@@ -4,7 +4,7 @@
 {% block content %}
   <div class="space-y-4">
     <div>
-      <div class="text-sm text-brand-dark/70"><a class="underline" href="/tasks/">Задачи</a> /</div>
+      <div class="text-sm text-brand-dark/70"><a class="underline" href="{% url 'task_list' %}">Задачи</a> /</div>
       <h1 class="text-2xl font-semibold">Новая задача</h1>
     </div>
 
@@ -31,15 +31,28 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label class="block text-sm text-brand-dark/80 mb-1">Компания</label>
-          <div class="space-y-1">
+          <div class="relative" id="companySearchBox">
             <input
               type="text"
               id="task-company-search"
               placeholder="Начните вводить название компании…"
               class="w-full rounded-lg border px-3 py-2 text-sm"
               autocomplete="off"
+              role="combobox"
+              aria-expanded="false"
+              aria-controls="companyDropdown"
+              aria-haspopup="listbox"
             >
-            {{ form.company }}
+            <div
+              id="companyDropdown"
+              class="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-y-auto hidden"
+              role="listbox"
+            ></div>
+            <div id="companySelected" class="text-xs text-brand-dark/60 mt-1 hidden">
+              Выбрано: <span id="companySelectedName" class="font-medium text-brand-dark"></span>
+              <button type="button" id="companyClearBtn" class="ml-2 text-red-500 underline text-xs">Очистить</button>
+            </div>
+            <div class="hidden">{{ form.company }}</div>
           </div>
         </div>
       </div>
@@ -72,12 +85,6 @@
         <div class="text-xs text-brand-dark/70 mt-1">Отметка "СРОЧНО" будет отображаться в уведомлениях и списках задач.</div>
       </div>
 
-      <div>
-        <label class="block text-sm text-brand-dark/80 mb-1">Повтор (RRULE)</label>
-        {{ form.recurrence_rrule }}
-        <div class="text-xs text-brand-dark/70 mt-1">Можно оставить пустым. Пример: <span class="font-mono">FREQ=WEEKLY;BYDAY=MO</span></div>
-      </div>
-
       {% if form.errors %}
         <div class="rounded-lg border border-brand-orange/60 bg-brand-orange/20 p-3 text-sm text-brand-dark">
           Проверь поля формы.
@@ -86,30 +93,20 @@
 
       <div class="flex gap-2">
         <button class="btn btn-primary" type="submit">Создать</button>
-        <a class="btn btn-outline" href="/tasks/">Отмена</a>
+        <a class="btn btn-outline" href="{% url 'task_list' %}">Отмена</a>
       </div>
     </form>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', () => {
-      // Защита от повторной отправки формы создания задачи (полная страница)
-      const taskFormEl = document.querySelector('form[action="/tasks/create/"]') || document.querySelector('form[method="post"]');
+      // Защита от повторной отправки формы
+      const taskFormEl = document.querySelector('form[method="post"]');
       if (taskFormEl) {
-        taskFormEl.addEventListener('submit', function(e) {
+        taskFormEl.addEventListener('submit', function (e) {
           const submitBtn = taskFormEl.querySelector('button[type="submit"]');
-          if (!submitBtn) {
-            return;
-          }
-
-          // Если уже отправляем форму — блокируем повторный submit
-          if (submitBtn.disabled) {
-            e.preventDefault();
-            return;
-          }
-
-          const originalText = submitBtn.dataset.originalText || submitBtn.textContent || '';
-          submitBtn.dataset.originalText = originalText;
+          if (!submitBtn) return;
+          if (submitBtn.disabled) { e.preventDefault(); return; }
           submitBtn.disabled = true;
           submitBtn.textContent = 'Создание...';
         });
@@ -117,119 +114,130 @@
 
       const searchInput = document.getElementById('task-company-search');
       const companySelect = document.getElementById('id_company');
+      const dropdown = document.getElementById('companyDropdown');
+      const selectedBox = document.getElementById('companySelected');
+      const selectedName = document.getElementById('companySelectedName');
+      const clearBtn = document.getElementById('companyClearBtn');
       const applyBox = document.getElementById('applyToOrgBranchesBox');
       const applyCheckbox = document.getElementById('id_apply_to_org_branches');
-      if (!searchInput || !companySelect) return;
+      if (!searchInput || !companySelect || !dropdown) return;
 
       const updateApplyToOrgVisibility = () => {
         if (!applyBox || !applyCheckbox) return;
         const opt = companySelect.options[companySelect.selectedIndex] || null;
         const isBranch = opt && opt.dataset && opt.dataset.isBranch === '1';
         const hasBranches = opt && opt.dataset && opt.dataset.hasBranches === '1';
-
-        // Если чекбокс уже предустановлен на сервере (initial=True),
-        // уважаем это и показываем блок даже при отсутствии флагов на option.
         const isPrechecked = applyCheckbox.checked;
         const show = Boolean(isBranch || hasBranches || isPrechecked);
-        if (show) {
-          applyBox.classList.remove('hidden');
-        } else {
-          applyBox.classList.add('hidden');
-          applyCheckbox.checked = false;
-        }
+        applyBox.classList.toggle('hidden', !show);
+        if (!show) applyCheckbox.checked = false;
       };
+
+      const selectCompany = (id, name, isBranch, hasBranches) => {
+        companySelect.innerHTML = '';
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = name;
+        opt.selected = true;
+        if (isBranch) opt.dataset.isBranch = '1';
+        if (hasBranches) opt.dataset.hasBranches = '1';
+        companySelect.appendChild(opt);
+        searchInput.value = name;
+        selectedName.textContent = name;
+        selectedBox.classList.remove('hidden');
+        dropdown.classList.add('hidden');
+        searchInput.setAttribute('aria-expanded', 'false');
+        updateApplyToOrgVisibility();
+      };
+
+      clearBtn?.addEventListener('click', () => {
+        companySelect.innerHTML = '<option value=""></option>';
+        searchInput.value = '';
+        selectedBox.classList.add('hidden');
+        dropdown.classList.add('hidden');
+        updateApplyToOrgVisibility();
+        searchInput.focus();
+      });
+
+      // Если компания уже выбрана (например, при ошибке формы)
+      if (companySelect.value) {
+        const opt = companySelect.options[companySelect.selectedIndex];
+        if (opt && opt.value) {
+          searchInput.value = opt.textContent;
+          selectedName.textContent = opt.textContent;
+          selectedBox.classList.remove('hidden');
+          updateApplyToOrgVisibility();
+        }
+      }
 
       let searchTimeout = null;
       let currentAbortController = null;
 
+      const renderDropdown = (items) => {
+        dropdown.innerHTML = '';
+        if (!items.length) {
+          const li = document.createElement('div');
+          li.className = 'px-3 py-2 text-sm text-brand-dark/50';
+          li.textContent = 'Ничего не найдено';
+          dropdown.appendChild(li);
+        } else {
+          items.forEach(item => {
+            const li = document.createElement('div');
+            li.className = 'px-3 py-2 text-sm cursor-pointer hover:bg-brand-soft/30 transition-colors';
+            li.setAttribute('role', 'option');
+            li.dataset.id = item.id;
+            li.dataset.name = item.name;
+            li.dataset.isBranch = item.is_branch ? '1' : '';
+            li.dataset.hasBranches = item.has_branches ? '1' : '';
+            let label = item.name;
+            if (item.inn) label += ` <span class="text-brand-dark/40 text-xs">(ИНН: ${item.inn})</span>`;
+            if (item.is_branch) label += ` <span class="text-xs text-brand-dark/40">· филиал</span>`;
+            li.innerHTML = label;
+            li.addEventListener('mousedown', (e) => {
+              e.preventDefault();
+              selectCompany(item.id, item.name, item.is_branch, item.has_branches);
+            });
+            dropdown.appendChild(li);
+          });
+        }
+        dropdown.classList.remove('hidden');
+        searchInput.setAttribute('aria-expanded', 'true');
+      };
+
       searchInput.addEventListener('input', () => {
         const q = searchInput.value.trim();
-        
-        // Отменяем предыдущий запрос
-        if (currentAbortController) {
-          currentAbortController.abort();
-        }
-        
-        // Если запрос < 2 символов, ищем по существующим опциям
+        if (currentAbortController) currentAbortController.abort();
         if (!q || q.length < 2) {
-          // Обычный поиск по существующим опциям
-          let firstMatch = null;
-          for (const opt of companySelect.options) {
-            if (!opt.value) continue;
-            const text = (opt.text || '').toLowerCase();
-            if (text.includes(q.toLowerCase())) {
-              firstMatch = opt;
-              break;
-            }
-          }
-          if (firstMatch) {
-            companySelect.value = firstMatch.value;
-          }
+          dropdown.classList.add('hidden');
+          searchInput.setAttribute('aria-expanded', 'false');
           return;
         }
-        
-        // AJAX поиск для запросов >= 2 символов
-        if (searchTimeout) {
-          clearTimeout(searchTimeout);
-        }
-        
+        if (searchTimeout) clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => {
           currentAbortController = new AbortController();
-          
           fetch(`/companies/autocomplete/?q=${encodeURIComponent(q)}`, {
             signal: currentAbortController.signal,
             headers: { 'X-Requested-With': 'XMLHttpRequest' }
           })
           .then(res => res.json())
-          .then(data => {
-            if (data.items && data.items.length > 0) {
-              // Временно сохраняем текущее значение
-              const currentValue = companySelect.value;
-              
-              // Очищаем опции (кроме пустой)
-              const emptyOpt = companySelect.querySelector('option[value=""]');
-              companySelect.innerHTML = '';
-              if (emptyOpt) {
-                companySelect.appendChild(emptyOpt);
-              }
-              
-              // Добавляем найденные компании
-              data.items.forEach(item => {
-                const opt = document.createElement('option');
-                opt.value = item.id;
-                opt.textContent = item.name;
-                if (item.inn) opt.textContent += ` (ИНН: ${item.inn})`;
-                if (item.is_branch) {
-                  opt.dataset.isBranch = '1';
-                }
-                if (item.has_branches) {
-                  opt.dataset.hasBranches = '1';
-                }
-                companySelect.appendChild(opt);
-              });
-              
-              // Восстанавливаем текущее значение, если оно было
-              if (currentValue) {
-                companySelect.value = currentValue;
-              }
-              
-              // Автоматически выбираем первую найденную компанию
-              if (companySelect.options.length > 1) {
-                companySelect.value = companySelect.options[1].value;
-              }
+          .then(data => { if (data.items) renderDropdown(data.items); })
+          .catch(err => { if (err.name !== 'AbortError') console.error('Ошибка поиска компаний:', err); });
+        }, 300);
+      });
 
-              updateApplyToOrgVisibility();
-            }
-          })
-          .catch(err => {
-            if (err.name !== 'AbortError') {
-              console.error('Ошибка поиска компаний:', err);
-            }
-          });
-        }, 300); // Debounce 300ms
+      searchInput.addEventListener('blur', () => {
+        setTimeout(() => {
+          dropdown.classList.add('hidden');
+          searchInput.setAttribute('aria-expanded', 'false');
+        }, 150);
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          dropdown.classList.add('hidden');
+          searchInput.setAttribute('aria-expanded', 'false');
+        }
       });
     });
   </script>
 {% endblock %}
-
-

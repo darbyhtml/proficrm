@@ -13,6 +13,12 @@ urlpatterns = [
     path("preferences/ui/", views.preferences_ui, name="preferences_ui"),
     path("preferences/ui/company-detail-view-mode/", views.preferences_company_detail_view_mode, name="preferences_company_detail_view_mode"),
     path("preferences/mail/", views.preferences_mail, name="preferences_mail"),
+    path("preferences/profile/", views.preferences_profile, name="preferences_profile"),
+    path("preferences/password/", views.preferences_password, name="preferences_password"),
+    path("preferences/mail-signature/", views.preferences_mail_signature, name="preferences_mail_signature"),
+    path("preferences/avatar/upload/", views.preferences_avatar_upload, name="preferences_avatar_upload"),
+    path("preferences/avatar/delete/", views.preferences_avatar_delete, name="preferences_avatar_delete"),
+    path("preferences/table-settings/", views.preferences_table_settings, name="preferences_table_settings"),
     path("reports/cold-calls/day/", views.cold_calls_report_day, name="cold_calls_report_day"),
     path("reports/cold-calls/month/", views.cold_calls_report_month, name="cold_calls_report_month"),
     path("reports/cold-calls/last-7-days/", views.cold_calls_report_last_7_days, name="cold_calls_report_last_7_days"),
@@ -75,15 +81,11 @@ urlpatterns = [
     path("tasks/<uuid:task_id>/edit/", views.task_edit, name="task_edit"),
     path("tasks/<uuid:task_id>/status/", views.task_set_status, name="task_set_status"),
     path("tasks/<uuid:task_id>/delete/", views.task_delete, name="task_delete"),
-
-    # Messenger (операторская панель диалогов)
-    path("messenger/conversations/", views.messenger_conversation_list, name="messenger_conversation_list"),
-    path("messenger/", views.messenger_conversations_unified, name="messenger_conversations_unified"),  # Unified Chatwoot-style layout
-    path("messenger/me/status/", views.messenger_agent_status, name="messenger_agent_status"),
-    path("messenger/conversations/<int:conversation_id>/", views.messenger_conversation_detail, name="messenger_conversation_detail"),
+    path("tasks/<uuid:task_id>/comment/", views.task_add_comment, name="task_add_comment"),
 
     # Settings (admin only)
     path("settings/", views.settings_dashboard, name="settings_dashboard"),
+    path("settings/announcements/", views.settings_announcements, name="settings_announcements"),
     path("settings/access/", views.settings_access, name="settings_access"),
     path("settings/access/roles/<str:role>/", views.settings_access_role, name="settings_access_role"),
     # Режим "просмотр как" (админ может визуально переключаться под роль/филиал)
@@ -147,7 +149,7 @@ urlpatterns = [
     path("settings/messenger/routing/<int:rule_id>/delete/", views.settings_messenger_routing_delete, name="settings_messenger_routing_delete"),
     path("settings/messenger/health/", views.settings_messenger_health, name="settings_messenger_health"),
     path("settings/messenger/analytics/", views.settings_messenger_analytics, name="settings_messenger_analytics"),
-    
+
     # Мобильное приложение
     path("mobile-app/", views.mobile_app_page, name="mobile_app_page"),
     path("mobile-app/download/<uuid:build_id>/", views.mobile_app_download, name="mobile_app_download"),

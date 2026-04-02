@@ -1,3 +1,6 @@
+from datetime import timedelta
+
+from django.utils import timezone
 from rest_framework import serializers, viewsets
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
@@ -47,8 +50,38 @@ class TaskSerializer(serializers.ModelSerializer):
     )
     
     def validate_recurrence_rrule(self, value):
-        """Гарантируем, что recurrence_rrule не будет None."""
-        return value or ""
+        """Валидация строки RRULE (iCalendar RFC 5545).
+
+        Допустимые значения:
+          ""                          — без повтора
+          "FREQ=DAILY"                — каждый день
+          "FREQ=WEEKLY;BYDAY=MO,FR"   — пн и пт каждую неделю
+          "FREQ=MONTHLY;BYMONTHDAY=1" — первого числа каждого месяца
+
+        Поддерживаемые FREQ: DAILY, WEEKLY, MONTHLY, YEARLY.
+        Опциональные параметры: INTERVAL, BYDAY, BYMONTHDAY, UNTIL, COUNT.
+        """
+        value = (value or "").strip()
+        if not value:
+            return ""
+
+        value_upper = value.upper()
+
+        if not value_upper.startswith("FREQ="):
+            raise serializers.ValidationError(
+                "RRULE должна начинаться с FREQ=. "
+                "Пример: FREQ=DAILY или FREQ=WEEKLY;BYDAY=MO,WE,FR"
+            )
+
+        valid_freqs = ("DAILY", "WEEKLY", "MONTHLY", "YEARLY")
+        freq_part = value_upper.split(";")[0].replace("FREQ=", "")
+        if freq_part not in valid_freqs:
+            raise serializers.ValidationError(
+                f"Недопустимое значение FREQ={freq_part}. "
+                f"Допустимые: {', '.join(valid_freqs)}"
+            )
+
+        return value
 
 
 class TaskTypeViewSet(viewsets.ModelViewSet):

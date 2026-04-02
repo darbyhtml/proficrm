@@ -6,6 +6,7 @@ from django.dispatch import receiver
 
 from .models import (
     Company,
+    CompanyDeletionRequest,
     CompanyEmail,
     CompanyNote,
     CompanyPhone,
@@ -57,6 +58,18 @@ def _schedule_rebuild_index_for_company(company_id):
     except Exception:
         # На всякий случай fallback, если нет менеджера транзакций.
         _rebuild_index_for_company(company_id)
+
+
+@receiver(pre_delete, sender=Company)
+def _auto_cancel_deletion_requests(sender, instance: Company, **kwargs):
+    """
+    При удалении компании все PENDING-заявки на удаление автоматически отменяются,
+    чтобы не оставалось zombie-записей со status=PENDING и company=NULL.
+    """
+    CompanyDeletionRequest.objects.filter(
+        company=instance,
+        status=CompanyDeletionRequest.Status.PENDING,
+    ).update(status=CompanyDeletionRequest.Status.CANCELLED)
 
 
 @receiver(post_save, sender=Company)

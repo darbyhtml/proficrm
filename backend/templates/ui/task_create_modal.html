@@ -35,8 +35,8 @@
           <span class="ms-value text-brand-dark/70">— Не выбрано —</span>
           <span class="ms-muted">▼</span>
         </button>
-        <div class="ms-panel hidden absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-60 overflow-auto">
-          <div class="ms-top sticky top-0 bg-white border-b p-2">
+        <div class="ms-panel hidden">
+          <div class="ms-top">
             <input class="input ms-search w-full" placeholder="Поиск компании..." />
           </div>
           <div class="ms-list"></div>
@@ -76,6 +76,14 @@
         {% endfor %}
       </div>
     {% endif %}
+
+    <div class="mt-3">
+      <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer">
+        {{ form.is_urgent }}
+        <span>Срочная задача</span>
+      </label>
+      <div class="text-xs text-brand-dark/50 mt-0.5">Отметка «СРОЧНО» будет видна в уведомлениях и списке.</div>
+    </div>
 
     <div class="flex gap-2 items-center flex-wrap mt-4">
       <button class="btn btn-primary" type="submit">Создать</button>

@@ -36,6 +36,26 @@
     }
     .note-files-zone:hover { background: rgba(1, 148, 142, 0.08); border-color: rgba(1, 148, 142, 0.5); }
     .note-files-zone.has-files { border-style: solid; background: rgba(194, 226, 222, 0.15); }
+    /* Строка ввода заметки (мессенджер-стиль): один контейнер с тенью, нижняя панель с иконками */
+    .note-input-bar.note-files-zone {
+      border: none;
+      padding: 0;
+      background: transparent;
+    }
+    .note-input-bar.note-files-zone.has-files { background: rgba(194, 226, 222, 0.08); }
+    .note-input-bar .note-input-bar-field {
+      min-height: 2.25rem;
+      max-height: 12rem;
+      resize: none;
+      overflow-y: auto;
+      border: none;
+      background: transparent;
+      box-shadow: none;
+      font-size: 0.9375rem;
+      line-height: 1.45;
+    }
+    .note-input-bar .note-input-bar-field::placeholder { color: #94a3b8; }
+    .note-input-bar .note-input-bar-field:focus { outline: none; }
 
     /* Карточки вложений (компактные, по макету) */
     .note-attachment-cards { display: flex; flex-wrap: wrap; gap: 0.75rem; }
@@ -119,8 +139,16 @@
     .note-attachments-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; }
     .note-attachments-header .note-attachment-card { cursor: default; }
 
-    /* Более компактное крепление файлов в классическом виде (как в мессенджерах) */
-    #companyDetailClassic #noteAddFilesZone,
+    /* Классический вид: бар заметок с рамкой и фоном (глобальные стили выше сбрасывают их) */
+    #companyDetailClassic .note-input-bar.note-files-zone {
+      border: 1px solid rgba(194, 226, 222, 0.8);
+      padding: 0.5rem 0.75rem;
+      background: #fff;
+    }
+    #companyDetailClassic .note-input-bar.note-files-zone.has-files {
+      background: rgba(194, 226, 222, 0.12);
+    }
+    /* В модалке редактирования заметки — без рамки */
     #companyDetailClassic #noteEditModal .note-files-zone {
       border: none;
       padding: 0.25rem 0 0;
@@ -337,7 +365,7 @@
               {% endif %}
             </div>
           </div>
-          <script>
+          <script nonce="{{ csp_nonce }}">
             (function(){
               var btn = document.getElementById('pinnedNoteExpandBtn');
               var preview = document.getElementById('pinnedNotePreview');
@@ -395,6 +423,16 @@
           {% elif can_request_delete %}
             <button type="button" class="btn btn-outline btn-sm btn-danger" id="openDeleteRequestModal">
               {% if delete_req %}Отменить запрос на удаление{% else %}Запросить удаление{% endif %}
+            </button>
+          {% endif %}
+
+          <!-- История передвижений (Classic) -->
+          {% if history_events %}
+            <button type="button" class="btn btn-outline btn-sm" id="openHistoryModal"
+                    title="История передвижений" aria-label="История передвижений">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
             </button>
           {% endif %}
 
@@ -1291,145 +1329,97 @@
                     </div>
                   {% endif %}
                 </div>
-                <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                <div class="mt-2 space-y-3">
                   <div>
-                    <div class="text-brand-dark/50 text-xs">Email</div>
-                    {% for e in c.emails.all %}
-                      <div class="flex items-center gap-2">
-                        <a href="mailto:{{ e.value }}" class="link font-mono text-xs text-brand-teal hover:underline" title="Написать">{{ e.value }}</a>
-                        <button type="button" class="btn btn-outline btn-xxs js-copy-email" data-email="{{ e.value }}" title="Копировать">📋</button>
-                        <button type="button" class="btn btn-outline btn-xs js-add-email-to-campaign" data-email="{{ e.value }}" data-company-id="{{ company.id }}" title="Добавить в рассылочную кампанию">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                            <polyline points="22,6 12,13 2,6"/>
-                          </svg>
-                        </button>
-                      </div>
-                    {% empty %}
-                      <div class="text-brand-dark/70">—</div>
-                    {% endfor %}
-                  </div>
-                  <div>
-                    <div class="text-brand-dark/50 text-xs">Телефон</div>
-                    {% for p in c.phones.all %}
-                      <div class="mb-2">
+                    <div class="text-brand-dark/50 text-xs mb-1">Email</div>
+                    <div class="space-y-1">
+                      {% for e in c.emails.all %}
                         <div class="flex items-center justify-between gap-2">
-                          <div class="flex-1">
-                            <div class="font-mono text-xs">{{ p.value|format_phone }}</div>
-                            {% with info=p.value|phone_local_info %}
-                              {% if info %}<div class="mt-1"><span class="badge badge-warn badge-xxxs">{{ info }}</span></div>{% endif %}
-                            {% endwith %}
-                            {% if not p.value|phone_local_info %}
-                              {% with guessed=company.address|guess_ru_tz %}
-                              {% with tz=company.work_timezone|default:guessed %}
-                                {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}" data-live-worktime="1"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
-                              {% endwith %}
-                              {% endwith %}
-                            {% endif %}
-                            <div class="mt-0.5 text-xs text-brand-dark/70 {% if not p.is_cold_call and not p.cold_marked_at %}hidden{% endif %}" data-cold-info="contact_phone:{{ p.id }}">
-                              <span class="font-medium">Холодный звонок:</span>
-                              {% if p.cold_marked_at %}
-                                {{ p.cold_marked_at|date:"d.m.Y H:i" }}
-                              {% endif %}
-                              {% if p.cold_marked_by %}
-                                ({{ p.cold_marked_by.first_name }} {{ p.cold_marked_by.last_name|default:"" }})
-                              {% endif %}
-                              {% if not p.is_cold_call and p.cold_marked_at %}
-                                <span class="opacity-80">(откат)</span>
-                              {% endif %}
-                            </div>
-                            <div class="mt-1">
-                              {% if can_edit_company %}
-                                <div class="phone-comment-wrapper" data-phone-type="contact" data-phone-id="{{ p.id }}">
-                                  <div class="phone-comment-display text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors" data-edit-comment style="white-space: pre-wrap;">{% if p.comment %}{{ p.comment }}{% else %}Комментарий{% endif %}</div>
-                                  <div class="phone-comment-edit hidden mt-1">
-                                    <textarea class="input text-xs" placeholder="Комментарий к номеру" maxlength="255" data-comment-input rows="2" style="padding:.35rem .5rem;font-size:.75rem;min-height:3.25rem;resize:vertical">{{ p.comment|default:'' }}</textarea>
-                                    <div class="flex gap-1 mt-1">
-                                      <button type="button" class="btn btn-primary btn-sm" data-save-comment>Сохранить</button>
-                                      <button type="button" class="btn btn-outline btn-sm" data-cancel-comment>Отмена</button>
-                                    </div>
-                                  </div>
-                                </div>
-                              {% elif p.comment %}
-                                <div class="text-xs text-brand-dark/50 mt-1" style="white-space: pre-wrap;">{{ p.comment }}</div>
-                              {% endif %}
-                            </div>
+                          <div class="min-w-0">
+                            <a href="mailto:{{ e.value }}" class="font-mono text-xs text-brand-teal hover:underline truncate block" title="Написать">{{ e.value }}</a>
                           </div>
-                          <div class="flex items-center gap-1 shrink-0">
-                            {% if can_edit_company %}
-                              <form
-                                method="post"
-                                action="/contact-phones/{{ p.id }}/cold-call/toggle/"
-                                class="js-cold-call-form"
-                                data-confirm="Вы действительно хотите отметить звонок как холодный?"
-                                data-cold-entity="contact_phone"
-                                data-cold-id="{{ p.id }}"
-                                data-cold-kind="toggle"
-                                style="{% if p.is_cold_call or p.cold_marked_at %}display:none{% endif %}"
-                              >
-                                {% csrf_token %}
-                                <input type="hidden" name="confirmed" value="1">
-                                <button
-                                  type="submit"
-                                  class="btn btn-outline btn-xs js-cold-mark"
-                                  style="padding:0.25rem 0.5rem;"
-                                  data-cold-btn="phone-{{ p.id }}"
-                                  title="Отметить холодный звонок"
-                                  aria-label="Отметить холодный звонок"
-                                >
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M12 2v20M4 6l16 12M20 6 4 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                    <path d="M6 4l12 16M18 4 6 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".35"/>
-                                  </svg>
-                                </button>
-                              </form>
-                              {% if view_is_admin %}
-                                <form
-                                  method="post"
-                                  action="/contact-phones/{{ p.id }}/cold-call/reset/"
-                                  class="js-cold-call-form"
-                                  data-confirm="Откатить отметку холодного звонка?"
-                                  data-cold-entity="contact_phone"
-                                  data-cold-id="{{ p.id }}"
-                                  data-cold-kind="reset"
-                                  style="display:inline;{% if not p.is_cold_call %}display:none{% endif %}"
-                                >
-                                  {% csrf_token %}
-                                  <button
-                                    type="submit"
-                                    class="btn btn-outline btn-xs"
-                                    style="padding:0.25rem 0.5rem;"
-                                    title="Откатить отметку холодного звонка (только для администраторов)"
-                                    aria-label="Откатить отметку холодного звонка"
-                                  >
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                      <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                    </svg>
-                                  </button>
-                                </form>
-                              {% endif %}
-                            {% endif %}
-                            {# Убрали отдельный квадрат-статус (дублировал смысл). #}
-                            <button
-                              type="button"
-                              class="btn btn-outline btn-xs js-call-phone"
-                              style="padding:0.25rem 0.5rem;"
-                              data-phone="{{ p.value }}"
-                              data-company="{{ company.id }}"
-                              data-contact="{{ c.id }}"
-                              title="Позвонить с телефона"
-                              aria-label="Позвонить с телефона"
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                              </svg>
-                            </button>
+                          <div class="relative shrink-0" data-dd-root>
+                            <button type="button" class="btn btn-outline btn-xs" data-dd-toggle title="Действия" aria-label="Действия">⋯</button>
+                            <div class="hidden absolute right-0 mt-2 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
+                              <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 js-copy-email" data-email="{{ e.value }}">Скопировать</button>
+                              <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 js-add-email-to-campaign" data-email="{{ e.value }}" data-company-id="{{ company.id }}">Добавить в рассылку</button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    {% empty %}
-                      <div class="text-brand-dark/70">—</div>
-                    {% endfor %}
+                      {% empty %}
+                        <div class="text-brand-dark/70 text-sm">—</div>
+                      {% endfor %}
+                    </div>
+                  </div>
+                  <div>
+                    <div class="text-brand-dark/50 text-xs mb-1">Телефон</div>
+                    <div class="space-y-2">
+                      {% for p in c.phones.all %}
+                        <div>
+                          <div class="flex items-center justify-between gap-2">
+                            <div class="min-w-0">
+                              <div class="font-mono text-xs">{{ p.value|format_phone }}</div>
+                              {% with info=p.value|phone_local_info %}
+                                {% if info %}<div class="mt-1"><span class="badge badge-warn badge-xxxs">{{ info }}</span></div>{% endif %}
+                              {% endwith %}
+                              {% if not p.value|phone_local_info %}
+                                {% with guessed=company.address|guess_ru_tz %}
+                                {% with tz=company.work_timezone|default:guessed %}
+                                  {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}" data-live-worktime="1"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
+                                {% endwith %}
+                                {% endwith %}
+                              {% endif %}
+                            </div>
+                            {% if p.value %}
+                              <div class="relative shrink-0" data-dd-root>
+                                <button type="button" class="btn btn-outline btn-xs" data-dd-toggle title="Действия" aria-label="Действия">⋯</button>
+                                <div class="hidden absolute right-0 mt-2 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
+                                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 js-call-phone" data-phone="{{ p.value }}" data-company="{{ company.id }}" data-contact="{{ c.id }}">Позвонить</button>
+                                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-copy-phone="{{ p.value }}">Скопировать</button>
+                                  {% if can_edit_company %}
+                                    <form method="post" action="/contact-phones/{{ p.id }}/cold-call/toggle/" class="js-cold-call-form" data-confirm="Вы действительно хотите отметить звонок как холодный?" data-cold-entity="contact_phone" data-cold-id="{{ p.id }}" data-cold-kind="toggle" style="{% if p.is_cold_call or p.cold_marked_at %}display:none{% endif %}">
+                                      {% csrf_token %}
+                                      <input type="hidden" name="confirmed" value="1">
+                                      <button type="submit" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25">Отметить холодным</button>
+                                    </form>
+                                    {% if view_is_admin %}
+                                      <form method="post" action="/contact-phones/{{ p.id }}/cold-call/reset/" class="js-cold-call-form" data-confirm="Откатить отметку холодного звонка?" data-cold-entity="contact_phone" data-cold-id="{{ p.id }}" data-cold-kind="reset" style="{% if not p.is_cold_call %}display:none{% endif %}">
+                                        {% csrf_token %}
+                                        <button type="submit" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25">Снять отметку</button>
+                                      </form>
+                                    {% endif %}
+                                  {% endif %}
+                                </div>
+                              </div>
+                            {% endif %}
+                          </div>
+                          <div class="mt-1 text-xs text-brand-dark/70 {% if not p.is_cold_call and not p.cold_marked_at %}hidden{% endif %}" data-cold-info="contact_phone:{{ p.id }}">
+                            <span class="font-medium">Холодный звонок:</span>
+                            {% if p.cold_marked_at %}<span>{{ p.cold_marked_at|date:"d.m.Y H:i" }}</span>{% endif %}
+                            {% if p.cold_marked_by %}<span>({{ p.cold_marked_by.first_name }} {{ p.cold_marked_by.last_name|default:"" }})</span>{% endif %}
+                            {% if not p.is_cold_call and p.cold_marked_at %}<span class="opacity-80">(откат)</span>{% endif %}
+                          </div>
+                          <div class="mt-1">
+                            {% if can_edit_company %}
+                              <div class="phone-comment-wrapper" data-phone-type="contact" data-phone-id="{{ p.id }}">
+                                <div class="phone-comment-display text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors" data-edit-comment style="white-space: pre-wrap;">{% if p.comment %}{{ p.comment }}{% else %}Комментарий{% endif %}</div>
+                                <div class="phone-comment-edit hidden mt-1">
+                                  <textarea class="input text-xs" placeholder="Комментарий к номеру" maxlength="255" data-comment-input rows="2" style="padding:.35rem .5rem;font-size:.75rem;min-height:3.25rem;resize:vertical">{{ p.comment|default:'' }}</textarea>
+                                  <div class="flex gap-1 mt-1">
+                                    <button type="button" class="btn btn-primary btn-sm" data-save-comment>Сохранить</button>
+                                    <button type="button" class="btn btn-outline btn-sm" data-cancel-comment>Отмена</button>
+                                  </div>
+                                </div>
+                              </div>
+                            {% elif p.comment %}
+                              <div class="text-xs text-brand-dark/50" style="white-space: pre-wrap;">{{ p.comment }}</div>
+                            {% endif %}
+                          </div>
+                        </div>
+                      {% empty %}
+                        <div class="text-brand-dark/70 text-sm">—</div>
+                      {% endfor %}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1482,7 +1472,7 @@
                       {% endif %}
                       <div class="flex-1">
                         {% if t.type %}
-                          {% include "ui/partials/task_type_badge.html" with task_type=t.type only %}
+                          {% task_type_badge t.type %}
                         {% elif t.title %}
                           <span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-800">
                             {{ t.title }}
@@ -1497,7 +1487,7 @@
                     {% endif %}
                     {% include "ui/partials/_task_meta.html" with task=t only %}
                     <div class="text-xs text-brand-dark/70 mt-1">
-                      {{ t.get_status_display }}
+                      <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
                       {% if t.assigned_to %} · {{ t.assigned_to }}{% endif %}
                     </div>
                   </div>
@@ -1591,29 +1581,24 @@
       <section class="card card-pad">
         <div class="font-medium mb-3">Заметки</div>
         {% if can_edit_company %}
-          <form class="space-y-3" method="post" action="/companies/{{ company.id }}/notes/add/" enctype="multipart/form-data" id="noteForm" data-company-id="{{ company.id }}" data-user-id="{{ request.user.id }}">
+          <form class="space-y-2" method="post" action="/companies/{{ company.id }}/notes/add/" enctype="multipart/form-data" id="noteForm" data-company-id="{{ company.id }}" data-user-id="{{ request.user.id }}">
             {% csrf_token %}
-            <div>
-              <label class="block text-xs font-medium text-brand-dark/70 mb-1">Текст заметки</label>
-              {{ note_form.text }}
-            </div>
-            <div class="note-files-zone rounded-xl p-4" id="noteAddFilesZone">
-              <input id="noteFile" type="file" name="attachment" class="hidden" />
-              <input id="noteFilesMultiple" type="file" name="attachments" multiple class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv" />
-              <div class="flex items-center gap-2 text-xs text-brand-dark/70">
-                <label class="inline-flex items-center justify-center p-2 rounded-full bg-white border border-brand-soft/80 text-brand-dark/80 hover:bg-brand-soft/30 cursor-pointer transition-colors" for="noteFilesMultiple" id="noteAttachMultipleLabel" title="Прикрепить файлы">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 7l7.5-7.5a3.536 3.536 0 115 5L10 14a2 2 0 11-3-3l6.5-6.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  <span class="sr-only">Прикрепить файлы</span>
-                </label>
-                <span class="text-xs text-brand-dark/60" id="noteAddFilesSummary"></span>
-                <button type="button" class="text-[11px] text-brand-teal hover:underline hidden" id="noteAddFilesRemoveAll" title="Удалить все">Очистить</button>
+            <input id="noteFile" type="file" name="attachment" class="hidden" />
+            <input id="noteFilesMultiple" type="file" name="attachments" multiple class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv" />
+            <span id="noteAddFilesSummary" class="sr-only" aria-hidden="true"></span>
+            <button type="button" class="hidden" id="noteAddFilesRemoveAll" title="Удалить все">Очистить</button>
+            <div class="note-input-bar note-files-zone flex items-start gap-2 rounded-xl border border-brand-soft bg-white px-3 py-2 min-h-[52px]" id="noteAddFilesZone">
+              <label for="noteFilesMultiple" id="noteAttachMultipleLabel" class="flex-shrink-0 p-2 rounded-lg text-[#64748b] hover:text-brand-teal hover:bg-black/5 cursor-pointer transition-colors" title="Прикрепить файлы" aria-label="Прикрепить файлы">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+              </label>
+              <div class="flex-1 min-w-0">
+                {{ note_form.text }}
               </div>
-              <div id="noteAddFileChips" class="note-attachment-cards mt-3"></div>
-              <p class="text-xs text-brand-dark/50 mt-2">PDF, DOC, XLS, изображения и др. До 15 МБ. Можно выбрать несколько.</p>
+              <button type="submit" class="flex-shrink-0 p-2 rounded-lg bg-[#01948E] text-white hover:bg-[#017a75] transition-colors" title="Отправить (Ctrl+Enter)" aria-label="Отправить">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+              </button>
             </div>
-            <div class="flex gap-2">
-              <button class="btn btn-primary" type="submit">Добавить заметку</button>
-            </div>
+            <div id="noteAddFileChips" class="note-attachment-cards flex flex-wrap gap-2 mt-2"></div>
           </form>
         {% else %}
           <div class="text-sm text-brand-dark/70">Нет прав на добавление заметок по этой компании.</div>
@@ -1928,7 +1913,7 @@
                 <button class="btn btn-outline" type="button" data-close-contract>Отмена</button>
               </div>
             </form>
-            <script>
+            <script nonce="{{ csp_nonce }}">
               (function() {
                 const contractTypeSelect = document.getElementById('contractTypeSelect');
                 const contractUntilField = document.getElementById('contractUntilField');
@@ -1959,7 +1944,7 @@
       </div>
     {% endif %}
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
       (function(){
         function getCookie(name) {
           const value = `; ${document.cookie}`;
@@ -2811,7 +2796,7 @@
       })();
     </script>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
       (function(){
         const input = document.getElementById('noteFile');
         const inputMulti = document.getElementById('noteFilesMultiple');
@@ -2918,7 +2903,7 @@
       })();
     </script>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Черновик заметки в карточке компании: сохраняем текст локально, чтобы не терялся при переходах.
       (function(){
         const form = document.getElementById('noteForm');
@@ -2960,25 +2945,53 @@
         // Восстановление черновика (только если поле пустое/не тронуто сервером)
         const current = normalize(textarea.value);
         const draft2 = getDraft();
+        let lastSavedValue = '';
         if (!current && draft2) {
           textarea.value = draft2;
+          lastSavedValue = draft2;
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        } else {
+          lastSavedValue = textarea.value || '';
         }
 
         // Автосохранение по мере ввода (debounce)
         let t = null;
         textarea.addEventListener('input', () => {
+          const v = textarea.value || '';
+          const normalized = normalize(v);
+          // Если пользователь вручную очистил поле — сразу убираем черновик, чтобы после перезагрузки не подгружался
+          if (!normalized) {
+            clearDraft();
+            lastSavedValue = '';
+            if (t) window.clearTimeout(t);
+            return;
+          }
           if (t) window.clearTimeout(t);
           t = window.setTimeout(() => {
-            const v = textarea.value || '';
-            if (normalize(v)) setDraft(v);
-            else clearDraft();
+            const v2 = textarea.value || '';
+            const normalized2 = normalize(v2);
+            if (normalized2 !== normalize(lastSavedValue)) {
+              setDraft(v2);
+              lastSavedValue = v2;
+            }
           }, 250);
         });
 
-        // На случай быстрых переходов — сохраняем при уходе со страницы
+        // На случай быстрых переходов — сохраняем при уходе со страницы (только если значение изменилось)
         window.addEventListener('beforeunload', () => {
           const v = textarea.value || '';
-          if (normalize(v)) setDraft(v);
+          const normalized = normalize(v);
+          if (normalized && normalized !== normalize(lastSavedValue)) {
+            setDraft(v);
+          }
+        });
+
+        // Ctrl+Enter / Cmd+Enter — отправить заметку
+        textarea.addEventListener('keydown', function(e) {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            if (typeof form.requestSubmit === 'function') form.requestSubmit(); else form.submit();
+          }
         });
 
         // После успешной отправки заметки очищаем черновик,
@@ -3296,6 +3309,16 @@
             {% elif can_request_delete %}
               <button type="button" class="btn btn-outline btn-xs md:btn-sm btn-danger" id="openDeleteRequestModal">
                 {% if delete_req %}Отменить запрос{% else %}Запросить удаление{% endif %}
+              </button>
+            {% endif %}
+
+            <!-- История передвижений (Modern) -->
+            {% if history_events %}
+              <button type="button" class="btn btn-outline btn-xs md:btn-sm" id="openHistoryModalModern"
+                      title="История передвижений" aria-label="История передвижений">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
               </button>
             {% endif %}
 
@@ -3654,7 +3677,7 @@
                             <div class="min-w-0">
                               <div class="flex items-center gap-2">
                                 {% if task.type %}
-                                  {% include "ui/partials/task_type_badge.html" with task_type=task.type only %}
+                                  {% task_type_badge task.type %}
                                 {% elif task.title %}
                                   <div class="font-medium text-sm truncate">{{ task.title }}</div>
                                 {% endif %}
@@ -4438,7 +4461,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function() {
       // Просмотр изображений (вложения заметок) без новой вкладки
       const imgModal = document.getElementById('imagePreviewModal');
@@ -4827,7 +4850,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Кнопка поиска из классического режима: плавный переход в Modern + открытие поиска
     (function() {
       const classicSearchBtn = document.getElementById('quickSearchBtnClassic');
@@ -4881,7 +4904,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Гарантированная инициализация modern-модалки заметок после загрузки DOM.
     // Нужна, потому что основной скрипт может выполниться до вставки разметки modern-блока.
     (function() {
@@ -5024,9 +5047,6 @@
         window.openNoteCreateModern = openCreate;
       }
 
-      // Экспортируем, чтобы можно было вызвать после ajax-обновления обзора
-      window.updateOverviewNoteExpand = updateExpandVisibility;
-
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initModernNoteModal);
       } else {
@@ -5035,7 +5055,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // История выполненных задач по компании (модалка)
     (function() {
       const btn = document.getElementById('taskHistoryButton');
@@ -5148,7 +5168,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function() {
       let currentTaskId = null;
       const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || document.querySelector('meta[name=csrf-token]')?.content;
@@ -5818,7 +5838,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Копирование email при клике
     (function() {
       document.querySelectorAll('.js-copy-email').forEach(el => {
@@ -5858,7 +5878,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Dropdown меню для телефонов/email + копирование телефона + инлайн-редактирование phone/email
     (function() {
       const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || document.querySelector('meta[name=csrf-token]')?.content;
@@ -6307,7 +6327,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Открытие модалки задачи из карточки компании
     (function() {
       const modal = document.getElementById('taskViewModal');
@@ -6555,7 +6575,7 @@
       window.initTaskViewModalTriggers = initTaskViewModalTriggers;
     })();
   </script>
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Немодальная панель контакта: открывается поверх, но НЕ блокирует фон (можно копировать данные из карточки)
     (function() {
       const panel = document.getElementById('contactPanel');
@@ -6895,7 +6915,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Управление сворачиванием дополнительных телефонов
     (function() {
       const toggleBtn = document.querySelector('[data-toggle-additional-phones]');
@@ -6948,7 +6968,7 @@
 
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Переключение режима просмотра карточки компании (classic/modern)
     (function() {
       const viewModeClassicBtn = document.getElementById('viewModeClassicDetail');
@@ -7091,7 +7111,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Dropdown действий в Modern режиме
     (function() {
       const btn = document.getElementById('companyActionsBtnModern');
@@ -7112,7 +7132,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Копирование телефона
     (function() {
       document.addEventListener('click', function(e) {
@@ -7135,7 +7155,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Обработчик формы заметок в modern режиме (inline)
     (function(){
       const input = document.getElementById('noteFileModernInline');
@@ -7165,8 +7185,17 @@
       if (btn && input) { btn.addEventListener('click', function() { input.click(); }); }
       if (input) input.addEventListener('change', function() { if (name) name.textContent = (input.files && input.files[0]) ? input.files[0].name : ''; });
 
-      // AJAX-сохранение inline-заметки без смены вкладки / перезагрузки
+      // Ctrl+Enter / Cmd+Enter — отправить заметку
       const form = document.getElementById('noteFormModernInline');
+      if (form) {
+        var textarea = form.querySelector('textarea[name="text"]');
+        if (textarea) textarea.addEventListener('keydown', function(e) {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            if (typeof form.requestSubmit === 'function') form.requestSubmit(); else form.submit();
+          }
+        });
+      }
       if (form && typeof window.fetch === 'function') {
         form.addEventListener('submit', async (e) => {
           e.preventDefault();
@@ -7178,6 +7207,12 @@
               headers: { 'X-Requested-With': 'XMLHttpRequest' }
             });
             if (!resp.ok) throw new Error('Failed to submit note');
+
+            // Очищаем черновик СРАЗУ после успешной отправки (до обновления панели)
+            const companyId = form.getAttribute('data-company-id') || '';
+            const userId = form.getAttribute('data-user-id') || '';
+            const storageKey = `companyNoteDraft:v1:${userId}:${companyId}`;
+            try { localStorage.removeItem(storageKey); } catch (_e) {}
 
             // Очищаем форму
             const textarea = form.querySelector('textarea[name="text"]');
@@ -7217,6 +7252,8 @@
                     newNotes.classList.remove('hidden');
                   }
                   currentNotes.parentNode.replaceChild(newNotes, currentNotes);
+                  if (window.initNoteInputAutogrow) window.initNoteInputAutogrow();
+                  if (window.initNoteDraft) window.initNoteDraft('noteFormModernInline');
                 }
               }
             } catch (_e) {
@@ -7229,7 +7266,52 @@
       }
     })();
   </script>
-  <script>
+  <script nonce="{{ csp_nonce }}">
+    // Авто-рост поля заметки и вставка скриншотов по Ctrl+V (классический и современный вид)
+    (function(){
+      function initNoteTextarea(textarea) {
+        if (!textarea || !textarea.classList.contains('note-input-autogrow') || textarea.getAttribute('data-note-autogrow-init')) return;
+        textarea.setAttribute('data-note-autogrow-init', '1');
+        var form = textarea.closest('form');
+        if (!form) return;
+        var fileInput = form.querySelector('input[name="attachments"]');
+        function autogrow() {
+          textarea.style.height = 'auto';
+          textarea.style.height = (textarea.scrollHeight) + 'px';
+        }
+        textarea.addEventListener('input', autogrow);
+        autogrow();
+        textarea.addEventListener('paste', function(e) {
+          var items = e.clipboardData && e.clipboardData.items;
+          if (!items || !fileInput) return;
+          var toAdd = [];
+          for (var i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image/') === 0) {
+              var f = items[i].getAsFile();
+              if (f) toAdd.push(f);
+            }
+          }
+          if (toAdd.length === 0) return;
+          e.preventDefault();
+          for (var k = 0; k < toAdd.length; k++) {
+            var f = toAdd[k];
+            if (!f.name || !String(f.name).trim()) toAdd[k] = new File([f], 'image.png', { type: f.type || 'image/png' });
+          }
+          if (typeof DataTransfer === 'undefined') return;
+          var dt = new DataTransfer();
+          for (var j = 0; j < (fileInput.files || []).length; j++) dt.items.add(fileInput.files[j]);
+          for (var k = 0; k < toAdd.length; k++) dt.items.add(toAdd[k]);
+          fileInput.files = dt.files;
+          fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      }
+      window.initNoteInputAutogrow = function() {
+        document.querySelectorAll('textarea.note-input-autogrow').forEach(initNoteTextarea);
+      };
+      window.initNoteInputAutogrow();
+    })();
+  </script>
+  <script nonce="{{ csp_nonce }}">
     // Черновик заметки в modern режиме (inline-форма)
     (function(){
       function initDraft(formId) {
@@ -7257,42 +7339,81 @@
           try { localStorage.removeItem(storageKey); } catch (_e) {}
         }
 
-        // Восстановление черновика
-        const current = normalize(textarea.value);
+        // Если последний добавленный note совпадает с черновиком — считаем, что он сохранён, и очищаем.
         const draft = getDraft();
-        if (!current && draft) {
-          textarea.value = draft;
+        if (draft) {
+          const firstNoteBody = document.querySelector('[data-note-item] [data-note-body]');
+          if (firstNoteBody) {
+            const noteText = normalize(firstNoteBody.textContent || '');
+            if (noteText && noteText === normalize(draft)) {
+              clearDraft();
+            }
+          }
+        }
+
+        // Восстановление черновика (только если поле пустое/не тронуто сервером)
+        const current = normalize(textarea.value);
+        const draft2 = getDraft();
+        let lastSavedValue = '';
+        if (!current && draft2) {
+          textarea.value = draft2;
+          lastSavedValue = draft2;
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        } else {
+          lastSavedValue = textarea.value || '';
         }
 
         // Автосохранение по мере ввода (debounce)
         let t = null;
         textarea.addEventListener('input', () => {
+          const v = textarea.value || '';
+          const normalized = normalize(v);
+          // Если пользователь вручную очистил поле — сразу убираем черновик, чтобы после перезагрузки не подгружался
+          if (!normalized) {
+            clearDraft();
+            lastSavedValue = '';
+            if (t) window.clearTimeout(t);
+            return;
+          }
           if (t) window.clearTimeout(t);
           t = window.setTimeout(() => {
-            const v = textarea.value || '';
-            if (normalize(v)) setDraft(v);
-            else clearDraft();
+            const v2 = textarea.value || '';
+            const normalized2 = normalize(v2);
+            if (normalized2 !== normalize(lastSavedValue)) {
+              setDraft(v2);
+              lastSavedValue = v2;
+            }
           }, 250);
         });
 
-        // Сохраняем при уходе со страницы
+        // Сохраняем при уходе со страницы (только если значение изменилось)
         window.addEventListener('beforeunload', () => {
           const v = textarea.value || '';
-          if (normalize(v)) setDraft(v);
+          const normalized = normalize(v);
+          if (normalized && normalized !== normalize(lastSavedValue)) {
+            setDraft(v);
+          }
         });
 
         // Очистка черновика после успешной отправки
-        form.addEventListener('submit', () => {
-          setTimeout(() => clearDraft(), 500);
+        // Для AJAX-форм очистка происходит в обработчике submit (до обновления панели)
+        // Для обычных форм (с редиректом) очищаем с задержкой
+        form.addEventListener('submit', function(e) {
+          // Если форма отправляется через AJAX (есть обработчик preventDefault выше), очистка уже произошла
+          // Для обычных форм очищаем с задержкой
+          if (!e.defaultPrevented) {
+            setTimeout(() => clearDraft(), 500);
+          }
         });
       }
 
-      // Инициализируем для inline-формы
+      // Инициализируем для inline-формы и выставляем глобально для повторной инициализации после AJAX-подмены панели
+      window.initNoteDraft = initDraft;
       initDraft('noteFormModernInline');
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Вкладки Modern: переключение контента без перезагрузки
     (function() {
       const modernRoot = document.getElementById('companyDetailModern');
@@ -7387,7 +7508,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Горячие клавиши для Modern режима
     (function() {
       const modernView = document.getElementById('companyDetailModern');
@@ -7455,7 +7576,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Поиск по карточке в Modern режиме
     (function() {
       const searchBtn = document.getElementById('quickSearchBtnModern');
@@ -7588,7 +7709,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Шаблоны заметок
     (function() {
       const templates = {
@@ -7617,7 +7738,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Копирование текста (универсальное)
     (function() {
       document.addEventListener('click', function(e) {
@@ -7640,7 +7761,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Быстрые действия в Modern режиме
     (function() {
       // Добавить заметку
@@ -7678,7 +7799,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Завершение задачи и перенос сроков
     (function() {
       // Завершение задачи
@@ -7750,7 +7871,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Быстрое изменение статуса компании
     (function() {
       const statusSelect = document.getElementById('quickStatusChangeModern');
@@ -7782,7 +7903,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Индикатор несохранённых изменений
     (function() {
       const indicator = document.getElementById('unsavedChangesIndicatorModern');
@@ -7851,7 +7972,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Обработка кнопок "Развернуть/Свернуть" для заметок в modern режиме (основная + превью)
     (function() {
       function updateExpandVisibility() {
@@ -7879,6 +8000,7 @@
         updateExpandVisibility();
       }
       window.addEventListener('resize', updateExpandVisibility);
+      window.updateOverviewNoteExpand = updateExpandVisibility;
 
       document.addEventListener('click', function(e) {
         const btn = e.target.closest('[data-note-expand-toggle], [data-note-preview-toggle]');
@@ -7913,6 +8035,112 @@
       });
     })();
   </script>
+
+  <!-- ===== МОДАЛКА: История передвижений карточки ===== -->
+  {% if history_events %}
+  <div id="historyModal" class="fixed inset-0 z-[250] hidden">
+    <div class="fixed inset-0 bg-black/35" id="historyModalOverlay"></div>
+    <div class="absolute inset-x-4 top-14 mx-auto max-w-lg" style="max-height:calc(100vh - 4rem)">
+      <div class="bg-white border rounded-2xl p-4 max-h-full overflow-y-auto shadow-xl">
+        <div class="flex items-center justify-between mb-4">
+          <div class="font-semibold text-base flex items-center gap-2">
+            <svg class="w-5 h-5 text-brand-teal flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            История передвижений
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" id="closeHistoryModal" aria-label="Закрыть">✕</button>
+        </div>
+
+        <ol class="relative border-l border-brand-soft/60 ml-3 space-y-0">
+          {% for ev in history_events %}
+            <li class="mb-5 ml-5">
+              <!-- Точка на таймлайне -->
+              <span class="absolute -left-[9px] flex h-[18px] w-[18px] items-center justify-center rounded-full
+                {% if ev.event_type == 'created' %}bg-green-50 border-2 border-green-400{% else %}bg-blue-50 border-2 border-blue-400{% endif %}">
+                {% if ev.event_type == 'created' %}
+                  <svg class="w-2.5 h-2.5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clip-rule="evenodd"/>
+                  </svg>
+                {% else %}
+                  <svg class="w-2.5 h-2.5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                  </svg>
+                {% endif %}
+              </span>
+
+              <!-- Дата + источник -->
+              <time class="mb-0.5 block text-xs text-brand-dark/50 leading-tight">
+                {{ ev.occurred_at|date:"d.m.Y H:i" }}
+                <span class="ml-1 text-[10px] rounded px-1 {% if ev.source == 'amocrm' %}bg-orange-100 text-orange-600{% else %}bg-teal-100 text-teal-600{% endif %}">
+                  {% if ev.source == 'amocrm' %}amoCRM{% else %}CRM{% endif %}
+                </span>
+              </time>
+
+              <!-- Описание события -->
+              {% if ev.event_type == 'created' %}
+                <p class="text-sm text-brand-dark/80 leading-snug">
+                  <span class="font-medium text-green-700">Создана</span>
+                  {% if ev.actor_name %}
+                    <span class="text-brand-dark/60"> · </span><span class="font-medium">{{ ev.actor_name }}</span>
+                  {% endif %}
+                </p>
+              {% else %}
+                <p class="text-sm text-brand-dark/80 leading-snug">
+                  <span class="font-medium text-blue-700">Передана</span>
+                  {% if ev.from_user_name %}
+                    <span class="text-brand-dark/60"> от </span><span class="font-medium">{{ ev.from_user_name }}</span>
+                  {% endif %}
+                  {% if ev.to_user_name %}
+                    <span class="text-brand-dark/60"> → </span><span class="font-medium">{{ ev.to_user_name }}</span>
+                  {% endif %}
+                  {% if ev.actor_name and ev.actor_name != ev.from_user_name and ev.actor_name != ev.to_user_name %}
+                    <span class="text-brand-dark/40 text-xs"> (выполнил: {{ ev.actor_name }})</span>
+                  {% endif %}
+                </p>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <script nonce="{{ csp_nonce }}">
+    (function() {
+      const modal = document.getElementById('historyModal');
+      if (!modal) return;
+
+      function openHistoryModal() {
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+        // Прокрутить к последнему (самому новому) событию
+        var scrollEl = modal.querySelector('.overflow-y-auto');
+        if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+      }
+      function closeHistoryModal() {
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+      }
+
+      // Кнопки открытия (classic + modern)
+      ['openHistoryModal', 'openHistoryModalModern'].forEach(function(id) {
+        var btn = document.getElementById(id);
+        if (btn) btn.addEventListener('click', openHistoryModal);
+      });
+
+      // Закрытие
+      var closeBtn = document.getElementById('closeHistoryModal');
+      if (closeBtn) closeBtn.addEventListener('click', closeHistoryModal);
+      var overlay = document.getElementById('historyModalOverlay');
+      if (overlay) overlay.addEventListener('click', closeHistoryModal);
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeHistoryModal();
+      });
+    })();
+  </script>
+  {% endif %}
+
 {% endblock %}
 
 

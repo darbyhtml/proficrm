@@ -202,6 +202,19 @@ class Company(models.Model):
             GinIndex(OpClass(Upper("email"), name="gin_trgm_ops"), name="cmp_email_trgm_gin_idx"),
         ]
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.head_company_id and self.pk:
+            visited = set()
+            current_id = self.head_company_id
+            while current_id is not None:
+                if current_id == self.pk:
+                    raise ValidationError({"head_company": "Нельзя создать циклическую связь головных организаций."})
+                if current_id in visited:
+                    break
+                visited.add(current_id)
+                current_id = Company.objects.filter(pk=current_id).values_list("head_company_id", flat=True).first()
+
     def save(self, *args, **kwargs):
         """
         Сохранение компании с нормализацией данных.
@@ -384,6 +397,14 @@ class CompanyDeal(models.Model):
 
 
 class Contact(models.Model):
+    """
+    Контакт (физическое лицо) связанный с компанией.
+
+    ВАЖНО (L-7): При удалении Company контакты НЕ удаляются — company=NULL (SET_NULL).
+    Это намеренное поведение: контакт может существовать без компании (независимый контакт,
+    переход в другую компанию и т.д.). Такие контакты видны в общем реестре контактов,
+    но не отображаются в карточке ни одной компании. При необходимости — удалять вручную.
+    """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.ForeignKey(Company, verbose_name="Компания", null=True, blank=True, on_delete=models.SET_NULL, related_name="contacts")
 
@@ -707,4 +728,80 @@ class CompanySearchIndex(models.Model):
             GinIndex(fields=["normalized_emails"], name="cmp_si_nemails_gin_idx"),
             GinIndex(fields=["normalized_inns"], name="cmp_si_ninns_gin_idx"),
         ]
+
+
+class CompanyHistoryEvent(models.Model):
+    """
+    История передвижений карточки компании.
+    Хранит события: создание карточки и передачи между ответственными.
+    Источник — либо наша CRM (source=local), либо импорт из amoCRM (source=amocrm).
+    Текстовые *_name поля заполняются всегда — для корректного отображения
+    даже если пользователь был удалён или пришёл без локального аккаунта.
+    """
+
+    class EventType(models.TextChoices):
+        CREATED = "created", "Создана"
+        ASSIGNED = "assigned", "Передана"
+
+    class Source(models.TextChoices):
+        LOCAL = "local", "CRM"
+        AMOCRM = "amocrm", "amoCRM"
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="history_events",
+        verbose_name="Компания",
+    )
+    event_type = models.CharField(
+        "Тип события", max_length=16, choices=EventType.choices, db_index=True
+    )
+
+    actor_name = models.CharField("Кто выполнил (текст)", max_length=255, blank=True, default="")
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="actor_history_events",
+        verbose_name="Кто выполнил",
+    )
+
+    from_user_name = models.CharField("От кого (текст)", max_length=255, blank=True, default="")
+    from_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        verbose_name="От кого",
+    )
+
+    to_user_name = models.CharField("Кому (текст)", max_length=255, blank=True, default="")
+    to_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        verbose_name="Кому",
+    )
+
+    occurred_at = models.DateTimeField("Когда произошло", db_index=True)
+    source = models.CharField(
+        "Источник", max_length=16, choices=Source.choices, default=Source.LOCAL, db_index=True
+    )
+    # ID события в amoCRM — для дедупликации при повторном импорте.
+    # Для "created"-события синтетический: f"created_{amo_company_id}".
+    external_id = models.CharField("Внешний ID", max_length=64, blank=True, default="", db_index=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-occurred_at"]
+        verbose_name = "История компании"
+        verbose_name_plural = "История компаний"
+        indexes = [
+            models.Index(fields=["company", "-occurred_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.get_event_type_display()} {self.company_id} @ {self.occurred_at:%d.%m.%Y %H:%M}"
 

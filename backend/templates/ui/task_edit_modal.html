@@ -8,14 +8,14 @@
     </button>
   </div>
 
-  <form method="post" data-task-edit-form action="/tasks/{{ task.id }}/edit/">
+  <form method="post" data-task-edit-form action="{% url 'task_edit' task.id %}">
     {% csrf_token %}
-    
+
     <div>
       <label class="block text-sm text-brand-dark/80 mb-1">Задача</label>
       {{ form.type }}
     </div>
-    
+
     <div class="mt-3">
       <label class="block text-sm text-brand-dark/80 mb-1">Описание</label>
       {{ form.description }}
@@ -24,6 +24,13 @@
     <div class="mt-3">
       <label class="block text-sm text-brand-dark/80 mb-1">Дедлайн</label>
       {{ form.due_at }}
+    </div>
+
+    <div class="mt-3">
+      <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
+        {{ form.is_urgent }}
+        <span>Срочная задача</span>
+      </label>
     </div>
 
     {% if form.errors %}
@@ -40,12 +47,16 @@
       <button class="btn btn-primary" type="submit">Сохранить</button>
       <button type="button" class="btn btn-outline" data-close-task-modal>Отмена</button>
       {% if can_delete_task %}
-        <form method="post" action="/tasks/{{ task.id }}/delete/" onsubmit="return confirm('Удалить задачу?');" style="display:inline;">
-          {% csrf_token %}
-          <button class="btn btn-outline" style="border-color:rgba(220,38,38,.5);color:#b91c1c;" type="submit">
-            Удалить
-          </button>
-        </form>
+        {# Кнопка удаления: используем data-task-delete (JS обработчик есть в task_list.html) #}
+        <button
+          type="button"
+          class="btn btn-outline"
+          style="border-color:rgba(220,38,38,.5);color:#b91c1c;"
+          data-task-delete
+          data-task-id="{{ task.id }}"
+        >
+          Удалить
+        </button>
       {% endif %}
     </div>
   </form>

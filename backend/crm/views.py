@@ -58,52 +58,74 @@ Canonical: {canonical_url}
 
 def health_check(request):
     """
-    Health check endpoint для мониторинга состояния сервиса.
-    Проверяет доступность БД, Redis и Celery.
+    Health check endpoint для мониторинга.
+    Возвращает 200 если всё OK, 503 если критичный компонент недоступен.
+
+    Проверки:
+      database — SELECT 1 к PostgreSQL
+      cache     — set/get через Redis
+      celery    — ping с таймаутом 2с (warning, не degraded)
+      disk      — свободное место на / (warning < 20%, degraded < 5%)
     """
+    import shutil
+    from datetime import datetime, timezone
     from django.db import connection
     from django.core.cache import cache
-    from django.conf import settings
-    
-    health_status = {
-        "status": "ok",
-        "checks": {}
-    }
-    
-    # Проверка БД
+
+    checks = {}
+    degraded = False
+
+    # --- database ---
     try:
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1")
-        health_status["checks"]["database"] = "ok"
+        checks["database"] = {"status": "ok"}
     except Exception as e:
-        health_status["checks"]["database"] = f"error: {str(e)}"
-        health_status["status"] = "degraded"
-    
-    # Проверка Redis (кеш)
-    try:
-        cache.set("health_check_test", "ok", 10)
-        test_value = cache.get("health_check_test")
-        if test_value == "ok":
-            health_status["checks"]["cache"] = "ok"
-        else:
-            health_status["checks"]["cache"] = "error: cache not working"
-            health_status["status"] = "degraded"
-    except Exception as e:
-        health_status["checks"]["cache"] = f"error: {str(e)}"
-        health_status["status"] = "degraded"
-    
-    # Проверка Celery (если настроен)
-    if hasattr(settings, "CELERY_BROKER_URL"):
-        try:
-            from celery import current_app
-            inspect = current_app.control.inspect()
-            stats = inspect.stats()
-            if stats:
-                health_status["checks"]["celery"] = "ok"
-            else:
-                health_status["checks"]["celery"] = "warning: no workers available"
-        except Exception as e:
-            health_status["checks"]["celery"] = f"warning: {str(e)}"
+        checks["database"] = {"status": "error", "detail": str(e)}
+        degraded = True
 
-    status_code = 200 if health_status["status"] == "ok" else 503
-    return JsonResponse(health_status, status=status_code)
+    # --- cache (Redis) ---
+    try:
+        cache.set("_hc", "1", 5)
+        if cache.get("_hc") == "1":
+            checks["cache"] = {"status": "ok"}
+        else:
+            checks["cache"] = {"status": "error", "detail": "get returned wrong value"}
+            degraded = True
+    except Exception as e:
+        checks["cache"] = {"status": "error", "detail": str(e)}
+        degraded = True
+
+    # --- celery (ping, timeout 2s — warning only) ---
+    try:
+        from celery import current_app
+        reply = current_app.control.ping(timeout=1)
+        if reply:
+            checks["celery"] = {"status": "ok", "workers": len(reply)}
+        else:
+            checks["celery"] = {"status": "warning", "detail": "no workers responded"}
+    except Exception as e:
+        checks["celery"] = {"status": "warning", "detail": str(e)}
+
+    # --- disk ---
+    try:
+        usage = shutil.disk_usage("/")
+        free_pct = usage.free / usage.total * 100
+        if free_pct < 5:
+            checks["disk"] = {"status": "error", "free_pct": round(free_pct, 1)}
+            degraded = True
+        elif free_pct < 20:
+            checks["disk"] = {"status": "warning", "free_pct": round(free_pct, 1)}
+        else:
+            checks["disk"] = {"status": "ok", "free_pct": round(free_pct, 1)}
+    except Exception as e:
+        checks["disk"] = {"status": "warning", "detail": str(e)}
+
+    overall = "degraded" if degraded else "ok"
+    status_code = 503 if degraded else 200
+
+    return JsonResponse({
+        "status": overall,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "checks": checks,
+    }, status=status_code)

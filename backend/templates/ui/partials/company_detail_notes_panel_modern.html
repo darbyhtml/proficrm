@@ -17,28 +17,22 @@
         <button type="button" class="btn btn-outline btn-xs note-template-btn" data-template="quote">💰 КП/счёт</button>
         <button type="button" class="btn btn-outline btn-xs note-template-btn" data-template="reject">❌ Отказ/причина</button>
       </div>
-      <form class="space-y-3" method="post" action="/companies/{{ company.id }}/notes/add/" enctype="multipart/form-data" id="noteFormModernInline" data-company-id="{{ company.id }}" data-user-id="{{ request.user.id }}">
+      <form class="note-input-wrapper rounded-2xl bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06),0_2px_8px_rgba(0,0,0,0.04)] border border-black/6" method="post" action="/companies/{{ company.id }}/notes/add/" enctype="multipart/form-data" id="noteFormModernInline" data-company-id="{{ company.id }}" data-user-id="{{ request.user.id }}">
         {% csrf_token %}
-        <div>
-          <label class="block text-xs font-medium text-brand-dark/70 mb-1">Текст заметки</label>
-          {{ note_form.text }}
-        </div>
-        <div class="note-files-zone rounded-xl p-4">
-          <input id="noteFileModernInline" type="file" name="attachment" class="hidden" />
-          <input id="noteFilesMultipleModernInline" type="file" name="attachments" multiple class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv" />
-          <div class="flex flex-wrap items-center gap-2">
-            <label class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-brand-soft/80 text-brand-dark/80 hover:bg-brand-soft/30 cursor-pointer transition-colors text-sm font-medium" for="noteFilesMultipleModernInline">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              Прикрепить файлы
-            </label>
-            <span class="text-xs text-brand-dark/50" id="noteFileNameModernInline"></span>
+        <input id="noteFileModernInline" type="file" name="attachment" class="hidden" />
+        <input id="noteFilesMultipleModernInline" type="file" name="attachments" multiple class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv" />
+        <div class="note-input-bar note-files-zone flex items-start gap-2 rounded-2xl overflow-hidden px-3 py-2 min-h-[52px]">
+          <label for="noteFilesMultipleModernInline" class="flex-shrink-0 p-2 rounded-lg text-[#64748b] hover:text-brand-teal hover:bg-black/5 cursor-pointer transition-colors" title="Прикрепить файлы" aria-label="Прикрепить файлы">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+          </label>
+          <div class="flex-1 min-w-0">
+            {{ note_form.text }}
           </div>
-          <div id="noteAddFileChipsModernInline" class="flex flex-wrap gap-2 mt-3"></div>
-          <p class="text-xs text-brand-dark/50 mt-2">PDF, DOC, XLS, изображения. До 15 МБ.</p>
+          <button type="submit" class="flex-shrink-0 p-2 rounded-lg bg-[#01948E] text-white hover:bg-[#017a75] transition-colors" title="Отправить (Ctrl+Enter)" aria-label="Отправить">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+          </button>
         </div>
-        <div class="flex gap-2">
-          <button class="btn btn-primary btn-sm" type="submit">Добавить заметку</button>
-        </div>
+        <div id="noteAddFileChipsModernInline" class="flex flex-wrap gap-2 px-3 pb-2 pt-1"></div>
       </form>
     </div>
   {% endif %}

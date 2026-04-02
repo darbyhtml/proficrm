@@ -813,6 +813,7 @@
       }
     </style>
     {% block extra_head %}{% endblock %}
+    <link rel="stylesheet" href="{% static 'ui/css/main.css' %}">
   </head>
   <body class="bg-brand-soft/40 text-brand-dark">
     <div class="min-h-screen">
@@ -834,7 +835,7 @@
                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
                 <div class="flex items-center gap-1">
                   <span class="text-brand-dark/60">Пользователь:</span>
-                  <select name="view_user_id" class="select w-auto py-1 px-2 text-xs" style="min-width: 150px;">
+                  <select name="view_user_id" class="select w-auto py-1 px-2 text-xs">
                     <option value="">— Выбрать —</option>
                     {% for u in view_as_users %}
                       <option value="{{ u.id }}" {% if view_as_user and view_as_user.id == u.id %}selected{% endif %}>
@@ -897,11 +898,14 @@
                 </div>
 
                 <div class="max-h-[420px] overflow-auto bg-white">
-                  {% if reminder_items %}
-                    <div class="px-4 pt-3 pb-2 flex items-center justify-between">
+                  {# Секция напоминаний — всегда в DOM, скрывается если пусто #}
+                  <div id="reminderSection" {% if not reminder_items %}class="hidden"{% endif %}>
+                    <div class="px-4 pt-3 pb-2 flex items-center justify-between" id="reminderHeader">
                       <span class="text-xs muted">Напоминания</span>
                       {% if reminder_count > reminder_items|length %}
-                        <a href="/notifications/reminders/all/" class="text-xs link">Показать все ({{ reminder_count }})</a>
+                        <a href="/notifications/reminders/all/" class="text-xs link" id="reminderShowAll">Показать все ({{ reminder_count }})</a>
+                      {% else %}
+                        <span id="reminderShowAll" class="hidden"></span>
                       {% endif %}
                     </div>
                     <div class="px-2 pb-2" id="reminderList">
@@ -912,7 +916,7 @@
                         </a>
                       {% endfor %}
                     </div>
-                  {% endif %}
+                  </div>
 
                   <div class="px-4 pt-3 pb-2 flex items-center justify-between">
                     <span class="text-xs muted">Новые</span>
@@ -945,7 +949,7 @@
                               {% endif %}
                             </div>
                             {% if n.body %}<div class="text-xs muted mt-0.5">{{ n.body|truncatechars:140 }}</div>{% endif %}
-                            <div class="muted-2 mt-1" style="font-size:0.6875rem;">{{ n.created_at }}</div>
+                            <div class="muted-2 mt-1" style="font-size:0.6875rem;">{{ n.created_at|date:"d.m.Y H:i" }}</div>
                           </div>
                           <form method="post" action="/notifications/{{ n.id }}/read/" class="js-notif-read-form">
                             {% csrf_token %}
@@ -963,13 +967,23 @@
                 </div>
               </div>
             </div>
-            <span class="text-brand-dark/80">
+            <a href="/preferences/#profile" class="shrink-0" title="Настройки профиля">
+              {% if request.user.avatar %}
+                <img src="{{ request.user.avatar.url }}" alt=""
+                     class="w-8 h-8 rounded-full object-cover border border-brand-soft shadow-sm hover:opacity-80 transition-opacity" />
+              {% else %}
+                <div class="w-8 h-8 rounded-full bg-brand-teal/20 border border-brand-soft flex items-center justify-center text-xs font-bold text-brand-teal hover:bg-brand-teal/30 transition-colors select-none">
+                  {{ request.user.first_name|first|upper }}{{ request.user.last_name|first|upper }}{% if not request.user.first_name and not request.user.last_name %}{{ request.user.username|first|upper }}{% endif %}
+                </div>
+              {% endif %}
+            </a>
+            <a href="/preferences/" class="text-brand-dark/80 hover:text-brand-dark transition-colors">
               {% if request.user.first_name or request.user.last_name %}
                 {{ request.user.last_name }} {{ request.user.first_name }}
               {% else %}
                 {{ request.user.get_username }}
               {% endif %}
-            </span>
+            </a>
             <form method="post" action="/logout/">
               {% csrf_token %}
               <button class="rounded-lg border border-brand-soft bg-white px-3 py-1.5 hover:bg-brand-soft/40 active:scale-[0.99]">Выйти</button>
@@ -1051,20 +1065,6 @@
                 </span>
                 <span>Компании</span>
               </a>
-              {% if MESSENGER_ENABLED %}
-                {% policy_can 'ui:messenger:conversations:list' as can_nav_messenger %}
-                {% if can_nav_messenger %}
-                  <a class="flex flex-col items-center gap-1 px-2 py-2 rounded-lg hover:bg-brand-soft/40 text-[12px] text-center {% if request.resolver_match.url_name == 'messenger_conversation_list' or request.resolver_match.url_name == 'messenger_conversation_detail' or request.resolver_match.url_name == 'messenger_conversations_unified' %}bg-brand-soft/50 font-medium{% endif %}" href="{% url 'messenger_conversations_unified' %}">
-                    <span class="nav-ico-wrap relative inline-block">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                      {% if messenger_unread_count|default:0 > 0 %}
-                        <span class="absolute -top-0.5 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-semibold">{{ messenger_unread_count }}</span>
-                      {% endif %}
-                    </span>
-                    <span>Диалоги</span>
-                  </a>
-                {% endif %}
-              {% endif %}
               <a class="flex flex-col items-center gap-1 px-2 py-2 rounded-lg hover:bg-brand-soft/40 text-[12px] text-center {% if request.path|slice:':6' == '/mail/' %}bg-brand-soft/50 font-medium{% endif %}" href="/mail/campaigns/">
                 <span class="nav-ico-wrap">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1194,7 +1194,7 @@
       </div>
     </a>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
       (function(){
         const btn = document.getElementById('notifBtn');
         const panel = document.getElementById('notifPanel');
@@ -1207,7 +1207,7 @@
         document.addEventListener('keydown', function(e){ if(e.key === 'Escape') close(); });
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Live notifications (polling). Без WebSocket, безопасно: если JS не работает — всё как раньше.
       (function(){
         function getCookie(name) {
@@ -1402,9 +1402,16 @@
           }
         }
 
+        const reminderSection = document.getElementById('reminderSection');
+        const reminderShowAll = document.getElementById('reminderShowAll');
+
         function renderReminders(items, totalCount){
           if(!reminderList) return;
           const arr = Array.isArray(items) ? items : [];
+          // Показываем/скрываем всю секцию напоминаний
+          if(reminderSection){
+            reminderSection.classList.toggle('hidden', arr.length === 0);
+          }
           if(!arr.length){
             reminderList.innerHTML = '';
             return;
@@ -1418,85 +1425,92 @@
               ${subtitle ? `<div class="text-xs muted mt-0.5">${subtitle}</div>` : ''}
             </a>`;
           }).join('');
-          
-          // Обновляем заголовок с кнопкой "Показать все"
-          const reminderHeader = reminderList.previousElementSibling;
-          if(reminderHeader){
-            const existingLink = reminderHeader.querySelector('a');
+          // Обновляем ссылку "Показать все"
+          if(reminderShowAll){
             if(totalCount && totalCount > arr.length){
-              if(!existingLink){
-                const showAllLink = document.createElement('a');
-                showAllLink.href = '/notifications/reminders/all/';
-                showAllLink.className = 'text-xs link';
-                showAllLink.textContent = `Показать все (${totalCount})`;
-                reminderHeader.appendChild(showAllLink);
-              } else {
-                existingLink.textContent = `Показать все (${totalCount})`;
-              }
-            } else if(existingLink){
-              existingLink.remove();
+              reminderShowAll.textContent = `Показать все (${totalCount})`;
+              reminderShowAll.href = '/notifications/reminders/all/';
+              reminderShowAll.className = 'text-xs link';
+              reminderShowAll.classList.remove('hidden');
+            } else {
+              reminderShowAll.classList.add('hidden');
             }
           }
         }
+
+        // Форматирование времени: "сегодня в 14:32", "вчера в 09:10", "16.03.2026"
+        function formatNotifTime(raw){
+          if(!raw) return '';
+          try{
+            // Django выводит ISO или "March 16, 2026, 3:14 p.m." — пробуем распарсить
+            const d = new Date(raw);
+            if(isNaN(d.getTime())) return String(raw);
+            const now = new Date();
+            const pad = n => String(n).padStart(2,'0');
+            const hhmm = pad(d.getHours()) + ':' + pad(d.getMinutes());
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+            const dDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            if(dDay.getTime() === today.getTime()) return 'сегодня в ' + hhmm;
+            if(dDay.getTime() === yesterday.getTime()) return 'вчера в ' + hhmm;
+            return pad(d.getDate()) + '.' + pad(d.getMonth()+1) + '.' + d.getFullYear() + ' ' + hhmm;
+          }catch(_e){ return String(raw); }
+        }
+
+        const notifShowAllEl = document.getElementById('notifShowAll') || null;
 
         function renderNotifs(items, totalCount){
           if(!notifList) return;
           const arr = Array.isArray(items) ? items : [];
           if(!arr.length){
             notifList.innerHTML = '<div class="px-2 pb-3 muted text-sm" id="notifEmpty">Уведомлений пока нет.</div>';
-            return;
-          }
-          notifList.innerHTML = arr.map(n => {
-            const id = escapeHtml(n.id);
-            const title = escapeHtml(n.title);
-            const body = escapeHtml(n.body || '');
-            const created = escapeHtml(n.created_at || '');
-            const url = escapeHtml(n.url || '');
-            const payload = n.payload || {};
-            const openLink = url ? `<a class="link text-sm mt-2 inline-block" href="${url}">Открыть</a>` : '';
-            const bodyShort = body ? (body.length > 140 ? body.slice(0, 140) + '…' : body) : '';
-            
-            // Иконки ролей и бейдж "СРОЧНО"
-            let roleIcon = '';
-            if (payload.creator_role === 'sales_head') {
-              roleIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-brand-teal inline-block ml-1" title="РОП"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>';
-            } else if (payload.creator_role === 'branch_director') {
-              roleIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-600 inline-block ml-1" title="Директор филиала"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>';
-            }
-            
-            const urgentBadge = payload.is_urgent ? '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 border border-red-200 ml-1">СРОЧНО</span>' : '';
-            
-            return `<div class="rounded-xl border border-brand-soft px-3 py-2 mb-2 bg-brand-soft/20" data-notif-id="${id}">
-              <div class="flex items-start justify-between gap-2">
-                <div class="flex-1">
-                  <div class="text-sm font-medium flex items-center gap-1">${title}${roleIcon}${urgentBadge}</div>
-                  ${bodyShort ? `<div class="text-xs muted mt-0.5">${bodyShort}</div>` : ''}
-                  <div class="muted-2 mt-1" style="font-size:0.6875rem;">${created}</div>
+          } else {
+            notifList.innerHTML = arr.map(n => {
+              const id = escapeHtml(String(n.id || ''));
+              const title = escapeHtml(n.title || '');
+              const body = escapeHtml(n.body || '');
+              const created = formatNotifTime(n.created_at || '');
+              const url = escapeHtml(n.url || '');
+              const payload = n.payload || {};
+              const openLink = url ? `<a class="link text-sm mt-2 inline-block" href="${url}">Открыть →</a>` : '';
+              const bodyShort = body ? (body.length > 140 ? body.slice(0, 140) + '…' : body) : '';
+              let roleIcon = '';
+              if(payload.creator_role === 'sales_head'){
+                roleIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#01948E;display:inline;margin-left:3px" title="РОП"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>';
+              } else if(payload.creator_role === 'branch_director'){
+                roleIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#d97706;display:inline;margin-left:3px" title="Директор филиала"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>';
+              }
+              const urgentBadge = payload.is_urgent ? '<span style="display:inline-flex;align-items:center;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:600;background:rgba(239,68,68,.1);color:#b91c1c;border:1px solid rgba(239,68,68,.25);margin-left:4px">СРОЧНО</span>' : '';
+              return `<div class="rounded-xl border border-brand-soft px-3 py-2 mb-2 bg-brand-soft/20" data-notif-id="${id}">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium">${title}${roleIcon}${urgentBadge}</div>
+                    ${bodyShort ? `<div class="text-xs muted mt-0.5 break-words">${bodyShort}</div>` : ''}
+                    <div class="muted-2 mt-1" style="font-size:0.6875rem;">${created}</div>
+                  </div>
+                  <form method="post" action="/notifications/${id}/read/" class="js-notif-read-form flex-shrink-0">
+                    <button class="btn btn-outline btn-sm" type="submit" title="Отметить прочитанным">✓</button>
+                  </form>
                 </div>
-                <form method="post" action="/notifications/${id}/read/" class="js-notif-read-form">
-                  <button class="btn btn-outline btn-sm" type="submit" title="Отметить прочитанным">✓</button>
-                </form>
-              </div>
-              ${openLink}
-            </div>`;
-          }).join('');
-          
-          // Обновляем заголовок с кнопкой "Показать все"
+                ${openLink}
+              </div>`;
+            }).join('');
+          }
+          // Обновляем ссылку "Показать все" (ищем в заголовке секции)
           const notifHeader = notifList.previousElementSibling;
           if(notifHeader){
-            const existingLink = notifHeader.querySelector('a');
+            let link = notifHeader.querySelector('a.js-notif-show-all');
             if(totalCount && totalCount > arr.length){
-              if(!existingLink){
-                const showAllLink = document.createElement('a');
-                showAllLink.href = '/notifications/all/';
-                showAllLink.className = 'text-xs link';
-                showAllLink.textContent = `Показать все (${totalCount})`;
-                notifHeader.appendChild(showAllLink);
-              } else {
-                existingLink.textContent = `Показать все (${totalCount})`;
+              if(!link){
+                link = document.createElement('a');
+                link.href = '/notifications/all/';
+                link.className = 'text-xs link js-notif-show-all';
+                notifHeader.appendChild(link);
               }
-            } else if(existingLink){
-              existingLink.remove();
+              link.textContent = `Показать все (${totalCount})`;
+              link.classList.remove('hidden');
+            } else if(link){
+              link.classList.add('hidden');
             }
           }
         }
@@ -1572,7 +1586,7 @@
         setInterval(pollOnce, 15000);
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       (function(){
         const openBtn = document.getElementById('menuBtn');
         const closeBtn = document.getElementById('menuCloseBtn');
@@ -1593,7 +1607,7 @@
         document.addEventListener('keydown', function(e){ if(e.key === 'Escape') close(); });
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Checkbox multiselect over <select multiple>
       (function(){
         function initOne(root){
@@ -1699,7 +1713,7 @@
         };
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Searchable single select over <select> (not multiple)
       (function(){
         const MAX_RENDER = 200;
@@ -1991,7 +2005,7 @@
         };
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Failsafe: если пользователь кликает по .ms-btn, но виджет не успел инициализироваться,
       // инициализируем "на лету" и открываем панель.
       (function(){
@@ -2020,7 +2034,7 @@
         }, true);
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Автоматическое форматирование номеров телефонов при вводе
       function formatPhoneInput(input) {
         let value = input.value.replace(/\D/g, ''); // Убираем все нецифровые символы
@@ -2362,7 +2376,7 @@
         setInterval(poll, 4000);
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Кастомный dropdown для выбора типа задачи с иконками и цветами
       (function() {
         window.initTaskTypeSelects = function() {
@@ -2544,50 +2558,66 @@
         observer.observe(document.body, { childList: true, subtree: true });
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Кастомный календарик для datetime-local и date с подписями "Часы" и "Минуты"
       (function() {
         function initCustomDatetimePicker() {
           document.querySelectorAll('input[type="datetime-local"], input[type="date"]').forEach(function(input) {
             if (input.dataset.customPickerInitialized) return;
             input.dataset.customPickerInitialized = 'true';
-            
+
             // Скрываем нативный календарик
             input.style.position = 'absolute';
             input.style.opacity = '0';
             input.style.width = '100%';
             input.style.height = '100%';
             input.style.pointerEvents = 'none';
-            
-            // Создаем обёртку
-            const wrapper = document.createElement('div');
-            wrapper.className = 'custom-datetime-picker';
-            wrapper.style.position = 'relative';
-            input.parentNode.insertBefore(wrapper, input);
-            wrapper.appendChild(input);
-            
-            // Создаем визуальный input
-            const visualInput = document.createElement('div');
-            visualInput.className = 'input';
-            visualInput.style.cursor = 'pointer';
-            visualInput.style.display = 'flex';
-            visualInput.style.alignItems = 'center';
-            visualInput.style.justifyContent = 'space-between';
-            visualInput.style.position = 'relative';
-            
-            // Добавляем текст
-            const textSpan = document.createElement('span');
-            textSpan.style.flex = '1';
-            visualInput.appendChild(textSpan);
-            
-            // Добавляем иконку календаря справа
-            const calendarIcon = document.createElement('div');
-            calendarIcon.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: rgba(0,61,56,.6); flex-shrink: 0;"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>';
-            calendarIcon.style.display = 'flex';
-            calendarIcon.style.alignItems = 'center';
-            calendarIcon.style.pointerEvents = 'none';
-            visualInput.appendChild(calendarIcon);
-            wrapper.appendChild(visualInput);
+
+            // Поддержка pre-rendered обёртки: если wrapper уже создан в шаблоне,
+            // просто используем его — не создаём заново
+            const isPreRendered = input.parentElement &&
+              input.parentElement.classList.contains('custom-datetime-picker');
+
+            let wrapper, visualInput, textSpan;
+
+            if (isPreRendered) {
+              wrapper = input.parentElement;
+              visualInput = wrapper.querySelector('[data-cdp-visual]');
+              textSpan = wrapper.querySelector('[data-cdp-text]');
+            } else {
+              // Создаем обёртку
+              wrapper = document.createElement('div');
+              wrapper.className = 'custom-datetime-picker';
+              wrapper.style.position = 'relative';
+              input.parentNode.insertBefore(wrapper, input);
+              wrapper.appendChild(input);
+
+              // Создаем визуальный input
+              visualInput = document.createElement('div');
+              visualInput.className = 'input';
+              visualInput.style.cursor = 'pointer';
+              visualInput.style.display = 'flex';
+              visualInput.style.alignItems = 'center';
+              visualInput.style.justifyContent = 'space-between';
+              visualInput.style.position = 'relative';
+              // Копируем padding и font-size из оригинального input, чтобы визуальный div совпадал по размеру
+              if (input.style.padding) visualInput.style.padding = input.style.padding;
+              if (input.style.fontSize) visualInput.style.fontSize = input.style.fontSize;
+
+              // Добавляем текст
+              textSpan = document.createElement('span');
+              textSpan.style.flex = '1';
+              visualInput.appendChild(textSpan);
+
+              // Добавляем иконку календаря справа
+              const calendarIcon = document.createElement('div');
+              calendarIcon.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: rgba(0,61,56,.6); flex-shrink: 0;"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>';
+              calendarIcon.style.display = 'flex';
+              calendarIcon.style.alignItems = 'center';
+              calendarIcon.style.pointerEvents = 'none';
+              visualInput.appendChild(calendarIcon);
+              wrapper.appendChild(visualInput);
+            }
             
             // Обновляем визуальный input
             function updateVisualInput() {
@@ -2656,7 +2686,10 @@
             }
 
             let currentDate = input.value ? new Date(input.value) : new Date();
-            let selectedDate = currentDate;
+            // selectedDate — только дата (полночь) без времени, иначе isSelected при pre-filled значении не совпадёт
+            let selectedDate = input.value
+              ? new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
+              : null;
             let initialHour = input.type === 'datetime-local' ? currentDate.getHours() : 0;
             let initialMinute = input.type === 'datetime-local' ? currentDate.getMinutes() : 0;
             const clampedInitial = clampTime(initialHour, initialMinute);
@@ -2690,7 +2723,7 @@
                   <div class="calendar-header">
                     <div class="month-year" style="cursor: pointer;">Выберите год</div>
                     <div class="nav-buttons">
-                      <button class="close-year-selector" type="button" style="font-size: 1.125rem; line-height: 1;">✕</button>
+                      <button class="close-year-selector" type="button">✕</button>
                     </div>
                   </div>
                   <div class="year-selector">
@@ -2743,8 +2776,8 @@
                   <div class="calendar-header">
                     <div class="month-year" style="cursor: pointer;">Выберите месяц</div>
                     <div class="nav-buttons">
-                      <button class="show-year-selector" type="button" style="min-width: 3.75rem; font-weight: 600;">${year}</button>
-                      <button class="close-month-selector" type="button" style="font-size: 1.125rem; line-height: 1;">✕</button>
+                      <button class="show-year-selector" type="button">${year}</button>
+                      <button class="close-month-selector" type="button">✕</button>
                     </div>
                   </div>
                   <div class="month-year-selector">
@@ -2912,7 +2945,7 @@
               popup.querySelector('.btn-today').addEventListener('click', () => {
                 const now = new Date();
                 currentDate = new Date(now);
-                selectedDate = new Date(now);
+                selectedDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                 if (input.type === 'datetime-local') {
                   const clamped = clampTime(now.getHours(), now.getMinutes());
                   selectedHour = clamped.hour;
@@ -2949,6 +2982,7 @@
             }
             
             function openPopup() {
+              overlay._activeClosePopup = closePopup;
               overlay.classList.add('active');
               const rect = visualInput.getBoundingClientRect();
               // Позиционируем popup прямо под полем ввода
@@ -2990,36 +3024,60 @@
               e.stopPropagation();
               openPopup();
             });
-            
-            overlay.addEventListener('click', (e) => {
-              if (e.target === overlay) {
-                closePopup();
-              }
-            });
-            
-            // Предотвращаем закрытие при клике на popup
-            popup.addEventListener('click', (e) => {
-              e.stopPropagation();
-            });
-            
-            // Закрытие по Escape
-            document.addEventListener('keydown', handleEscape);
-            
+
+            // Глобальные обработчики вешаем только один раз (не дублируем на каждый пикер)
+            if (!overlay._hasCloseHandler) {
+              overlay._hasCloseHandler = true;
+              overlay.addEventListener('click', (e) => {
+                if (e.target === overlay && overlay._activeClosePopup) {
+                  overlay._activeClosePopup();
+                }
+              });
+            }
+
+            if (!popup._hasStopPropHandler) {
+              popup._hasStopPropHandler = true;
+              popup.addEventListener('click', (e) => { e.stopPropagation(); });
+            }
+
+            if (!overlay._hasEscapeHandler) {
+              overlay._hasEscapeHandler = true;
+              document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && overlay.classList.contains('active') && overlay._activeClosePopup) {
+                  overlay._activeClosePopup();
+                }
+              });
+            }
+
             input.addEventListener('change', updateVisualInput);
           });
         }
-        
+
         if (document.readyState === 'loading') {
           document.addEventListener('DOMContentLoaded', initCustomDatetimePicker);
         } else {
           initCustomDatetimePicker();
         }
-        
-        const observer = new MutationObserver(initCustomDatetimePicker);
+
+        // MutationObserver: только при добавлении новых datetime/date input-ов, не на каждый рендер попапа
+        const observer = new MutationObserver((mutations) => {
+          for (const m of mutations) {
+            for (const node of m.addedNodes) {
+              if (node.nodeType !== 1) continue;
+              if (
+                (node.matches && node.matches('input[type="datetime-local"], input[type="date"]')) ||
+                (node.querySelector && node.querySelector('input[type="datetime-local"], input[type="date"]'))
+              ) {
+                initCustomDatetimePicker();
+                return;
+              }
+            }
+          }
+        });
         observer.observe(document.body, { childList: true, subtree: true });
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Live clock + live worktime colors (ok/warn/off) without page reload.
       (function(){
         const DAY_MAP = { 'пн':0, 'вт':1, 'ср':2, 'чт':3, 'пт':4, 'сб':5, 'вс':6 };
@@ -3353,7 +3411,159 @@
         }
       })();
     </script>
+    <script nonce="{{ csp_nonce }}">
+      // Глобальный обработчик data-confirm на формах — заменяет inline onsubmit="return confirm(...)"
+      document.addEventListener('submit', function(e) {
+        var msg = e.target && e.target.getAttribute ? e.target.getAttribute('data-confirm') : null;
+        if (msg && !window.confirm(msg)) { e.preventDefault(); return false; }
+      }, true);
+    </script>
     {% block extra_js %}{% endblock %}
+    {# CRM Announcements modal — показывается при наличии непрочитанного объявления #}
+    <div id="crmAnnouncementModal"
+      style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:9990;align-items:center;justify-content:center;background:rgba(0,61,56,0.35);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);opacity:0;transition:opacity .25s ease;">
+      <div id="crmAnnouncementBox"
+        style="position:relative;max-width:480px;width:92vw;background:#fff;border-radius:1.25rem;box-shadow:0 24px 60px rgba(0,61,56,0.18);padding:2rem;border-top:4px solid #01948E;transform:translateY(12px);transition:transform .25s ease;"
+        role="dialog" aria-modal="true" aria-labelledby="crmAnnTitle">
+        <div id="crmAnnTypeBadge" style="display:inline-flex;align-items:center;border-radius:999px;padding:.15rem .65rem;font-size:.72rem;font-weight:600;margin-bottom:.75rem;border:1px solid rgba(194,226,222,.9);background:rgba(1,148,142,.10);color:#01948E;"></div>
+        <h2 id="crmAnnTitle" style="font-size:1.125rem;font-weight:700;color:#003D38;margin:0 0 .6rem 0;"></h2>
+        <p id="crmAnnBody" style="font-size:.9rem;color:rgba(0,61,56,.78);white-space:pre-wrap;margin:0 0 1.5rem 0;"></p>
+        <div style="display:flex;justify-content:flex-end;">
+          <button id="crmAnnCloseBtn"
+            style="display:inline-flex;align-items:center;gap:.4rem;background:#01948E;color:#fff;border:none;border-radius:.75rem;padding:.55rem 1.1rem;font-size:.875rem;cursor:pointer;transition:background .15s ease;">
+            Понятно
+          </button>
+        </div>
+      </div>
+    </div>
+    <script nonce="{{ csp_nonce }}">
+      (function(){
+        var modal = document.getElementById('crmAnnouncementModal');
+        var box = document.getElementById('crmAnnouncementBox');
+        var titleEl = document.getElementById('crmAnnTitle');
+        var bodyEl = document.getElementById('crmAnnBody');
+        var badgeEl = document.getElementById('crmAnnTypeBadge');
+        var closeBtn = document.getElementById('crmAnnCloseBtn');
+        if(!modal || !box || !titleEl || !bodyEl || !closeBtn) return;
+
+        var currentAnnId = null;
+
+        var typeConfig = {
+          'info':      { label: 'Информация', borderColor: '#2563eb', badgeBg: 'rgba(37,99,235,.10)', badgeColor: '#2563eb' },
+          'important': { label: 'Важно',       borderColor: '#ca8a04', badgeBg: 'rgba(202,138,4,.12)',  badgeColor: '#854d0e' },
+          'urgent':    { label: 'Срочно',      borderColor: '#dc2626', badgeBg: 'rgba(220,38,38,.12)', badgeColor: '#991b1b' },
+        };
+
+        function escAnn(s){
+          return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        function showAnnouncement(ann){
+          if(!ann || !ann.id) return;
+          currentAnnId = ann.id;
+          var cfg = typeConfig[ann.type] || typeConfig['info'];
+
+          box.style.borderTopColor = cfg.borderColor;
+          badgeEl.style.background = cfg.badgeBg;
+          badgeEl.style.color = cfg.badgeColor;
+          badgeEl.style.borderColor = cfg.borderColor.replace(')',', .35)').replace('rgb','rgba');
+          badgeEl.textContent = cfg.label;
+          titleEl.textContent = ann.title || '';
+          bodyEl.textContent = ann.body || '';
+
+          modal.style.display = 'flex';
+          // trigger transition
+          requestAnimationFrame(function(){
+            requestAnimationFrame(function(){
+              modal.style.opacity = '1';
+              box.style.transform = 'translateY(0)';
+            });
+          });
+        }
+
+        function hideAnnouncement(){
+          modal.style.opacity = '0';
+          box.style.transform = 'translateY(12px)';
+          setTimeout(function(){ modal.style.display = 'none'; }, 260);
+        }
+
+        function getCsrf(){
+          var value = '; ' + document.cookie;
+          var parts = value.split('; csrftoken=');
+          if(parts.length === 2) return parts.pop().split(';').shift();
+          return '';
+        }
+
+        function markRead(annId){
+          if(!annId) return;
+          fetch('/notifications/announcements/' + annId + '/read/', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json'},
+          }).catch(function(){});
+        }
+
+        closeBtn.addEventListener('mouseover', function(){ this.style.background = '#003D38'; });
+        closeBtn.addEventListener('mouseout', function(){ this.style.background = '#01948E'; });
+        closeBtn.addEventListener('click', function(){
+          if(currentAnnId) markRead(currentAnnId);
+          hideAnnouncement();
+        });
+
+        // Close on backdrop click
+        modal.addEventListener('click', function(e){
+          if(e.target === modal){
+            if(currentAnnId) markRead(currentAnnId);
+            hideAnnouncement();
+          }
+        });
+
+        // Close on Escape
+        document.addEventListener('keydown', function(e){
+          if(e.key === 'Escape' && modal.style.display !== 'none'){
+            if(currentAnnId) markRead(currentAnnId);
+            hideAnnouncement();
+          }
+        });
+
+        // Hook into existing poll function — listen for announcement in poll response
+        var _origFetch = window.fetch;
+        // Instead of patching fetch, we listen via MutationObserver/poll override approach.
+        // We intercept the poll by wrapping the interval check:
+        var annShownIds = (function(){
+          try{ return JSON.parse(sessionStorage.getItem('crm_ann_shown') || '{}'); }catch(_e){ return {}; }
+        })();
+
+        function saveShown(id){
+          annShownIds[id] = 1;
+          try{ sessionStorage.setItem('crm_ann_shown', JSON.stringify(annShownIds)); }catch(_e){}
+        }
+
+        // Poll for announcements independently (reuses same endpoint)
+        var annPollInFlight = false;
+        function pollAnnouncement(){
+          if(annPollInFlight) return;
+          annPollInFlight = true;
+          fetch('/notifications/poll/', {credentials:'same-origin'})
+            .then(function(r){ return r.json(); })
+            .then(function(data){
+              if(data && data.announcement && data.announcement.id){
+                var ann = data.announcement;
+                if(!annShownIds[ann.id]){
+                  saveShown(ann.id);
+                  showAnnouncement(ann);
+                }
+              }
+            })
+            .catch(function(){})
+            .finally(function(){ annPollInFlight = false; });
+        }
+
+        // Run after a short delay to let the page load, then every 60s
+        setTimeout(pollAnnouncement, 2000);
+        setInterval(pollAnnouncement, 60000);
+      })();
+    </script>
   </body>
 </html>
 

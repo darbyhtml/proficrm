@@ -1,3 +1,6 @@
+# Claude Code
+.claude/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -93,4 +96,12 @@ sphere_merge.json
 
 # Chatwoot reference code (for study, not to be committed)
 chatwoot/
+
+# Local audit & planning docs (Claude Code workspace)
+.audit/
+
+# Node / Tailwind build
+node_modules/
+
+# External reference repos (не часть проекта)
 chatwoot-reference/

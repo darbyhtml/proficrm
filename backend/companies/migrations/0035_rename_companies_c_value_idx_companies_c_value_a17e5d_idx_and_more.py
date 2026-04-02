@@ -3,6 +3,18 @@
 from django.db import migrations
 
 
+
+
+def _rename_indexes_pg(apps, schema_editor):
+    """ALTER INDEX IF EXISTS работает только в PostgreSQL; для SQLite — пропускаем."""
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute("ALTER INDEX IF EXISTS companies_c_value_idx RENAME TO companies_c_value_a17e5d_idx;")
+    schema_editor.execute("ALTER INDEX IF EXISTS companies_c_company_order_idx RENAME TO companies_c_company_90564b_idx;")
+    schema_editor.execute("ALTER INDEX IF EXISTS companies_c_phone_value_idx RENAME TO companies_c_value_b68823_idx;")
+    schema_editor.execute("ALTER INDEX IF EXISTS companies_c_phone_company_order_idx RENAME TO companies_c_company_3cdaea_idx;")
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -12,22 +24,7 @@ class Migration(migrations.Migration):
     operations = [
         migrations.SeparateDatabaseAndState(
             database_operations=[
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS companies_c_value_idx RENAME TO companies_c_value_a17e5d_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS companies_c_value_a17e5d_idx RENAME TO companies_c_value_idx;",
-                ),
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS companies_c_company_order_idx RENAME TO companies_c_company_90564b_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS companies_c_company_90564b_idx RENAME TO companies_c_company_order_idx;",
-                ),
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS companies_c_phone_value_idx RENAME TO companies_c_value_b68823_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS companies_c_value_b68823_idx RENAME TO companies_c_phone_value_idx;",
-                ),
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS companies_c_phone_company_order_idx RENAME TO companies_c_company_3cdaea_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS companies_c_company_3cdaea_idx RENAME TO companies_c_phone_company_order_idx;",
-                ),
+                migrations.RunPython(_rename_indexes_pg, migrations.RunPython.noop),
             ],
             state_operations=[
                 migrations.RenameIndex(

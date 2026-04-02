@@ -8,6 +8,7 @@ urlpatterns = [
     path("notifications/poll/", views.poll, name="notifications_poll"),
     path("notifications/all/", views.all_notifications, name="notifications_all"),
     path("notifications/reminders/all/", views.all_reminders, name="notifications_reminders_all"),
+    path("notifications/announcements/<int:announcement_id>/read/", views.mark_announcement_read, name="announcement_mark_read"),
 ]
 
 

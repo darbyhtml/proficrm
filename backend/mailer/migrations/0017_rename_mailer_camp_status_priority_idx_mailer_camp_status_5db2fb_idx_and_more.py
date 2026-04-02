@@ -5,6 +5,21 @@ from django.conf import settings
 from django.db import migrations, models
 
 
+def _rename_indexes_pg(apps, schema_editor):
+    """ALTER INDEX IF EXISTS работает только в PostgreSQL; для SQLite — пропускаем."""
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(
+        "ALTER INDEX IF EXISTS mailer_camp_status_priority_idx RENAME TO mailer_camp_status_5db2fb_idx;"
+    )
+    schema_editor.execute(
+        "ALTER INDEX IF EXISTS mailer_emai_created_7b9a3d_idx RENAME TO mailer_emai_created_817c96_idx;"
+    )
+    schema_editor.execute(
+        "ALTER INDEX IF EXISTS mailer_user_user_id_2a3b4c_idx RENAME TO mailer_user_user_id_db59f8_idx;"
+    )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -15,18 +30,9 @@ class Migration(migrations.Migration):
     operations = [
         migrations.SeparateDatabaseAndState(
             database_operations=[
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS mailer_camp_status_priority_idx RENAME TO mailer_camp_status_5db2fb_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS mailer_camp_status_5db2fb_idx RENAME TO mailer_camp_status_priority_idx;",
-                ),
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS mailer_emai_created_7b9a3d_idx RENAME TO mailer_emai_created_817c96_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS mailer_emai_created_817c96_idx RENAME TO mailer_emai_created_7b9a3d_idx;",
-                ),
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS mailer_user_user_id_2a3b4c_idx RENAME TO mailer_user_user_id_db59f8_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS mailer_user_user_id_db59f8_idx RENAME TO mailer_user_user_id_2a3b4c_idx;",
-                ),
+                # PostgreSQL-only: ALTER INDEX не поддерживается в SQLite.
+                # Выполняем через RunPython с проверкой vendor.
+                migrations.RunPython(_rename_indexes_pg, migrations.RunPython.noop),
             ],
             state_operations=[
                 migrations.RenameIndex(

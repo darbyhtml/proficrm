@@ -1,3 +1,4 @@
+{% load ui_extras %}
 <div class="card card-pad">
   <div class="flex items-center justify-between mb-3">
     <div class="font-medium text-lg">Задачи</div>
@@ -9,11 +10,11 @@
   </div>
   <div id="tasks-modern-content">
     {% for task in tasks %}
-      <div class="rounded-lg border p-3 {% if task.due_at and task.due_at < local_now and task.status != 'done' and task.status != 'cancelled' %}task-overdue{% endif %} hover:bg-brand-soft/20 transition-colors cursor-pointer mb-3" onclick="window.location='/tasks/{{ task.id }}/'">
+      <a href="/tasks/{{ task.id }}/" class="block rounded-lg border p-3 {% if task.due_at and task.due_at < local_now and task.status != 'done' and task.status != 'cancelled' %}task-overdue{% endif %} hover:bg-brand-soft/20 transition-colors mb-3" style="text-decoration:none;color:inherit;">
         <div class="flex items-start justify-between gap-2">
           <div class="flex-1 min-w-0">
             {% if task.type %}
-              {% include "ui/partials/task_type_badge.html" with task_type=task.type only %}
+              {% task_type_badge task.type %}
             {% elif task.title %}
               <span class="badge badge-sm">{{ task.title }}</span>
             {% endif %}
@@ -23,7 +24,7 @@
             {% include "ui/partials/_task_meta.html" with task=task only %}
           </div>
         </div>
-      </div>
+      </a>
     {% empty %}
       <div class="text-sm text-brand-dark/50 italic py-4 text-center">Нет задач</div>
     {% endfor %}

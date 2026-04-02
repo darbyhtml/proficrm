@@ -88,6 +88,7 @@ if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
     SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL_REDIRECT", "1") == "1"
+    SECURE_REDIRECT_EXEMPT = [r"^health/$"]
     SESSION_COOKIE_SECURE = os.getenv("DJANGO_SESSION_COOKIE_SECURE", "1") == "1"
     CSRF_COOKIE_SECURE = os.getenv("DJANGO_CSRF_COOKIE_SECURE", "1") == "1"
 
@@ -109,7 +110,7 @@ if not DEBUG:
     CSP_DEFAULT_SRC = os.getenv("CSP_DEFAULT_SRC", "'self'")
     CSP_SCRIPT_SRC = os.getenv("CSP_SCRIPT_SRC", "'self' 'unsafe-inline' https://cdn.tailwindcss.com")
     CSP_STYLE_SRC = os.getenv("CSP_STYLE_SRC", "'self' 'unsafe-inline' https://cdn.tailwindcss.com")
-    CSP_IMG_SRC = os.getenv("CSP_IMG_SRC", "'self' data: https:")
+    CSP_IMG_SRC = os.getenv("CSP_IMG_SRC", "'self' data: https: blob:")
     CSP_FONT_SRC = os.getenv("CSP_FONT_SRC", "'self' data:")
     CSP_CONNECT_SRC = os.getenv("CSP_CONNECT_SRC", "'self'")
     
@@ -152,6 +153,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'django_filters',
     'corsheaders',
+    'drf_spectacular',  # OpenAPI 3.0 schema generation
 
     # Local apps
     'accounts',
@@ -164,7 +166,6 @@ INSTALLED_APPS = [
     'phonebridge',
     'amocrm',  # AmoCRM integration (migration tools and management commands)
     'policy',
-    'messenger',
 ]
 
 MIDDLEWARE = [
@@ -199,7 +200,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'ui.context_processors.ui_globals',
                 'notifications.context_processors.notifications_panel',
-                'messenger.context_processors.messenger_globals',
+                'crm.context_processors.csp_nonce',
             ],
         },
     },
@@ -233,6 +234,12 @@ if DB_ENGINE == "postgres":
         }
     }
 else:
+    if _is_production_like:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured(
+            "DB_ENGINE is not set to 'postgres' in a production-like environment. "
+            "Set DB_ENGINE=postgres in your .env file."
+        )
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -284,18 +291,23 @@ SESSION_SAVE_EVERY_REQUEST = True
 # Mailer encryption key (Fernet). Generate once and store in env on VDS.
 MAILER_FERNET_KEY = os.getenv("MAILER_FERNET_KEY", "")
 
-# Проверка: в production MAILER_FERNET_KEY должен быть установлен, если используется mailer функциональность
+# В production MAILER_FERNET_KEY обязателен — без него пароли SMTP хранятся в plaintext.
+# Генерация: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 if not DEBUG and not MAILER_FERNET_KEY:
-    import warnings
-    warnings.warn(
-        "⚠️ SECURITY WARNING: MAILER_FERNET_KEY is not set in production. "
-        "Email account passwords cannot be encrypted. Set MAILER_FERNET_KEY in .env. "
-        "Generate: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"",
-        UserWarning
+    raise ImproperlyConfigured(
+        "MAILER_FERNET_KEY is not set. Email account passwords cannot be encrypted. "
+        "Generate: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
     )
 
 # Public base URL for emails/unsubscribe (optional; example: https://crm.example.ru)
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
+
+# Mailer: размер батча отправки (получателей за один проход задачи)
+MAILER_SEND_BATCH_SIZE = int(os.getenv("MAILER_SEND_BATCH_SIZE", "10"))
+# Mailer: таймаут Redis-лока задачи send_pending_emails (секунды)
+MAILER_SEND_LOCK_TIMEOUT = int(os.getenv("MAILER_SEND_LOCK_TIMEOUT", "120"))
+# Mailer: максимум получателей в кампании
+MAILER_MAX_CAMPAIGN_RECIPIENTS = int(os.getenv("MAILER_MAX_CAMPAIGN_RECIPIENTS", "10000"))
 
 # Security contact email for security.txt
 SECURITY_CONTACT_EMAIL = os.getenv("SECURITY_CONTACT_EMAIL", "")
@@ -359,6 +371,18 @@ REST_FRAMEWORK = {
     ),
     # Защита от утечки информации через ошибки API
     "EXCEPTION_HANDLER": "crm.exceptions.custom_exception_handler",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "ProfiCRM API",
+    "DESCRIPTION": "REST API для ProfiCRM. Аутентификация: JWT Bearer token.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,  # Не включать /api/schema/ в сам schema
+    # Swagger UI доступен только в DEBUG режиме (защита от exposure в production)
+    "SWAGGER_UI_SETTINGS": {
+        "persistAuthorization": True,
+    },
 }
 
 # Настройки JWT (simplejwt). Подобраны безопасные дефолты без изменения текущей логики API.
@@ -393,11 +417,10 @@ CORS_ALLOWED_ORIGINS = [o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "ht
 if not DEBUG:
     localhost_origins = [o for o in CORS_ALLOWED_ORIGINS if "localhost" in o.lower() or "127.0.0.1" in o.lower()]
     if localhost_origins:
-        import warnings
-        warnings.warn(
-            f"⚠️ SECURITY WARNING: CORS_ALLOWED_ORIGINS contains localhost origins in production: {localhost_origins}. "
-            "This is unsafe. Set CORS_ALLOWED_ORIGINS to your production domain(s) only.",
-            UserWarning
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured(
+            f"CORS_ALLOWED_ORIGINS contains localhost origins in production: {localhost_origins}. "
+            "Set CORS_ALLOWED_ORIGINS to your production domain(s) only."
         )
 
 CORS_ALLOW_CREDENTIALS = True
@@ -408,6 +431,7 @@ CORS_ALLOW_CREDENTIALS = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR / "static"]
 
 # Media (uploads)
 MEDIA_URL = "/media/"
@@ -495,6 +519,12 @@ SMTP_BZ_UNSUB_SYNC_SECONDS = float(os.getenv("SMTP_BZ_UNSUB_SYNC_SECONDS", "600"
 SMTP_BZ_DELIVERY_SYNC_SECONDS = float(os.getenv("SMTP_BZ_DELIVERY_SYNC_SECONDS", "600") or "600")
 # Частота reconcile очереди рассылок (сек). По умолчанию раз в 5 минут.
 MAILER_QUEUE_RECONCILE_SECONDS = float(os.getenv("MAILER_QUEUE_RECONCILE_SECONDS", "300") or "300")
+
+# Retention policy: срок хранения записей в журналах (дни)
+ACTIVITY_EVENT_RETENTION_DAYS = int(os.getenv("ACTIVITY_EVENT_RETENTION_DAYS", "180") or "180")
+ERRORLOG_RETENTION_DAYS = int(os.getenv("ERRORLOG_RETENTION_DAYS", "90") or "90")
+NOTIFICATION_RETENTION_DAYS = int(os.getenv("NOTIFICATION_RETENTION_DAYS", "90") or "90")
+
 CELERY_BEAT_SCHEDULE = {
     "send-pending-emails": {
         "task": "mailer.tasks.send_pending_emails",
@@ -523,6 +553,23 @@ CELERY_BEAT_SCHEDULE = {
     "reindex-companies-daily": {
         "task": "companies.tasks.reindex_companies_daily",
         "schedule": crontab(hour=0, minute=0),  # Ежедневно 00:00 (по CELERY_TIMEZONE = Europe/Moscow)
+    },
+    "generate-recurring-tasks": {
+        "task": "tasksapp.tasks.generate_recurring_tasks",
+        "schedule": crontab(hour=6, minute=0),  # Ежедневно 06:00 по Moscow
+    },
+    # Retention: еженедельно в воскресенье 03:00 MSK
+    "purge-old-activity-events": {
+        "task": "audit.tasks.purge_old_activity_events",
+        "schedule": crontab(hour=3, minute=0, day_of_week=0),
+    },
+    "purge-old-error-logs": {
+        "task": "audit.tasks.purge_old_error_logs",
+        "schedule": crontab(hour=3, minute=15, day_of_week=0),
+    },
+    "purge-old-notifications": {
+        "task": "notifications.tasks.purge_old_notifications",
+        "schedule": crontab(hour=3, minute=30, day_of_week=0),
     },
 }
 
@@ -612,16 +659,6 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
-        "messenger.widget": {
-            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
-            "level": "INFO",
-            "propagate": False,
-        },
-        "messenger.ui": {
-            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
-            "level": "INFO",
-            "propagate": False,
-        },
     },
 }
 
@@ -661,5 +698,16 @@ MAILER_LOG_FULL_EMAILS = os.getenv("MAILER_LOG_FULL_EMAILS", "False").lower() ==
 # Соль для хэширования email в логах
 # ⚠️ ВАЖНО: Дефолтный salt НЕ должен использоваться в production!
 # Установите уникальный MAILER_LOG_HASH_SALT через environment variable.
-# Пример: MAILER_LOG_HASH_SALT=$(openssl rand -hex 32)
-MAILER_LOG_HASH_SALT = os.getenv("MAILER_LOG_HASH_SALT", "default-salt-change-in-production")
+# Генерация: openssl rand -hex 32
+_DEFAULT_LOG_HASH_SALT = "default-salt-change-in-production"
+MAILER_LOG_HASH_SALT = os.getenv("MAILER_LOG_HASH_SALT", _DEFAULT_LOG_HASH_SALT)
+if not DEBUG and MAILER_LOG_HASH_SALT == _DEFAULT_LOG_HASH_SALT:
+    raise ImproperlyConfigured(
+        "MAILER_LOG_HASH_SALT is using the default value in production. "
+        "Set a unique salt in .env to protect email masking in logs. "
+        "Generate: openssl rand -hex 32"
+    )
+
+# Custom test runner: при тестах на SQLite игнорирует PostgreSQL-специфичный синтаксис
+# (GIN/trigram/tsvector индексы, расширения, триггеры). На PostgreSQL — стандартный DiscoverRunner.
+TEST_RUNNER = "crm.test_runner.SQLiteCompatibleTestRunner"

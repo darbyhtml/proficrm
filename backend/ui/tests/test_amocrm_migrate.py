@@ -16,6 +16,9 @@ from ui.models import AmoApiConfig
 
 User = get_user_model()
 
+# Тестовый Fernet-ключ (не используется в prod)
+_TEST_FERNET_KEY = "85--b5Z37dcxRDvHf_xmpOis4j_NGXACmrek0BtzyZo="
+
 
 def _get_csrf(client):
     r = client.get("/settings/amocrm/migrate/")
@@ -45,7 +48,7 @@ def _make_result(companies_matched=5, companies_next_offset=5, companies_has_mor
     return r
 
 
-@override_settings(SECURE_SSL_REDIRECT=False)
+@override_settings(SECURE_SSL_REDIRECT=False, MAILER_FERNET_KEY=_TEST_FERNET_KEY)
 class AmocrmMigrateViewTestCase(TestCase):
     def setUp(self):
         cache.clear()
@@ -65,9 +68,9 @@ class AmocrmMigrateViewTestCase(TestCase):
     def _migrate_patchers(self, result=None):
         if result is None:
             result = _make_result()
-        p1 = patch("ui.views.fetch_amo_users", return_value=[{"id": 1, "name": "M1"}, {"id": 2, "name": "M2"}])
-        p2 = patch("ui.views.fetch_company_custom_fields", return_value=[])
-        p3 = patch("ui.views.migrate_filtered", return_value=result)
+        p1 = patch("ui.views.settings_integrations.fetch_amo_users", return_value=[{"id": 1, "name": "M1"}, {"id": 2, "name": "M2"}])
+        p2 = patch("ui.views.settings_integrations.fetch_company_custom_fields", return_value=[])
+        p3 = patch("ui.views.settings_integrations.migrate_filtered", return_value=result)
         with p1, p2, p3 as m3:
             yield (None, None, m3)
 

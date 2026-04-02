@@ -14,7 +14,9 @@
       </div>
       <form method="post" id="migrate-form" class="grid grid-cols-1 md:grid-cols-2 gap-3" data-progress-url="{% url 'settings_amocrm_migrate_progress' %}">
         {% csrf_token %}
-        <input type="hidden" name="offset" value="{{ form.offset.value|default:0 }}" />
+        <input type="hidden" name="offset" value="0" />
+        <input type="hidden" name="prev_events_created" value="0" />
+        <input type="hidden" name="prev_events_skipped" value="0" />
 
         <div class="flex items-end">
           <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
@@ -84,22 +86,36 @@
 
         <div class="flex items-end">
           <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
-            <input type="checkbox" name="import_tasks" value="on" {% if form.import_tasks.value %}checked{% endif %} />
+            <input type="checkbox" name="import_tasks" value="on" {% if form.import_tasks.value %}checked{% endif %} id="cb_import_tasks" />
             Импортировать задачи
           </label>
         </div>
         <div class="flex items-end">
           <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
-            <input type="checkbox" name="import_notes" value="on" {% if form.import_notes.value %}checked{% endif %} />
+            <input type="checkbox" name="import_notes" value="on" {% if form.import_notes.value %}checked{% endif %} id="cb_import_notes" />
             Импортировать заметки
           </label>
         </div>
         <div class="flex items-end">
           <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
-            <input type="checkbox" name="import_contacts" value="on" {% if form.import_contacts.value %}checked{% endif %} />
+            <input type="checkbox" name="import_contacts" value="on" {% if form.import_contacts.value %}checked{% endif %} id="cb_import_contacts" />
             Импортировать контакты
             <span class="text-xs muted-2">(может быть медленно)</span>
           </label>
+        </div>
+
+        <div class="md:col-span-2 border-t pt-3">
+          <label class="inline-flex items-center gap-2 text-sm font-medium text-brand-dark/80 cursor-pointer" id="lbl_import_history">
+            <input type="checkbox" name="import_history" value="on" {% if form.import_history.value %}checked{% endif %} id="cb_import_history" />
+            <span>
+              <span class="text-brand-teal font-semibold">Только импорт истории передвижений</span>
+              <span class="font-normal text-brand-dark/60"> — быстро, данные карточек не изменяются</span>
+            </span>
+          </label>
+          <p class="text-xs text-brand-dark/50 mt-1 ml-6">
+            Загружает из amoCRM кто и когда передавал карточку. Отображается в карточке компании иконкой часов.
+            Компании фильтруются так же, как при обычном импорте (по ответственному и полю).
+          </p>
         </div>
 
         <div class="md:col-span-2 flex gap-2">
@@ -119,6 +135,111 @@
             <b>Dry-run: данные НЕ сохранены</b>
           </div>
         {% endif %}
+
+        {# ---- Результат для режима «только история» ---- #}
+        {% if form.import_history.value %}
+          <div class="text-sm text-brand-dark/80 space-y-1">
+            <div>Компаний обработано: <b>{{ result.companies_processed }}</b></div>
+            <div>
+              {% if form.dry_run.value %}Событий будет создано{% else %}Событий создано{% endif %}: <b>{{ result.events_created }}</b>
+            </div>
+            <div>Пропущено (уже есть): <b>{{ result.events_skipped }}</b></div>
+            {% if result.errors %}<div class="text-red-600">Ошибок: <b>{{ result.errors }}</b></div>{% endif %}
+          </div>
+          {% if result.preview %}
+            <div class="mt-4">
+              <div class="font-medium text-sm mb-2">
+                {% if form.dry_run.value %}Предпросмотр событий (первые {{ result.preview|length }}):{% else %}Созданные события (первые {{ result.preview|length }}):{% endif %}
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-xs border-collapse">
+                  <thead>
+                    <tr class="bg-brand-soft/40">
+                      <th class="text-left px-2 py-1 border border-brand-soft">Компания</th>
+                      <th class="text-left px-2 py-1 border border-brand-soft">Тип</th>
+                      <th class="text-left px-2 py-1 border border-brand-soft">Дата</th>
+                      <th class="text-left px-2 py-1 border border-brand-soft">От</th>
+                      <th class="text-left px-2 py-1 border border-brand-soft">Кому</th>
+                      <th class="text-left px-2 py-1 border border-brand-soft">Выполнил</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for ev in result.preview %}
+                      <tr class="hover:bg-brand-soft/20">
+                        <td class="px-2 py-1 border border-brand-soft">{{ ev.company_name }}</td>
+                        <td class="px-2 py-1 border border-brand-soft">
+                          {% if ev.event_type == "created" %}<span class="text-green-700">Создана</span>{% else %}<span class="text-blue-700">Передана</span>{% endif %}
+                        </td>
+                        <td class="px-2 py-1 border border-brand-soft whitespace-nowrap">{{ ev.occurred_at }}</td>
+                        <td class="px-2 py-1 border border-brand-soft">{{ ev.from }}</td>
+                        <td class="px-2 py-1 border border-brand-soft">{{ ev.to }}</td>
+                        <td class="px-2 py-1 border border-brand-soft">{{ ev.actor }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          {% endif %}
+          {% if result.companies_has_more and not form.dry_run.value %}
+          <div class="mt-4 border-t pt-4">
+            <div id="auto-continue-status" class="mb-3 rounded-xl border border-brand-blue/60 bg-brand-blue/20 px-4 py-3">
+              <div class="flex items-center justify-between">
+                <div class="text-sm text-brand-dark">
+                  <b>Автоматическое продолжение:</b> следующая пачка запустится через <span id="countdown">5</span> сек.
+                  <span class="text-xs muted-2 block mt-1">
+                    Прогресс: {{ result.companies_next_offset }} / {{ result.companies_total }} компаний
+                  </span>
+                </div>
+                <button id="stop-auto-continue" class="btn btn-outline text-sm" type="button">Остановить</button>
+              </div>
+            </div>
+            <form id="continue-form" method="post" class="flex flex-wrap gap-2 items-center">
+              {% csrf_token %}
+              <input type="hidden" name="dry_run" value="" />
+              <input type="hidden" name="import_history" value="on" />
+              <input type="hidden" name="limit_companies" value="{{ form.limit_companies.value|default:200 }}" />
+              <input type="hidden" name="offset" value="{{ result.companies_next_offset }}" />
+              <input type="hidden" name="prev_events_created" value="{{ result.events_created }}" />
+              <input type="hidden" name="prev_events_skipped" value="{{ result.events_skipped }}" />
+              <input type="hidden" name="responsible_user_id" value="{{ migrate_responsible_user_id|default:form.responsible_user_id.value }}" />
+              <input type="hidden" name="custom_field_id" value="{{ form.custom_field_id.value }}" />
+              <input type="hidden" name="custom_value_label" value="{{ form.custom_value_label.value }}" />
+              <input type="hidden" name="custom_value_enum_id" value="{{ form.custom_value_enum_id.value }}" />
+              {% if form.migrate_all_companies.value %}<input type="hidden" name="migrate_all_companies" value="on" />{% endif %}
+              <button class="btn btn-primary" type="submit">Продолжить (следующая пачка)</button>
+              <span class="text-xs muted-2">Следующий offset: {{ result.companies_next_offset }} / {{ result.companies_total }}</span>
+            </form>
+          </div>
+          <script nonce="{{ csp_nonce }}">
+            (function() {
+              let countdown = 5;
+              let autoContinue = true;
+              const countdownEl = document.getElementById('countdown');
+              const statusEl = document.getElementById('auto-continue-status');
+              const stopBtn = document.getElementById('stop-auto-continue');
+              const form = document.getElementById('continue-form');
+              if (!countdownEl || !statusEl || !stopBtn || !form) return;
+              stopBtn.addEventListener('click', function() {
+                autoContinue = false;
+                statusEl.innerHTML = '<div class="text-sm text-brand-dark">Автоматическое продолжение остановлено.</div>';
+              });
+              const timer = setInterval(function() {
+                if (!autoContinue) { clearInterval(timer); return; }
+                countdown--;
+                if (countdownEl) countdownEl.textContent = countdown;
+                if (countdown <= 0) {
+                  clearInterval(timer);
+                  if (autoContinue) {
+                    statusEl.innerHTML = '<div class="text-sm text-brand-dark">Запускается следующая пачка...</div>';
+                    form.submit();
+                  }
+                }
+              }, 1000);
+            })();
+          </script>
+          {% endif %}
+        {% else %}
         {% if result.error %}
           <div class="mb-4 rounded-xl border border-red-500/60 bg-red-500/20 px-4 py-3 text-sm text-red-700">
             <div class="font-medium mb-1">⚠️ Ошибка миграции:</div>
@@ -633,7 +754,7 @@
               </div>
             {% endif %}
           </div>
-        {% endif %}
+        {% endif %}{# /import_history else #}
 
         {% if result.companies_has_more and not form.dry_run.value %}
           <div class="mt-4 border-t pt-4">
@@ -642,7 +763,7 @@
                 <div class="text-sm text-brand-dark">
                   <b>Автоматическое продолжение:</b> следующая пачка запустится через <span id="countdown">5</span> сек.
                   <span class="text-xs muted-2 block mt-1">
-                    Прогресс: {{ result.companies_next_offset }} / {{ result.companies_matched }} компаний
+                    Прогресс: {{ result.companies_next_offset }} / {{ result.companies_total }} компаний
                   </span>
                 </div>
                 <button id="stop-auto-continue" class="btn btn-outline text-sm" type="button">Остановить</button>
@@ -651,6 +772,7 @@
             <form id="continue-form" method="post" class="flex flex-wrap gap-2 items-center">
               {% csrf_token %}
               <input type="hidden" name="dry_run" value="" />
+              <input type="hidden" name="import_history" value="on" />
               <input type="hidden" name="limit_companies" value="{{ form.limit_companies.value|default:10 }}" />
               <input type="hidden" name="offset" value="{{ result.companies_next_offset }}" />
               <input type="hidden" name="responsible_user_id" value="{{ migrate_responsible_user_id|default:form.responsible_user_id.value }}" />
@@ -665,7 +787,7 @@
               <span class="text-xs muted-2">Следующий offset: {{ result.companies_next_offset }}</span>
             </form>
           </div>
-          <script>
+          <script nonce="{{ csp_nonce }}">
             (function() {
               // Скролл к результатам при загрузке страницы
               const resultCard = document.querySelector('.card.card-pad');
@@ -712,11 +834,12 @@
           </script>
         {% endif %}
       </div>
-    {% endif %}
+    {% endif %}{# /import_history #}
+    {% endif %}{# /result #}
 
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function() {
       // Управление видимостью кастомного поля в зависимости от чекбокса
       const migrateAllCheckbox = document.getElementById('migrate_all_checkbox');
@@ -737,8 +860,29 @@
       
       if (migrateAllCheckbox) {
         migrateAllCheckbox.addEventListener('change', updateCustomFieldVisibility);
-        // Инициализация при загрузке страницы
         updateCustomFieldVisibility();
+      }
+
+      // Режим «только история» — скрываем чекбоксы задач/заметок/контактов
+      const cbImportHistory = document.getElementById('cb_import_history');
+      const historyOnlySections = [
+        document.getElementById('cb_import_tasks')?.closest('.flex'),
+        document.getElementById('cb_import_notes')?.closest('.flex'),
+        document.getElementById('cb_import_contacts')?.closest('.flex'),
+      ].filter(Boolean);
+
+      function updateHistoryMode() {
+        if (!cbImportHistory) return;
+        const isHistory = cbImportHistory.checked;
+        historyOnlySections.forEach(el => {
+          el.style.opacity = isHistory ? '0.35' : '1';
+          el.style.pointerEvents = isHistory ? 'none' : '';
+        });
+      }
+
+      if (cbImportHistory) {
+        cbImportHistory.addEventListener('change', updateHistoryMode);
+        updateHistoryMode();
       }
       
       // Очистка результатов при отправке основной формы (новый импорт)

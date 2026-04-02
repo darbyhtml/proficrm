@@ -25,6 +25,7 @@
         {% if view_is_admin %}
           <a class="btn btn-outline" href="/mail/admin/">Админ-панель</a>
         {% endif %}
+        <a class="btn btn-outline" href="/mail/templates/">Шаблоны</a>
         <a class="btn btn-outline" href="/mail/signature/">Настройка подписи</a>
         <a class="btn btn-primary" href="/mail/campaigns/new/">+ Новая кампания</a>
       </div>
@@ -116,7 +117,7 @@
         <div class="flex items-center justify-between gap-3 mb-2">
           <div class="font-semibold text-sm">Статистика (сегодня)</div>
           <div class="flex items-center gap-2">
-            <button type="button" class="btn btn-outline btn-sm" id="open-unsubscribes-modal" style="padding:.25rem .5rem">Отписки</button>
+            <button type="button" class="btn btn-outline btn-sm" id="open-unsubscribes-modal">Отписки</button>
             <a href="/mail/admin/?tab=analytics" class="btn btn-outline btn-sm hover:bg-brand hover:text-white transition-all">Подробнее →</a>
           </div>
         </div>
@@ -231,7 +232,13 @@
             {% for c in campaigns %}
               {% include "ui/mail/_campaign_row.html" with campaign=c show_creator_column=show_creator_column is_admin=view_is_admin %}
             {% empty %}
-              <tr><td class="muted" colspan="{% if show_creator_column %}7{% else %}6{% endif %}" style="padding:1.25rem 1rem">Кампаний нет.</td></tr>
+              <tr><td colspan="{% if show_creator_column %}7{% else %}6{% endif %}" class="py-10 text-center">
+                <div class="flex flex-col items-center gap-2 text-brand-dark/50 text-sm">
+                  <svg class="w-8 h-8 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"/></svg>
+                  <span>Кампаний пока нет.</span>
+                  <a href="/mail/campaigns/new/" class="btn btn-primary btn-sm mt-1">+ Новая кампания</a>
+                </div>
+              </td></tr>
             {% endfor %}
             {% endif %}
           </tbody>
@@ -254,24 +261,24 @@
 
     {# Модальное окно "Отписки" — только для администратора #}
     {% if view_is_admin %}
-      <div id="unsubscribes-modal" class="hidden fixed inset-0 z-50">
+      <div id="unsubscribes-modal" class="hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-labelledby="unsubscribes-modal-title">
         <div class="absolute inset-0 bg-black/40" data-close-unsubscribes></div>
         <div class="absolute inset-0 flex items-center justify-center p-4">
           <div class="bg-white rounded-xl shadow-xl w-full max-w-3xl overflow-hidden">
             <div class="flex items-center justify-between gap-3 px-4 py-3 border-b">
-              <div class="font-medium">Отписки</div>
-              <button type="button" class="btn btn-outline" style="padding:.25rem .5rem" data-close-unsubscribes>Закрыть</button>
+              <div class="font-medium" id="unsubscribes-modal-title">Отписки</div>
+              <button type="button" class="btn btn-outline btn-sm" data-close-unsubscribes aria-label="Закрыть">Закрыть</button>
             </div>
 
             <div class="p-4 space-y-3">
               <div class="flex flex-col md:flex-row md:items-center gap-2 justify-between">
                 <div class="flex items-center gap-2">
-                  <input id="unsub-q" class="input" placeholder="Поиск email…" style="min-width:16.25rem" />
-                  <button type="button" class="btn btn-outline" id="unsub-refresh" style="padding:.25rem .5rem">Обновить</button>
+                  <input id="unsub-q" class="input" placeholder="Поиск email…" style="min-width:16.25rem" aria-label="Поиск по email в отписках" />
+                  <button type="button" class="btn btn-outline btn-sm" id="unsub-refresh">Обновить</button>
                 </div>
                 <div class="flex items-center gap-2">
                   <div class="text-xs text-brand-dark/60" id="unsub-meta">—</div>
-                  <button type="button" class="btn btn-outline" id="unsub-clear-all" style="padding:.25rem .5rem;border-color:#fecaca;color:#dc2626">
+                  <button type="button" class="btn btn-outline btn-sm border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300" id="unsub-clear-all">
                     Очистить список
                   </button>
                 </div>
@@ -291,15 +298,15 @@
                       </tr>
                     </thead>
                     <tbody id="unsub-tbody">
-                      <tr><td colspan="5" class="muted" style="padding:1rem">Нет данных</td></tr>
+                      <tr><td class="td-empty" colspan="5">Ничего не найдено</td></tr>
                     </tbody>
                   </table>
                 </div>
               </div>
 
               <div class="flex items-center justify-between">
-                <div class="text-xs text-brand-dark/60" id="unsub-error" style="display:none;color:#dc2626"></div>
-                <button type="button" class="btn btn-outline" id="unsub-load-more" style="display:none;padding:.25rem .5rem">Показать ещё</button>
+                <div class="text-xs text-red-600" id="unsub-error" style="display:none"></div>
+                <button type="button" class="btn btn-outline btn-sm" id="unsub-load-more" style="display:none">Показать ещё</button>
               </div>
             </div>
           </div>
@@ -310,7 +317,16 @@
 {% endblock %}
 
 {% block extra_js %}
-  <script>
+  <script nonce="{{ csp_nonce }}">
+    // Клик по строке таблицы с data-href — переход без onclick на <tr>
+    document.addEventListener('click', function(e) {
+      var row = e.target && e.target.closest ? e.target.closest('tr[data-href]') : null;
+      if (!row) return;
+      if (e.target.closest('a, button, input, form')) return;
+      window.location.href = row.getAttribute('data-href');
+    });
+  </script>
+  <script nonce="{{ csp_nonce }}">
     (function () {
       const quotaCard = document.getElementById('quota-card');
       if (!quotaCard) return;
@@ -385,7 +401,7 @@
   </script>
 
   {% if view_is_admin %}
-    <script>
+    <script nonce="{{ csp_nonce }}">
       (function () {
         const modal = document.getElementById('unsubscribes-modal');
         const openBtn = document.getElementById('open-unsubscribes-modal');
@@ -438,7 +454,7 @@
         function render() {
           meta.textContent = `Показано: ${state.items.length} из ${state.total}`;
           if (!state.items.length) {
-            tbody.innerHTML = '<tr><td colspan="5" class="muted" style="padding:1rem">Нет данных</td></tr>';
+            tbody.innerHTML = '<tr><td class="td-empty" colspan="5">Ничего не найдено</td></tr>';
           } else {
             tbody.innerHTML = state.items.map((r) => {
               const email = (r.email || '');
@@ -452,7 +468,7 @@
                   <td class="muted">${reason}</td>
                   <td class="muted">${updated}</td>
                   <td>
-                    <button type="button" class="btn btn-outline" data-del="${encodeURIComponent(email)}" style="padding:.15rem .4rem;border-color:#fecaca;color:#dc2626">✕</button>
+                    <button type="button" class="btn btn-outline btn-sm border-red-200 text-red-700 hover:bg-red-50" data-del="${encodeURIComponent(email)}" aria-label="Удалить из отписок: ${email}">✕</button>
                   </td>
                 </tr>
               `;

@@ -87,17 +87,49 @@ def get_next_send_window_start(
     return next_day
 
 
-_RE_SCRIPT_TAG = re.compile(r"<\s*script\b[^>]*>[\s\S]*?<\s*/\s*script\s*>", re.IGNORECASE)
-_RE_ON_ATTR_DQ = re.compile(r'\son\w+\s*=\s*"[^"]*"',
-                            re.IGNORECASE)
-_RE_ON_ATTR_SQ = re.compile(r"\son\w+\s*=\s*'[^']*'",
-                            re.IGNORECASE)
-_RE_JS_PROTO = re.compile(r"""(\b(?:href|src)\s*=\s*["']?)\s*javascript:[^"'>\s]+""", re.IGNORECASE)
+# ---------------------------------------------------------------------------
+# Email HTML санитизация (nh3 — Rust-based HTML parser whitelist)
+# ---------------------------------------------------------------------------
+
 _RE_BODY = re.compile(r"(?is)<\s*body\b[^>]*>(.*?)<\s*/\s*body\s*>")
 _RE_HTML_WRAPPERS = re.compile(r"(?is)<\s*/?\s*(html|head)\b[^>]*>")
 _RE_CK_SAVED_ATTR = re.compile(r"(?i)\sdata-cke-saved-(href|src)\s*=\s*(['\"]).*?\2")
 _RE_IMG_TAG = re.compile(r"(?is)<\s*img\b[^>]*>")
 _RE_IMG_STYLE = re.compile(r"(?is)\sstyle\s*=\s*(['\"])(.*?)\1")
+
+# Разрешённые HTML теги в теле письма (email-safe whitelist)
+_NH3_ALLOWED_TAGS = frozenset({
+    "a", "b", "blockquote", "br", "caption", "center", "code",
+    "col", "colgroup", "div", "em", "figure", "figcaption",
+    "h1", "h2", "h3", "h4", "h5", "h6", "hr", "i", "img",
+    "li", "ol", "p", "pre", "s", "small", "span", "strike",
+    "strong", "sub", "sup", "table", "tbody", "td", "tfoot", "th", "thead",
+    "tr", "u", "ul",
+})
+
+# Общие атрибуты разрешены на всех тегах
+_COMMON_ATTRS = frozenset({"class", "id", "style", "align", "valign", "dir"})
+
+# Разрешённые атрибуты по тегу
+_NH3_ALLOWED_ATTRS: dict[str, frozenset[str]] = {
+    "a":        _COMMON_ATTRS | frozenset({"href", "target", "rel", "name", "title"}),
+    "img":      _COMMON_ATTRS | frozenset({"src", "alt", "title", "width", "height", "border"}),
+    "table":    _COMMON_ATTRS | frozenset({"width", "height", "border", "cellpadding", "cellspacing", "bgcolor", "summary"}),
+    "td":       _COMMON_ATTRS | frozenset({"width", "height", "colspan", "rowspan", "bgcolor", "nowrap"}),
+    "th":       _COMMON_ATTRS | frozenset({"width", "height", "colspan", "rowspan", "bgcolor", "scope"}),
+    "col":      _COMMON_ATTRS | frozenset({"width", "span"}),
+    "colgroup": _COMMON_ATTRS | frozenset({"width", "span"}),
+    "figure":   _COMMON_ATTRS,
+    "figcaption": _COMMON_ATTRS,
+    "blockquote": _COMMON_ATTRS | frozenset({"cite"}),
+}
+# Для тегов без специальных атрибутов — только общие
+for _tag in _NH3_ALLOWED_TAGS:
+    if _tag not in _NH3_ALLOWED_ATTRS:
+        _NH3_ALLOWED_ATTRS[_tag] = _COMMON_ATTRS
+
+# Разрешённые URL-схемы (mailto и data: нужны для email)
+_NH3_URL_SCHEMES = frozenset({"http", "https", "mailto", "data", "cid"})
 
 
 def _normalize_email_img_tags(html_value: str) -> str:
@@ -152,26 +184,37 @@ def _normalize_email_img_tags(html_value: str) -> str:
 
 def sanitize_email_html(value: str) -> str:
     """
-    Минимальная серверная санитизация HTML (защита от stored-XSS при отображении в UI).
-    Email-клиенты обычно режут скрипты сами, но мы защищаем и CRM UI.
+    Серверная санитизация HTML через nh3 (Rust-based parser, whitelist-подход).
+    Защищает от XSS при отображении в CRM UI и в email-клиентах.
+
+    Использует строгий whitelist тегов и атрибутов вместо regex-замен.
+    Regex-подход обходился через <scri pt>, entity encoding, STYLE-инъекции.
     """
+    import nh3
+
     s = value or ""
-    # Если прилетела обертка целого письма из почтовика, вытаскиваем только body,
-    # чтобы не было вложенных <body>/<html> в письме (это часто ломает верстку в почтовиках).
+
+    # Если прилетела обертка целого письма из почтовика — вытаскиваем только body
     m = _RE_BODY.search(s)
     if m:
         s = m.group(1) or ""
-    # Убираем <html>/<head> если они остались (и "data-cke-saved-*" атрибуты)
+
+    # Убираем <html>/<head> если остались
     s = _RE_HTML_WRAPPERS.sub(" ", s)
+
+    # Убираем CKEditor-артефакты data-cke-saved-*
     s = _RE_CK_SAVED_ATTR.sub(" ", s)
-    s = _RE_SCRIPT_TAG.sub("", s)
-    # Удаляем inline обработчики событий
-    s = _RE_ON_ATTR_DQ.sub(" ", s)
-    s = _RE_ON_ATTR_SQ.sub(" ", s)
-    # Убираем javascript: в href/src
-    s = _RE_JS_PROTO.sub(r"\1#", s)
+
+    # Очищаем через nh3 с whitelist (надёжнее regex)
+    s = nh3.clean(
+        s,
+        tags=_NH3_ALLOWED_TAGS,
+        attributes=_NH3_ALLOWED_ATTRS,
+        url_schemes=_NH3_URL_SCHEMES,
+        strip_comments=True,
+        link_rel=None,  # Не добавляем rel="noopener" — в email ссылках это не нужно
+    )
+
     # Подправляем <img> для предсказуемой верстки в почтовиках
     s = _normalize_email_img_tags(s)
     return s
-
-

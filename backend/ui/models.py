@@ -86,9 +86,11 @@ class AmoApiConfig(models.Model):
     client_secret = models.CharField("OAuth Client Secret", max_length=255, blank=True, default="")
     redirect_uri = models.CharField("Redirect URI", max_length=500, blank=True, default="")
 
-    access_token = models.TextField("Access token", blank=True, default="")
-    refresh_token = models.TextField("Refresh token", blank=True, default="")
-    long_lived_token = models.TextField("Долгосрочный токен (если используете)", blank=True, default="")
+    # Токены хранятся зашифрованными (Fernet, ключ MAILER_FERNET_KEY).
+    # Используйте свойства get_access_token / set_access_token и т.д.
+    access_token_enc = models.TextField("Access token (зашифрован)", blank=True, default="")
+    refresh_token_enc = models.TextField("Refresh token (зашифрован)", blank=True, default="")
+    long_lived_token_enc = models.TextField("Долгосрочный токен (зашифрован)", blank=True, default="")
     token_type = models.CharField("Token type", max_length=32, blank=True, default="Bearer")
     expires_at = models.DateTimeField("Token expires at", null=True, blank=True)
 
@@ -104,6 +106,48 @@ class AmoApiConfig(models.Model):
     class Meta:
         verbose_name = "Интеграция amoCRM"
         verbose_name_plural = "Интеграция amoCRM"
+
+    # ------------------------------------------------------------------
+    # Шифрование токенов (Fernet, тот же ключ что у mailer)
+    # ------------------------------------------------------------------
+
+    def _encrypt(self, value: str) -> str:
+        from mailer.crypto import encrypt_str
+        return encrypt_str(value or "")
+
+    def _decrypt(self, value: str) -> str:
+        if not value:
+            return ""
+        try:
+            from mailer.crypto import decrypt_str
+            return decrypt_str(value)
+        except Exception:
+            # Could be plaintext (fallback) or wrong key — return as-is
+            return value
+
+    @property
+    def access_token(self) -> str:
+        return self._decrypt(self.access_token_enc)
+
+    @access_token.setter
+    def access_token(self, value: str) -> None:
+        self.access_token_enc = self._encrypt(value)
+
+    @property
+    def refresh_token(self) -> str:
+        return self._decrypt(self.refresh_token_enc)
+
+    @refresh_token.setter
+    def refresh_token(self, value: str) -> None:
+        self.refresh_token_enc = self._encrypt(value)
+
+    @property
+    def long_lived_token(self) -> str:
+        return self._decrypt(self.long_lived_token_enc)
+
+    @long_lived_token.setter
+    def long_lived_token(self, value: str) -> None:
+        self.long_lived_token_enc = self._encrypt(value)
 
     @classmethod
     def load(cls) -> "AmoApiConfig":
@@ -148,6 +192,22 @@ class UiUserPreference(models.Model):
             ("modern", "Современный"),
         ],
         help_text="Режим отображения карточки компании: классический (старый layout) или современный (новый layout)",
+    )
+    tasks_per_page = models.PositiveSmallIntegerField(
+        "Строк на странице (задачи)",
+        default=25,
+        choices=[(10, "10"), (25, "25"), (50, "50"), (100, "100")],
+    )
+    default_task_tab = models.CharField(
+        "Вкладка задач по умолчанию",
+        max_length=20,
+        default="all",
+        choices=[
+            ("all", "Все"),
+            ("mine", "Мои"),
+            ("overdue", "Просроченные"),
+            ("today", "Сегодня"),
+        ],
     )
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
 

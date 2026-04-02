@@ -9,9 +9,22 @@ import secrets
 class Branch(models.Model):
     code = models.SlugField("Код", max_length=50, unique=True)
     name = models.CharField("Название", max_length=120, unique=True)
+    is_active = models.BooleanField("Активен", default=True, db_index=True)
 
     def __str__(self) -> str:
         return self.name
+
+    def delete(self, *args, **kwargs):
+        from django.core.exceptions import ValidationError
+        if self.users.filter(is_active=True).exists():
+            raise ValidationError(
+                f"Нельзя удалить филиал «{self.name}»: к нему привязаны активные сотрудники."
+            )
+        if self.companies.filter().exists():
+            raise ValidationError(
+                f"Нельзя удалить филиал «{self.name}»: к нему привязаны компании."
+            )
+        super().delete(*args, **kwargs)
 
 
 class User(AbstractUser):
@@ -34,6 +47,13 @@ class User(AbstractUser):
     data_scope = models.CharField("Доступ к базе", max_length=16, choices=DataScope.choices, default=DataScope.GLOBAL)
 
     email_signature_html = models.TextField("Подпись в письме (HTML)", blank=True, default="")
+
+    avatar = models.ImageField(
+        "Фото профиля",
+        upload_to="users/avatars/",
+        null=True,
+        blank=True,
+    )
 
     def __str__(self) -> str:
         full = f"{self.last_name} {self.first_name}".strip()

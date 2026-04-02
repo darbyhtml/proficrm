@@ -1,0 +1,17 @@
+services:
+  db_test:
+    image: postgres:16
+    container_name: crm-test-pg
+    environment:
+      POSTGRES_DB: crm_test
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: testpassword
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data   # В RAM — тесты быстрее, данные не сохраняются
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm -d crm_test"]
+      interval: 3s
+      timeout: 5s
+      retries: 10

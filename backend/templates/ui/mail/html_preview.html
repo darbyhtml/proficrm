@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Превью: {{ campaign.name }}</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      color: #1a1a1a;
+      background: #f5f5f5;
+    }
+    .preview-wrap {
+      max-width: 680px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      padding: 24px;
+    }
+    .preview-meta {
+      border-bottom: 1px solid #ebebeb;
+      padding-bottom: 12px;
+      margin-bottom: 20px;
+      font-size: 12px;
+      color: #666;
+    }
+    .preview-meta strong { color: #333; }
+  </style>
+</head>
+<body>
+  <div class="preview-wrap">
+    <div class="preview-meta">
+      <div><strong>Тема:</strong> {{ campaign.subject }}</div>
+      {% if campaign.sender_name %}
+        <div><strong>От:</strong> {{ campaign.sender_name }}</div>
+      {% endif %}
+    </div>
+    {% if preview_html %}
+      {{ preview_html|safe }}
+    {% else %}
+      <p style="color:#999;font-style:italic">Тело письма не заполнено.</p>
+    {% endif %}
+  </div>
+</body>
+</html>

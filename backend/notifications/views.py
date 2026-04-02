@@ -8,7 +8,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from datetime import timedelta
 
-from notifications.models import Notification
+from django.core.cache import cache
+
+from notifications.models import Notification, CrmAnnouncement, CrmAnnouncementRead
 from notifications.context_processors import notifications_panel
 from tasksapp.models import Task
 from companies.models import Company
@@ -21,6 +23,7 @@ def mark_all_read(request: HttpRequest) -> HttpResponse:
         return redirect(request.META.get("HTTP_REFERER") or "/")
     enforce(user=request.user, resource_type="action", resource="ui:notifications:mark_all_read", context={"path": request.path, "method": request.method})
     Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+    cache.delete(f"bell_data:{request.user.pk}")
     messages.success(request, "Уведомления отмечены как прочитанные.")
     return redirect(request.META.get("HTTP_REFERER") or "/")
 
@@ -33,6 +36,7 @@ def mark_read(request: HttpRequest, notification_id: int) -> HttpResponse:
     n = get_object_or_404(Notification, id=notification_id, user=request.user)
     n.is_read = True
     n.save(update_fields=["is_read"])
+    cache.delete(f"bell_data:{request.user.pk}")
     return redirect(n.url or (request.META.get("HTTP_REFERER") or "/"))
 
 
@@ -58,6 +62,24 @@ def poll(request: HttpRequest) -> HttpResponse:
                 "payload": n.payload or {},
             }
         )
+    # Объявления CRM
+    from django.db.models import Q
+    announcement_payload = None
+    active_ann = CrmAnnouncement.objects.filter(
+        is_active=True,
+    ).filter(
+        Q(scheduled_at__isnull=True) | Q(scheduled_at__lte=timezone.now())
+    ).exclude(
+        reads__user=user
+    ).order_by("-created_at").first()
+    if active_ann:
+        announcement_payload = {
+            "id": active_ann.id,
+            "title": active_ann.title,
+            "body": active_ann.body,
+            "type": active_ann.announcement_type,
+        }
+
     return JsonResponse(
         {
             "ok": True,
@@ -66,6 +88,7 @@ def poll(request: HttpRequest) -> HttpResponse:
             "reminder_count": int(ctx.get("reminder_count") or 0),
             "reminder_items": ctx.get("reminder_items") or [],
             "notif_items": notif_payload,
+            "announcement": announcement_payload,
         }
     )
 
@@ -178,3 +201,15 @@ def all_reminders(request: HttpRequest) -> HttpResponse:
             "total_contracts": contracts.count(),
         },
     )
+
+
+@login_required
+def mark_announcement_read(request: HttpRequest, announcement_id: int) -> JsonResponse:
+    if request.method != "POST":
+        return JsonResponse({"ok": False}, status=405)
+    try:
+        ann = CrmAnnouncement.objects.get(id=announcement_id)
+        CrmAnnouncementRead.objects.get_or_create(user=request.user, announcement=ann)
+        return JsonResponse({"ok": True})
+    except CrmAnnouncement.DoesNotExist:
+        return JsonResponse({"ok": False}, status=404)

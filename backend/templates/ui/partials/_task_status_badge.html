@@ -1,0 +1,6 @@
+{#
+  Бейдж статуса задачи.
+  Использование: {% include "ui/partials/_task_status_badge.html" with task=t %}
+  Переменная: task (объект Task с полями .status и .get_status_display)
+#}
+<span class="badge {% if task.status == 'new' %}badge-new{% elif task.status == 'in_progress' %}badge-progress{% elif task.status == 'done' %}badge-done{% elif task.status == 'cancelled' %}badge-cancel{% endif %}">{{ task.get_status_display }}</span>

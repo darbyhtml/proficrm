@@ -3,6 +3,18 @@
 from django.db import migrations
 
 
+def _rename_indexes_pg(apps, schema_editor):
+    """ALTER INDEX IF EXISTS работает только в PostgreSQL; для SQLite — пропускаем."""
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute(
+        "ALTER INDEX IF EXISTS accounts_m_token_h_abc123_idx RENAME TO accounts_ma_token_h_1115dc_idx;"
+    )
+    schema_editor.execute(
+        "ALTER INDEX IF EXISTS accounts_m_user_id_xyz789_idx RENAME TO accounts_ma_user_id_c3f298_idx;"
+    )
+
+
 class Migration(migrations.Migration):
     dependencies = [
         ("accounts", "0006_merge_0002_0005"),
@@ -11,16 +23,7 @@ class Migration(migrations.Migration):
     operations = [
         migrations.SeparateDatabaseAndState(
             database_operations=[
-                # На некоторых окружениях индексы могли уже получить "новые" имена
-                # (или быть созданы иначе). Делаем rename безопасным.
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS accounts_m_token_h_abc123_idx RENAME TO accounts_ma_token_h_1115dc_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS accounts_ma_token_h_1115dc_idx RENAME TO accounts_m_token_h_abc123_idx;",
-                ),
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS accounts_m_user_id_xyz789_idx RENAME TO accounts_ma_user_id_c3f298_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS accounts_ma_user_id_c3f298_idx RENAME TO accounts_m_user_id_xyz789_idx;",
-                ),
+                migrations.RunPython(_rename_indexes_pg, migrations.RunPython.noop),
             ],
             state_operations=[
                 migrations.RenameIndex(

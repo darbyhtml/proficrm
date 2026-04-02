@@ -15,7 +15,7 @@ from rest_framework import status
 from django.db import connection
 
 from .normalizers import normalize_phone, normalize_inn, normalize_work_schedule
-from .models import Company, CompanyStatus, CompanyEmail, CompanyPhone, Contact, ContactEmail, ContactPhone
+from .models import Company, CompanyDeletionRequest, CompanyStatus, CompanyEmail, CompanyPhone, Contact, ContactEmail, ContactPhone
 from .search_index import rebuild_company_search_index
 
 User = get_user_model()
@@ -582,3 +582,54 @@ class CompanyAutocompleteOrgFlagsTestCase(TestCase):
         self.assertIsNotNone(br)
         self.assertTrue(br.get("is_branch"))
         # Для ветки наличие своих под‑филиалов не проверяем здесь
+
+
+class CompanyHeadCompanyCycleTestCase(TestCase):
+    """Тесты защиты от циклов в head_company."""
+
+    def test_direct_cycle_raises_validation_error(self):
+        a = Company.objects.create(name="A")
+        b = Company.objects.create(name="B", head_company=a)
+        a.head_company = b
+        from django.core.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            a.clean()
+
+    def test_no_cycle_passes(self):
+        a = Company.objects.create(name="Root")
+        b = Company.objects.create(name="Child", head_company=a)
+        b.head_company = a
+        b.clean()  # не должно поднимать исключение
+
+    def test_self_reference_raises(self):
+        a = Company.objects.create(name="Self")
+        a.head_company = a
+        from django.core.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            a.clean()
+
+
+class CompanyDeletionRequestSignalTest(TestCase):
+    """Signal: при DELETE Company PENDING-заявки автоматически отменяются."""
+
+    def setUp(self):
+        self.company = Company.objects.create(name="DeleteMe")
+        self.request = CompanyDeletionRequest.objects.create(
+            company=self.company,
+            company_id_snapshot=self.company.id,
+            company_name_snapshot=self.company.name,
+            status=CompanyDeletionRequest.Status.PENDING,
+        )
+
+    def test_pending_request_cancelled_on_company_delete(self):
+        self.company.delete()
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.status, CompanyDeletionRequest.Status.CANCELLED)
+
+    def test_approved_request_not_touched(self):
+        """Уже одобренные заявки сигнал не трогает."""
+        self.request.status = CompanyDeletionRequest.Status.APPROVED
+        self.request.save()
+        self.company.delete()
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.status, CompanyDeletionRequest.Status.APPROVED)

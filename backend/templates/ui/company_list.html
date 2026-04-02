@@ -21,7 +21,7 @@
         <div class="flex gap-2">
           <a href="/companies/new/" class="btn btn-primary">+ Добавить компанию</a>
           {% if view_is_admin %}
-            <a href="/companies/export/?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}{% for r_id in selected_regions %}&region={{ r_id }}{% endfor %}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}" class="btn btn-outline">Экспорт CSV</a>
+            <a href="/companies/export/?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}{% for r_id in selected_regions %}&region={{ r_id }}{% endfor %}&overdue={{ overdue }}&task_filter={{ task_filter|default:'' }}&sort={{ sort }}&dir={{ dir }}" class="btn btn-outline">Экспорт CSV</a>
           {% endif %}
         </div>
       </div>
@@ -30,16 +30,28 @@
     <form class="card card-pad space-y-4" method="get" id="companyFilterForm" data-user-id="{{ request.user.id }}">
       <div>
         <label class="block text-sm text-brand-dark/80 mb-1">Поиск</label>
-        <div class="relative">
-          <input name="q" value="{{ q }}" id="company-search-input" class="input w-full pr-10" placeholder="ИНН / название / адрес" autocomplete="off" />
-          <button type="button" id="company-search-clear" class="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-brand-soft/50 text-brand-dark/60 hover:text-brand-dark focus:outline-none {% if not q %}hidden{% endif %}" title="Очистить поиск" aria-label="Очистить поиск">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-          </button>
-          <div id="company-search-loading" class="hidden absolute right-8 top-1/2 -translate-y-1/2">
-            <div class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-brand-teal border-t-transparent"></div>
+        <div class="relative company-search-wrapper">
+          <input name="q" value="{{ q }}" id="company-search-input" class="input w-full pr-24" placeholder="ИНН / название / адрес" autocomplete="off" />
+          <div id="company-search-actions" class="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+            <div id="company-search-loading" class="hidden w-8 h-8 flex items-center justify-center" aria-hidden="true">
+              <div class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-brand-teal border-t-transparent"></div>
+            </div>
+            <button type="button" id="company-search-btn" class="p-1.5 rounded hover:bg-brand-soft/50 text-brand-dark/70 hover:text-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/40 transition-opacity duration-200" title="Искать" aria-label="Выполнить поиск">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            </button>
+            <button type="button" id="company-search-clear" class="p-1.5 rounded hover:bg-brand-soft/50 text-brand-dark/60 hover:text-brand-dark focus:outline-none transition-opacity duration-200 {% if not q %}hidden{% endif %}" title="Очистить поиск" aria-label="Очистить поиск">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
           </div>
+          <p id="company-search-hint" class="hidden text-xs text-brand-teal/80 mt-1">Нажмите Enter для поиска</p>
         </div>
-        <div class="text-xs text-brand-dark/60 mt-1">Результаты поиска отображаются в таблице ниже</div>
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
+          <div class="text-xs text-brand-dark/60">Результаты поиска отображаются в таблице ниже</div>
+          <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer" title="Сохранит строку поиска и восстановит при возврате">
+            <input type="checkbox" id="rememberCompanySearch" class="rounded" />
+            <span>Запоминать поиск</span>
+          </label>
+        </div>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-end">
         <div>
@@ -116,8 +128,8 @@
             </button>
             <div class="hidden absolute right-0 mt-1 w-full bg-white border border-brand-soft rounded-lg shadow-lg p-2 z-50" id="regionFilterMenu">
               <div class="flex items-center justify-between gap-2 mb-2">
-                <button type="button" class="btn btn-outline" id="regionResetBtn" style="padding:.35rem .6rem;font-size:.875rem">Сброс</button>
-                <button type="button" class="btn btn-primary" id="regionDoneBtn" style="padding:.35rem .6rem;font-size:.875rem">Готово</button>
+                <button type="button" class="btn btn-outline btn-md" id="regionResetBtn">Сброс</button>
+                <button type="button" class="btn btn-primary btn-md" id="regionDoneBtn">Готово</button>
               </div>
               <div class="max-h-48 overflow-y-auto">
                 {% for r in regions %}
@@ -140,27 +152,31 @@
       </div>
       <div class="flex flex-col md:flex-row md:items-center md:flex-wrap gap-2 justify-between">
         <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
-            <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %} />
+          <div class="flex items-center gap-2">
+            <label class="text-sm text-brand-dark/80 whitespace-nowrap">Задачи</label>
+            <select name="task_filter" id="companyFilterTaskFilter" class="select" style="min-width:11rem">
+              <option value="">Любой</option>
+              <option value="no_tasks" {% if task_filter == 'no_tasks' %}selected{% endif %}>Нет задач</option>
+              <option value="today" {% if task_filter == 'today' %}selected{% endif %}>На сегодня</option>
+              <option value="tomorrow" {% if task_filter == 'tomorrow' %}selected{% endif %}>На завтра</option>
+              <option value="week" {% if task_filter == 'week' %}selected{% endif %}>На этой неделе</option>
+              <option value="month" {% if task_filter == 'month' %}selected{% endif %}>В этом месяце</option>
+              <option value="quarter" {% if task_filter == 'quarter' %}selected{% endif %}>В этом квартале</option>
+            </select>
+          </div>
+          <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer" id="companyFilterOverdueLabel">
+            <input type="checkbox" name="overdue" value="1" id="companyFilterOverdue" {% if overdue == '1' and task_filter != 'no_tasks' %}checked{% endif %}{% if task_filter == 'no_tasks' %} disabled{% endif %} />
             Только с просрочками
           </label>
-          <div class="flex flex-col gap-1">
-            <div class="flex flex-wrap items-center gap-4">
-              <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer" title="При возврате в «Компании» фильтры применятся автоматически">
-                <input type="checkbox" id="rememberCompanyFilters" class="rounded" />
-                <span>Запоминать фильтры</span>
-              </label>
-              <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer" title="Сохранит строку поиска и восстановит при возврате">
-                <input type="checkbox" id="rememberCompanySearch" class="rounded" />
-                <span>Запоминать поиск</span>
-              </label>
-            </div>
-            <div class="text-xs text-brand-dark/50">
-              Фильтры и поиск будут автоматически восстановлены при следующем входе в раздел (если галочки включены).
-            </div>
+          <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer" title="При возврате в «Компании» фильтры применятся автоматически">
+            <input type="checkbox" id="rememberCompanyFilters" class="rounded" />
+            <span>Запоминать фильтры</span>
+          </label>
+          <div class="text-xs text-brand-dark/50 w-full md:w-auto">
+            Фильтры будут автоматически восстановлены при следующем входе (если галочка «Запоминать фильтры» включена).
           </div>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap gap-2 hidden" id="companyFilterFormButtons">
           <button class="btn btn-primary" type="submit" id="filterSubmitBtn">Поиск</button>
           <a class="btn btn-outline" href="/companies/" id="filterResetBtn">Сброс</a>
         </div>
@@ -181,6 +197,7 @@
       {% endfor %}
       <input type="hidden" name="cold_call" value="{{ cold_call }}" />
       <input type="hidden" name="overdue" value="{{ overdue }}" />
+      <input type="hidden" name="task_filter" value="{{ task_filter|default:'' }}" />
 
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div class="text-sm text-brand-dark/80">
@@ -208,14 +225,6 @@
         Совет: чтобы переназначить “все компании сотрудника”, отфильтруйте по ответственному → нажмите <b>Выбрать все по фильтру</b> → выберите нового ответственного → Переназначить.
       </div>
     </form>
-
-    <!-- Индикатор загрузки -->
-    <div id="companyListLoading" class="hidden fixed inset-0 z-40 flex items-center justify-center" style="background: rgba(0, 61, 56, 0.15);">
-      <div class="bg-white rounded-2xl shadow-xl p-8 flex flex-col items-center gap-4" style="border: 1px solid rgba(194, 226, 222, 0.9);">
-        <div class="inline-block animate-spin rounded-full h-12 w-12" style="border: 0.1875rem solid rgba(194, 226, 222, 0.3); border-top-color: #01948E;"></div>
-        <div style="color: #003D38; font-weight: 500;">Загрузка компаний...</div>
-      </div>
-    </div>
 
       <div class="card overflow-hidden">
       <div class="overflow-x-auto">
@@ -350,7 +359,7 @@
         <div class="flex items-center gap-2">
           <form method="get" class="flex items-center gap-2" id="perPageForm">
             <label class="text-sm text-brand-dark/70 whitespace-nowrap">На странице:</label>
-            <select name="per_page" class="select" id="perPageSelect" style="padding:.25rem .5rem;font-size:.875rem;min-width:auto">
+            <select name="per_page" class="select select-sm" id="perPageSelect">
               <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
               <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
               <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
@@ -366,6 +375,7 @@
             <input type="hidden" name="region" value="{{ r_id }}" />
             {% endfor %}
             {% if overdue %}<input type="hidden" name="overdue" value="{{ overdue }}" />{% endif %}
+            {% if task_filter %}<input type="hidden" name="task_filter" value="{{ task_filter }}" />{% endif %}
             {% if sort %}<input type="hidden" name="sort" value="{{ sort }}" />{% endif %}
             {% if dir %}<input type="hidden" name="dir" value="{{ dir }}" />{% endif %}
           </form>
@@ -397,22 +407,28 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function(){
       const form = document.getElementById('bulkTransferForm');
       const selectAll = document.getElementById('bulkSelectAll');
-      const items = Array.from(document.querySelectorAll('.bulk-company'));
       const countEl = document.getElementById('bulkSelectedCount');
       const clearBtn = document.getElementById('bulkClear');
       const selectFilteredBtn = document.getElementById('bulkSelectFiltered');
       const modeEl = document.getElementById('bulkApplyMode');
       const hintEl = document.getElementById('bulkModeHint');
+      const companyListBody = document.getElementById('companyListBody');
+
+      // Всегда получаем актуальные чекбоксы (после AJAX-обновления таблицы прежние элементы удаляются)
+      function getBulkItems() {
+        return Array.from(document.querySelectorAll('.bulk-company'));
+      }
 
       function selectedCount() {
-        return items.filter(i => i.checked).length;
+        return getBulkItems().filter(i => i.checked).length;
       }
 
       function update() {
+        const items = getBulkItems();
         const cnt = selectedCount();
         if (countEl) countEl.textContent = String(cnt);
         if (form) form.style.display = (cnt > 0) ? 'block' : 'none';
@@ -424,16 +440,21 @@
       if (selectAll) {
         selectAll.addEventListener('change', () => {
           const v = !!selectAll.checked;
-          items.forEach(i => { i.checked = v; });
+          getBulkItems().forEach(i => { i.checked = v; });
           update();
         });
       }
 
-      items.forEach(i => i.addEventListener('change', update));
+      // Делегирование: чекбоксы пересоздаются при AJAX, слушатель вешаем на tbody
+      if (companyListBody) {
+        companyListBody.addEventListener('change', (e) => {
+          if (e.target && e.target.matches && e.target.matches('.bulk-company')) update();
+        });
+      }
 
       if (clearBtn) {
         clearBtn.addEventListener('click', () => {
-          items.forEach(i => { i.checked = false; });
+          getBulkItems().forEach(i => { i.checked = false; });
           update();
         });
       }
@@ -454,7 +475,7 @@
 
       // Проверка прав на передачу и возможности нажатия «Переназначить»
       function checkTransferRights() {
-        const checked = items.filter(i => i.checked);
+        const checked = getBulkItems().filter(i => i.checked);
         const transferBtn = document.getElementById('bulkTransferBtn');
         const responsibleSelect = form ? form.querySelector('select[name="responsible_id"]') : null;
         const responsibleId = responsibleSelect ? responsibleSelect.value : '';
@@ -526,14 +547,13 @@
         if (!filterForm) return;
         
         // Удаляем старые скрытые поля фильтров (кроме apply_mode и csrf_token)
-        const fieldsToUpdate = ['q', 'responsible', 'status', 'branch', 'sphere', 'contract_type', 'region', 'cold_call', 'overdue'];
+        const fieldsToUpdate = ['q', 'responsible', 'status', 'branch', 'sphere', 'contract_type', 'region', 'cold_call', 'overdue', 'task_filter'];
         fieldsToUpdate.forEach(fieldName => {
           form.querySelectorAll(`input[name="${fieldName}"]`).forEach(el => el.remove());
         });
         
         // Добавляем текущие значения из формы фильтров
         const filterFormData = new FormData(filterForm);
-        const beforeEl = form.querySelector('select[name="responsible_id"]');
         fieldsToUpdate.forEach(fieldName => {
           const values = filterFormData.getAll(fieldName) || [];
           values.forEach(value => {
@@ -542,11 +562,7 @@
             input.type = 'hidden';
             input.name = fieldName;
             input.value = String(value);
-            if (beforeEl) {
-              form.insertBefore(input, beforeEl);
-            } else {
-              form.appendChild(input);
-            }
+            form.appendChild(input);
           });
         });
       }
@@ -682,9 +698,50 @@
             // Блокируем кнопку подтверждения, если нет разрешённых компаний
             modalConfirm.disabled = (allowedCount === 0);
             
-            // Обработчик подтверждения
-            modalConfirm.onclick = function() {
-              form.submit();
+            // Обработчик подтверждения: AJAX-отправка + live refresh таблицы
+            modalConfirm.onclick = async function() {
+              modalConfirm.disabled = true;
+              modalContent.innerHTML = '<div class="text-center py-8"><div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-teal"></div><p class="mt-4 text-brand-dark/70">Переназначение...</p></div>';
+              try {
+                const formData = new FormData(form);
+                // Явно добавляем company_ids — чекбоксы могут быть вне form в DOM
+                formData.delete('company_ids');
+                getBulkItems().filter(cb => cb.checked).forEach(cb => {
+                  if (cb.value) formData.append('company_ids', cb.value);
+                });
+                const resp = await fetch('/companies/bulk-transfer/', {
+                  method: 'POST',
+                  body: formData,
+                  headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value
+                  }
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (resp.ok && data.success) {
+                  hideModal();
+                  getBulkItems().forEach(i => { i.checked = false; });
+                  if (typeof window.updateBulkTransfer === 'function') window.updateBulkTransfer();
+                  if (typeof window.loadCompanies === 'function') {
+                    window.loadCompanies(true);
+                  } else {
+                    window.location.reload();
+                  }
+                  const msg = document.createElement('div');
+                  msg.className = 'fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg bg-green-600 text-white text-sm';
+                  msg.textContent = 'Переназначено ' + (data.updated || 0) + ' компаний → ' + (data.new_responsible || '');
+                  document.body.appendChild(msg);
+                  setTimeout(() => msg.remove(), 4000);
+                } else {
+                  const errMsg = data.error || (resp.status === 400 ? 'Проверьте права или выбранные компании.' : 'Ошибка переназначения');
+                  modalContent.innerHTML = '<div class="py-8"><div class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">' + errMsg + '</div><p class="text-sm mt-2 text-red-600">Если ошибка повторяется — попробуйте обновить страницу и повторить.</p></div>';
+                  modalConfirm.disabled = false;
+                }
+              } catch (err) {
+                console.error('Bulk transfer error:', err);
+                modalContent.innerHTML = '<div class="py-8"><div class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">Ошибка сети. Попробуйте обновить страницу (F5) и повторить.</div></div>';
+                modalConfirm.disabled = false;
+              }
             };
             
           } catch (error) {
@@ -695,15 +752,16 @@
       }
       
       update();
+      // Даём второму скрипту обновлять UI после AJAX-загрузки таблицы
+      window.updateBulkTransfer = update;
     })();
   </script>
 
-  <script>
-    // AJAX-фильтрация и виртуальный скроллинг
+  <script nonce="{{ csp_nonce }}">
+    // AJAX-фильтрация и поиск компаний (поиск только по Enter / лупа; без оверлея)
     (function() {
       const filterForm = document.getElementById('companyFilterForm');
       const companyListBody = document.getElementById('companyListBody');
-      const loadingIndicator = document.getElementById('companyListLoading');
       const paginationContainer = document.getElementById('paginationContainer');
       const perPageSelect = document.getElementById('perPageSelect');
       const sortLinks = document.querySelectorAll('.sort-link');
@@ -711,14 +769,51 @@
       const filterResetBtn = document.getElementById('filterResetBtn');
       const rememberFiltersCb = document.getElementById('rememberCompanyFilters');
       const rememberSearchCb = document.getElementById('rememberCompanySearch');
-      
+      const searchInput = document.getElementById('company-search-input');
+      const searchBtn = document.getElementById('company-search-btn');
+      const searchClearBtn = document.getElementById('company-search-clear');
+      const searchLoadingEl = document.getElementById('company-search-loading');
+      const searchHintEl = document.getElementById('company-search-hint');
+
       let currentSort = '{{ sort_field }}';
       let currentDir = '{{ sort_dir }}';
       let currentPage = 1;
       let isLoading = false;
       let hasMore = true;
+      let abortController = null;
+      let currentRequestId = 0;
+      // В запрос уходим normalized; в поле ввода не подставляем (оставляем как ввёл пользователь)
+      let nextRequestQueryOverride = null;
+      let restoredSearchOnLoad = false;
       // Сортировка до начала поиска: при очистке поиска восстанавливаем её
       let sortBeforeSearch = { sort: currentSort, dir: currentDir };
+
+      // Нормализация ввода: trim, схлопнуть пробелы; проверка на пустоту/пунктуацию/минимальную длину
+      function normalizeSearchQuery(raw) {
+        if (raw == null) raw = '';
+        const s = String(raw).replace(/\s+/g, ' ').trim();
+        if (!s) return { canSearch: false, normalized: '' };
+        const onlyPunctuation = /^[\s.,;:!?\-–—'"()\[\]\/\\+#]+$/.test(s);
+        if (onlyPunctuation) return { canSearch: false, normalized: s };
+        const digits = s.replace(/\D/g, '');
+        const hasLetters = /[A-Za-zА-Яа-яЁё]/.test(s);
+        if (!hasLetters && digits.length >= 4) return { canSearch: true, normalized: digits };
+        if (!hasLetters && digits.length > 0) return { canSearch: false, normalized: s };
+        if (s.includes('@')) {
+          if (s.length < 5) return { canSearch: false, normalized: s };
+          return { canSearch: true, normalized: s };
+        }
+        if (s.length < 3) return { canSearch: false, normalized: s };
+        return { canSearch: true, normalized: s };
+      }
+
+      function getSearchInputValue() {
+        return searchInput ? (searchInput.value || '').trim() : '';
+      }
+
+      function canSearchNow() {
+        return normalizeSearchQuery(getSearchInputValue()).canSearch;
+      }
 
       // Запоминание фильтров/поиска (localStorage, per-user).
       // ВАЖНО: ключи включают userId, чтобы после перелогина не подтягивались "чужие" фильтры.
@@ -852,28 +947,38 @@
         return true;
       }
       
-      function showLoading() {
-        if (loadingIndicator) loadingIndicator.classList.remove('hidden');
+      function showInlineLoading() {
         isLoading = true;
+        if (searchLoadingEl) searchLoadingEl.classList.remove('hidden');
+        if (searchBtn) searchBtn.classList.add('hidden');
+        if (searchClearBtn) searchClearBtn.classList.add('hidden');
       }
-      
-      function hideLoading() {
-        if (loadingIndicator) loadingIndicator.classList.add('hidden');
+
+      function hideInlineLoading() {
         isLoading = false;
+        if (searchLoadingEl) searchLoadingEl.classList.add('hidden');
+        if (searchBtn) searchBtn.classList.remove('hidden');
+        updateSearchBtnState();
+        updateClearButtonVisibility();
       }
       
       function buildQueryParams() {
         const formData = new FormData(filterForm);
         const params = new URLSearchParams();
-        const searchVal = (filterForm && filterForm.querySelector('input[name="q"]')) ? (filterForm.querySelector('input[name="q"]').value || '').trim() : '';
-        
-        // Добавляем все поля формы
+        let qForRequest = nextRequestQueryOverride != null ? nextRequestQueryOverride : (filterForm && filterForm.querySelector('input[name="q"]') ? (filterForm.querySelector('input[name="q"]').value || '') : '');
+        if (nextRequestQueryOverride != null) nextRequestQueryOverride = null;
+        if (typeof qForRequest === 'string') qForRequest = qForRequest.replace(/\s+/g, ' ').trim();
+
         for (const [key, value] of formData.entries()) {
+          if (key === 'q') {
+            if (qForRequest) params.append('q', qForRequest);
+            continue;
+          }
           if (value) params.append(key, value);
         }
-        
+
         // При непустом поиске не передаём sort/dir — бэкенд отдаёт по релевантности; при очистке вернётся сохранённая сортировка
-        if (!searchVal) {
+        if (!qForRequest) {
           params.append('sort', currentSort);
           params.append('dir', currentDir);
         }
@@ -910,36 +1015,58 @@
       function getSearchInput() {
         return filterForm ? filterForm.querySelector('input[name="q"]') : null;
       }
-      
+
+      function updateSearchBtnState() {
+        if (!searchBtn) return;
+        const { canSearch } = normalizeSearchQuery(getSearchInputValue());
+        searchBtn.disabled = !canSearch;
+      }
+
+      function updateClearButtonVisibility() {
+        if (!searchClearBtn) return;
+        if (getSearchInputValue()) {
+          searchClearBtn.classList.remove('hidden');
+        } else {
+          searchClearBtn.classList.add('hidden');
+        }
+      }
+
       function clearSearchAndRestoreSort() {
-        const searchInput = getSearchInput();
-        if (!searchInput) return;
-        searchInput.value = '';
+        const inp = getSearchInput();
+        if (!inp) return;
+        inp.value = '';
         currentSort = sortBeforeSearch.sort;
         currentDir = sortBeforeSearch.dir;
         updateSortHeaderUI();
-        const clearBtn = document.getElementById('company-search-clear');
-        if (clearBtn) clearBtn.classList.add('hidden');
-        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        updateClearButtonVisibility();
+        updateSearchBtnState();
+        if (searchHintEl) searchHintEl.classList.add('hidden');
+        loadCompanies(true);
       }
-      
+
       async function loadCompanies(resetPage = true) {
-        if (isLoading) return;
-        
         if (resetPage) {
           currentPage = 1;
           hasMore = true;
         }
-        
-        showLoading();
-        
+
+        if (abortController) {
+          abortController.abort();
+        }
+        const controller = new AbortController();
+        abortController = controller;
+        const signal = controller.signal;
+        const requestId = ++currentRequestId;
+
+        showInlineLoading();
+
         try {
           const params = buildQueryParams();
-          const response = await fetch(`/companies/ajax/?${params.toString()}`);
-          const data = await response.json();
-          
+          const response = await fetch(`/companies/ajax/?${params.toString()}`, { signal });
+          let data = null;
+          try { data = await response.json(); } catch (_) {}
           if (!response.ok) {
-            throw new Error(data.error || 'Ошибка загрузки');
+            throw new Error((data && data.error) || 'Ошибка загрузки');
           }
           
           // Обновляем тело таблицы (всегда заменяем, не добавляем)
@@ -996,10 +1123,10 @@
             window.updateRelativeTimes();
           }
           
-          // Обновляем чекбоксы для массового переназначения (если функция доступна)
+          // Обновляем чекбоксы и кнопку «Переназначить» после замены строк таблицы
           setTimeout(() => {
-            if (typeof update === 'function') {
-              update();
+            if (typeof window.updateBulkTransfer === 'function') {
+              window.updateBulkTransfer();
             }
           }, 100);
           
@@ -1007,25 +1134,29 @@
           updateSortHeaderUI();
           
         } catch (error) {
+          if (error && error.name === 'AbortError') {
+            return;
+          }
           console.error('Error loading companies:', error);
           if (companyListBody) {
             companyListBody.innerHTML = '<tr><td class="muted" colspan="20" style="padding:1.25rem 1rem">Ошибка загрузки данных.</td></tr>';
           }
         } finally {
-          hideLoading();
-
-          // После любой загрузки сохраняем текущее состояние (если включено)
-          const prefs = getPrefs();
-          const enabled = !!((rememberFiltersCb && rememberFiltersCb.checked) || (rememberSearchCb && rememberSearchCb.checked));
-          if (enabled) {
-            const s = captureCurrentState();
-            if (s) setSavedState(s);
-          } else {
-            // если отключили обе галочки — не храним состояние, чтобы не путать
-            setSavedState(null);
+          if (abortController === controller) abortController = null;
+          if (requestId === currentRequestId) {
+            hideInlineLoading();
+            const prefs = getPrefs();
+            const enabled = !!((rememberFiltersCb && rememberFiltersCb.checked) || (rememberSearchCb && rememberSearchCb.checked));
+            if (enabled) {
+              const s = captureCurrentState();
+              if (s) setSavedState(s);
+            } else {
+              setSavedState(null);
+            }
           }
         }
       }
+      window.loadCompanies = loadCompanies;
 
       // Инициализация чекбоксов из localStorage
       (function initRememberUi() {
@@ -1043,11 +1174,35 @@
         if (rememberFiltersCb) rememberFiltersCb.addEventListener('change', onPrefChange);
         if (rememberSearchCb) rememberSearchCb.addEventListener('change', onPrefChange);
       })();
+
+      // «Нет задач» и «Только с просрочками» взаимоисключающие: при выборе «Нет задач» снимаем и отключаем просрочки
+      (function initOverdueTaskFilterSync() {
+        const taskFilterEl = document.getElementById('companyFilterTaskFilter');
+        const overdueCb = document.getElementById('companyFilterOverdue');
+        if (!taskFilterEl || !overdueCb) return;
+        const overdueLabel = document.getElementById('companyFilterOverdueLabel');
+        window._syncCompanyOverdueWithTaskFilter = function() {
+          if (taskFilterEl.value === 'no_tasks') {
+            overdueCb.checked = false;
+            overdueCb.disabled = true;
+            if (overdueLabel) { overdueLabel.classList.add('opacity-60', 'cursor-not-allowed'); overdueLabel.title = 'Недоступно при фильтре «Нет задач»'; }
+          } else {
+            overdueCb.disabled = false;
+            if (overdueLabel) { overdueLabel.classList.remove('opacity-60', 'cursor-not-allowed'); overdueLabel.title = ''; }
+          }
+        };
+        taskFilterEl.addEventListener('change', window._syncCompanyOverdueWithTaskFilter);
+        window._syncCompanyOverdueWithTaskFilter();
+      })();
       
-      // Обработчик формы фильтрации
+      // Обработчик формы: поиск только по Enter/лупе с валидным запросом (в запрос уходит normalized, в поле не подставляем)
       if (filterForm) {
         filterForm.addEventListener('submit', (e) => {
           e.preventDefault();
+          const raw = getSearchInputValue();
+          const { canSearch, normalized } = normalizeSearchQuery(raw);
+          if (!canSearch) return;
+          nextRequestQueryOverride = normalized;
           loadCompanies(true);
         });
       }
@@ -1164,10 +1319,9 @@
       }
       setRegionLabel();
 
-      // Восстановление сохранённых фильтров/поиска на входе в раздел
+      // Восстановление сохранённых фильтров/поиска на входе в раздел (автопоиск не запускаем)
       (function restoreRememberedStateOnLoad() {
         if (!filterForm) return;
-        // Если в URL уже есть параметры (например, пришли по глубокой ссылке) — ничего не перетираем.
         if (window.location.search && window.location.search.length > 1) return;
         const prefs = getPrefs();
         const enabled = !!((rememberFiltersCb && rememberFiltersCb.checked) || (rememberSearchCb && rememberSearchCb.checked));
@@ -1176,8 +1330,20 @@
         if (!saved) return;
         const applied = applySavedState(saved, prefs);
         if (!applied) return;
-        // Обновляем подпись регионов и сразу подгружаем таблицу с восстановленными настройками
         setRegionLabel();
+        if (typeof window._syncCompanyOverdueWithTaskFilter === 'function') window._syncCompanyOverdueWithTaskFilter();
+        const hadSearch = !!(saved.search && String(saved.search).trim());
+        if (hadSearch && prefs.search) {
+          restoredSearchOnLoad = true;
+          if (searchHintEl) searchHintEl.classList.remove('hidden');
+        }
+        updateSearchBtnState();
+        updateClearButtonVisibility();
+        updateSortHeaderUI();
+        if (hadSearch && prefs.search) {
+          // Не запускаем автопоиск и не грузим «гибрид» — таблица остаётся с серверного рендера, ждём Enter/лупу
+          return;
+        }
         loadCompanies(true);
       })();
       
@@ -1192,48 +1358,55 @@
 
         // Поле общего поиска: при вводе — сортировка по релевантности; при очистке — восстанавливаем сохранённую сортировку
         if (input.id === 'company-search-input') {
-          const clearBtn = document.getElementById('company-search-clear');
-          const searchLoading = document.getElementById('company-search-loading');
-
           function updateSearchUi() {
-            const query = input.value.trim();
+            const query = (input.value || '').trim();
             if (query) {
               sortBeforeSearch = { sort: currentSort, dir: currentDir };
-              if (clearBtn) clearBtn.classList.remove('hidden');
             } else {
               currentSort = sortBeforeSearch.sort;
               currentDir = sortBeforeSearch.dir;
               updateSortHeaderUI();
-              if (clearBtn) clearBtn.classList.add('hidden');
             }
+            updateClearButtonVisibility();
+            updateSearchBtnState();
           }
 
           input.addEventListener('input', () => {
+            if (searchHintEl) searchHintEl.classList.add('hidden');
             updateSearchUi();
-            // При полном очищении строки поиска сразу обновляем список
-            if (!input.value.trim()) {
-              loadCompanies(true);
-            }
           });
 
-          // Явный запуск поиска только по Enter
           input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
-              if (searchLoading) searchLoading.classList.remove('hidden');
-              loadCompanies(true).finally(() => {
-                if (searchLoading) searchLoading.classList.add('hidden');
-              });
-            }
-          });
-          if (clearBtn) {
-            clearBtn.addEventListener('click', (e) => {
+              const raw = getSearchInputValue();
+              const { canSearch, normalized } = normalizeSearchQuery(raw);
+              if (!canSearch) return;
+              nextRequestQueryOverride = normalized;
+              loadCompanies(true);
+            } else if (e.key === 'Escape') {
+              // Только при фокусе в поле — не конфликтует с модалками и глобальными hotkeys
               e.preventDefault();
               clearSearchAndRestoreSort();
-              if (searchLoading) searchLoading.classList.add('hidden');
+            }
+          });
+
+          if (searchBtn) {
+            searchBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              const raw = getSearchInputValue();
+              const { canSearch, normalized } = normalizeSearchQuery(raw);
+              if (!canSearch) return;
+              nextRequestQueryOverride = normalized;
+              loadCompanies(true);
             });
           }
-          // Инициализируем состояние поиска при загрузке
+          if (searchClearBtn) {
+            searchClearBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              clearSearchAndRestoreSort();
+            });
+          }
           updateSearchUi();
           return;
         }
@@ -1266,7 +1439,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Функция подсветки совпадений (используется в таблице)
     (function() {
       window.highlightMatch = function(text, query) {
@@ -1349,13 +1522,8 @@
     
     // Старый код автодополнения (отключен, но оставлен для совместимости)
     (function() {
-      const searchInput = document.getElementById('company-search-input');
-      if (!searchInput) return;
-
-      let debounceTimer = null;
-      let abortController = null;
-
       // Глобальные хелперы для отображения "N мин. назад" рядом с датой обновления
+      // Определяются до guard, чтобы работали независимо от автодополнения
       window.formatRelativeTime = function formatRelativeTime(dateStr) {
         if (!dateStr) return '';
         const date = new Date(dateStr);
@@ -1393,6 +1561,14 @@
           window.updateRelativeTimes();
         }
       }
+
+      // Далее — старый код автодополнения. Запускаем только если элементы присутствуют.
+      const searchInput = document.getElementById('company-search-input');
+      const dropdown = document.getElementById('company-autocomplete-dropdown');
+      if (!searchInput || !dropdown) return;
+
+      let debounceTimer = null;
+      let abortController = null;
 
       function escapeHtml(text) {
         const div = document.createElement('div');

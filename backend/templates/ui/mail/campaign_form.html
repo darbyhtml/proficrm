@@ -237,6 +237,13 @@
         <div class="text-xs text-brand-dark/50 mt-1.5">Максимальный размер: 15 МБ. Файл будет прикреплен ко всем письмам кампании.</div>
       </div>
 
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Запланировать отправку (опционально)</label>
+        {{ form.send_at }}
+        <div class="text-xs muted-2 mt-1">{{ form.send_at.help_text }}</div>
+        {% if form.send_at.errors %}<div class="text-xs text-red-600 mt-1">{{ form.send_at.errors }}</div>{% endif %}
+      </div>
+
       {% if form.errors %}
         <div class="rounded-xl border border-brand-orange/60 bg-brand-orange/20 px-4 py-3 text-sm text-brand-dark">Проверь поля формы.</div>
       {% endif %}
@@ -252,7 +259,9 @@
     </form>
   </div>
 
-  <script>
+  {% load static %}
+  <script src="{% static 'ui/purify.min.js' %}"></script>
+  <script nonce="{{ csp_nonce }}">
     (function () {
       const htmlWrap = document.getElementById("html-wrap");
       const visualWrap = document.getElementById("visual-wrap");
@@ -270,7 +279,13 @@
       // Инициализация: подставляем существующий текст
       function loadContent() {
         const html = htmlField.value || "";
-        editor.innerHTML = html;
+        // Санитизируем сохранённый HTML перед рендером в редакторе.
+        // FORCE_BODY сохраняет корневые inline-элементы; ADD_TAGS разрешает img с base64.
+        editor.innerHTML = DOMPurify.sanitize(html, {
+          FORCE_BODY: true,
+          ADD_TAGS: ["img"],
+          ADD_ATTR: ["style", "align", "border", "cellpadding", "cellspacing", "width", "height"],
+        });
         // Убеждаемся, что изображения правильно отображаются
         const images = editor.querySelectorAll("img");
         images.forEach((img) => {
@@ -390,9 +405,14 @@
 
         // Если есть HTML, вставляем его
         if (htmlData) {
-          // Создаем временный контейнер для обработки HTML
+          // Создаем временный контейнер для обработки HTML.
+          // Санитизируем перед вставкой в DOM, чтобы предотвратить XSS.
           const tempDiv = document.createElement("div");
-          tempDiv.innerHTML = htmlData;
+          tempDiv.innerHTML = DOMPurify.sanitize(htmlData, {
+            FORCE_BODY: true,
+            ADD_TAGS: ["img"],
+            ADD_ATTR: ["style", "align", "border", "cellpadding", "cellspacing", "width", "height"],
+          });
 
           // Если вставили "целое письмо" с <body> — берём только содержимое body,
           // иначе часть почтовиков/редакторов искажает структуру письма.

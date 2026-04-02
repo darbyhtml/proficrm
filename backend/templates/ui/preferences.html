@@ -2,31 +2,884 @@
 {% block title %}Настройки — CRM ПРОФИ{% endblock %}
 
 {% block content %}
-  <div class="space-y-4">
-    <div class="flex items-end justify-between gap-3">
-      <div>
-        <h1 class="text-2xl font-semibold">Настройки</h1>
-        <div class="muted text-sm">Выберите раздел настроек.</div>
-      </div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <a class="card card-pad block hover:bg-brand-soft/20 transition-colors" href="/preferences/ui/">
-        <div class="font-medium mb-1">Интерфейс</div>
-        <div class="text-sm muted mb-3">Размер шрифта и визуальные параметры.</div>
-        <div class="btn btn-outline">Открыть</div>
-      </a>
-
-      <a class="card card-pad block hover:bg-brand-soft/20 transition-colors" href="/preferences/mail/">
-        <div class="font-medium mb-1">Почта</div>
-        <div class="text-sm muted mb-3">Подпись, рассылки и связанные настройки.</div>
-        <div class="btn btn-outline">Открыть</div>
-      </a>
-    </div>
-
-    <div class="text-xs muted-2">
-      Если вам нужны админские настройки (пользователи, справочники, безопасность) — они доступны только администраторам.
+<div class="space-y-4">
+  <div class="flex items-end justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-semibold">Настройки</h1>
+      <div class="muted text-sm">Личные настройки вашего аккаунта.</div>
     </div>
   </div>
-{% endblock %}
 
+  {% if messages %}
+    <div class="space-y-2" id="globalMessages">
+      {% for msg in messages %}
+        <div class="rounded-xl px-4 py-2.5 text-sm font-medium
+          {% if msg.tags == 'success' %}bg-emerald-50 text-emerald-800 border border-emerald-200
+          {% elif msg.tags == 'error' %}bg-red-50 text-red-800 border border-red-200
+          {% else %}bg-brand-soft/30 text-brand-dark border border-brand-soft{% endif %}">
+          {{ msg }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="flex flex-col md:flex-row gap-5">
+    {# ── Sidebar ── #}
+    <nav class="md:w-52 shrink-0" id="prefNav">
+      <div class="card overflow-hidden">
+        <button type="button" class="pref-tab w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-left transition-colors hover:bg-brand-soft/20 border-b border-brand-soft/30"
+                data-tab="profile">
+          <svg class="w-4 h-4 shrink-0 text-brand-dark/50" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
+            <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+          </svg>
+          Профиль
+        </button>
+        <button type="button" class="pref-tab w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-left transition-colors hover:bg-brand-soft/20 border-b border-brand-soft/30"
+                data-tab="interface">
+          <svg class="w-4 h-4 shrink-0 text-brand-dark/50" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
+            <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+          </svg>
+          Интерфейс
+        </button>
+        <button type="button" class="pref-tab w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-left transition-colors hover:bg-brand-soft/20"
+                data-tab="mail">
+          <svg class="w-4 h-4 shrink-0 text-brand-dark/50" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
+            <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/>
+          </svg>
+          Почта
+        </button>
+      </div>
+    </nav>
+
+    {# ── Content ── #}
+    <div class="flex-1 min-w-0 space-y-4">
+
+      {# ─── Профиль ─── #}
+      <section class="pref-section" data-section="profile">
+
+        {# Avatar #}
+        <div class="card card-pad space-y-4 mb-4">
+          <div>
+            <div class="font-semibold text-base mb-0.5">Фото профиля</div>
+            <div class="text-sm muted">Отображается в навигации и сообщениях. JPEG, PNG или WEBP, до 5 МБ.</div>
+          </div>
+
+          <div class="flex items-center gap-5">
+            {# Avatar — click to upload, auto-submit #}
+            <form method="post" action="/preferences/avatar/upload/" enctype="multipart/form-data" id="avatarUploadForm">
+              {% csrf_token %}
+              <label class="relative shrink-0 cursor-pointer group" title="Нажмите, чтобы изменить фото">
+                {% if user.avatar %}
+                  <img src="{{ user.avatar.url }}" alt="Фото профиля"
+                       class="w-20 h-20 rounded-full object-cover border-2 border-brand-soft shadow-sm group-hover:opacity-70 transition-opacity" />
+                {% else %}
+                  <div class="w-20 h-20 rounded-full bg-brand-teal/20 border-2 border-brand-soft flex items-center justify-center text-2xl font-bold text-brand-teal group-hover:bg-brand-teal/30 transition-colors select-none">
+                    {{ user.first_name|first|upper }}{{ user.last_name|first|upper }}{% if not user.first_name and not user.last_name %}{{ user.username|first|upper }}{% endif %}
+                  </div>
+                {% endif %}
+                {# Camera overlay on hover #}
+                <span class="absolute inset-0 rounded-full flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                    <circle cx="12" cy="13" r="4"/>
+                  </svg>
+                </span>
+                <input type="file" name="avatar" accept="image/jpeg,image/png,image/webp"
+                       class="sr-only" id="avatarFileInput" />
+              </label>
+            </form>
+
+            <div class="space-y-1.5">
+              <div class="text-sm font-medium">Нажмите на фото, чтобы изменить</div>
+              <div class="text-xs muted-2">JPEG, PNG или WEBP · до 5 МБ</div>
+              {% if user.avatar %}
+                <form method="post" action="/preferences/avatar/delete/">
+                  {% csrf_token %}
+                  <button type="submit" class="text-xs text-red-500 hover:text-red-700 hover:underline transition-colors"
+                          onclick="return confirm('Удалить фото профиля?')">Удалить фото</button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="card card-pad space-y-4">
+          <div>
+            <div class="font-semibold text-base mb-0.5">Профиль</div>
+            <div class="text-sm muted">Имя, которое видят другие сотрудники в задачах и карточках.</div>
+          </div>
+
+          <form method="post" action="/preferences/profile/" class="space-y-4">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs muted-2 mb-1 block" for="id_first_name">Имя</label>
+                <input id="id_first_name" class="input" type="text" name="first_name"
+                       value="{{ user.first_name|default:'' }}" maxlength="30" placeholder="Иван" />
+              </div>
+              <div>
+                <label class="text-xs muted-2 mb-1 block" for="id_last_name">Фамилия</label>
+                <input id="id_last_name" class="input" type="text" name="last_name"
+                       value="{{ user.last_name|default:'' }}" maxlength="150" placeholder="Иванов" />
+              </div>
+            </div>
+
+            <div class="rounded-xl border border-brand-soft/50 bg-brand-soft/10 divide-y divide-brand-soft/30">
+              <div class="flex items-center justify-between px-4 py-2.5 text-sm">
+                <span class="muted-2">Логин</span>
+                <span class="font-medium">{{ user.username }}</span>
+              </div>
+              <div class="flex items-center justify-between px-4 py-2.5 text-sm">
+                <span class="muted-2">Роль</span>
+                <span class="font-medium">{{ user.get_role_display }}</span>
+              </div>
+              {% if user.branch %}
+              <div class="flex items-center justify-between px-4 py-2.5 text-sm">
+                <span class="muted-2">Филиал</span>
+                <span class="font-medium">{{ user.branch.name }}</span>
+              </div>
+              {% endif %}
+              {% if user.email %}
+              <div class="flex items-center justify-between px-4 py-2.5 text-sm">
+                <span class="muted-2">Email</span>
+                <span class="font-medium truncate max-w-xs">{{ user.email }}</span>
+              </div>
+              {% endif %}
+            </div>
+
+            <div>
+              <button type="submit" class="btn btn-primary">Сохранить профиль</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      {# ─── Интерфейс ─── #}
+      <section class="pref-section hidden" data-section="interface">
+        <div class="space-y-4">
+
+          {# Font scale #}
+          <div class="card card-pad space-y-4">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-semibold text-base mb-0.5">Размер шрифта</div>
+                <div class="text-sm muted">Масштаб интерфейса на всех страницах. Диапазон ограничен, чтобы верстка не «ехала».</div>
+              </div>
+              <div class="text-sm font-semibold whitespace-nowrap" id="fontScaleLabel"></div>
+            </div>
+
+            <form method="post" action="/preferences/ui/" class="space-y-3" id="fontScaleForm">
+              {% csrf_token %}
+              <input type="hidden" name="font_scale" id="fontScaleHidden" value="{{ ui_font_scale_value|default:1.0 }}" />
+
+              <div class="flex items-center gap-3">
+                <div class="text-xs muted-2 w-10 text-right">90%</div>
+                <input id="fontScaleRange" type="range" min="90" max="115" step="1" class="w-full" />
+                <div class="text-xs muted-2 w-10">115%</div>
+              </div>
+
+              <div class="rounded-xl border border-brand-soft bg-brand-soft/15 p-3" id="fontScalePreview">
+                <div class="font-semibold mb-1">Предпросмотр</div>
+                <div class="text-sm muted mb-3">Пример элементов интерфейса при выбранном масштабе.</div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  <div class="space-y-2">
+                    <div class="font-medium">Карточка</div>
+                    <div class="text-sm muted">Небольшой текст описания.</div>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <button type="button" class="btn btn-primary">Кнопка</button>
+                      <button type="button" class="btn btn-outline">Вторичная</button>
+                      <span class="badge badge-new">Новый</span>
+                    </div>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="font-medium">Поля</div>
+                    <div class="grid grid-cols-2 gap-2">
+                      <div>
+                        <div class="text-xs muted-2 mb-1">Название</div>
+                        <input class="input" type="text" value="ООО Пример" readonly />
+                      </div>
+                      <div>
+                        <div class="text-xs muted-2 mb-1">Статус</div>
+                        <select class="select" disabled><option selected>Новый</option></select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2">
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+                <button type="button" class="btn btn-outline" id="fontScaleCancelBtn">Отменить</button>
+                <button type="button" class="btn btn-secondary" id="fontScaleResetBtn">100%</button>
+                <span class="text-xs muted-2">Если таблицы не помещаются — уменьшите масштаб.</span>
+              </div>
+            </form>
+          </div>
+
+          {# Table / list settings #}
+          <div class="card card-pad space-y-4">
+            <div>
+              <div class="font-semibold text-base mb-0.5">Настройки таблиц</div>
+              <div class="text-sm muted">Строк на странице и раздел по умолчанию при открытии задач.</div>
+            </div>
+
+            <form method="post" action="/preferences/table-settings/" class="space-y-4">
+              {% csrf_token %}
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="text-xs muted-2 mb-1.5 block" for="id_tasks_per_page">Строк на странице (задачи)</label>
+                  <select id="id_tasks_per_page" name="tasks_per_page" class="select">
+                    <option value="10"  {% if tasks_per_page == 10  %}selected{% endif %}>10</option>
+                    <option value="25"  {% if tasks_per_page == 25  %}selected{% endif %}>25</option>
+                    <option value="50"  {% if tasks_per_page == 50  %}selected{% endif %}>50</option>
+                    <option value="100" {% if tasks_per_page == 100 %}selected{% endif %}>100</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="text-xs muted-2 mb-1.5 block" for="id_default_task_tab">Раздел задач по умолчанию</label>
+                  <select id="id_default_task_tab" name="default_task_tab" class="select">
+                    <option value="all"     {% if default_task_tab == 'all'     %}selected{% endif %}>Все задачи</option>
+                    <option value="mine"    {% if default_task_tab == 'mine'    %}selected{% endif %}>Мои задачи</option>
+                    <option value="overdue" {% if default_task_tab == 'overdue' %}selected{% endif %}>Просроченные</option>
+                    <option value="today"   {% if default_task_tab == 'today'   %}selected{% endif %}>На сегодня</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+              </div>
+            </form>
+          </div>
+
+          {# Company detail view mode #}
+          <div class="card card-pad space-y-4">
+            <div>
+              <div class="font-semibold text-base mb-0.5">Режим карточки компании</div>
+              <div class="text-sm muted">Выберите, как по умолчанию открывается карточка компании.</div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="viewModeOptions">
+              <label class="view-mode-option cursor-pointer rounded-xl border-2 p-4 transition-colors
+                {% if company_detail_view_mode == 'classic' %}border-brand-teal bg-brand-teal/10{% else %}border-brand-soft/50 hover:border-brand-teal/50{% endif %}"
+                data-mode="classic">
+                <input type="radio" name="view_mode" value="classic" class="sr-only"
+                  {% if company_detail_view_mode == 'classic' %}checked{% endif %} />
+                <div class="flex items-center gap-2 mb-2">
+                  <svg class="w-5 h-5 text-brand-dark/60" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/>
+                    <rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/>
+                  </svg>
+                  <span class="font-medium">Классический</span>
+                </div>
+                <p class="text-sm muted">Секции развернуты. Вся информация сразу на виду.</p>
+              </label>
+
+              <label class="view-mode-option cursor-pointer rounded-xl border-2 p-4 transition-colors
+                {% if company_detail_view_mode == 'modern' %}border-brand-teal bg-brand-teal/10{% else %}border-brand-soft/50 hover:border-brand-teal/50{% endif %}"
+                data-mode="modern">
+                <input type="radio" name="view_mode" value="modern" class="sr-only"
+                  {% if company_detail_view_mode == 'modern' %}checked{% endif %} />
+                <div class="flex items-center gap-2 mb-2">
+                  <svg class="w-5 h-5 text-brand-dark/60" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <rect x="3" y="3" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/>
+                    <rect x="3" y="17" width="18" height="4" rx="1"/>
+                  </svg>
+                  <span class="font-medium">Современный</span>
+                </div>
+                <p class="text-sm muted">Вкладки и аккордеоны. Удобно на больших карточках.</p>
+              </label>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <button type="button" class="btn btn-primary" id="viewModeSaveBtn">Сохранить</button>
+              <span class="text-xs muted-2" id="viewModeSaveStatus"></span>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      {# ─── Почта ─── #}
+      <section class="pref-section hidden" data-section="mail">
+        <div class="space-y-4">
+
+          {# Signature — contenteditable WYSIWYG (same engine as /mail/signature/) #}
+          <div class="card card-pad space-y-4">
+            <div>
+              <div class="font-semibold text-base mb-0.5">Подпись в письмах</div>
+              <div class="text-sm muted">Подпись добавляется в конец каждого исходящего письма.</div>
+            </div>
+
+            <form method="post" action="/preferences/mail-signature/" class="space-y-3" id="signatureForm">
+              {% csrf_token %}
+              {# Скрытое поле — заполняется из редактора перед сабмитом #}
+              <textarea name="email_signature_html" id="prefSigHidden" class="hidden">{{ user.email_signature_html|default:'' }}</textarea>
+
+              <div>
+                <div class="flex items-end justify-between gap-2 mb-2">
+                  <label class="block text-xs muted-2">Подпись</label>
+                  <div class="flex gap-2">
+                    <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="prefSigBtnVisual">Визуальный</button>
+                    <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="prefSigBtnHtml">HTML‑код</button>
+                  </div>
+                </div>
+
+                {# HTML-режим #}
+                <div id="prefSigHtmlWrap" class="hidden">
+                  <textarea id="prefSigHtmlArea" class="input font-mono text-xs resize-y w-full" rows="8"></textarea>
+                  <div class="text-xs muted-2 mt-1">Можно писать HTML вручную.</div>
+                </div>
+
+                {# Визуальный редактор #}
+                <div id="prefSigVisualWrap">
+                  <div class="rounded-lg border border-brand-soft bg-brand-soft/40 px-2 py-1 mb-2 flex flex-nowrap items-center gap-1 text-xs overflow-x-auto">
+                    <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-pref-cmd="bold" title="Жирный"><b>Ж</b></button>
+                    <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-pref-cmd="italic" title="Курсив"><i>К</i></button>
+                    <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-pref-cmd="underline" title="Подчёркивание"><u>Ч</u></button>
+                    <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-pref-cmd="strikeThrough" title="Зачёркивание"><s>З</s></button>
+                    <span class="mx-1 h-4 w-px bg-brand-soft"></span>
+                    <select id="prefSigFont" class="select !py-1 !px-2 text-xs" title="Шрифт">
+                      <option value="">Шрифт</option>
+                      <option value="Arial" style="font-family:Arial;">Arial</option>
+                      <option value="Tahoma" style="font-family:Tahoma;">Tahoma</option>
+                      <option value="Times New Roman" style="font-family:'Times New Roman';">Times New Roman</option>
+                      <option value="Courier New" style="font-family:'Courier New';">Courier New</option>
+                    </select>
+                    <select id="prefSigSize" class="select !py-1 !px-2 text-xs" title="Размер">
+                      <option value="">Размер</option>
+                      <option value="2">10</option>
+                      <option value="3">12</option>
+                      <option value="4">14</option>
+                      <option value="5">16</option>
+                      <option value="6">18</option>
+                    </select>
+                    <span class="mx-1 h-4 w-px bg-brand-soft"></span>
+                    <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-pref-cmd="justifyLeft" title="По левому краю">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                    <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-pref-cmd="justifyCenter" title="По центру">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                    <span class="mx-1 h-4 w-px bg-brand-soft"></span>
+                    <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" id="prefSigLinkBtn" title="Вставить ссылку">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    </button>
+                    <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-pref-cmd="removeFormat" title="Очистить форматирование">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
+                    </button>
+                  </div>
+
+                  <div class="rounded-xl border border-brand-soft bg-white p-3 overflow-x-auto">
+                    <div id="prefSigEditor" contenteditable="true" role="textbox" aria-multiline="true"
+                         class="min-h-[180px] outline-none text-sm" style="white-space:pre-wrap;"></div>
+                  </div>
+
+                  <div id="prefSigLinkPanel" class="hidden mt-2 flex items-center gap-2 p-2 bg-brand-soft/20 rounded-lg border border-brand-soft">
+                    <input id="prefSigLinkInput" type="url" class="input flex-1 text-sm" placeholder="https://..." />
+                    <button type="button" id="prefSigLinkConfirm" class="btn btn-primary btn-sm">Вставить</button>
+                    <button type="button" id="prefSigLinkCancel" class="btn btn-outline btn-sm">Отмена</button>
+                  </div>
+
+                  <div class="text-xs muted-2 mt-2">
+                    Можно скопировать подпись из Yandex или другой почты и вставить сюда — форматирование сохранится.
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <button type="submit" class="btn btn-primary">Сохранить подпись</button>
+              </div>
+            </form>
+          </div>
+
+          {# Quick links #}
+          <div class="card card-pad">
+            <div class="font-semibold text-base mb-3">Рассылки</div>
+            <p class="text-sm muted mb-3">Управление почтовыми кампаниями доступно в разделе Почта.</p>
+            <a href="/mail/campaigns/" class="btn btn-outline text-sm">Перейти в раздел Почта</a>
+          </div>
+
+        </div>
+      </section>
+
+    </div>{# /content #}
+  </div>{# /flex #}
+</div>
+
+<script nonce="{{ csp_nonce }}">
+(function () {
+  'use strict';
+
+  /* ── Tab switching ── */
+  var tabs    = document.querySelectorAll('.pref-tab');
+  var sections = document.querySelectorAll('.pref-section');
+  var ACTIVE_CLS  = ['bg-brand-teal/10', 'text-brand-teal', 'border-l-2', 'border-brand-teal'];
+  var DEFAULT_TAB = 'profile';
+
+  function activate(tabName) {
+    tabs.forEach(function (btn) {
+      var isActive = btn.dataset.tab === tabName;
+      ACTIVE_CLS.forEach(function (cls) {
+        btn.classList.toggle(cls, isActive);
+      });
+    });
+    sections.forEach(function (sec) {
+      sec.classList.toggle('hidden', sec.dataset.section !== tabName);
+    });
+  }
+
+  function tabFromHash() {
+    var hash = (window.location.hash || '').replace('#', '');
+    var valid = Array.from(tabs).map(function (b) { return b.dataset.tab; });
+    return valid.indexOf(hash) !== -1 ? hash : DEFAULT_TAB;
+  }
+
+  tabs.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var tab = btn.dataset.tab;
+      history.replaceState(null, '', '#' + tab);
+      activate(tab);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+
+  window.addEventListener('hashchange', function () {
+    activate(tabFromHash());
+  });
+
+  activate(tabFromHash());
+
+  /* ── Font scale ── */
+  (function () {
+    var htmlEl    = document.documentElement;
+    var range     = document.getElementById('fontScaleRange');
+    var hidden    = document.getElementById('fontScaleHidden');
+    var label     = document.getElementById('fontScaleLabel');
+    var cancelBtn = document.getElementById('fontScaleCancelBtn');
+    var resetBtn  = document.getElementById('fontScaleResetBtn');
+    if (!range || !hidden || !label) return;
+
+    var savedScale = (function () {
+      var raw = (hidden.value || '').replace(',', '.');
+      var f = parseFloat(raw);
+      return (isFinite(f) && f > 0) ? f : 1.0;
+    })();
+
+    function setScale(scale) {
+      var safe = Math.max(0.90, Math.min(1.15, scale));
+      htmlEl.style.setProperty('--ui-font-scale', safe.toFixed(2));
+      hidden.value = safe.toFixed(2);
+      label.textContent = Math.round(safe * 100) + '%';
+      range.value = String(Math.round(safe * 100));
+    }
+
+    setScale(savedScale);
+
+    range.addEventListener('input', function () {
+      setScale(parseInt(range.value, 10) / 100);
+    });
+    cancelBtn && cancelBtn.addEventListener('click', function () { setScale(savedScale); });
+    resetBtn  && resetBtn.addEventListener('click',  function () { setScale(1.0); });
+  })();
+
+  /* ── Company detail view mode ── */
+  (function () {
+    var options   = document.querySelectorAll('.view-mode-option');
+    var saveBtn   = document.getElementById('viewModeSaveBtn');
+    var statusEl  = document.getElementById('viewModeSaveStatus');
+    if (!saveBtn) return;
+
+    options.forEach(function (label) {
+      label.addEventListener('click', function () {
+        options.forEach(function (l) {
+          var active = l === label;
+          l.classList.toggle('border-brand-teal',    active);
+          l.classList.toggle('bg-brand-teal/10',     active);
+          l.classList.toggle('border-brand-soft/50', !active);
+          var radio = l.querySelector('input[type=radio]');
+          if (radio) radio.checked = active;
+        });
+      });
+    });
+
+    saveBtn.addEventListener('click', function () {
+      var checked = document.querySelector('.view-mode-option input[type=radio]:checked');
+      if (!checked) return;
+      var mode = checked.value;
+
+      saveBtn.disabled = true;
+      if (statusEl) statusEl.textContent = 'Сохраняем…';
+
+      var csrf = document.querySelector('input[name=csrfmiddlewaretoken]');
+      var body = new URLSearchParams();
+      body.set('view_mode', mode);
+      if (csrf) body.set('csrfmiddlewaretoken', csrf.value);
+
+      fetch('/preferences/ui/company-detail-view-mode/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrf ? csrf.value : '' },
+        body: body.toString(),
+        credentials: 'same-origin',
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (statusEl) statusEl.textContent = data.success ? 'Сохранено ✓' : (data.error || 'Ошибка');
+        setTimeout(function () { if (statusEl) statusEl.textContent = ''; }, 3000);
+      })
+      .catch(function () {
+        if (statusEl) statusEl.textContent = 'Ошибка сети';
+      })
+      .finally(function () {
+        saveBtn.disabled = false;
+      });
+    });
+  })();
+
+  /* ── Avatar: click → pick → auto-submit ── */
+  (function () {
+    var fileInput = document.getElementById('avatarFileInput');
+    var form      = document.getElementById('avatarUploadForm');
+    if (!fileInput || !form) return;
+    fileInput.addEventListener('change', function () {
+      if (fileInput.files && fileInput.files.length > 0) {
+        form.submit();
+      }
+    });
+  })();
+
+})();
+</script>
+
+{# ── Signature WYSIWYG (contenteditable, same engine as /mail/signature/) ── #}
+<style>
+  #prefSigEditor:empty:before { content: "Напишите подпись письма..."; color: rgba(0,61,56,.45); pointer-events:none; }
+  /* Ширина 620px = стандарт email — таблицы подписи не растягиваются */
+  #prefSigEditor { max-width: 620px; }
+  #prefSigEditor img { max-width:100% !important; display:inline-block; vertical-align:middle; }
+  #prefSigEditor img[data-resize-sel] { outline:2px solid #01948E; box-shadow:0 0 0 3px rgba(1,148,142,.2); }
+  #prefSigEditor table { border-collapse:collapse; max-width:100%; }
+  #prefSigEditor td, #prefSigEditor th { vertical-align:top; }
+</style>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var form        = document.getElementById('signatureForm');
+  var htmlWrap    = document.getElementById('prefSigHtmlWrap');
+  var visualWrap  = document.getElementById('prefSigVisualWrap');
+  var btnVisual   = document.getElementById('prefSigBtnVisual');
+  var btnHtml     = document.getElementById('prefSigBtnHtml');
+  var editor      = document.getElementById('prefSigEditor');
+  var htmlArea    = document.getElementById('prefSigHtmlArea');
+  var hiddenField = document.getElementById('prefSigHidden');
+  var fontSelect  = document.getElementById('prefSigFont');
+  var sizeSelect  = document.getElementById('prefSigSize');
+  var linkBtn     = document.getElementById('prefSigLinkBtn');
+  var linkPanel   = document.getElementById('prefSigLinkPanel');
+  var linkInput   = document.getElementById('prefSigLinkInput');
+  var linkConfirm = document.getElementById('prefSigLinkConfirm');
+  var linkCancel  = document.getElementById('prefSigLinkCancel');
+
+  if (!form || !editor || !hiddenField) return;
+
+  var _savedRange = null;
+
+  function syncToHidden() {
+    // Убираем маркер выделения перед сохранением — он не должен попасть в email
+    editor.querySelectorAll('[data-resize-sel]').forEach(function (el) { el.removeAttribute('data-resize-sel'); });
+    hiddenField.value = editor.innerHTML || '';
+    if (htmlArea) htmlArea.value = hiddenField.value;
+  }
+
+  function loadSignature() {
+    editor.innerHTML = hiddenField.value || '';
+    editor.querySelectorAll('img').forEach(function (img) {
+      if (!img.style.height) img.style.height = 'auto';
+      // Если нет явной ширины ни в style, ни в атрибуте — применяем naturalWidth
+      if (!img.style.width && !img.getAttribute('width')) {
+        var applyNatural = function () {
+          if (img.naturalWidth > 0 && !img.style.width && !img.getAttribute('width')) {
+            var w = Math.min(img.naturalWidth, 600);
+            img.style.width = w + 'px';
+            img.style.maxWidth = '';
+            img.style.height = 'auto';
+            img.setAttribute('width', w);
+            img.removeAttribute('height');
+            syncToHidden();
+          }
+        };
+        if (img.complete && img.naturalWidth > 0) applyNatural();
+        else img.addEventListener('load', applyNatural, { once: true });
+      }
+    });
+  }
+
+  // Отключаем браузерные нативные ручки ресайза картинок в contenteditable
+  try { document.execCommand('enableObjectResizing', false, false); } catch(e) {}
+
+  function setActive(on, off) {
+    on.classList.add('bg-brand-soft/40');
+    off.classList.remove('bg-brand-soft/40');
+  }
+
+  function showVisual() {
+    htmlWrap.classList.add('hidden');
+    visualWrap.classList.remove('hidden');
+    setActive(btnVisual, btnHtml);
+    loadSignature();
+  }
+
+  function showHtml() {
+    syncToHidden();
+    visualWrap.classList.add('hidden');
+    htmlWrap.classList.remove('hidden');
+    if (htmlArea) htmlArea.value = hiddenField.value;
+    setActive(btnHtml, btnVisual);
+  }
+
+  btnVisual.addEventListener('click', showVisual);
+  btnHtml.addEventListener('click', showHtml);
+
+  // Toolbar buttons
+  document.querySelectorAll('[data-pref-cmd]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.execCommand(btn.getAttribute('data-pref-cmd'), false, null);
+      editor.focus();
+      syncToHidden();
+    });
+  });
+
+  if (fontSelect) {
+    fontSelect.addEventListener('change', function () {
+      if (!fontSelect.value) return;
+      document.execCommand('fontName', false, fontSelect.value);
+      editor.focus(); syncToHidden();
+    });
+  }
+
+  if (sizeSelect) {
+    sizeSelect.addEventListener('change', function () {
+      if (!sizeSelect.value) return;
+      document.execCommand('fontSize', false, sizeSelect.value);
+      editor.focus(); syncToHidden();
+    });
+  }
+
+  // Link panel
+  if (linkBtn && linkPanel && linkInput) {
+    linkBtn.addEventListener('click', function () {
+      var sel = window.getSelection();
+      _savedRange = (sel && sel.rangeCount > 0) ? sel.getRangeAt(0).cloneRange() : null;
+      linkPanel.classList.remove('hidden');
+      linkInput.value = '';
+      linkInput.focus();
+    });
+    linkConfirm.addEventListener('click', function () {
+      var url = linkInput.value.trim();
+      linkPanel.classList.add('hidden');
+      if (!url) return;
+      if (_savedRange) {
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(_savedRange);
+        _savedRange = null;
+      }
+      document.execCommand('createLink', false, url);
+      editor.focus(); syncToHidden();
+    });
+    linkCancel.addEventListener('click', function () {
+      linkPanel.classList.add('hidden');
+      _savedRange = null;
+      editor.focus();
+    });
+    linkInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); linkConfirm.click(); }
+      if (e.key === 'Escape') { e.preventDefault(); linkCancel.click(); }
+    });
+  }
+
+  editor.addEventListener('input', syncToHidden);
+
+  // HTML mode sync back to hidden on change
+  if (htmlArea) {
+    htmlArea.addEventListener('input', function () {
+      hiddenField.value = htmlArea.value;
+    });
+  }
+
+  // Paste — preserve HTML and images (same as /mail/signature/)
+  editor.addEventListener('paste', function (e) {
+    e.preventDefault();
+    var cd = e.clipboardData || window.clipboardData;
+    var htmlData = cd.getData('text/html');
+    var textData = cd.getData('text/plain');
+    var imageItem = Array.from(cd.items || []).find(function (i) { return i.type.indexOf('image') !== -1; });
+
+    if (imageItem) {
+      var file = imageItem.getAsFile();
+      if (file) {
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+          var img = document.createElement('img');
+          img.src = ev.target.result;
+          img.style.maxWidth = '100%';
+          img.style.height = 'auto';
+          var sel = window.getSelection();
+          if (sel && sel.rangeCount > 0) {
+            var range = sel.getRangeAt(0);
+            range.deleteContents();
+            range.insertNode(img);
+            range.collapse(false);
+            sel.removeAllRanges(); sel.addRange(range);
+          } else { editor.appendChild(img); }
+          syncToHidden();
+        };
+        reader.readAsDataURL(file);
+        return;
+      }
+    }
+
+    if (htmlData) {
+      var tmp = document.createElement('div');
+      tmp.innerHTML = htmlData;
+      var bodyEl = tmp.querySelector('body');
+      if (bodyEl) { tmp.innerHTML = ''; while (bodyEl.firstChild) tmp.appendChild(bodyEl.firstChild); }
+      tmp.querySelectorAll('[data-cke-saved-src]').forEach(function (el) {
+        var v = el.getAttribute('data-cke-saved-src');
+        if (v && !el.getAttribute('src')) el.setAttribute('src', v);
+        el.removeAttribute('data-cke-saved-src');
+      });
+      tmp.querySelectorAll('img').forEach(function (img) {
+        img.style.maxWidth = '100%'; img.style.height = 'auto';
+        // Если нет явной ширины — применяем naturalWidth после загрузки
+        if (!img.style.width && !img.getAttribute('width')) {
+          var applyNatural = function () {
+            if (img.naturalWidth > 0 && !img.style.width && !img.getAttribute('width')) {
+              var w = Math.min(img.naturalWidth, 600);
+              img.style.width = w + 'px';
+              img.style.maxWidth = '';
+              img.style.height = 'auto';
+              img.setAttribute('width', w);
+              img.removeAttribute('height');
+              syncToHidden();
+            }
+          };
+          if (img.complete && img.naturalWidth > 0) applyNatural();
+          else img.addEventListener('load', applyNatural, { once: true });
+        }
+      });
+      var sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        var range = sel.getRangeAt(0);
+        range.deleteContents();
+        var frag = document.createDocumentFragment();
+        while (tmp.firstChild) frag.appendChild(tmp.firstChild);
+        range.insertNode(frag);
+        range.collapse(false);
+        sel.removeAllRanges(); sel.addRange(range);
+      } else { while (tmp.firstChild) editor.appendChild(tmp.firstChild); }
+    } else if (textData) {
+      var sel2 = window.getSelection();
+      if (sel2 && sel2.rangeCount > 0) {
+        var range2 = sel2.getRangeAt(0);
+        range2.deleteContents();
+        var tn = document.createTextNode(textData);
+        range2.insertNode(tn);
+        range2.collapse(false);
+        sel2.removeAllRanges(); sel2.addRange(range2);
+      }
+    }
+    syncToHidden();
+  });
+
+  form.addEventListener('submit', syncToHidden);
+
+  // ── Drag-to-resize для картинок в редакторе ──────────────────────────
+  (function () {
+    var selImg = null, dragState = null;
+
+    // Три ручки: правый край (ширина), нижний край (высота), угол (оба)
+    function makeHandle(cursor) {
+      var h = document.createElement('span');
+      h.setAttribute('aria-hidden', 'true');
+      h.style.cssText = 'position:fixed;width:10px;height:10px;background:#01948E;border:2px solid #fff;border-radius:2px;z-index:9998;display:none;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:' + cursor + ';';
+      document.body.appendChild(h);
+      return h;
+    }
+    var hRight  = makeHandle('e-resize');
+    var hBottom = makeHandle('s-resize');
+    var hCorner = makeHandle('se-resize');
+
+    function placeHandles() {
+      if (!selImg) {
+        hRight.style.display = hBottom.style.display = hCorner.style.display = 'none';
+        return;
+      }
+      var r = selImg.getBoundingClientRect();
+      hRight.style.left  = (r.right  - 5) + 'px';
+      hRight.style.top   = (r.top + r.height / 2 - 5) + 'px';
+      hRight.style.display = 'block';
+      hBottom.style.left = (r.left + r.width / 2 - 5) + 'px';
+      hBottom.style.top  = (r.bottom - 5) + 'px';
+      hBottom.style.display = 'block';
+      hCorner.style.left = (r.right  - 5) + 'px';
+      hCorner.style.top  = (r.bottom - 5) + 'px';
+      hCorner.style.display = 'block';
+    }
+
+    function pickImg(img) {
+      if (selImg) selImg.removeAttribute('data-resize-sel');
+      selImg = img;
+      selImg.setAttribute('data-resize-sel', '1');
+      placeHandles();
+    }
+
+    function dropImg() {
+      if (selImg) selImg.removeAttribute('data-resize-sel');
+      selImg = null;
+      hRight.style.display = hBottom.style.display = hCorner.style.display = 'none';
+    }
+
+    editor.addEventListener('click', function (e) {
+      if (e.target.tagName === 'IMG') { e.preventDefault(); pickImg(e.target); }
+      else if (e.target !== hRight && e.target !== hBottom && e.target !== hCorner) { dropImg(); }
+    });
+
+    function startDrag(e, type) {
+      e.preventDefault();
+      if (!selImg) return;
+      var r = selImg.getBoundingClientRect();
+      dragState = { type: type, startX: e.clientX, startY: e.clientY, w: Math.round(r.width), h: Math.round(r.height) };
+    }
+    hRight.addEventListener('mousedown',  function (e) { startDrag(e, 'w'); });
+    hBottom.addEventListener('mousedown', function (e) { startDrag(e, 'h'); });
+    hCorner.addEventListener('mousedown', function (e) { startDrag(e, 'wh'); });
+
+    document.addEventListener('mousemove', function (e) {
+      if (!dragState || !selImg) return;
+      var dx = e.clientX - dragState.startX;
+      var dy = e.clientY - dragState.startY;
+      var newW = dragState.w, newH = dragState.h;
+      if (dragState.type === 'w'  || dragState.type === 'wh') newW = Math.max(20, Math.round(dragState.w + dx));
+      if (dragState.type === 'h'  || dragState.type === 'wh') newH = Math.max(10, Math.round(dragState.h + dy));
+      selImg.style.width   = newW + 'px';
+      selImg.style.height  = newH + 'px';
+      selImg.style.maxWidth = '';
+      selImg.setAttribute('width',  newW);
+      selImg.setAttribute('height', newH);
+      placeHandles();
+    });
+
+    document.addEventListener('mouseup', function () {
+      if (dragState) { dragState = null; syncToHidden(); }
+    });
+
+    window.addEventListener('scroll', placeHandles, { passive: true });
+    window.addEventListener('resize', placeHandles, { passive: true });
+    editor.addEventListener('scroll', placeHandles, { passive: true });
+    editor.addEventListener('blur', function () { setTimeout(dropImg, 200); });
+  })();
+
+  // Init
+  showVisual();
+})();
+</script>
+{% endblock %}

@@ -65,9 +65,23 @@ class GlobalMailAccount(models.Model):
     # Дополнительный лимит: сколько писем в день может отправить ОДИН менеджер
     per_user_daily_limit = models.PositiveIntegerField("Лимит писем в день на менеджера", default=100)
     
-    # API smtp.bz для получения информации о тарифе и квоте
-    smtp_bz_api_key = models.CharField("API ключ smtp.bz", max_length=255, blank=True, default="", help_text="API ключ для получения информации о тарифе и квоте")
+    # API smtp.bz для получения информации о тарифе и квоте.
+    # Хранится зашифрованным (Fernet), как и SMTP-пароль.
+    smtp_bz_api_key_enc = models.TextField("API ключ smtp.bz (зашифрован)", blank=True, default="", help_text="API ключ для получения информации о тарифе и квоте (Fernet)")
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
+
+    def set_api_key(self, key: str) -> None:
+        from mailer.crypto import encrypt_str
+        self.smtp_bz_api_key_enc = encrypt_str(key or "")
+
+    def get_api_key(self) -> str:
+        from mailer.crypto import decrypt_str
+        return decrypt_str(self.smtp_bz_api_key_enc or "")
+
+    @property
+    def smtp_bz_api_key(self) -> str:
+        """Обратная совместимость: возвращает расшифрованный ключ."""
+        return self.get_api_key()
 
     @classmethod
     def load(cls) -> "GlobalMailAccount":
@@ -152,6 +166,17 @@ class Campaign(models.Model):
 
     status = models.CharField("Статус", max_length=16, choices=Status.choices, default=Status.DRAFT)
 
+    # Запланированная отправка: не начинать до указанного момента
+    send_at = models.DateTimeField(
+        "Запланировано на",
+        null=True,
+        blank=True,
+        help_text="Если задано — рассылка не начнётся раньше этого времени.",
+    )
+
+    # Шаблон письма: не отправляется, используется для создания новых кампаний
+    is_template = models.BooleanField("Шаблон", default=False, db_index=True, help_text="Шаблоны не отправляются и не показываются в списке кампаний — только как основа для новых.")
+
     created_at = models.DateTimeField("Создано", auto_now_add=True)
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
 
@@ -170,11 +195,25 @@ class CampaignRecipient(models.Model):
     campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name="recipients", verbose_name="Кампания")
 
     email = models.EmailField("Email")
-    contact_id = models.UUIDField("ID контакта", null=True, blank=True)
-    company_id = models.UUIDField("ID компании", null=True, blank=True)
+    contact = models.ForeignKey(
+        "companies.Contact",
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        verbose_name="Контакт",
+        db_index=True,
+    )
+    company = models.ForeignKey(
+        "companies.Company",
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        verbose_name="Компания",
+        db_index=True,
+    )
 
     status = models.CharField("Статус", max_length=16, choices=Status.choices, default=Status.PENDING)
-    last_error = models.CharField("Ошибка", max_length=255, blank=True, default="")
+    last_error = models.CharField("Ошибка", max_length=2000, blank=True, default="")
 
     created_at = models.DateTimeField("Создано", auto_now_add=True)
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
@@ -191,6 +230,10 @@ class CampaignRecipient(models.Model):
 
 
 class SendLog(models.Model):
+    class Status(models.TextChoices):
+        SENT = "sent", "Отправлено"
+        FAILED = "failed", "Ошибка"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name="send_logs", verbose_name="Кампания")
     recipient = models.ForeignKey(CampaignRecipient, null=True, blank=True, on_delete=models.SET_NULL, related_name="send_logs", verbose_name="Получатель")
@@ -198,9 +241,28 @@ class SendLog(models.Model):
 
     provider = models.CharField("Провайдер", max_length=50, default="smtp")
     message_id = models.CharField("Message-ID", max_length=255, blank=True, default="")
-    status = models.CharField("Статус", max_length=32, default="sent")
+    status = models.CharField("Статус", max_length=32, choices=Status.choices, default=Status.SENT)
     error = models.TextField("Ошибка", blank=True, default="")
     created_at = models.DateTimeField("Когда", auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            # Ускоряет sent_today / sent_last_hour запросы (основной паттерн запросов)
+            models.Index(fields=["provider", "status", "created_at"]),
+            # Ускоряет запросы idempotency check и campaign stats
+            models.Index(fields=["campaign", "recipient", "status"]),
+        ]
+        constraints = [
+            # Гарантирует идемпотентность: для одной пары (campaign, recipient) не может быть
+            # двух SENT-записей. Если send_via_smtp отправил письмо, но процесс упал до
+            # bulk_create — при retry bulk_create(..., ignore_conflicts=True) просто пропустит
+            # дубль, а idempotency-чек выше синхронизирует статус получателя.
+            models.UniqueConstraint(
+                fields=["campaign", "recipient"],
+                condition=models.Q(status="sent"),
+                name="mailer_sendlog_unique_sent_per_recipient",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.campaign} {self.status}"
@@ -303,6 +365,8 @@ class CampaignQueue(models.Model):
         ordering = ["-priority", "queued_at"]
         indexes = [
             models.Index(fields=["status", "priority", "queued_at"]),
+            # Ускоряет основной запрос выборки очереди с фильтром по deferred_until
+            models.Index(fields=["status", "deferred_until", "priority", "queued_at"]),
         ]
     
     def __str__(self) -> str:

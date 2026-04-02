@@ -10,7 +10,7 @@ Partial для отображения мета-информации задачи
 В списке задач (без дублирования «поставил»): {% include "ui/partials/_task_meta.html" with task=t hide_created_by=True only %}
 {% endcomment %}
 
-{% if task.created_by or task.due_at or task.is_urgent %}
+{% if task.created_by or task.due_at or task.is_urgent or task.recurrence_rrule %}
   <div class="flex items-center gap-1.5 flex-wrap text-xs text-brand-dark/60 mt-1">
     {% if task.created_by and not hide_created_by %}
       <span class="flex items-center gap-1">
@@ -42,6 +42,13 @@ Partial для отображения мета-информации задачи
     {% if task.is_urgent %}
       {% if task.created_by or task.due_at %}<span class="text-brand-dark/60">·</span>{% endif %}
       <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 border border-red-200">СРОЧНО</span>
+    {% endif %}
+    {% if task.recurrence_rrule %}
+      <span class="text-brand-dark/60">·</span>
+      <span class="inline-flex items-center gap-0.5 text-brand-dark/50" title="Повторяющаяся задача">
+        <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        повторяется
+      </span>
     {% endif %}
   </div>
 {% endif %}

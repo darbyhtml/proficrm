@@ -24,6 +24,14 @@ class _SmtpAccountLike(Protocol):
     def get_password(self) -> str: ...
 
 
+_RE_CRLF = re.compile(r"[\r\n]")
+
+
+def _sanitize_header(value: str) -> str:
+    """Удаляет CRLF из значения заголовка для защиты от header injection."""
+    return _RE_CRLF.sub("", value)
+
+
 _RE_DATA_IMG = re.compile(
     r"""(<img\b[^>]*?\bsrc\s*=\s*)(["'])(data:image/[^;"']+;base64,[^"']+)\2""",
     re.IGNORECASE,
@@ -96,12 +104,12 @@ def build_message(
     attachment_filename: Optional[str] = None,
 ) -> EmailMessage:
     msg = EmailMessage()
-    msg["Subject"] = subject
-    _from_email = (from_email or account.from_email or account.smtp_username or "").strip()
-    _from_name = (from_name or account.from_name or "").strip()
+    msg["Subject"] = _sanitize_header(subject or "")
+    _from_email = _sanitize_header((from_email or account.from_email or account.smtp_username or "").strip())
+    _from_name = _sanitize_header((from_name or account.from_name or "").strip())
     msg["From"] = formataddr((_from_name, _from_email)) if _from_name else _from_email
-    msg["To"] = to_email
-    _reply_to = (reply_to or account.reply_to or "").strip()
+    msg["To"] = _sanitize_header(to_email or "")
+    _reply_to = _sanitize_header((reply_to or account.reply_to or "").strip())
     if _reply_to:
         msg["Reply-To"] = _reply_to
 
@@ -188,7 +196,22 @@ def format_smtp_error(error: Exception, account: _SmtpAccountLike) -> str:
     if "authentication failed" in error_str.lower() or "535" in error_str or "535-" in error_str:
         return "Ошибка аутентификации: неверный логин или пароль SMTP. Проверьте настройки в Почта → Настройки."
     
-    # Ошибки подключения
+    # Ошибки STARTTLS
+    if "STARTTLS" in error_str or "starttls" in error_str.lower():
+        return f"Ошибка установки защищенного соединения (STARTTLS) с {account.smtp_host}:{account.smtp_port}. Попробуйте отключить STARTTLS или проверьте настройки."
+
+    # Специфические SMTP-ошибки — должны быть ДО проверки OSError,
+    # т.к. SMTPException наследуется от OSError.
+    if isinstance(error, smtplib.SMTPRecipientsRefused):
+        return f"Получатель отклонен сервером: {error_str[:200]}"
+
+    if isinstance(error, smtplib.SMTPSenderRefused):
+        return f"Отправитель отклонен сервером: {error_str[:200]}"
+
+    if isinstance(error, smtplib.SMTPDataError):
+        return f"Ошибка данных письма: {error_str[:200]}"
+
+    # Ошибки подключения (OSError/ConnectionError — после специфических SMTP)
     if isinstance(error, (smtplib.SMTPConnectError, ConnectionError, OSError)):
         if "Connection refused" in error_str or "Connection refused" in str(error):
             return f"Не удалось подключиться к SMTP серверу {account.smtp_host}:{account.smtp_port}. Проверьте настройки подключения."
@@ -197,20 +220,6 @@ def format_smtp_error(error: Exception, account: _SmtpAccountLike) -> str:
         if "Name or service not known" in error_str or "getaddrinfo failed" in error_str:
             return f"Не удалось найти SMTP сервер {account.smtp_host}. Проверьте правильность адреса сервера."
         return f"Ошибка подключения к SMTP серверу: {error_str[:200]}"
-    
-    # Ошибки STARTTLS
-    if "STARTTLS" in error_str or "starttls" in error_str.lower():
-        return f"Ошибка установки защищенного соединения (STARTTLS) с {account.smtp_host}:{account.smtp_port}. Попробуйте отключить STARTTLS или проверьте настройки."
-    
-    # Ошибки отправки
-    if isinstance(error, smtplib.SMTPRecipientsRefused):
-        return f"Получатель отклонен сервером: {error_str[:200]}"
-    
-    if isinstance(error, smtplib.SMTPSenderRefused):
-        return f"Отправитель отклонен сервером: {error_str[:200]}"
-    
-    if isinstance(error, smtplib.SMTPDataError):
-        return f"Ошибка данных письма: {error_str[:200]}"
     
     if isinstance(error, smtplib.SMTPException):
         # Парсим код ошибки SMTP (например, "550 5.1.1 User unknown")
