@@ -88,3 +88,10 @@ from ui.views.settings_integrations import (
 from ui.views.mobile import (
     mobile_app_page, mobile_app_download, mobile_app_qr_image,
 )  # noqa: F401
+from ui.views.settings_messenger import (
+    settings_messenger_overview, settings_messenger_source_choose,
+    settings_messenger_inbox_edit, settings_messenger_inbox_ready,
+    settings_messenger_routing_list, settings_messenger_routing_edit,
+    settings_messenger_routing_delete,
+    settings_messenger_health, settings_messenger_analytics,
+)  # noqa: F401
