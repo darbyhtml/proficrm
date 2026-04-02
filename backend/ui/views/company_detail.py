@@ -210,44 +210,44 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     timeline_notes = list(
         CompanyNote.objects.filter(company=company)
         .select_related("author")
-        .order_by("-created_at")[:200]
+        .order_by("-created_at")[:2000]
     )
     # 2) Передвижения / создание
     timeline_events = list(
         company.history_events.select_related("actor", "from_user", "to_user")
-        .order_by("-occurred_at")[:200]
+        .order_by("-occurred_at")[:500]
     )
     # 3) Задачи
     timeline_tasks = list(
         Task.objects.filter(company=company)
         .select_related("created_by", "assigned_to", "type")
-        .order_by("-created_at")[:200]
+        .order_by("-created_at")[:500]
     )
     # 4) Сделки
     timeline_deals = list(
         CompanyDeal.objects.filter(company=company)
         .select_related("created_by")
-        .order_by("-created_at")[:200]
+        .order_by("-created_at")[:500]
     )
     # 5) Звонки из телефонии CRM
     timeline_calls = list(
         CallRequest.objects.filter(company=company)
         .select_related("created_by")
-        .order_by("-created_at")[:200]
+        .order_by("-created_at")[:500]
     )
     # 6) Рассылки
     timeline_mailings = list(
         CampaignRecipient.objects.filter(company=company, status="sent")
         .select_related("campaign")
-        .order_by("-updated_at")[:200]
+        .order_by("-updated_at")[:500]
     )
     # 7) Запросы на удаление
     timeline_delreqs = list(
         CompanyDeletionRequest.objects.filter(company=company)
         .select_related("requested_by", "decided_by")
-        .order_by("-created_at")[:50]
+        .order_by("-created_at")[:100]
     )
-    # Объединяем всё в один список
+    # Объединяем всё в один список (без лимита итогового)
     timeline_items = sorted(
         [{"date": n.created_at, "kind": "note", "obj": n} for n in timeline_notes]
         + [{"date": e.occurred_at, "kind": "event", "obj": e} for e in timeline_events]
@@ -258,7 +258,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         + [{"date": r.created_at, "kind": "delreq", "obj": r} for r in timeline_delreqs],
         key=lambda x: x["date"],
         reverse=True,
-    )[:200]
+    )
 
     quick_form = CompanyQuickEditForm(instance=company)
     contract_form = CompanyContractForm(instance=company)

@@ -8255,21 +8255,33 @@
   <div id="historyModal" class="fixed inset-0 z-[250] hidden">
     <div class="fixed inset-0 bg-black/35" id="historyModalOverlay"></div>
     <div class="absolute inset-x-4 top-14 bottom-4 mx-auto max-w-2xl flex flex-col">
-      <div class="bg-white border rounded-2xl p-4 overflow-y-auto shadow-xl flex-1 min-h-0">
-        <div class="flex items-center justify-between mb-4">
-          <div class="font-semibold text-base flex items-center gap-2">
-            <svg class="w-5 h-5 text-brand-teal flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-            История взаимодействий
-            <span class="text-xs font-normal text-brand-dark/40">{{ timeline_items|length }}</span>
+      <div class="bg-white border rounded-2xl shadow-xl flex-1 min-h-0 flex flex-col">
+        <!-- Sticky header -->
+        <div class="sticky top-0 z-10 bg-white rounded-t-2xl px-4 pt-4 pb-0 border-b border-brand-soft/20">
+          <div class="flex items-center justify-between mb-3">
+            <div class="font-semibold text-base flex items-center gap-2">
+              <svg class="w-5 h-5 text-brand-teal flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              История взаимодействий
+              <span class="text-xs font-normal text-brand-dark/40" id="timelineTotalCount">{{ timeline_items|length }}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <!-- Сортировка -->
+              <button type="button" class="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-brand-soft/60 bg-white text-xs text-brand-dark/70 hover:bg-brand-soft/20 transition-colors" id="timelineSortBtn" title="Сортировка по дате">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/></svg>
+                <span id="timelineSortLabel">Сначала новые</span>
+              </button>
+              <button type="button" class="btn btn-outline btn-sm" id="closeHistoryModal" aria-label="Закрыть">✕</button>
+            </div>
           </div>
-          <button type="button" class="btn btn-outline btn-sm" id="closeHistoryModal" aria-label="Закрыть">✕</button>
-        </div>
 
-        <!-- Фильтры таймлайна -->
-        <div class="text-xs font-medium text-brand-dark/50 uppercase tracking-wide mb-1.5">Фильтр</div>
-        <div class="flex flex-wrap gap-1.5 mb-4 pb-4 border-b-2 border-brand-soft/40" id="timelineFilters">
+          <!-- Фильтры -->
+          <div class="flex items-center gap-2 mb-2">
+            <div class="text-xs font-medium text-brand-dark/50 uppercase tracking-wide shrink-0">Фильтр</div>
+            <button type="button" class="text-[10px] text-brand-dark/40 hover:text-red-500 transition-colors hidden" id="timelineResetFilters">сбросить</button>
+          </div>
+          <div class="flex flex-wrap gap-1.5 pb-3" id="timelineFilters">
           <button type="button" class="tl-filter-btn group relative inline-flex items-center gap-1 px-2 py-1 rounded-lg border-2 border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-yellow-100 transition-colors text-xs font-medium" data-tl-filter="note" title="Заметки">
             <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/></svg>
             <span class="hidden sm:inline">Заметки</span>
@@ -8315,12 +8327,14 @@
             <span class="hidden sm:inline">SMS</span>
             <svg class="w-3 h-3 text-cyan-600 tl-filter-check" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
           </button>
+          </div>
+          <div id="timelineCounter" class="text-xs text-brand-dark/40 pb-2"></div>
         </div>
-        <div id="timelineCounter" class="text-xs text-brand-dark/40 mb-2"></div>
-
+        <!-- Scrollable timeline body -->
+        <div class="overflow-y-auto flex-1 min-h-0 px-4 pb-4">
         <ol class="relative border-l-2 border-brand-soft/50 ml-3 space-y-0" id="timelineList">
           {% for item in timeline_items %}
-            <li class="mb-4 ml-6 tl-item" data-tl-type="{% if item.kind == 'note' %}{% if item.obj.note_type == 'call_in' or item.obj.note_type == 'call_out' %}call{% elif item.obj.note_type == 'email_in' or item.obj.note_type == 'email_out' %}email{% elif item.obj.note_type == 'sms' %}sms{% else %}note{% endif %}{% else %}{{ item.kind }}{% endif %}">
+            <li class="mb-4 ml-6 tl-item" data-tl-type="{% if item.kind == 'note' %}{% if item.obj.note_type == 'call_in' or item.obj.note_type == 'call_out' %}call{% elif item.obj.note_type == 'email_in' or item.obj.note_type == 'email_out' %}email{% elif item.obj.note_type == 'sms' %}sms{% else %}note{% endif %}{% else %}{{ item.kind }}{% endif %}" data-tl-date="{{ item.date|date:'c' }}" data-tl-month="{{ item.date|date:'Y-m' }}">
               {% if item.kind == "event" %}
                 {# === Передвижение / Создание === #}
                 <span class="absolute -left-[11px] flex h-[22px] w-[22px] items-center justify-center rounded-full
@@ -8547,13 +8561,14 @@
             </li>
           {% endfor %}
         </ol>
-      </div>
+        </div>{# /scrollable #}
+      </div>{# /modal card #}
     </div>
   </div>
 
   <script nonce="{{ csp_nonce }}">
     (function() {
-      const modal = document.getElementById('historyModal');
+      var modal = document.getElementById('historyModal');
       if (!modal) return;
 
       function openHistoryModal() {
@@ -8565,13 +8580,10 @@
         document.body.style.overflow = '';
       }
 
-      // Кнопки открытия (classic + modern)
       ['openHistoryModal', 'openHistoryModalModern'].forEach(function(id) {
         var btn = document.getElementById(id);
         if (btn) btn.addEventListener('click', openHistoryModal);
       });
-
-      // Закрытие
       var closeBtn = document.getElementById('closeHistoryModal');
       if (closeBtn) closeBtn.addEventListener('click', closeHistoryModal);
       var overlay = document.getElementById('historyModalOverlay');
@@ -8580,15 +8592,26 @@
         if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeHistoryModal();
       });
 
-      // ===== Фильтры таймлайна =====
-      var activeFilters = new Set();  // пусто = показывать всё
+      // ===== Фильтры + Сортировка =====
+      var activeFilters = new Set();
       var filterBtns = modal.querySelectorAll('[data-tl-filter]');
-      var items = modal.querySelectorAll('.tl-item');
+      var list = document.getElementById('timelineList');
+      var items = Array.from(list.querySelectorAll('.tl-item'));
       var counter = document.getElementById('timelineCounter');
+      var resetBtn = document.getElementById('timelineResetFilters');
+      var sortBtn = document.getElementById('timelineSortBtn');
+      var sortLabel = document.getElementById('timelineSortLabel');
+      var sortAsc = false; // false = новые сверху (по умолчанию)
+
+      // Подсчёт элементов по типу
+      var typeCounts = {};
+      items.forEach(function(li) {
+        var t = li.getAttribute('data-tl-type');
+        typeCounts[t] = (typeCounts[t] || 0) + 1;
+      });
 
       function applyFilters() {
         var shown = 0;
-        var total = items.length;
         items.forEach(function(li) {
           var type = li.getAttribute('data-tl-type');
           var visible = activeFilters.size === 0 || activeFilters.has(type);
@@ -8596,49 +8619,64 @@
           if (visible) shown++;
         });
         if (counter) {
-          counter.textContent = activeFilters.size === 0
-            ? ''
-            : 'Показано ' + shown + ' из ' + total;
+          counter.textContent = activeFilters.size === 0 ? '' : 'Показано ' + shown + ' из ' + items.length;
         }
-        // Обновить стили кнопок
+        if (resetBtn) {
+          resetBtn.classList.toggle('hidden', activeFilters.size === 0);
+        }
         filterBtns.forEach(function(btn) {
           var f = btn.getAttribute('data-tl-filter');
           var isActive = activeFilters.has(f);
           var check = btn.querySelector('.tl-filter-check');
           if (check) check.style.display = isActive ? 'inline' : 'none';
-          if (isActive) {
-            btn.style.opacity = '1';
-            btn.style.boxShadow = '0 0 0 1px rgba(0,0,0,0.1)';
-          } else if (activeFilters.size > 0) {
-            btn.style.opacity = '0.45';
-            btn.style.boxShadow = 'none';
-          } else {
-            btn.style.opacity = '1';
-            btn.style.boxShadow = 'none';
-          }
+          btn.style.opacity = (activeFilters.size > 0 && !isActive) ? '0.4' : '1';
+          btn.style.transform = isActive ? 'scale(1.05)' : '';
         });
       }
 
+      // Инициализация кнопок фильтров
       filterBtns.forEach(function(btn) {
-        // Скрыть галочки по умолчанию
         var check = btn.querySelector('.tl-filter-check');
         if (check) check.style.display = 'none';
-        // Скрыть кнопки для типов, у которых нет элементов
         var filterType = btn.getAttribute('data-tl-filter');
-        var hasItems = false;
-        items.forEach(function(li) { if (li.getAttribute('data-tl-type') === filterType) hasItems = true; });
-        if (!hasItems) { btn.style.display = 'none'; return; }
+        var cnt = typeCounts[filterType] || 0;
+        if (cnt === 0) { btn.style.display = 'none'; return; }
+        // Добавить счётчик
+        var badge = document.createElement('span');
+        badge.className = 'text-[10px] opacity-60';
+        badge.textContent = cnt;
+        btn.insertBefore(badge, btn.querySelector('.tl-filter-check'));
 
         btn.addEventListener('click', function() {
-          var f = btn.getAttribute('data-tl-filter');
-          if (activeFilters.has(f)) {
-            activeFilters.delete(f);
-          } else {
-            activeFilters.add(f);
-          }
+          if (activeFilters.has(filterType)) { activeFilters.delete(filterType); }
+          else { activeFilters.add(filterType); }
           applyFilters();
         });
       });
+
+      // Сброс фильтров
+      if (resetBtn) {
+        resetBtn.addEventListener('click', function() {
+          activeFilters.clear();
+          applyFilters();
+        });
+      }
+
+      // Сортировка
+      if (sortBtn) {
+        sortBtn.addEventListener('click', function() {
+          sortAsc = !sortAsc;
+          sortLabel.textContent = sortAsc ? 'Сначала старые' : 'Сначала новые';
+          sortBtn.querySelector('svg').style.transform = sortAsc ? 'scaleY(-1)' : '';
+          items.sort(function(a, b) {
+            var da = a.getAttribute('data-tl-date') || '';
+            var db = b.getAttribute('data-tl-date') || '';
+            return sortAsc ? da.localeCompare(db) : db.localeCompare(da);
+          });
+          // Перерисовать
+          items.forEach(function(li) { list.appendChild(li); });
+        });
+      }
     })();
   </script>
   {% endif %}
