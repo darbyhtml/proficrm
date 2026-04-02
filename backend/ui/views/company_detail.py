@@ -203,24 +203,62 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         company.history_events.select_related("actor", "from_user", "to_user").order_by("occurred_at")[:50]
     )
 
-    # Таймлайн: звонки + письма + передвижения — единая хронологическая лента
+    # ===== ПОЛНЫЙ ТАЙМЛАЙН: всё, что происходило с карточкой =====
+    from mailer.models import CampaignRecipient
+
+    # 1) Все заметки (включая amo-импорт, звонки, письма)
     timeline_notes = list(
         CompanyNote.objects.filter(company=company)
-        .exclude(note_type=CompanyNote.NoteType.NOTE)
         .select_related("author")
-        .order_by("-created_at")[:100]
+        .order_by("-created_at")[:200]
     )
+    # 2) Передвижения / создание
     timeline_events = list(
         company.history_events.select_related("actor", "from_user", "to_user")
-        .order_by("-occurred_at")[:100]
+        .order_by("-occurred_at")[:200]
     )
-    # Объединяем в один список кортежей (datetime, type_tag, object)
+    # 3) Задачи
+    timeline_tasks = list(
+        Task.objects.filter(company=company)
+        .select_related("created_by", "assigned_to", "type")
+        .order_by("-created_at")[:200]
+    )
+    # 4) Сделки
+    timeline_deals = list(
+        CompanyDeal.objects.filter(company=company)
+        .select_related("created_by")
+        .order_by("-created_at")[:200]
+    )
+    # 5) Звонки из телефонии CRM
+    timeline_calls = list(
+        CallRequest.objects.filter(company=company)
+        .select_related("created_by")
+        .order_by("-created_at")[:200]
+    )
+    # 6) Рассылки
+    timeline_mailings = list(
+        CampaignRecipient.objects.filter(company=company, status="sent")
+        .select_related("campaign")
+        .order_by("-updated_at")[:200]
+    )
+    # 7) Запросы на удаление
+    timeline_delreqs = list(
+        CompanyDeletionRequest.objects.filter(company=company)
+        .select_related("requested_by", "decided_by")
+        .order_by("-created_at")[:50]
+    )
+    # Объединяем всё в один список
     timeline_items = sorted(
         [{"date": n.created_at, "kind": "note", "obj": n} for n in timeline_notes]
-        + [{"date": e.occurred_at, "kind": "event", "obj": e} for e in timeline_events],
+        + [{"date": e.occurred_at, "kind": "event", "obj": e} for e in timeline_events]
+        + [{"date": t.created_at, "kind": "task", "obj": t} for t in timeline_tasks]
+        + [{"date": d.created_at, "kind": "deal", "obj": d} for d in timeline_deals]
+        + [{"date": c.created_at, "kind": "call", "obj": c} for c in timeline_calls]
+        + [{"date": m.updated_at, "kind": "mailing", "obj": m} for m in timeline_mailings]
+        + [{"date": r.created_at, "kind": "delreq", "obj": r} for r in timeline_delreqs],
         key=lambda x: x["date"],
         reverse=True,
-    )[:100]
+    )[:200]
 
     quick_form = CompanyQuickEditForm(instance=company)
     contract_form = CompanyContractForm(instance=company)
