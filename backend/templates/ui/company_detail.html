@@ -426,13 +426,14 @@
             </button>
           {% endif %}
 
-          <!-- История передвижений (Classic) -->
-          {% if history_events %}
+          <!-- История взаимодействий (Classic) -->
+          {% if timeline_items %}
             <button type="button" class="btn btn-outline btn-sm" id="openHistoryModal"
-                    title="История передвижений" aria-label="История передвижений">
+                    title="История взаимодействий" aria-label="История взаимодействий">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
               </svg>
+              <span class="text-xs">{{ timeline_items|length }}</span>
             </button>
           {% endif %}
 
@@ -3312,13 +3313,14 @@
               </button>
             {% endif %}
 
-            <!-- История передвижений (Modern) -->
-            {% if history_events %}
+            <!-- История взаимодействий (Modern) -->
+            {% if timeline_items %}
               <button type="button" class="btn btn-outline btn-xs md:btn-sm" id="openHistoryModalModern"
-                      title="История передвижений" aria-label="История передвижений">
+                      title="История взаимодействий" aria-label="История взаимодействий">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
+                <span class="text-xs">{{ timeline_items|length }}</span>
               </button>
             {% endif %}
 
@@ -8176,68 +8178,120 @@
     })();
   </script>
 
-  <!-- ===== МОДАЛКА: История передвижений карточки ===== -->
-  {% if history_events %}
+  <!-- ===== МОДАЛКА: История взаимодействий (полный таймлайн) ===== -->
+  {% if timeline_items %}
   <div id="historyModal" class="fixed inset-0 z-[250] hidden">
     <div class="fixed inset-0 bg-black/35" id="historyModalOverlay"></div>
-    <div class="absolute inset-x-4 top-14 mx-auto max-w-lg" style="max-height:calc(100vh - 4rem)">
+    <div class="absolute inset-x-4 top-14 mx-auto max-w-2xl" style="max-height:calc(100vh - 4rem)">
       <div class="bg-white border rounded-2xl p-4 max-h-full overflow-y-auto shadow-xl">
         <div class="flex items-center justify-between mb-4">
           <div class="font-semibold text-base flex items-center gap-2">
             <svg class="w-5 h-5 text-brand-teal flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
-            История передвижений
+            История взаимодействий
+            <span class="text-xs font-normal text-brand-dark/40">{{ timeline_items|length }}</span>
           </div>
           <button type="button" class="btn btn-outline btn-sm" id="closeHistoryModal" aria-label="Закрыть">✕</button>
         </div>
 
-        <ol class="relative border-l border-brand-soft/60 ml-3 space-y-0">
-          {% for ev in history_events %}
-            <li class="mb-5 ml-5">
-              <!-- Точка на таймлайне -->
-              <span class="absolute -left-[9px] flex h-[18px] w-[18px] items-center justify-center rounded-full
-                {% if ev.event_type == 'created' %}bg-green-50 border-2 border-green-400{% else %}bg-blue-50 border-2 border-blue-400{% endif %}">
-                {% if ev.event_type == 'created' %}
-                  <svg class="w-2.5 h-2.5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clip-rule="evenodd"/>
-                  </svg>
-                {% else %}
-                  <svg class="w-2.5 h-2.5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
-                  </svg>
-                {% endif %}
-              </span>
-
-              <!-- Дата + источник -->
-              <time class="mb-0.5 block text-xs text-brand-dark/50 leading-tight">
-                {{ ev.occurred_at|date:"d.m.Y H:i" }}
-                <span class="ml-1 text-[10px] rounded px-1 {% if ev.source == 'amocrm' %}bg-orange-100 text-orange-600{% else %}bg-teal-100 text-teal-600{% endif %}">
-                  {% if ev.source == 'amocrm' %}amoCRM{% else %}CRM{% endif %}
+        <ol class="relative border-l-2 border-brand-soft/50 ml-3 space-y-0">
+          {% for item in timeline_items %}
+            <li class="mb-4 ml-6">
+              {% if item.kind == "event" %}
+                {# === Передвижение / Создание === #}
+                <span class="absolute -left-[11px] flex h-[22px] w-[22px] items-center justify-center rounded-full
+                  {% if item.obj.event_type == 'created' %}bg-green-50 border-2 border-green-400{% else %}bg-blue-50 border-2 border-blue-400{% endif %}">
+                  {% if item.obj.event_type == 'created' %}
+                    <svg class="w-3 h-3 text-green-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                  {% else %}
+                    <svg class="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                  {% endif %}
                 </span>
-              </time>
+                <time class="block text-xs text-brand-dark/40 mb-0.5">
+                  {{ item.date|date:"d.m.Y H:i" }}
+                  <span class="ml-1 text-[10px] rounded px-1 {% if item.obj.source == 'amocrm' %}bg-orange-100 text-orange-600{% else %}bg-teal-100 text-teal-600{% endif %}">
+                    {% if item.obj.source == 'amocrm' %}amoCRM{% else %}CRM{% endif %}
+                  </span>
+                </time>
+                {% if item.obj.event_type == 'created' %}
+                  <p class="text-sm"><span class="font-medium text-green-700">Создана</span>{% if item.obj.actor_name %} <span class="text-brand-dark/60">·</span> {{ item.obj.actor_name }}{% endif %}</p>
+                {% else %}
+                  <p class="text-sm">
+                    <span class="font-medium text-blue-700">Передана</span>
+                    {% if item.obj.from_user_name %} <span class="text-brand-dark/50">от</span> <span class="font-medium">{{ item.obj.from_user_name }}</span>{% endif %}
+                    {% if item.obj.to_user_name %} <span class="text-brand-dark/50">&rarr;</span> <span class="font-medium">{{ item.obj.to_user_name }}</span>{% endif %}
+                    {% if item.obj.actor_name and item.obj.actor_name != item.obj.from_user_name and item.obj.actor_name != item.obj.to_user_name %}
+                      <span class="text-brand-dark/40 text-xs">({{ item.obj.actor_name }})</span>
+                    {% endif %}
+                  </p>
+                {% endif %}
 
-              <!-- Описание события -->
-              {% if ev.event_type == 'created' %}
-                <p class="text-sm text-brand-dark/80 leading-snug">
-                  <span class="font-medium text-green-700">Создана</span>
-                  {% if ev.actor_name %}
-                    <span class="text-brand-dark/60"> · </span><span class="font-medium">{{ ev.actor_name }}</span>
+              {% elif item.obj.note_type == 'call_out' or item.obj.note_type == 'call_in' %}
+                {# === Звонок === #}
+                <span class="absolute -left-[11px] flex h-[22px] w-[22px] items-center justify-center rounded-full
+                  {% if item.obj.note_type == 'call_in' %}bg-teal-50 border-2 border-teal-400{% else %}bg-orange-50 border-2 border-orange-400{% endif %}">
+                  <svg class="w-3 h-3 {% if item.obj.note_type == 'call_in' %}text-teal-600{% else %}text-orange-600{% endif %}" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"/>
+                  </svg>
+                </span>
+                <time class="block text-xs text-brand-dark/40 mb-0.5">
+                  {{ item.date|date:"d.m.Y H:i" }}
+                  <span class="ml-1 text-[10px] rounded px-1 bg-orange-100 text-orange-600">amoCRM</span>
+                </time>
+                <div class="rounded-xl border {% if item.obj.note_type == 'call_in' %}border-teal-200 bg-teal-50/30{% else %}border-orange-200 bg-orange-50/30{% endif %} px-3 py-2">
+                  <div class="flex items-center gap-2 text-sm font-medium {% if item.obj.note_type == 'call_in' %}text-teal-800{% else %}text-orange-800{% endif %}">
+                    {% if item.obj.note_type == 'call_in' %}Входящий звонок{% else %}Исходящий звонок{% endif %}
+                  </div>
+                  {% if item.obj.author %}<div class="text-xs text-brand-dark/50 mt-0.5">{{ item.obj.author.get_full_name }}</div>{% endif %}
+                  {% with lines=item.obj.text|linebreaksbr %}
+                    <div class="text-xs text-brand-dark/70 mt-1 leading-relaxed">{{ lines }}</div>
+                  {% endwith %}
+                </div>
+
+              {% elif item.obj.note_type == 'email_in' or item.obj.note_type == 'email_out' %}
+                {# === Письмо === #}
+                <span class="absolute -left-[11px] flex h-[22px] w-[22px] items-center justify-center rounded-full
+                  {% if item.obj.note_type == 'email_in' %}bg-green-50 border-2 border-green-400{% else %}bg-indigo-50 border-2 border-indigo-400{% endif %}">
+                  <svg class="w-3 h-3 {% if item.obj.note_type == 'email_in' %}text-green-600{% else %}text-indigo-600{% endif %}" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/>
+                    <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/>
+                  </svg>
+                </span>
+                <time class="block text-xs text-brand-dark/40 mb-0.5">
+                  {{ item.date|date:"d.m.Y H:i" }}
+                  <span class="ml-1 text-[10px] rounded px-1 bg-orange-100 text-orange-600">amoCRM</span>
+                </time>
+                <div class="rounded-xl border {% if item.obj.note_type == 'email_in' %}border-green-200 bg-green-50/30{% else %}border-indigo-200 bg-indigo-50/30{% endif %} px-3 py-2">
+                  <div class="flex items-center gap-2 text-sm font-medium {% if item.obj.note_type == 'email_in' %}text-green-800{% else %}text-indigo-800{% endif %}">
+                    {% if item.obj.note_type == 'email_in' %}Входящее письмо{% else %}Исходящее письмо{% endif %}
+                  </div>
+                  {% if item.obj.meta.subject %}
+                    <div class="text-sm font-medium text-brand-dark/80 mt-1">{{ item.obj.meta.subject }}</div>
                   {% endif %}
-                </p>
+                  {% if item.obj.meta.from %}
+                    <div class="text-xs text-brand-dark/50 mt-0.5"><span class="text-brand-dark/40">От:</span> {{ item.obj.meta.from }}</div>
+                  {% endif %}
+                  {% if item.obj.meta.to %}
+                    <div class="text-xs text-brand-dark/50"><span class="text-brand-dark/40">Кому:</span> {{ item.obj.meta.to }}</div>
+                  {% endif %}
+                  {% if item.obj.meta.body %}
+                    <div class="text-xs text-brand-dark/60 mt-1.5 leading-relaxed border-t border-brand-soft/30 pt-1.5">{{ item.obj.meta.body|truncatewords:40 }}</div>
+                  {% elif item.obj.text %}
+                    <div class="text-xs text-brand-dark/60 mt-1.5 leading-relaxed border-t border-brand-soft/30 pt-1.5">{{ item.obj.text|truncatewords:40 }}</div>
+                  {% endif %}
+                  {% if item.obj.meta.attachments %}
+                    <div class="text-xs text-brand-dark/40 mt-1">{{ item.obj.meta.attachments }} вложений</div>
+                  {% endif %}
+                </div>
+
               {% else %}
-                <p class="text-sm text-brand-dark/80 leading-snug">
-                  <span class="font-medium text-blue-700">Передана</span>
-                  {% if ev.from_user_name %}
-                    <span class="text-brand-dark/60"> от </span><span class="font-medium">{{ ev.from_user_name }}</span>
-                  {% endif %}
-                  {% if ev.to_user_name %}
-                    <span class="text-brand-dark/60"> → </span><span class="font-medium">{{ ev.to_user_name }}</span>
-                  {% endif %}
-                  {% if ev.actor_name and ev.actor_name != ev.from_user_name and ev.actor_name != ev.to_user_name %}
-                    <span class="text-brand-dark/40 text-xs"> (выполнил: {{ ev.actor_name }})</span>
-                  {% endif %}
-                </p>
+                {# === Прочее (fallback) === #}
+                <span class="absolute -left-[11px] flex h-[22px] w-[22px] items-center justify-center rounded-full bg-gray-50 border-2 border-gray-300">
+                  <svg class="w-3 h-3 text-gray-500" fill="currentColor" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3"/></svg>
+                </span>
+                <time class="block text-xs text-brand-dark/40 mb-0.5">{{ item.date|date:"d.m.Y H:i" }}</time>
+                <div class="text-sm text-brand-dark/70">{{ item.obj.text|truncatewords:30 }}</div>
               {% endif %}
             </li>
           {% endfor %}
@@ -8254,9 +8308,6 @@
       function openHistoryModal() {
         modal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
-        // Прокрутить к последнему (самому новому) событию
-        var scrollEl = modal.querySelector('.overflow-y-auto');
-        if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
       }
       function closeHistoryModal() {
         modal.classList.add('hidden');
