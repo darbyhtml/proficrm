@@ -2240,7 +2240,7 @@
                 var mainCard = document.createElement('div');
                 mainCard.className = 'note-attachment-card note-attachment-card--editable';
                 mainCard.dataset.main = '1';
-                mainCard.innerHTML = '<button type="button" class="note-attachment-card__delete" aria-label="Удалить вложение" data-note-attachment-remove></button>' + prev + '<div class="note-attachment-card__name">' + (fileName.replace(/</g,'&lt;').replace(/"/g,'&quot;')) + '</div>';
+                mainCard.innerHTML = '<button type="button" class="note-attachment-card__delete" aria-label="Удалить вложение" data-note-attachment-remove></button>' + prev + '<div class="note-attachment-card__name">' + window.__escapeHtml(fileName) + '</div>';
                 mainCard.querySelector('[data-note-attachment-remove]').textContent = '\u00D7';
                 mainCard.querySelector('[data-note-attachment-remove]').addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); if (noteEditRemoveFile) noteEditRemoveFile.checked = true; if (noteEditRemoveHidden) noteEditRemoveHidden.value = '1'; mainCard.remove(); updateEditRemoveAllVisibility(); });
                 noteEditExistingCards.appendChild(mainCard);
@@ -2256,7 +2256,7 @@
                 var card = document.createElement('div');
                 card.className = 'note-attachment-card note-attachment-card--editable';
                 card.dataset.attachmentId = id;
-                card.innerHTML = '<button type="button" class="note-attachment-card__delete" aria-label="Удалить вложение" data-note-attachment-remove></button>' + prev + '<div class="note-attachment-card__name">' + (name.replace(/</g,'&lt;').replace(/"/g,'&quot;')) + '</div>';
+                card.innerHTML = '<button type="button" class="note-attachment-card__delete" aria-label="Удалить вложение" data-note-attachment-remove></button>' + prev + '<div class="note-attachment-card__name">' + window.__escapeHtml(name) + '</div>';
                 card.querySelector('[data-note-attachment-remove]').textContent = '\u00D7';
                 card.querySelector('[data-note-attachment-remove]').addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); var cur = (noteEditRemoveIds.value || '').split(',').filter(Boolean); cur.push(id); noteEditRemoveIds.value = cur.join(','); card.remove(); updateEditRemoveAllVisibility(); });
                 noteEditExistingCards.appendChild(card);
@@ -2302,7 +2302,7 @@
                 var ic = editIconClass(ext);
                 prev = '<div class="note-attachment-card__preview"><div class="note-attachment-card__icon note-attachment-card__icon--' + ic + '">' + (editIconSvg[ic] || editIconSvg.file) + '</div></div>';
               }
-              card.innerHTML = '<button type="button" class="note-attachment-card__delete" aria-label="Удалить вложение" data-note-attachment-remove></button>' + prev + '<div class="note-attachment-card__name">' + (name.replace(/</g,'&lt;').replace(/"/g,'&quot;')) + '</div>';
+              card.innerHTML = '<button type="button" class="note-attachment-card__delete" aria-label="Удалить вложение" data-note-attachment-remove></button>' + prev + '<div class="note-attachment-card__name">' + window.__escapeHtml(name) + '</div>';
               card.querySelector('[data-note-attachment-remove]').textContent = '\u00D7';
               card.querySelector('[data-note-attachment-remove]').addEventListener('click', function(e) {
                 e.preventDefault(); e.stopPropagation();
@@ -2396,7 +2396,7 @@
             if (noteEditFileSelectedModern) noteEditFileSelectedModern.textContent = '';
             if (noteEditRemoveFileModern) noteEditRemoveFileModern.checked = false;
             if (noteEditRemoveHiddenModern) noteEditRemoveHiddenModern.value = '0';
-            if (noteEditFileCurrentModern) noteEditFileCurrentModern.innerHTML = fileName ? '<span class="note-file-chip inline-flex"><span class="truncate max-w-[180px]">' + (fileName.replace(/</g,'&lt;').replace(/"/g,'&quot;')) + '</span> (основной)</span>' : 'Основной файл: не выбран';
+            if (noteEditFileCurrentModern) noteEditFileCurrentModern.innerHTML = fileName ? '<span class="note-file-chip inline-flex"><span class="truncate max-w-[180px]">' + window.__escapeHtml(fileName) + '</span> (основной)</span>' : 'Основной файл: не выбран';
             if (noteEditTitleModern) noteEditTitleModern.textContent = 'Редактировать заметку';
             if (noteEditSubtitleModern) noteEditSubtitleModern.classList.remove('hidden');
             if (noteEditRemoveRowModern) noteEditRemoveRowModern.style.display = 'flex';
@@ -2859,7 +2859,7 @@
             }
             card.innerHTML = '<button type="button" class="note-attachment-card__delete" aria-label="Удалить вложение" data-note-attachment-remove>&times;</button>' +
               previewHtml +
-              '<div class="note-attachment-card__name" title="' + name.replace(/"/g, '&quot;') + '">' + (name.replace(/</g,'&lt;').replace(/"/g,'&quot;')) + '</div>';
+              '<div class="note-attachment-card__name" title="' + name.replace(/"/g, '&quot;') + '">' + window.__escapeHtml(name) + '</div>';
             cardsWrap.appendChild(card);
           });
         }
@@ -4938,7 +4938,7 @@
           if (fileSelected) fileSelected.textContent = '';
           if (removeFile) removeFile.checked = false;
           if (removeHidden) removeHidden.value = '0';
-          if (fileCurrent) fileCurrent.innerHTML = fileName ? '<span class="note-file-chip inline-flex"><span class="truncate max-w-[180px]">' + (fileName.replace(/</g,'&lt;').replace(/"/g,'&quot;')) + '</span> (основной)</span>' : 'Основной файл: не выбран';
+          if (fileCurrent) fileCurrent.innerHTML = fileName ? '<span class="note-file-chip inline-flex"><span class="truncate max-w-[180px]">' + window.__escapeHtml(fileName) + '</span> (основной)</span>' : 'Основной файл: не выбран';
           if (titleEl) titleEl.textContent = 'Редактировать заметку';
           if (subtitleEl) subtitleEl.classList.remove('hidden');
           if (removeRow) removeRow.style.display = 'flex';
@@ -6184,32 +6184,33 @@
 
       function renderCompanyPhoneItem(phoneId, rawPhone, displayText) {
         const companyId = '{{ company.id }}';
+        const esc = window.__escapeHtml;
         return `
           <div>
             <div class="flex items-center justify-between gap-2">
               <div class="min-w-0">
-                <div class="font-mono text-xs" data-company-phone-display="${phoneId}">${displayText || '—'}</div>
-                <div class="text-[11px] muted-2 mt-0.5 ${rawPhone ? '' : 'hidden'}" data-company-phone-local="${phoneId}"></div>
-                <div class="hidden mt-1" data-company-phone-edit="${phoneId}">
-                  <input class="input text-xs" data-company-phone-input value="${rawPhone || ''}" placeholder="+7..." style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:15rem" />
+                <div class="font-mono text-xs" data-company-phone-display="${esc(phoneId)}">${esc(displayText) || '—'}</div>
+                <div class="text-[11px] muted-2 mt-0.5 ${rawPhone ? '' : 'hidden'}" data-company-phone-local="${esc(phoneId)}"></div>
+                <div class="hidden mt-1" data-company-phone-edit="${esc(phoneId)}">
+                  <input class="input text-xs" data-company-phone-input value="${esc(rawPhone) || ''}" placeholder="+7..." style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:15rem" />
                   <div class="flex gap-1 mt-1">
-                    <button type="button" class="btn btn-primary btn-sm" data-company-phone-save="${phoneId}">Сохранить</button>
-                    <button type="button" class="btn btn-outline btn-sm" data-company-phone-cancel="${phoneId}">Отмена</button>
+                    <button type="button" class="btn btn-primary btn-sm" data-company-phone-save="${esc(phoneId)}">Сохранить</button>
+                    <button type="button" class="btn btn-outline btn-sm" data-company-phone-cancel="${esc(phoneId)}">Отмена</button>
                   </div>
-                  <div class="text-xs text-red-600 mt-1 hidden" data-company-phone-error="${phoneId}"></div>
+                  <div class="text-xs text-red-600 mt-1 hidden" data-company-phone-error="${esc(phoneId)}"></div>
                 </div>
               </div>
               <div class="relative shrink-0" data-dd-root>
                 <button type="button" class="btn btn-outline btn-xs" data-dd-toggle title="Действия" aria-label="Действия">⋯</button>
                 <div class="hidden absolute right-0 mt-2 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
-                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 js-call-phone" data-phone="${rawPhone || ''}" data-company="${companyId}" data-contact="">Позвонить</button>
-                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-copy-phone="${rawPhone || ''}">Скопировать</button>
-                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-edit-company-phone="${phoneId}">Изменить</button>
+                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 js-call-phone" data-phone="${esc(rawPhone) || ''}" data-company="${companyId}" data-contact="">Позвонить</button>
+                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-copy-phone="${esc(rawPhone) || ''}">Скопировать</button>
+                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-edit-company-phone="${esc(phoneId)}">Изменить</button>
                 </div>
               </div>
             </div>
             <div class="mt-1">
-              <div class="phone-comment-wrapper" data-phone-type="company" data-phone-id="${phoneId}">
+              <div class="phone-comment-wrapper" data-phone-type="company" data-phone-id="${esc(phoneId)}">
                 <div class="phone-comment-display text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors" data-edit-comment style="white-space: pre-wrap;">Комментарий</div>
                 <div class="phone-comment-edit hidden mt-1">
                   <textarea class="input text-xs" placeholder="Комментарий к номеру" maxlength="255" data-comment-input rows="2" style="padding:.35rem .5rem;font-size:.75rem;min-height:3.25rem;resize:vertical"></textarea>
@@ -7672,9 +7673,11 @@
             if (parent && !results.find(r => r.element === parent)) {
               results.push({ element: parent, text: `Заметка: ${noteText.substring(0, 50)}...`, label: 'Заметка' });
               // Подсветка текста внутри заметки
-              const regex = new RegExp(`(${query})`, 'gi');
-              if (el.innerHTML) {
-                el.innerHTML = el.innerHTML.replace(regex, '<mark style="background-color:#fef3c7">$1</mark>');
+              const safeQuery = window.__escapeRegExp(query);
+              const regex = new RegExp(`(${safeQuery})`, 'gi');
+              if (el.textContent) {
+                const highlighted = window.__escapeHtml(el.textContent).replace(regex, '<mark style="background-color:#fef3c7">$1</mark>');
+                el.innerHTML = highlighted;
               }
             }
           }
@@ -7694,12 +7697,19 @@
         });
 
         if (results.length > 0) {
-          searchResults.innerHTML = results.slice(0, 8).map((r, idx) => 
-            `<div class="p-2 hover:bg-brand-soft/20 rounded cursor-pointer border-b border-brand-soft/30 last:border-0" onclick="const el = document.querySelectorAll('[data-task-id], .inline-field-wrapper, .card')[${idx}]; if(el) { el.scrollIntoView({behavior:'smooth',block:'center'}); setTimeout(() => { document.getElementById('cardSearchModern').classList.add('hidden'); }, 300); }">
-              <div class="text-xs text-brand-dark/50 mb-0.5">${r.label}</div>
-              <div class="text-sm">${r.text.substring(0, 80)}${r.text.length > 80 ? '...' : ''}</div>
+          const esc = window.__escapeHtml;
+          searchResults.innerHTML = results.slice(0, 8).map((r, idx) =>
+            `<div class="p-2 hover:bg-brand-soft/20 rounded cursor-pointer border-b border-brand-soft/30 last:border-0" data-search-scroll="${idx}">
+              <div class="text-xs text-brand-dark/50 mb-0.5">${esc(r.label)}</div>
+              <div class="text-sm">${esc(r.text.substring(0, 80))}${r.text.length > 80 ? '...' : ''}</div>
             </div>`
           ).join('');
+          searchResults.querySelectorAll('[data-search-scroll]').forEach(el => {
+            el.addEventListener('click', function() {
+              const target = results[parseInt(this.dataset.searchScroll)]?.element;
+              if (target) { target.scrollIntoView({behavior:'smooth', block:'center'}); setTimeout(() => { document.getElementById('cardSearchModern').classList.add('hidden'); }, 300); }
+            });
+          });
           searchResults.classList.remove('hidden');
         } else {
           searchResults.innerHTML = '<div class="p-2 text-brand-dark/50 text-center">Ничего не найдено</div>';

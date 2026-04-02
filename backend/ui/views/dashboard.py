@@ -41,8 +41,16 @@ from ui.views._base import (
     timedelta,
     timezone,
 )
+from django.utils.http import url_has_allowed_host_and_scheme
 import logging
 logger = logging.getLogger(__name__)
+
+
+def _safe_redirect_url(request, url, fallback="/"):
+    if url and url_has_allowed_host_and_scheme(url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+        return url
+    return fallback
+
 
 @login_required
 def view_as_update(request: HttpRequest) -> HttpResponse:
@@ -106,7 +114,7 @@ def view_as_update(request: HttpRequest) -> HttpResponse:
         else:
             request.session.pop("view_as_branch_id", None)
 
-    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or "/"
+    next_url = _safe_redirect_url(request, request.POST.get("next") or request.META.get("HTTP_REFERER"))
     return redirect(next_url)
 
 
@@ -124,7 +132,7 @@ def view_as_reset(request: HttpRequest) -> HttpResponse:
     request.session.pop("view_as_role", None)
     request.session.pop("view_as_branch_id", None)
 
-    return redirect(request.META.get("HTTP_REFERER") or "/")
+    return redirect(_safe_redirect_url(request, request.META.get("HTTP_REFERER")))
 
 
 @login_required

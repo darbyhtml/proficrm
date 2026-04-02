@@ -53,6 +53,7 @@ from ui.views.tasks import (
     task_set_status, task_add_comment,
     task_view, task_edit,
     _apply_task_filters_for_bulk_ui,  # accessed by tasksapp/tests.py
+    _create_note_from_task,  # accessed by tasksapp/management/commands/cleanup_old_tasks.py
 )  # noqa: F401
 from ui.views.settings_core import (
     settings_dashboard, settings_announcements,

@@ -12,6 +12,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
 from django.conf import settings
+from django.utils.http import url_has_allowed_host_and_scheme
 import hashlib
 
 from accounts.models import MagicLinkToken, User
@@ -187,7 +188,9 @@ class SecureLoginView(auth_views.LoginView):
                 pass
             
             # Редирект
-            redirect_to = request.POST.get("next") or settings.LOGIN_REDIRECT_URL
+            redirect_to = request.POST.get("next") or ""
+            if not url_has_allowed_host_and_scheme(redirect_to, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+                redirect_to = settings.LOGIN_REDIRECT_URL
             return redirect(redirect_to)
         
         # Вход по логину и паролю (только для администраторов)
@@ -249,7 +252,9 @@ class SecureLoginView(auth_views.LoginView):
                 pass
             
             # Редирект
-            redirect_to = request.POST.get("next") or settings.LOGIN_REDIRECT_URL
+            redirect_to = request.POST.get("next") or ""
+            if not url_has_allowed_host_and_scheme(redirect_to, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+                redirect_to = settings.LOGIN_REDIRECT_URL
             return redirect(redirect_to)
         
         # Если не указан тип входа или другие случаи, возвращаем ошибку

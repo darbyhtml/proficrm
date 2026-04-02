@@ -1327,15 +1327,18 @@ def company_phone_create(request: HttpRequest, company_id) -> HttpResponse:
     # Дубли: основной телефон и другие доп. телефоны
     if (company.phone or "").strip() == normalized:
         return JsonResponse({"success": False, "error": "Этот телефон уже указан как основной."}, status=400)
-    if CompanyPhone.objects.filter(company=company, value=normalized).exists():
-        return JsonResponse({"success": False, "error": "Такой телефон уже есть в дополнительных номерах."}, status=400)
 
+    from django.db import transaction
     from django.db.models import Max
 
-    max_order = CompanyPhone.objects.filter(company=company).aggregate(m=Max("order")).get("m")
-    next_order = int(max_order) + 1 if max_order is not None else 0
+    with transaction.atomic():
+        if CompanyPhone.objects.filter(company=company, value=normalized).exists():
+            return JsonResponse({"success": False, "error": "Такой телефон уже есть в дополнительных номерах."}, status=400)
 
-    company_phone = CompanyPhone.objects.create(company=company, value=normalized, order=next_order)
+        max_order = CompanyPhone.objects.select_for_update().filter(company=company).aggregate(m=Max("order")).get("m")
+        next_order = int(max_order) + 1 if max_order is not None else 0
+
+        company_phone = CompanyPhone.objects.create(company=company, value=normalized, order=next_order)
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.CREATE,

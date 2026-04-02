@@ -735,7 +735,7 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
 
     now_ts = timezone.now()
     # Транзакция обеспечивается декоратором @transaction.atomic на функции
-    qs_to_update = Company.objects.filter(id__in=ids).select_related("responsible", "branch", "status")
+    qs_to_update = Company.objects.select_for_update().filter(id__in=ids).select_related("responsible", "branch", "status")
     
     # Собираем детальную информацию для аудита
     companies_data = []

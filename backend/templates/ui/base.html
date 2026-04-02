@@ -11,7 +11,7 @@
     <link rel="icon" type="image/svg+xml" href="{% static 'ui/favicon-v2.svg' %}">
     <link rel="shortcut icon" href="{% static 'ui/favicon-v2.svg' %}">
     <meta name="theme-color" content="#01948E">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com" nonce="{{ csp_nonce }}"></script>
     <script>
       tailwind.config = {
         theme: {
@@ -1195,6 +1195,20 @@
     </a>
 
     <script nonce="{{ csp_nonce }}">
+      window.__escapeHtml = function(s){
+        return String(s || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      };
+      window.__escapeAttr = window.__escapeHtml;
+      window.__escapeRegExp = function(s){
+        return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      };
+    </script>
+    <script nonce="{{ csp_nonce }}">
       (function(){
         const btn = document.getElementById('notifBtn');
         const panel = document.getElementById('notifPanel');
@@ -2170,8 +2184,9 @@
           const el = document.querySelector('[data-cold-info="' + entity + ':' + id + '"]');
           if(!el) return;
           if(data && (data.is_cold_call || data.has_mark)){
-            const by = data.marked_by ? (' (' + data.marked_by + ')') : '';
-            const at = data.marked_at ? (' <span>' + data.marked_at + '</span>') : '';
+            const esc = window.__escapeHtml;
+            const by = data.marked_by ? (' (' + esc(data.marked_by) + ')') : '';
+            const at = data.marked_at ? (' <span>' + esc(data.marked_at) + '</span>') : '';
             const rollback = (!data.is_cold_call && data.has_mark) ? ' <span class="opacity-80">(откат)</span>' : '';
             el.innerHTML = '<span class="font-medium">Холодный звонок:</span>' + at + by + rollback;
             el.classList.remove('hidden');

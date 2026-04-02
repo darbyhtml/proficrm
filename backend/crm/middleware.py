@@ -84,8 +84,9 @@ class ErrorLoggingMiddleware(MiddlewareMixin):
                 level=level
             )
         except Exception:
-            # Если не удалось сохранить ошибку, не прерываем обработку
-            pass
+            # Если не удалось сохранить ошибку, логируем в stderr
+            import logging
+            logging.getLogger("crm.error_logging").exception("Failed to persist ErrorLog entry")
         
         # Возвращаем None, чтобы Django продолжил стандартную обработку ошибки
         return None

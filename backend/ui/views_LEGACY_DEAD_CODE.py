@@ -20,6 +20,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from accounts.models import Branch, User, MagicLinkToken
 from audit.models import ActivityEvent
@@ -74,6 +75,14 @@ from datetime import date as _date
 from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_redirect_url(request, url, fallback="/"):
+    """Validate redirect URL to prevent open redirect attacks."""
+    if url and url_has_allowed_host_and_scheme(url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+        return url
+    return fallback
+
 
 from .forms import (
     CompanyCreateForm,
@@ -201,7 +210,7 @@ def view_as_update(request: HttpRequest) -> HttpResponse:
         return redirect("dashboard")
 
     if request.method != "POST":
-        return redirect(request.META.get("HTTP_REFERER") or "/")
+        return redirect(_safe_redirect_url(request, request.META.get("HTTP_REFERER")))
 
     view_user_id = (request.POST.get("view_user_id") or "").strip()
     view_role = (request.POST.get("view_role") or "").strip()
@@ -251,7 +260,7 @@ def view_as_update(request: HttpRequest) -> HttpResponse:
         else:
             request.session.pop("view_as_branch_id", None)
 
-    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or "/"
+    next_url = _safe_redirect_url(request, request.POST.get("next") or request.META.get("HTTP_REFERER"))
     return redirect(next_url)
 
 
@@ -269,7 +278,7 @@ def view_as_reset(request: HttpRequest) -> HttpResponse:
     request.session.pop("view_as_role", None)
     request.session.pop("view_as_branch_id", None)
 
-    return redirect(request.META.get("HTTP_REFERER") or "/")
+    return redirect(_safe_redirect_url(request, request.META.get("HTTP_REFERER")))
 
 
 def _notify_head_deleted_with_branches(*, actor: User, head_company: Company, detached: list[Company]):
@@ -7055,7 +7064,7 @@ def task_delete(request: HttpRequest, task_id) -> HttpResponse:
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return JsonResponse({"success": True, "note_created": save_to_notes, "message": f"Задача «{title}» удалена." + (" Заметка создана." if save_to_notes else "")})
         
-        return redirect(request.META.get("HTTP_REFERER") or "task_list")
+        return redirect(_safe_redirect_url(request, request.META.get("HTTP_REFERER"), fallback="task_list"))
 
     return redirect("task_list")
 
@@ -7932,7 +7941,7 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
             "redirect": request.META.get("HTTP_REFERER") or "/tasks/"
         })
     
-    return redirect(request.META.get("HTTP_REFERER") or "/tasks/")
+    return redirect(_safe_redirect_url(request, request.META.get("HTTP_REFERER"), fallback="/tasks/"))
 
 
 @login_required
@@ -11078,14 +11087,14 @@ def messenger_agent_status(request: HttpRequest) -> HttpResponse:
     allowed = {s.value for s in AgentProfile.Status}
     if status not in allowed:
         messages.error(request, "Неверный статус оператора.")
-        next_url = request.POST.get("next") or reverse("messenger_conversations_unified")
+        next_url = _safe_redirect_url(request, request.POST.get("next"), fallback=reverse("messenger_conversations_unified"))
         return redirect(next_url)
 
     profile, _ = AgentProfile.objects.get_or_create(user=user)
     profile.status = status
     profile.save(update_fields=["status", "updated_at"])
 
-    next_url = request.POST.get("next") or reverse("messenger_conversations_unified")
+    next_url = _safe_redirect_url(request, request.POST.get("next"), fallback=reverse("messenger_conversations_unified"))
     return redirect(next_url)
 
 
