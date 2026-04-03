@@ -19,7 +19,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone as django_timezone
 from django.http import FileResponse, Http404, StreamingHttpResponse
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.decorators import api_view, authentication_classes, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.exceptions import APIException, ValidationError as DRFValidationError, Throttled
@@ -121,6 +121,7 @@ def _get_working_hours_schedule(inbox):
 
 
 @api_view(["POST", "OPTIONS"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 @throttle_classes([WidgetBootstrapThrottle])
 def widget_bootstrap(request):
@@ -413,6 +414,7 @@ def widget_bootstrap(request):
 
 
 @api_view(["POST", "OPTIONS"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def widget_contact_update(request):
     """
@@ -520,6 +522,7 @@ def _parse_widget_send_input(request):
 
 
 @api_view(["POST"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 @throttle_classes([WidgetSendThrottle])
 def widget_send(request):
@@ -818,6 +821,7 @@ def widget_send(request):
 
 
 @api_view(["GET"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 @throttle_classes([WidgetPollThrottle])
 def widget_poll(request):
@@ -1179,6 +1183,7 @@ def widget_stream(request):
 
 
 @api_view(["GET"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 def widget_attachment_download(request, attachment_id):
     """
@@ -1226,6 +1231,7 @@ def widget_attachment_download(request, attachment_id):
 
 
 @api_view(["POST"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 @throttle_classes([WidgetPollThrottle])
 def widget_typing(request):
@@ -1265,6 +1271,7 @@ def widget_typing(request):
 
 
 @api_view(["POST"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 @throttle_classes([WidgetPollThrottle])
 def widget_mark_read(request):
@@ -1332,6 +1339,7 @@ def widget_mark_read(request):
 
 
 @api_view(["POST"])
+@authentication_classes([])
 @permission_classes([AllowAny])
 @throttle_classes([WidgetPollThrottle])
 def widget_rate(request):
