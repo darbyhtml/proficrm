@@ -1,106 +1,125 @@
 {% extends "ui/base.html" %}
-{% load static %}
+{% block title %}Автоматизация — Настройки — CRM ПРОФИ{% endblock %}
 
 {% block content %}
 <div class="space-y-6 max-w-5xl mx-auto py-4 px-4">
   <div class="space-y-2">
-    <div class="text-sm text-brand-dark/70"><a class="underline" href="{% url 'settings_dashboard' %}">Настройки</a> / <a class="underline" href="{% url 'settings_messenger_overview' %}">Live-chat</a> / Автоматизация</div>
+    <div class="text-sm text-brand-dark/70">
+      <a class="underline" href="{% url 'settings_dashboard' %}">Настройки</a> /
+      <a class="underline" href="{% url 'settings_messenger_overview' %}">Live-chat</a> / Автоматизация
+    </div>
     <h1 class="text-2xl font-bold text-brand-dark">Автоматизация</h1>
-    <p class="text-sm text-brand-dark/70">Правила автоматизации и макросы для быстрых действий операторов.</p>
+    <p class="text-sm text-brand-dark/60">Правила автоматизации и макросы для быстрых действий операторов.</p>
   </div>
 
   {% include "ui/settings/messenger_nav.html" with active="automation" %}
 
-  <!-- Automation Rules -->
-  <div class="bg-white rounded-xl border border-brand-soft/60 overflow-hidden">
+  {# --- Правила автоматизации --- #}
+  <div class="bg-white rounded-2xl border border-brand-soft/60 overflow-hidden">
     <div class="px-5 py-4 border-b border-brand-soft/40">
       <h2 class="font-semibold text-brand-dark">Правила автоматизации</h2>
-      <p class="text-xs text-brand-dark/50 mt-1">Автоматические действия при событиях (создание диалога, новое сообщение). Управление через API: POST /api/automation-rules/</p>
+      <p class="text-xs text-brand-dark/50 mt-1">Автоматические действия при создании диалога, новом сообщении и других событиях.</p>
     </div>
     <table class="w-full text-sm">
       <thead class="bg-brand-soft/20">
         <tr>
-          <th class="text-left px-4 py-3 font-medium text-brand-dark">Название</th>
-          <th class="text-left px-4 py-3 font-medium text-brand-dark">Событие</th>
-          <th class="text-left px-4 py-3 font-medium text-brand-dark">Inbox</th>
-          <th class="text-center px-4 py-3 font-medium text-brand-dark">Условия</th>
-          <th class="text-center px-4 py-3 font-medium text-brand-dark">Действия</th>
-          <th class="text-center px-4 py-3 font-medium text-brand-dark">Статус</th>
-          <th class="text-center px-4 py-3 font-medium text-brand-dark"></th>
+          <th class="text-left px-5 py-3 font-medium text-brand-dark">Название</th>
+          <th class="text-left px-5 py-3 font-medium text-brand-dark">Событие</th>
+          <th class="text-left px-5 py-3 font-medium text-brand-dark">Inbox</th>
+          <th class="text-center px-5 py-3 font-medium text-brand-dark">Условия</th>
+          <th class="text-center px-5 py-3 font-medium text-brand-dark">Действия</th>
+          <th class="text-center px-5 py-3 font-medium text-brand-dark">Статус</th>
+          <th class="text-right px-5 py-3 font-medium text-brand-dark"></th>
         </tr>
       </thead>
       <tbody class="divide-y divide-brand-soft/30">
         {% for r in rules %}
-        <tr class="hover:bg-brand-soft/10">
-          <td class="px-4 py-3 font-medium text-brand-dark">{{ r.name }}</td>
-          <td class="px-4 py-3 text-brand-dark/70">{{ r.get_event_name_display }}</td>
-          <td class="px-4 py-3 text-brand-dark/70">{{ r.inbox.name|default:"Все" }}</td>
-          <td class="px-4 py-3 text-center text-xs text-brand-dark/50">{{ r.conditions|length }}</td>
-          <td class="px-4 py-3 text-center text-xs text-brand-dark/50">{{ r.actions|length }}</td>
-          <td class="px-4 py-3 text-center">
+        <tr class="hover:bg-brand-soft/10 transition-colors">
+          <td class="px-5 py-3.5 font-medium text-brand-dark">{{ r.name }}</td>
+          <td class="px-5 py-3.5">
+            <span class="inline-flex items-center rounded-full bg-brand-soft/40 px-2 py-0.5 text-[11px] text-brand-dark/70">{{ r.get_event_name_display }}</span>
+          </td>
+          <td class="px-5 py-3.5 text-brand-dark/70">{{ r.inbox.name|default:"Все" }}</td>
+          <td class="px-5 py-3.5 text-center">
+            <span class="inline-flex items-center justify-center size-6 rounded-md bg-brand-soft/30 text-xs text-brand-dark/60">{{ r.conditions|length }}</span>
+          </td>
+          <td class="px-5 py-3.5 text-center">
+            <span class="inline-flex items-center justify-center size-6 rounded-md bg-brand-soft/30 text-xs text-brand-dark/60">{{ r.actions|length }}</span>
+          </td>
+          <td class="px-5 py-3.5 text-center">
             <form method="post" class="inline">
               {% csrf_token %}
               <input type="hidden" name="action" value="toggle_rule">
               <input type="hidden" name="rule_id" value="{{ r.id }}">
-              <button type="submit" class="px-2 py-0.5 rounded-full text-xs font-medium {% if r.is_active %}bg-green-100 text-green-700{% else %}bg-gray-100 text-gray-500{% endif %}">
+              <button type="submit" class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium border transition {% if r.is_active %}bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100{% else %}bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200{% endif %}">
                 {% if r.is_active %}Активно{% else %}Выкл{% endif %}
               </button>
             </form>
           </td>
-          <td class="px-4 py-3 text-center">
-            <form method="post" class="inline" onsubmit="return confirm('Удалить правило?')">
+          <td class="px-5 py-3.5 text-right">
+            <form method="post" class="inline" onsubmit="return confirm('Удалить правило «{{ r.name }}»?')">
               {% csrf_token %}
               <input type="hidden" name="action" value="delete_rule">
               <input type="hidden" name="rule_id" value="{{ r.id }}">
-              <button type="submit" class="text-red-500 hover:text-red-700 text-xs">Удалить</button>
+              <button type="submit" class="text-xs text-red-500 hover:text-red-700 transition">Удалить</button>
             </form>
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="7" class="px-4 py-8 text-center text-brand-dark/50">Нет правил автоматизации. Создайте через API: POST /api/automation-rules/</td></tr>
+        <tr>
+          <td colspan="7" class="px-5 py-12 text-center text-sm text-brand-dark/50">
+            Правил автоматизации пока нет.
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 
-  <!-- Macros -->
-  <div class="bg-white rounded-xl border border-brand-soft/60 overflow-hidden">
+  {# --- Макросы --- #}
+  <div class="bg-white rounded-2xl border border-brand-soft/60 overflow-hidden">
     <div class="px-5 py-4 border-b border-brand-soft/40">
       <h2 class="font-semibold text-brand-dark">Макросы</h2>
-      <p class="text-xs text-brand-dark/50 mt-1">Быстрые действия для операторов (один клик = несколько действий). Управление через API: POST /api/macros/</p>
+      <p class="text-xs text-brand-dark/50 mt-1">Быстрые действия для операторов: один клик запускает набор действий.</p>
     </div>
     <table class="w-full text-sm">
       <thead class="bg-brand-soft/20">
         <tr>
-          <th class="text-left px-4 py-3 font-medium text-brand-dark">Название</th>
-          <th class="text-left px-4 py-3 font-medium text-brand-dark">Владелец</th>
-          <th class="text-center px-4 py-3 font-medium text-brand-dark">Видимость</th>
-          <th class="text-center px-4 py-3 font-medium text-brand-dark">Действий</th>
-          <th class="text-center px-4 py-3 font-medium text-brand-dark"></th>
+          <th class="text-left px-5 py-3 font-medium text-brand-dark">Название</th>
+          <th class="text-left px-5 py-3 font-medium text-brand-dark">Владелец</th>
+          <th class="text-center px-5 py-3 font-medium text-brand-dark">Видимость</th>
+          <th class="text-center px-5 py-3 font-medium text-brand-dark">Действий</th>
+          <th class="text-right px-5 py-3 font-medium text-brand-dark"></th>
         </tr>
       </thead>
       <tbody class="divide-y divide-brand-soft/30">
         {% for m in macros %}
-        <tr class="hover:bg-brand-soft/10">
-          <td class="px-4 py-3 font-medium text-brand-dark">{{ m.name }}</td>
-          <td class="px-4 py-3 text-brand-dark/70">{{ m.user.get_full_name|default:"Общий" }}</td>
-          <td class="px-4 py-3 text-center">
-            <span class="px-2 py-0.5 rounded-full text-xs font-medium {% if m.visibility == 'global' %}bg-blue-100 text-blue-700{% else %}bg-gray-100 text-gray-600{% endif %}">
+        <tr class="hover:bg-brand-soft/10 transition-colors">
+          <td class="px-5 py-3.5 font-medium text-brand-dark">{{ m.name }}</td>
+          <td class="px-5 py-3.5 text-brand-dark/70">{{ m.user.get_full_name|default:"Общий" }}</td>
+          <td class="px-5 py-3.5 text-center">
+            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium {% if m.visibility == 'global' %}bg-blue-50 text-blue-700 border border-blue-100{% else %}bg-gray-100 text-gray-600 border border-gray-200{% endif %}">
               {{ m.get_visibility_display }}
             </span>
           </td>
-          <td class="px-4 py-3 text-center text-xs text-brand-dark/50">{{ m.actions|length }}</td>
-          <td class="px-4 py-3 text-center">
-            <form method="post" class="inline" onsubmit="return confirm('Удалить макрос?')">
+          <td class="px-5 py-3.5 text-center">
+            <span class="inline-flex items-center justify-center size-6 rounded-md bg-brand-soft/30 text-xs text-brand-dark/60">{{ m.actions|length }}</span>
+          </td>
+          <td class="px-5 py-3.5 text-right">
+            <form method="post" class="inline" onsubmit="return confirm('Удалить макрос «{{ m.name }}»?')">
               {% csrf_token %}
               <input type="hidden" name="action" value="delete_macro">
               <input type="hidden" name="macro_id" value="{{ m.id }}">
-              <button type="submit" class="text-red-500 hover:text-red-700 text-xs">Удалить</button>
+              <button type="submit" class="text-xs text-red-500 hover:text-red-700 transition">Удалить</button>
             </form>
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="5" class="px-4 py-8 text-center text-brand-dark/50">Нет макросов. Создайте через API: POST /api/macros/</td></tr>
+        <tr>
+          <td colspan="5" class="px-5 py-12 text-center text-sm text-brand-dark/50">
+            Макросов пока нет.
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
