@@ -103,6 +103,7 @@ urlpatterns = [
     path("favicon.ico", RedirectView.as_view(url=static("ui/favicon-v2.svg"), permanent=True)),
     path('admin/', admin.site.urls),
     path("", include("ui.urls")),
+    path("", include("messenger.urls")),
     path("", include("mailer.urls")),
     path("", include("notifications.urls")),
     # Session auth for UI (without weird /login/login/ prefixes) - с защитой от брутфорса
