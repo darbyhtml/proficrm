@@ -251,7 +251,8 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     timeline_items = sorted(
         [{"date": n.created_at, "kind": "note", "obj": n} for n in timeline_notes]
         + [{"date": e.occurred_at, "kind": "event", "obj": e} for e in timeline_events]
-        + [{"date": t.created_at, "kind": "task", "obj": t} for t in timeline_tasks]
+        + [{"date": t.created_at, "kind": "task_created", "obj": t} for t in timeline_tasks]
+        + [{"date": t.completed_at, "kind": "task_done", "obj": t} for t in timeline_tasks if t.completed_at]
         + [{"date": d.created_at, "kind": "deal", "obj": d} for d in timeline_deals]
         + [{"date": c.created_at, "kind": "call", "obj": c} for c in timeline_calls]
         + [{"date": m.updated_at, "kind": "mailing", "obj": m} for m in timeline_mailings]
