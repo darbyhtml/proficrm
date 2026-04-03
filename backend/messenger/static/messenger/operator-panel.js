@@ -390,18 +390,18 @@ class MessengerOperatorPanel {
     }
     
     // Обновить мета (бейдж непрочитанных и статус)
+    const unread = Number(conversation.unread_count || 0);
     const metaEl = cardEl.querySelector('.conversation-meta');
     if (metaEl) {
-      const unread = Number(conversation.unread_count || 0);
       let statusBadge = '';
       if (status === 'open') statusBadge = '<span class="badge badge-new badge-xs">Открыт</span>';
       else if (status === 'pending') statusBadge = '<span class="badge badge-progress badge-xs">Ожидание</span>';
       else if (status === 'resolved') statusBadge = '<span class="badge badge-done badge-xs">Решён</span>';
       else if (status === 'closed') statusBadge = '<span class="badge badge-cancel badge-xs">Закрыт</span>';
-      
+
       metaEl.innerHTML = (unread > 0 ? `<span class="conversation-badge">${unread}</span>` : '') + statusBadge;
     }
-    
+
     // Обновить активное состояние и unread
     const isActive = this.currentConversationId === id;
     const isUnread = unread > 0 && !isActive;
