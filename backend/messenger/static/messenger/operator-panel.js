@@ -1606,12 +1606,12 @@ class MessengerOperatorPanel {
           <h3 class="text-sm font-semibold mb-3">Действия</h3>
           <div class="space-y-2.5">
             <div class="flex gap-2">
-              <button type="button" class="btn btn-outline btn-sm flex-1 text-xs" id="assignMeBtn">
+              ${window.MESSENGER_CAN_REPLY ? `<button type="button" class="btn btn-outline btn-sm flex-1 text-xs" id="assignMeBtn">
                 <span class="inline-flex items-center gap-1.5">
                   ${iconUserPlus}
                   <span>Назначить меня</span>
                 </span>
-              </button>
+              </button>` : ''}
               <button type="button" class="btn btn-outline btn-sm text-xs" id="closeConvBtn" title="Закрыть диалог">
                 ${iconX}
               </button>
