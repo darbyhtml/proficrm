@@ -56,6 +56,26 @@ Canonical: {canonical_url}
     return response
 
 
+def sw_push_js(request):
+    """
+    Отдать Service Worker напрямую (не через redirect).
+    Браузеры запрещают регистрацию SW через 302-redirect.
+    """
+    import pathlib
+    from django.conf import settings as django_settings
+
+    sw_path = pathlib.Path(django_settings.BASE_DIR) / "messenger" / "static" / "messenger" / "sw-push.js"
+    try:
+        content = sw_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise Http404("sw-push.js not found")
+
+    response = HttpResponse(content, content_type="application/javascript; charset=utf-8")
+    response["Service-Worker-Allowed"] = "/"
+    response["Cache-Control"] = "no-cache"
+    return response
+
+
 def health_check(request):
     """
     Health check endpoint для мониторинга.
