@@ -2085,6 +2085,30 @@
         localStorage.setItem(this._storageKey('campaigns_shown'), JSON.stringify([...shown]));
       } catch (e) { /* quota exceeded — ignore */ }
     }
+
+    /**
+     * Полная очистка ресурсов виджета (таймеры, SSE, DOM).
+     * Вызывать при SPA-навигации или удалении виджета со страницы.
+     */
+    destroy() {
+      // SSE + reconnect timer
+      this.closeSSE();
+      // Polling
+      if (this.pollTimer) { clearTimeout(this.pollTimer); this.pollTimer = null; }
+      if (this.pollInterval) { clearInterval(this.pollInterval); this.pollInterval = null; }
+      // Other timers
+      if (this.markReadTimer) { clearTimeout(this.markReadTimer); this.markReadTimer = null; }
+      if (this.typingSendTimer) { clearTimeout(this.typingSendTimer); this.typingSendTimer = null; }
+      // Campaign timers
+      this.campaignTimers.forEach(t => clearTimeout(t));
+      this.campaignTimers = [];
+      this._dismissCampaignBubble();
+      // Remove DOM
+      const container = document.getElementById('messenger-widget-container');
+      if (container) container.remove();
+      const launcher = document.getElementById('messenger-widget-launcher');
+      if (launcher) launcher.remove();
+    }
   }
 
   // Автоинициализация при загрузке скрипта + публичный JS API
@@ -2125,6 +2149,9 @@
       },
       isOpen() {
         return !!(widgetInstance && widgetInstance.isOpen);
+      },
+      destroy() {
+        if (widgetInstance) { widgetInstance.destroy(); widgetInstance = null; }
       },
     };
   }

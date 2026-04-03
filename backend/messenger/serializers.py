@@ -145,7 +145,15 @@ class MessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Message
-        fields = "__all__"
+        fields = (
+            "id", "conversation", "direction", "body",
+            "content_attributes", "source_id",
+            "sender_user", "sender_contact",
+            "created_at", "delivered_at", "read_at",
+            # computed
+            "attachments", "sender_user_name", "sender_user_username",
+            "sender_contact_name",
+        )
         read_only_fields = ("created_at", "delivered_at")
 
     def create(self, validated_data: dict) -> models.Message:
@@ -199,7 +207,7 @@ class ConversationLabelSerializer(serializers.ModelSerializer):
 class CannedResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.CannedResponse
-        fields = "__all__"
+        fields = ("id", "title", "body", "branch", "created_by", "created_at")
         read_only_fields = ("created_by", "created_at")
 
 

@@ -752,11 +752,8 @@ class MessengerOperatorPanel {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         if (this.listPollingTimer) { clearInterval(this.listPollingTimer); this.listPollingTimer = null; }
-        // Закрыть SSE при скрытии вкладки
-        if (this.eventSource) {
-          this.eventSource.close();
-          this.eventSource = null;
-        }
+        // Закрыть SSE при скрытии вкладки (включая таймер автозакрытия)
+        this._cleanupSSE();
       } else {
         this.startListPolling();
         this.refreshConversationList();
@@ -986,15 +983,19 @@ class MessengerOperatorPanel {
   }
 
   async markConversationRead(conversationId) {
-    await fetch(`/api/conversations/${conversationId}/read/`, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: {
-        'X-CSRFToken': this.getCsrfToken(),
-      },
-    });
-    // обновим список (сбросит бейдж непрочитанных, если был)
-    this.refreshConversationList();
+    try {
+      await fetch(`/api/conversations/${conversationId}/read/`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'X-CSRFToken': this.getCsrfToken(),
+        },
+      });
+      // обновим список (сбросит бейдж непрочитанных, если был)
+      this.refreshConversationList();
+    } catch (err) {
+      console.warn('markConversationRead failed:', err);
+    }
   }
 
   /**
@@ -1775,19 +1776,25 @@ class MessengerOperatorPanel {
       btn.parentElement.style.position = 'relative';
       btn.parentElement.appendChild(popup);
 
+      // Закрыть popup при клике вне — один обработчик, удаляется при любом закрытии
+      let closeHandler = null;
+      const removePopup = () => {
+        popup.remove();
+        if (closeHandler) { document.removeEventListener('click', closeHandler); closeHandler = null; }
+      };
+
       popup.querySelectorAll('[data-add-label]').forEach(item => {
         item.addEventListener('click', () => {
           const labelId = parseInt(item.getAttribute('data-add-label'));
           const newIds = [...currentIds, labelId];
-          popup.remove();
+          removePopup();
           this.patchConversation(conversation.id, { label_ids: newIds });
         });
       });
 
-      // Закрыть popup при клике вне
       setTimeout(() => {
-        const close = (e) => { if (!popup.contains(e.target) && e.target !== btn) { popup.remove(); document.removeEventListener('click', close); } };
-        document.addEventListener('click', close);
+        closeHandler = (e) => { if (!popup.contains(e.target) && e.target !== btn) removePopup(); };
+        document.addEventListener('click', closeHandler);
       }, 10);
     } catch (e) {
       console.error('Failed to load labels:', e);
@@ -2267,11 +2274,10 @@ class MessengerOperatorPanel {
           const separatorDiv = document.createElement('div');
           separatorDiv.className = 'text-center my-4';
           separatorDiv.setAttribute('data-date-separator', messageDate);
-          separatorDiv.innerHTML = `
-            <span class="inline-block px-3 py-1 rounded-full bg-brand-soft/40 text-xs text-brand-dark/70">
-              ${messageDate}
-            </span>
-          `;
+          const dateSpan = document.createElement('span');
+          dateSpan.className = 'inline-block px-3 py-1 rounded-full bg-brand-soft/40 text-xs text-brand-dark/70';
+          dateSpan.textContent = messageDate;
+          separatorDiv.appendChild(dateSpan);
           messagesList.appendChild(separatorDiv);
         }
       }
