@@ -971,6 +971,8 @@ class MessengerOperatorPanel {
       // this.startTypingPolling(conversationId);
       
     } catch (error) {
+      // AbortError — нормальная ситуация при быстрой смене диалога, молча игнорируем
+      if (error.name === 'AbortError') return;
       console.error('Failed to load conversation:', error);
       if (contentArea) {
         contentArea.innerHTML = `

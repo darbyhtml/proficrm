@@ -153,6 +153,8 @@ urlpatterns = [
     path("settings/messenger/canned-responses/new/", views.settings_messenger_canned_edit, name="settings_messenger_canned_create"),
     path("settings/messenger/canned-responses/<int:response_id>/", views.settings_messenger_canned_edit, name="settings_messenger_canned_edit"),
     path("settings/messenger/canned-responses/<int:response_id>/delete/", views.settings_messenger_canned_delete, name="settings_messenger_canned_delete"),
+    path("settings/messenger/campaigns/", views.settings_messenger_campaigns, name="settings_messenger_campaigns"),
+    path("settings/messenger/automation/", views.settings_messenger_automation, name="settings_messenger_automation"),
 
     # Messenger operator panel
     path("messenger/", views.messenger_conversations_unified, name="messenger_conversations_unified"),

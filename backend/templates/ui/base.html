@@ -3588,6 +3588,32 @@
         setInterval(pollAnnouncement, 60000);
       })();
     </script>
+    {% if user.is_authenticated %}
+    <script>
+      // Sidebar unread badge for messenger
+      (function() {
+        var badge = document.getElementById('messengerUnreadBadge');
+        if (!badge) return;
+        function pollUnread() {
+          fetch('/api/conversations/unread-count/', { credentials: 'same-origin' })
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(d) {
+              if (!d) return;
+              var c = d.unread_count || 0;
+              if (c > 0) {
+                badge.textContent = c > 99 ? '99+' : String(c);
+                badge.classList.remove('hidden');
+              } else {
+                badge.classList.add('hidden');
+              }
+            })
+            .catch(function(){});
+        }
+        setTimeout(pollUnread, 3000);
+        setInterval(pollUnread, 30000);
+      })();
+    </script>
+    {% endif %}
   </body>
 </html>
 

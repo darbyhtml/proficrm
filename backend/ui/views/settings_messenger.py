@@ -13,7 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from crm.utils import require_admin
-from messenger.models import Conversation, Message, Inbox, RoutingRule, Channel, CannedResponse
+from messenger.models import Conversation, Message, Inbox, RoutingRule, Channel, CannedResponse, Campaign, AutomationRule, Macro
 from messenger.logging_utils import ui_logger
 from messenger.utils import ensure_messenger_enabled_view
 
@@ -994,3 +994,79 @@ def settings_messenger_canned_delete(request: HttpRequest, response_id: int) -> 
         return redirect("settings_messenger_canned_list")
 
     return redirect("settings_messenger_canned_list")
+
+
+# ─── Campaigns ───────────────────────────────────────────────────────────
+
+@login_required
+def settings_messenger_campaigns(request: HttpRequest) -> HttpResponse:
+    """CRUD для кампаний (список + создание/редактирование inline)."""
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+    ensure_messenger_enabled_view()
+
+    if request.method == "POST":
+        action = request.POST.get("action", "")
+        if action == "create":
+            inbox_id = request.POST.get("inbox")
+            Campaign.objects.create(
+                inbox_id=inbox_id,
+                title=request.POST.get("title", "").strip(),
+                message=request.POST.get("message", "").strip(),
+                url_pattern=request.POST.get("url_pattern", "*").strip() or "*",
+                time_on_page=int(request.POST.get("time_on_page", 10) or 10),
+                status=request.POST.get("status", "active"),
+            )
+            messages.success(request, "Кампания создана.")
+        elif action == "delete":
+            Campaign.objects.filter(id=request.POST.get("campaign_id")).delete()
+            messages.success(request, "Кампания удалена.")
+        elif action == "toggle":
+            c = Campaign.objects.filter(id=request.POST.get("campaign_id")).first()
+            if c:
+                c.status = "disabled" if c.status == "active" else "active"
+                c.save(update_fields=["status"])
+        return redirect("settings_messenger_campaigns")
+
+    campaigns = Campaign.objects.select_related("inbox").order_by("-created_at")
+    inboxes = Inbox.objects.filter(is_active=True).order_by("name")
+    return render(request, "ui/settings/messenger_campaigns.html", {
+        "campaigns": campaigns,
+        "inboxes": inboxes,
+    })
+
+
+# ─── Automation Rules ────────────────────────────────────────────────────
+
+@login_required
+def settings_messenger_automation(request: HttpRequest) -> HttpResponse:
+    """CRUD для правил автоматизации + макросов."""
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+    ensure_messenger_enabled_view()
+
+    if request.method == "POST":
+        action = request.POST.get("action", "")
+        if action == "delete_rule":
+            AutomationRule.objects.filter(id=request.POST.get("rule_id")).delete()
+            messages.success(request, "Правило удалено.")
+        elif action == "toggle_rule":
+            r = AutomationRule.objects.filter(id=request.POST.get("rule_id")).first()
+            if r:
+                r.is_active = not r.is_active
+                r.save(update_fields=["is_active"])
+        elif action == "delete_macro":
+            Macro.objects.filter(id=request.POST.get("macro_id")).delete()
+            messages.success(request, "Макрос удалён.")
+        return redirect("settings_messenger_automation")
+
+    rules = AutomationRule.objects.select_related("inbox").order_by("-created_at")
+    macros = Macro.objects.select_related("user").order_by("name")
+    inboxes = Inbox.objects.filter(is_active=True).order_by("name")
+    return render(request, "ui/settings/messenger_automation.html", {
+        "rules": rules,
+        "macros": macros,
+        "inboxes": inboxes,
+    })

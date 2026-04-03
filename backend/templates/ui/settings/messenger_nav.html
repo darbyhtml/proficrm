@@ -19,6 +19,16 @@
   {% else %}
     <a href="{% url 'settings_messenger_health' %}" class="px-3 py-2 rounded-lg text-sm text-brand-dark/70 hover:bg-white/80 hover:text-brand-dark transition">Диагностика</a>
   {% endif %}
+  {% if active == 'campaigns' %}
+    <span class="px-3 py-2 rounded-lg bg-white font-medium text-brand-teal shadow-sm text-sm" aria-current="page">Кампании</span>
+  {% else %}
+    <a href="{% url 'settings_messenger_campaigns' %}" class="px-3 py-2 rounded-lg text-sm text-brand-dark/70 hover:bg-white/80 hover:text-brand-dark transition">Кампании</a>
+  {% endif %}
+  {% if active == 'automation' %}
+    <span class="px-3 py-2 rounded-lg bg-white font-medium text-brand-teal shadow-sm text-sm" aria-current="page">Автоматизация</span>
+  {% else %}
+    <a href="{% url 'settings_messenger_automation' %}" class="px-3 py-2 rounded-lg text-sm text-brand-dark/70 hover:bg-white/80 hover:text-brand-dark transition">Автоматизация</a>
+  {% endif %}
   {% if active == 'analytics' %}
     <span class="px-3 py-2 rounded-lg bg-white font-medium text-brand-teal shadow-sm text-sm" aria-current="page">Аналитика</span>
   {% else %}
