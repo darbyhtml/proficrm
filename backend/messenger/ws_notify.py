@@ -21,6 +21,7 @@ def _get_layer():
     try:
         return get_channel_layer()
     except Exception:
+        logger.error("Failed to get channel layer (Redis down?)", exc_info=True)
         return None
 
 
@@ -43,7 +44,7 @@ def notify_new_message(conversation, message_data: dict) -> None:
             },
         )
     except Exception:
-        logger.debug("WS notify_new_message failed for conversation %s", conversation.id, exc_info=True)
+        logger.error("WS notify_new_message failed for conversation %s", conversation.id, exc_info=True)
 
     # В канал inbox (для списка диалогов)
     if conversation.inbox_id:
@@ -57,7 +58,7 @@ def notify_new_message(conversation, message_data: dict) -> None:
                 },
             )
         except Exception:
-            pass
+            logger.error("WS notify inbox_%s failed", conversation.inbox_id, exc_info=True)
 
     # Личное уведомление назначенному оператору
     if conversation.assignee_id:
@@ -72,7 +73,7 @@ def notify_new_message(conversation, message_data: dict) -> None:
                 },
             )
         except Exception:
-            pass
+            logger.error("WS notify operator_%s failed", conversation.assignee_id, exc_info=True)
 
 
 def notify_conversation_updated(conversation, changes: dict) -> None:
@@ -93,7 +94,7 @@ def notify_conversation_updated(conversation, changes: dict) -> None:
             },
         )
     except Exception:
-        logger.debug("WS notify_conversation_updated failed", exc_info=True)
+        logger.error("WS notify_conversation_updated failed for conversation %s", conversation.id, exc_info=True)
 
     if conversation.inbox_id:
         try:
@@ -106,7 +107,7 @@ def notify_conversation_updated(conversation, changes: dict) -> None:
                 },
             )
         except Exception:
-            pass
+            logger.error("WS notify_conversation_updated inbox_%s failed", conversation.inbox_id, exc_info=True)
 
 
 def notify_new_conversation(conversation, conversation_data: dict) -> None:

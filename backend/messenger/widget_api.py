@@ -33,6 +33,7 @@ from .utils import (
     is_within_working_hours,
     get_attachment_settings,
     is_content_type_allowed,
+    validate_upload_safety,
     build_message_attachments_payload,
     enforce_widget_origin_allowed,
     get_client_ip,
@@ -297,11 +298,12 @@ def widget_bootstrap(request):
                     or "Сейчас никого нет. Оставьте заявку — мы ответим в рабочее время."
                 )
 
-        # Создать widget_session_token
+        # Создать widget_session_token (привязка к IP клиента)
         session = create_widget_session(
             inbox_id=inbox.id,
             conversation_id=conversation.id,
             contact_id=str(contact.id),
+            client_ip=get_client_ip(request),
         )
 
         # Опционально: вернуть последние сообщения (IN и OUT, без INTERNAL)
@@ -469,7 +471,7 @@ def widget_contact_update(request):
             status=status.HTTP_404_NOT_FOUND,
         )
 
-    session = get_widget_session(widget_session_token)
+    session = get_widget_session(widget_session_token, client_ip=get_client_ip(request))
     if not session:
         return Response(
             {"detail": "Invalid or expired widget_session_token."},
@@ -678,9 +680,16 @@ def widget_send(request):
                         {"detail": f"File type not allowed: {ct or 'unknown'}."},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
+                # Magic bytes + extension safety check
+                safety_error = validate_upload_safety(f)
+                if safety_error:
+                    return Response(
+                        {"detail": safety_error},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
         # Получить сессию виджета
-        session = get_widget_session(widget_session_token)
+        session = get_widget_session(widget_session_token, client_ip=get_client_ip(request))
         if not session:
             safe_log_widget_error(
                 widget_logger,
@@ -741,18 +750,20 @@ def widget_send(request):
         except ValidationError as exc:
             detail = exc.message_dict if hasattr(exc, "message_dict") else str(exc)
             return Response({"detail": detail}, status=status.HTTP_429_TOO_MANY_REQUESTS)
-        message.save()
 
-        for f in uploaded_files:
-            models.MessageAttachment.objects.create(
-                message=message,
-                file=f,
-                original_name=getattr(f, "name", "") or "",
-                content_type=(getattr(f, "content_type", "") or "")[:120],
-                size=getattr(f, "size", 0) or 0,
-            )
+        # Атомарно: сообщение + вложения + last_activity_at
+        from django.db import transaction as db_transaction
+        with db_transaction.atomic():
+            message.save()
 
-        models.Conversation.objects.filter(pk=conversation.id).update(last_activity_at=django_timezone.now())
+            for f in uploaded_files:
+                models.MessageAttachment.objects.create(
+                    message=message,
+                    file=f,
+                    original_name=getattr(f, "name", "") or "",
+                    content_type=(getattr(f, "content_type", "") or "")[:120],
+                    size=getattr(f, "size", 0) or 0,
+                )
 
         # Webhook: новое входящее сообщение
         try:
@@ -901,7 +912,7 @@ def widget_poll(request):
         enforce_widget_origin_allowed(request, inbox)
 
         # Получить сессию виджета
-        session = get_widget_session(widget_session_token)
+        session = get_widget_session(widget_session_token, client_ip=get_client_ip(request))
         if not session:
             safe_log_widget_error(
                 widget_logger,
@@ -1093,7 +1104,7 @@ def widget_stream(request):
     if not bool(features_cfg.get("sse", True)):
         raise Http404("SSE disabled for this inbox.")
 
-    session = get_widget_session(widget_session_token)
+    session = get_widget_session(widget_session_token, client_ip=get_client_ip(request))
     if not session or session.inbox_id != inbox.id:
         from django.http import JsonResponse
         resp = JsonResponse(
@@ -1273,7 +1284,7 @@ def widget_attachment_download(request, attachment_id):
         raise Http404("Invalid widget_token or inbox is inactive.")
 
     enforce_widget_origin_allowed(request, inbox)
-    session = get_widget_session(widget_session_token)
+    session = get_widget_session(widget_session_token, client_ip=get_client_ip(request))
     if not session or session.inbox_id != inbox.id:
         return Response(
             {"detail": "Invalid or expired widget_session_token."},
@@ -1287,13 +1298,21 @@ def widget_attachment_download(request, attachment_id):
         raise Http404("Attachment not found.")
     if not attachment.file:
         raise Http404("File not available.")
-    filename = attachment.original_name or os.path.basename(attachment.file.name)
+    raw_filename = attachment.original_name or os.path.basename(attachment.file.name)
+    # Sanitize filename: strip path separators, control chars, quotes
+    import re as _re
+    safe_filename = os.path.basename(raw_filename)
+    safe_filename = _re.sub(r'[\x00-\x1f\x7f"\\;]', "_", safe_filename)
+    safe_filename = safe_filename.strip(". ") or "attachment"
     try:
         f = attachment.file.open("rb")
     except Exception:
         raise Http404("File not available.")
-    response = FileResponse(f, filename=filename, content_type=attachment.content_type or "application/octet-stream")
-    response["Content-Disposition"] = f'inline; filename="{filename}"'
+    response = FileResponse(f, filename=safe_filename, content_type=attachment.content_type or "application/octet-stream")
+    # Use RFC 5987 encoding for safe Content-Disposition
+    from urllib.parse import quote
+    encoded_filename = quote(safe_filename, safe="")
+    response["Content-Disposition"] = f"inline; filename*=UTF-8''{encoded_filename}"
     return response
 
 
@@ -1322,7 +1341,7 @@ def widget_typing(request):
         return Response({"detail": "Invalid widget_token or inbox is inactive."}, status=status.HTTP_404_NOT_FOUND)
 
     enforce_widget_origin_allowed(request, inbox)
-    session = get_widget_session(widget_session_token)
+    session = get_widget_session(widget_session_token, client_ip=get_client_ip(request))
     if not session or session.inbox_id != inbox.id:
         return Response(
             {"detail": "Invalid or expired widget_session_token."},
@@ -1363,7 +1382,7 @@ def widget_mark_read(request):
         return Response({"detail": "Invalid widget_token or inbox is inactive."}, status=status.HTTP_404_NOT_FOUND)
 
     enforce_widget_origin_allowed(request, inbox)
-    session = get_widget_session(widget_session_token)
+    session = get_widget_session(widget_session_token, client_ip=get_client_ip(request))
     if not session or session.inbox_id != inbox.id:
         return Response(
             {"detail": "Invalid or expired widget_session_token."},
@@ -1430,7 +1449,7 @@ def widget_rate(request):
         return Response({"detail": "Invalid widget_token or inbox is inactive."}, status=status.HTTP_404_NOT_FOUND)
 
     enforce_widget_origin_allowed(request, inbox)
-    session = get_widget_session(widget_session_token)
+    session = get_widget_session(widget_session_token, client_ip=get_client_ip(request))
     if not session or session.inbox_id != inbox.id:
         return Response(
             {"detail": "Invalid or expired widget_session_token."},

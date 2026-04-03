@@ -22,7 +22,7 @@ from accounts.models import User
 from policy.drf import PolicyPermission
 
 from . import models, selectors, serializers, services
-from .utils import ensure_messenger_enabled_api
+from .utils import ensure_messenger_enabled_api, validate_upload_safety
 from django.db.models import Q
 from django.http import StreamingHttpResponse
 from django.utils import timezone
@@ -592,20 +592,28 @@ class ConversationViewSet(
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+            for f in files:
+                safety_error = validate_upload_safety(f)
+                if safety_error:
+                    return Response({"detail": safety_error}, status=status.HTTP_400_BAD_REQUEST)
+
+            from django.db import transaction
             from .services import record_message
 
-            message = record_message(
-                conversation=conversation,
-                direction=direction,
-                body=body or "",
-                sender_user=request.user,
-                sender_contact=None,
-            )
+            # Атомарно: сообщение + вложения
+            with transaction.atomic():
+                message = record_message(
+                    conversation=conversation,
+                    direction=direction,
+                    body=body or "",
+                    sender_user=request.user,
+                    sender_contact=None,
+                )
 
-            for f in files:
-                models.MessageAttachment.objects.create(message=message, file=f)
+                for f in files:
+                    models.MessageAttachment.objects.create(message=message, file=f)
 
-            # @mentions в внутренних заметках — уведомить упомянутых
+            # @mentions в внутренних заметках — уведомить упомянутых (вне транзакции)
             if direction == models.Message.Direction.INTERNAL and body:
                 self._process_mentions(body, conversation, request.user)
 

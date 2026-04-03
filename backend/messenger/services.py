@@ -134,37 +134,37 @@ def record_message(
         content_attributes: Атрибуты контента (in_reply_to, deleted и т.д.)
         source_id: ID источника для дедупликации
     """
-    # Дедупликация через source_id (по образцу Chatwoot)
-    # Используем select_for_update для защиты от race condition при проверке дубликатов
-    if source_id:
-        from django.db import transaction
-        with transaction.atomic():
+    from django.db import transaction
+
+    # Всё создание сообщения внутри одной транзакции:
+    # дедупликация + create + last_activity_at — атомарно.
+    with transaction.atomic():
+        # Дедупликация через source_id (по образцу Chatwoot)
+        if source_id:
             existing = Message.objects.select_for_update().filter(
                 conversation=conversation,
-                source_id=source_id
+                source_id=source_id,
             ).first()
             if existing:
                 return existing  # Дубликат
-    
-    msg = Message.objects.create(
-        conversation=conversation,
-        direction=direction,
-        body=body,
-        sender_user=sender_user,
-        sender_contact=sender_contact,
-        content_attributes=content_attributes or {},
-        source_id=source_id or "",
-    )
-    
-    # Обновление last_activity_at происходит в Message.save() через update_columns
-    # (по образцу Chatwoot: conversation.update_columns(last_activity_at: created_at))
-    
-    # Обновить last_activity_at контакта при входящем сообщении (по образцу Chatwoot)
-    if sender_contact:
-        Contact.objects.filter(pk=sender_contact.pk).update(
-            last_activity_at=timezone.now()
+
+        msg = Message.objects.create(
+            conversation=conversation,
+            direction=direction,
+            body=body,
+            sender_user=sender_user,
+            sender_contact=sender_contact,
+            content_attributes=content_attributes or {},
+            source_id=source_id or "",
         )
-    
+
+        # Обновить last_activity_at контакта при входящем сообщении
+        if sender_contact:
+            Contact.objects.filter(pk=sender_contact.pk).update(
+                last_activity_at=timezone.now(),
+            )
+
+    # Уведомления — вне транзакции (не блокируем БД на сетевые вызовы)
     try:
         notify_message(msg)
     except Exception:
