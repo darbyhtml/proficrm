@@ -15,13 +15,14 @@ import json
 import time
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.utils import timezone as django_timezone
 from django.http import FileResponse, Http404, StreamingHttpResponse
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.exceptions import ValidationError as DRFValidationError, Throttled
+from rest_framework.exceptions import APIException, ValidationError as DRFValidationError, Throttled
 
 from . import models, serializers, services
 from .utils import (
@@ -390,7 +391,11 @@ def widget_bootstrap(request):
         )
         # DRF автоматически обработает через raise_exception=True
         raise
-    
+
+    except APIException:
+        # DRF-исключения (PermissionDenied, NotFound и т.д.) — пробрасываем для обработки DRF
+        raise
+
     except Exception as e:
         # Неожиданные ошибки
         safe_log_widget_error(
@@ -709,7 +714,11 @@ def widget_send(request):
             sender_contact=contact,
             sender_user=None,
         )
-        message.full_clean()
+        try:
+            message.full_clean()
+        except ValidationError as exc:
+            detail = exc.message_dict if hasattr(exc, "message_dict") else str(exc)
+            return Response({"detail": detail}, status=status.HTTP_429_TOO_MANY_REQUESTS)
         message.save()
 
         for f in uploaded_files:
@@ -788,7 +797,10 @@ def widget_send(request):
             error=e,
         )
         raise
-    
+
+    except APIException:
+        raise
+
     except Exception as e:
         # Неожиданные ошибки
         safe_log_widget_error(
@@ -876,11 +888,6 @@ def widget_poll(request):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # Обновить last_seen контакта с троттлингом (по образцу Chatwoot)
-        from . import services as messenger_services
-
-        messenger_services.touch_contact_last_seen(conversation, session.contact_id)
-
         # Получить conversation
         try:
             conversation = models.Conversation.objects.get(id=session.conversation_id, inbox=inbox)
@@ -898,6 +905,11 @@ def widget_poll(request):
                 {"detail": "Conversation not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        # Обновить last_seen контакта с троттлингом (по образцу Chatwoot)
+        from . import services as messenger_services
+
+        messenger_services.touch_contact_last_seen(conversation, session.contact_id)
 
         # Получить новые сообщения (только OUT, без INTERNAL)
         messages_qs = conversation.messages.filter(
@@ -967,7 +979,10 @@ def widget_poll(request):
             session_token=widget_session_token,
         )
         raise
-    
+
+    except APIException:
+        raise
+
     except Exception as e:
         # Неожиданные ошибки
         safe_log_widget_error(

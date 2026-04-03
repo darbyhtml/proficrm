@@ -1,0 +1,63 @@
+{% extends "ui/base.html" %}
+{% block title %}Шаблонные ответы — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div class="flex items-end justify-between gap-3 flex-wrap">
+      <div>
+        <div class="text-sm text-brand-dark/70"><a class="underline" href="{% url 'settings_dashboard' %}">Настройки</a> / <a class="underline" href="{% url 'settings_messenger_overview' %}">Live-chat</a> / Шаблоны /</div>
+        <h1 class="text-2xl font-semibold">Шаблонные ответы</h1>
+      </div>
+      <a href="{% url 'settings_messenger_canned_create' %}" class="btn btn-primary">+ Создать шаблон</a>
+    </div>
+    {% include "ui/settings/messenger_nav.html" with active="canned" %}
+
+    <div class="bg-white border rounded-2xl overflow-hidden">
+      <table class="min-w-full text-sm">
+        <thead class="bg-brand-soft/40 text-brand-dark/80">
+          <tr>
+            <th class="text-left px-4 py-3">Название</th>
+            <th class="text-left px-4 py-3">Текст</th>
+            <th class="text-left px-4 py-3">Филиал</th>
+            <th class="text-left px-4 py-3">Автор</th>
+            <th class="text-left px-4 py-3">Дата</th>
+            <th class="text-left px-4 py-3">Действия</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for resp in responses %}
+            <tr class="border-t">
+              <td class="px-4 py-3 font-medium">{{ resp.title }}</td>
+              <td class="px-4 py-3 text-brand-dark/70">{{ resp.body|truncatechars:80 }}</td>
+              <td class="px-4 py-3">
+                {% if resp.branch %}
+                  {{ resp.branch.name }}
+                {% else %}
+                  <span class="text-brand-dark/50">Все филиалы</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3">{{ resp.created_by.get_full_name|default:resp.created_by.username }}</td>
+              <td class="px-4 py-3">{{ resp.created_at|date:"d.m.Y H:i" }}</td>
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-2">
+                  <a class="underline text-brand-teal" href="{% url 'settings_messenger_canned_edit' resp.id %}">Редактировать</a>
+                  <span class="text-brand-dark/40">|</span>
+                  <form method="post" action="{% url 'settings_messenger_canned_delete' resp.id %}" onsubmit="return confirm('Удалить шаблон?');" class="inline">
+                    {% csrf_token %}
+                    <button type="submit" class="underline text-red-600">Удалить</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td class="px-4 py-6 text-brand-dark/70" colspan="6">Шаблонных ответов нет. <a href="{% url 'settings_messenger_canned_create' %}" class="underline">Создать первый</a></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div>
+      <a href="{% url 'settings_messenger_overview' %}" class="btn btn-outline">← Назад к источникам</a>
+    </div>
+  </div>
+{% endblock %}

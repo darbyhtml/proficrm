@@ -17,6 +17,9 @@ class WidgetSecurityFeatureTests(TestCase):
         self.original_messenger_enabled = getattr(settings, "MESSENGER_ENABLED", False)
         settings.MESSENGER_ENABLED = True
 
+        from django.core.cache import cache
+        cache.clear()
+
         self.branch = Branch.objects.create(code="b1", name="B1")
         self.inbox = Inbox.objects.create(
             name="Inbox",
@@ -35,6 +38,8 @@ class WidgetSecurityFeatureTests(TestCase):
 
     def tearDown(self):
         settings.MESSENGER_ENABLED = self.original_messenger_enabled
+        from django.core.cache import cache
+        cache.clear()
 
     def test_domain_allowlist_blocks_foreign_origin(self):
         self.inbox.settings = {"security": {"allowed_domains": ["allowed.com"]}}
@@ -199,6 +204,9 @@ class WidgetDeliveryAndAttachmentsTests(TestCase):
     def setUp(self):
         self.original_messenger_enabled = getattr(settings, "MESSENGER_ENABLED", False)
         settings.MESSENGER_ENABLED = True
+
+        from django.core.cache import cache
+        cache.clear()
 
         self.branch = Branch.objects.create(code="b2", name="B2")
         self.inbox = Inbox.objects.create(

@@ -88,8 +88,8 @@ class ConversationViewSet(
             "assignee", 
             "inbox"
         ).prefetch_related(
-            # Предзагружаем сообщения для уменьшения запросов при сериализации
-            "messages"
+            # Предзагружаем сообщения и метки для уменьшения запросов при сериализации
+            "messages", "labels"
         )
 
         # Аннотации: превью последнего сообщения + unread_count (для текущего пользователя)
@@ -242,6 +242,37 @@ class ConversationViewSet(
             {"status": "ok", "message": "Диалог успешно удалён"},
             status=status.HTTP_200_OK,
         )
+
+    @action(detail=False, methods=["post"], url_path="bulk")
+    def bulk(self, request):
+        """
+        Массовые действия над диалогами (по образцу Chatwoot).
+
+        POST /api/conversations/bulk/
+        Body: {"ids": [1,2,3], "action": "close"|"reopen"|"assign", "assignee_id": 5}
+        """
+        ids = request.data.get("ids", [])
+        action_type = request.data.get("action", "")
+        if not ids or not isinstance(ids, list):
+            return Response({"detail": "ids is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        qs = self.get_queryset().filter(id__in=ids)
+        updated = 0
+
+        if action_type == "close":
+            updated = qs.update(status=models.Conversation.Status.CLOSED)
+        elif action_type == "reopen":
+            updated = qs.update(status=models.Conversation.Status.OPEN)
+        elif action_type == "assign":
+            assignee_id = request.data.get("assignee_id")
+            if assignee_id:
+                updated = qs.update(assignee_id=assignee_id)
+            else:
+                updated = qs.update(assignee=None)
+        else:
+            return Response({"detail": "Unknown action."}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({"status": "ok", "updated": updated})
 
     @action(detail=True, methods=["get", "post"], url_path="messages")
     def messages(self, request, pk=None):
@@ -523,9 +554,9 @@ class CannedResponseViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         qs = models.CannedResponse.objects.all()
-        # Фильтруем по филиалу пользователя
+        # Фильтруем по филиалу пользователя + глобальные (без филиала)
         if user.branch_id:
-            qs = qs.filter(branch_id=user.branch_id)
+            qs = qs.filter(Q(branch_id=user.branch_id) | Q(branch__isnull=True))
         return qs.order_by("title")
 
     def perform_create(self, serializer):
@@ -536,3 +567,13 @@ class CannedResponseViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
             serializer: Сериализатор с валидированными данными
         """
         serializer.save(created_by=self.request.user)
+
+
+class ConversationLabelViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
+    """API для меток диалогов."""
+    queryset = models.ConversationLabel.objects.all()
+    serializer_class = serializers.ConversationLabelSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return models.ConversationLabel.objects.order_by("title")

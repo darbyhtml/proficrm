@@ -13,7 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from crm.utils import require_admin
-from messenger.models import Conversation, Message, Inbox, RoutingRule, Channel
+from messenger.models import Conversation, Message, Inbox, RoutingRule, Channel, CannedResponse
 from messenger.logging_utils import ui_logger
 from messenger.utils import ensure_messenger_enabled_view
 
@@ -883,5 +883,114 @@ def settings_messenger_routing_delete(request: HttpRequest, rule_id: int) -> Htt
         rule.delete()
         messages.success(request, "Правило маршрутизации удалено.")
         return redirect("settings_messenger_routing_list")
-    
+
     return redirect("settings_messenger_routing_list")
+
+
+@login_required
+def settings_messenger_canned_list(request: HttpRequest) -> HttpResponse:
+    """
+    Список шаблонных ответов.
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    ensure_messenger_enabled_view()
+
+    responses = (
+        CannedResponse.objects
+        .select_related("branch", "created_by")
+        .order_by("-created_at")
+    )
+
+    return render(
+        request,
+        "ui/settings/messenger_canned_list.html",
+        {
+            "responses": responses,
+        },
+    )
+
+
+@login_required
+def settings_messenger_canned_edit(request: HttpRequest, response_id: int = None) -> HttpResponse:
+    """
+    Создание/редактирование шаблонного ответа.
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    ensure_messenger_enabled_view()
+
+    canned = None
+    if response_id:
+        canned = get_object_or_404(CannedResponse, id=response_id)
+
+    if request.method == "POST":
+        title = request.POST.get("title", "").strip()
+        body = request.POST.get("body", "").strip()
+        branch_id = request.POST.get("branch", "").strip()
+
+        if not title or not body:
+            messages.error(request, "Заполните название и текст ответа.")
+        else:
+            try:
+                from accounts.models import Branch
+
+                branch = None
+                if branch_id:
+                    branch = Branch.objects.get(id=int(branch_id))
+
+                if canned:
+                    canned.title = title
+                    canned.body = body
+                    canned.branch = branch
+                    canned.save()
+                else:
+                    canned = CannedResponse.objects.create(
+                        title=title,
+                        body=body,
+                        branch=branch,
+                        created_by=request.user,
+                    )
+
+                messages.success(request, "Шаблонный ответ сохранён.")
+                return redirect("settings_messenger_canned_list")
+            except (Branch.DoesNotExist, ValueError, TypeError) as e:
+                messages.error(request, f"Ошибка: {str(e)}")
+
+    from accounts.models import Branch
+
+    branches = Branch.objects.order_by("name")
+
+    return render(
+        request,
+        "ui/settings/messenger_canned_form.html",
+        {
+            "canned": canned,
+            "branches": branches,
+        },
+    )
+
+
+@login_required
+def settings_messenger_canned_delete(request: HttpRequest, response_id: int) -> HttpResponse:
+    """
+    Удаление шаблонного ответа.
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    ensure_messenger_enabled_view()
+
+    canned = get_object_or_404(CannedResponse, id=response_id)
+
+    if request.method == "POST":
+        canned.delete()
+        messages.success(request, "Шаблонный ответ удалён.")
+        return redirect("settings_messenger_canned_list")
+
+    return redirect("settings_messenger_canned_list")

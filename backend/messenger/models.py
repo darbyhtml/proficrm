@@ -293,6 +293,12 @@ class Conversation(models.Model):
     )
     rating_comment = models.TextField("Комментарий к оценке", blank=True, default="")
     rated_at = models.DateTimeField("Когда оценено", null=True, blank=True)
+    labels = models.ManyToManyField(
+        "messenger.ConversationLabel",
+        verbose_name="Метки",
+        blank=True,
+        related_name="conversations",
+    )
 
     class Meta:
         verbose_name = "Диалог"
@@ -874,6 +880,32 @@ class CannedResponse(models.Model):
     class Meta:
         verbose_name = "Шаблон ответа"
         verbose_name_plural = "Шаблоны ответов"
+
+    def __str__(self) -> str:
+        return self.title
+
+
+class ConversationLabel(models.Model):
+    """Метка/тег для диалога (по образцу Chatwoot labels)."""
+
+    COLORS = [
+        ("#EF4444", "Красный"),
+        ("#F59E0B", "Жёлтый"),
+        ("#10B981", "Зелёный"),
+        ("#3B82F6", "Синий"),
+        ("#8B5CF6", "Фиолетовый"),
+        ("#EC4899", "Розовый"),
+        ("#6B7280", "Серый"),
+    ]
+
+    title = models.CharField("Название", max_length=64, unique=True)
+    color = models.CharField("Цвет", max_length=7, default="#3B82F6")
+    created_at = models.DateTimeField("Создано", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Метка диалога"
+        verbose_name_plural = "Метки диалогов"
+        ordering = ["title"]
 
     def __str__(self) -> str:
         return self.title

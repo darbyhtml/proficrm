@@ -4,6 +4,63 @@
 
 {% block content %}
 <style>
+  /* Анимация появления сообщений (как в Chatwoot/JivoChat) */
+  @keyframes msgSlideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .msg-appear {
+    animation: msgSlideUp 0.25s ease-out both;
+  }
+
+  /* Плавное появление карточек диалогов */
+  @keyframes cardFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .conversation-card {
+    animation: cardFadeIn 0.15s ease-out both;
+  }
+
+  /* Drag-and-drop overlay */
+  #messengerDragOverlay {
+    transition: opacity 0.2s ease;
+  }
+
+  /* Bulk actions */
+  .bulk-action-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px; background: #1e293b; color: #fff;
+    border-radius: 10px; margin: 8px 8px 0; gap: 8px;
+    font-size: 13px; z-index: 10;
+  }
+  .bulk-action-bar.hidden { display: none; }
+  .bulk-bar-info { display: flex; align-items: center; gap: 8px; }
+  .bulk-bar-close { background: none; border: none; color: #94a3b8; font-size: 18px; cursor: pointer; padding: 0 4px; }
+  .bulk-bar-close:hover { color: #fff; }
+  .bulk-bar-count { font-weight: 600; white-space: nowrap; }
+  .bulk-bar-actions { display: flex; gap: 6px; }
+  .bulk-btn {
+    display: flex; align-items: center; gap: 4px;
+    padding: 5px 10px; border-radius: 6px; border: none;
+    font-size: 12px; font-weight: 500; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .bulk-btn-close { background: #ef4444; color: #fff; }
+  .bulk-btn-close:hover { background: #dc2626; }
+  .bulk-btn-reopen { background: #10b981; color: #fff; }
+  .bulk-btn-reopen:hover { background: #059669; }
+  .conversation-bulk-checkbox {
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; width: 20px; margin-right: 4px; cursor: pointer;
+  }
+  .conversation-bulk-checkbox input[type="checkbox"] {
+    width: 16px; height: 16px; cursor: pointer; accent-color: #3b82f6;
+  }
+  .conversation-card.bulk-selected {
+    background: #eff6ff !important; border-left: 3px solid #3b82f6;
+  }
+
   .messenger-unified-layout {
     display: flex;
     /* Базовая высота по умолчанию; реальная высота подстраивается через JS от верхнего края до низа окна */

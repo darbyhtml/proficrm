@@ -14,18 +14,13 @@ def custom_exception_handler(exc, context):
     response = exception_handler(exc, context)
     
     if response is not None:
-        # В production не показываем детали ошибок
-        if not settings.DEBUG:
-            # Сохраняем оригинальное сообщение для логирования
-            original_detail = response.data.get('detail', 'Произошла ошибка')
-            
-            # Заменяем детали на общее сообщение
-            if isinstance(response.data, dict):
-                response.data = {
-                    'detail': 'Произошла ошибка. Обратитесь к администратору.'
-                }
-            else:
-                response.data = {'detail': 'Произошла ошибка. Обратитесь к администратору.'}
-    
+        # В production не показываем детали ошибок для серверных ошибок (5xx),
+        # но валидационные ошибки (400) и прочие клиентские ошибки (401, 403, 404)
+        # возвращаем как есть — клиенту нужна информация для исправления запроса.
+        if not settings.DEBUG and response.status_code >= 500:
+            response.data = {
+                'detail': 'Произошла ошибка. Обратитесь к администратору.'
+            }
+
     return response
 

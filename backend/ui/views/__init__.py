@@ -95,6 +95,8 @@ from ui.views.settings_messenger import (
     settings_messenger_routing_list, settings_messenger_routing_edit,
     settings_messenger_routing_delete,
     settings_messenger_health, settings_messenger_analytics,
+    settings_messenger_canned_list, settings_messenger_canned_edit,
+    settings_messenger_canned_delete,
 )  # noqa: F401
 from ui.views.messenger_panel import (
     messenger_conversations_unified, messenger_agent_status,

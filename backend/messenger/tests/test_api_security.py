@@ -127,6 +127,20 @@ class MessengerAPISecurityTests(TestCase):
             assignee=self.operator_b,
         )
 
+        # Создаём сообщения (чтобы диалоги появлялись в list — он фильтрует пустые)
+        Message.objects.create(
+            conversation=self.conversation_a,
+            direction=Message.Direction.IN,
+            body="Hello from contact A",
+            sender_contact=self.contact_a,
+        )
+        Message.objects.create(
+            conversation=self.conversation_b,
+            direction=Message.Direction.IN,
+            body="Hello from contact B",
+            sender_contact=self.contact_b,
+        )
+
         # Включаем messenger для тестов
         self.original_messenger_enabled = getattr(settings, "MESSENGER_ENABLED", False)
         settings.MESSENGER_ENABLED = True
@@ -147,7 +161,8 @@ class MessengerAPISecurityTests(TestCase):
         response = client.get("/api/conversations/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        conversation_ids = [conv["id"] for conv in response.data["results"]]
+        data = _get_response_data(response)
+        conversation_ids = [conv["id"] for conv in data]
         self.assertIn(self.conversation_a.id, conversation_ids)
         self.assertNotIn(self.conversation_b.id, conversation_ids)
 
@@ -220,7 +235,7 @@ class MessengerAPISecurityTests(TestCase):
         self.assertIn("inbox", response.data)
 
     def test_patch_branch_forbidden(self):
-        """Попытка изменить branch через API должна вернуть 400."""
+        """Попытка изменить branch через API игнорируется (editable=False на модели)."""
         client = APIClient()
         client.force_authenticate(user=self.operator_a)
 
@@ -228,8 +243,10 @@ class MessengerAPISecurityTests(TestCase):
             f"/api/conversations/{self.conversation_a.id}/",
             {"branch": self.branch_b.id},
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("branch", response.data)
+        # branch имеет editable=False, DRF игнорирует поле — запрос успешен, но branch не меняется
+        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
+        self.conversation_a.refresh_from_db()
+        self.assertEqual(self.conversation_a.branch, self.branch_a)
 
     def test_patch_contact_forbidden(self):
         """Попытка изменить contact через API должна вернуть 400."""
@@ -358,7 +375,8 @@ class MessengerAPISecurityTests(TestCase):
 
         response = client.get(f"/api/conversations/{self.conversation_a.id}/messages/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 2)
+        # 1 сообщение из setUp + 2 здесь = 3
+        self.assertEqual(len(response.data), 3)
 
     # ========================================================================
     # D) Feature flag тесты

@@ -26,6 +26,15 @@ class ConversationSerializer(serializers.ModelSerializer):
     assignee_name = serializers.CharField(source="assignee.get_full_name", read_only=True)
     last_message_body = serializers.CharField(read_only=True)
     unread_count = serializers.IntegerField(read_only=True)
+    label_ids = serializers.PrimaryKeyRelatedField(
+        source="labels", many=True,
+        queryset=models.ConversationLabel.objects.all(),
+        required=False,
+    )
+    label_names = serializers.SerializerMethodField()
+
+    def get_label_names(self, obj):
+        return [{"id": l.id, "title": l.title, "color": l.color} for l in obj.labels.all()]
 
     class Meta:
         model = models.Conversation
@@ -33,7 +42,7 @@ class ConversationSerializer(serializers.ModelSerializer):
         # branch выставляется автоматически из inbox.branch и не редактируется вручную.
         # inbox/contact/region для v1 считаем неизменяемыми через API (только status/assignee/priority).
         read_only_fields = (
-            "branch", "created_at", "last_activity_at", "waiting_since", 
+            "created_at", "last_activity_at", "waiting_since",
             "first_reply_created_at", "contact_last_seen_at", "agent_last_seen_at"
         )
 
@@ -59,7 +68,7 @@ class ConversationSerializer(serializers.ModelSerializer):
         Запрещённые поля:
         - inbox, branch, contact, region и любые другие системные поля
         """
-        allowed_fields = {"status", "assignee", "priority"}
+        allowed_fields = {"status", "assignee", "priority", "labels"}
         forbidden = {field for field in validated_data.keys() if field not in allowed_fields}
         if forbidden:
             raise serializers.ValidationError(
@@ -76,13 +85,20 @@ class ConversationSerializer(serializers.ModelSerializer):
                         {"assignee": "Ответственным можно назначить только менеджера."}
                     )
 
+        # M2M поле labels обрабатываем отдельно
+        labels = validated_data.pop("labels", None)
+
         for field in allowed_fields:
-            if field in validated_data:
+            if field != "labels" and field in validated_data:
                 setattr(instance, field, validated_data[field])
 
         # Валидация инвариантов модели (branch/inbox и т.п.).
         instance.full_clean()
         instance.save()
+
+        if labels is not None:
+            instance.labels.set(labels)
+
         return instance
 
 
@@ -148,6 +164,13 @@ class MessageSerializer(serializers.ModelSerializer):
         instance.full_clean()
         instance.save()
         return instance
+
+
+class ConversationLabelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.ConversationLabel
+        fields = ("id", "title", "color", "created_at")
+        read_only_fields = ("created_at",)
 
 
 class CannedResponseSerializer(serializers.ModelSerializer):

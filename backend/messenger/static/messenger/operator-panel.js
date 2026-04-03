@@ -43,6 +43,12 @@ class MessengerOperatorPanel {
     this._activeAbortControllers = new Set(); // Для отмены fetch при смене диалога
     this._appendLock = false; // Защита от race condition при append
     this._toastContainer = null; // Контейнер для toast-уведомлений
+    this._cannedResponses = []; // Кэш шаблонных ответов
+    this._cannedDropdownVisible = false;
+    this._cannedFilterText = '';
+    this._dragCounter = 0; // Для корректного отслеживания drag-and-drop
+    this._bulkSelected = new Set(); // Выделенные диалоги для bulk-действий
+    this._bulkMode = false;
   }
 
   /** Fetch с таймаутом и AbortController */
@@ -77,6 +83,10 @@ class MessengerOperatorPanel {
     this.initKeyboardShortcuts();
     this.initNotifications();
     this.initOverlayHandlers();
+    this.initCannedResponsesTrigger();
+    this.initDragDrop();
+    this.loadCannedResponses();
+    this.initBulkActions();
     
     // Обработка URL hash для открытия диалога
     const hash = window.location.hash;
@@ -271,13 +281,9 @@ class MessengerOperatorPanel {
 
     const params = this.getListQueryParams();
     try {
-      // простое состояние загрузки, если список пустой
+      // Skeleton-загрузка, если список пустой (как в Chatwoot)
       if (!listEl.querySelector('.conversation-card')) {
-        listEl.innerHTML = `
-          <div class="empty-state">
-            <p>Загрузка диалогов…</p>
-          </div>
-        `;
+        listEl.innerHTML = this.renderSkeletonList();
       }
 
       const response = await fetch(`/api/conversations/?${params.toString()}`, {
@@ -483,8 +489,15 @@ class MessengerOperatorPanel {
       </button>
     ` : '';
 
+    const bulkChecked = this._bulkSelected.has(id);
+    const bulkCheckbox = this._bulkMode ? `
+      <label class="conversation-bulk-checkbox" onclick="event.stopPropagation();">
+        <input type="checkbox" ${bulkChecked ? 'checked' : ''} onchange="window.MessengerPanel.toggleBulkSelect(${id}, this.checked)">
+      </label>` : '';
+
     return `
-      <div class="conversation-card ${isActive ? 'active' : ''} ${isUnread ? 'unread' : ''}" data-conversation-id="${id}" onclick="window.MessengerPanel.openConversation(${id})">
+      <div class="conversation-card ${isActive ? 'active' : ''} ${isUnread ? 'unread' : ''} ${bulkChecked ? 'bulk-selected' : ''}" data-conversation-id="${id}" onclick="window.MessengerPanel.openConversation(${id})">
+        ${bulkCheckbox}
         <div class="conversation-avatar" style="background: ${bg};">${this.escapeHtml(initial)}</div>
         <div class="conversation-content">
           <div class="conversation-header">
@@ -547,20 +560,38 @@ class MessengerOperatorPanel {
     
     if (contentArea) {
       contentArea.innerHTML = `
-        <div class="flex items-center justify-center h-full">
-          <div class="text-center">
-            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-teal mb-2"></div>
-            <p class="text-sm text-brand-dark/60">Загрузка диалога...</p>
+        <div class="flex flex-col h-full">
+          <div class="border-b border-brand-soft/60 p-3 bg-white flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full animate-pulse bg-brand-soft/40"></div>
+            <div class="flex-1 space-y-1.5">
+              <div class="h-3.5 animate-pulse bg-brand-soft/40 rounded w-32"></div>
+              <div class="h-2.5 animate-pulse bg-brand-soft/40 rounded w-20"></div>
+            </div>
           </div>
+          <div class="flex-1 overflow-hidden">${this.renderSkeletonMessages()}</div>
         </div>
       `;
     }
     if (infoArea) {
+      const sh = 'animate-pulse bg-brand-soft/40 rounded';
       infoArea.innerHTML = `
-        <div class="flex items-center justify-center h-full">
-          <div class="text-center">
-            <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-brand-teal mb-2"></div>
-            <p class="text-xs text-brand-dark/60">Загрузка информации...</p>
+        <div class="space-y-3 p-4">
+          <div class="bg-white rounded-lg border border-brand-soft/60 p-3 space-y-2">
+            <div class="h-4 ${sh} w-16"></div>
+            <div class="h-3.5 ${sh} w-32"></div>
+            <div class="h-3 ${sh} w-40"></div>
+            <div class="h-3 ${sh} w-28"></div>
+          </div>
+          <div class="bg-white rounded-lg border border-brand-soft/60 p-3 space-y-2">
+            <div class="h-4 ${sh} w-14"></div>
+            <div class="h-3 ${sh} w-full"></div>
+            <div class="h-3 ${sh} w-3/4"></div>
+            <div class="h-3 ${sh} w-full"></div>
+          </div>
+          <div class="bg-white rounded-lg border border-brand-soft/60 p-3 space-y-2">
+            <div class="h-4 ${sh} w-20"></div>
+            <div class="h-8 ${sh} w-full"></div>
+            <div class="h-8 ${sh} w-full"></div>
           </div>
         </div>
       `;
@@ -751,7 +782,7 @@ class MessengerOperatorPanel {
           </div>
           <div id="messageAttachmentsNames" class="text-xs text-brand-dark/60 mt-1 px-1"></div>
           <div id="composeModeHint" class="text-[10px] text-brand-dark/40 mt-1 px-1">Сообщение увидит клиент. Внутренние заметки доступны только сотрудникам.</div>
-          <p class="text-[10px] text-brand-dark/40 mt-1.5 px-1">Макс. 5 МБ на файл • изображения и PDF</p>
+          <p class="text-[10px] text-brand-dark/40 mt-1.5 px-1">Макс. 5 МБ на файл • изображения и PDF • <span class="font-medium">/</span> — шаблоны ответов</p>
         </form>` : `<div class="text-center py-3 text-xs text-brand-dark/50 border-t border-brand-soft/40">
           <svg class="w-4 h-4 inline-block mr-1 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
           Только менеджеры могут отвечать в чатах
@@ -1271,6 +1302,25 @@ class MessengerOperatorPanel {
             </div>
           </div>
         </div>
+
+        <!-- Метки (как в Chatwoot) -->
+        <div class="bg-white rounded-lg border border-brand-soft/60 p-3">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-semibold">Метки</h3>
+          </div>
+          <div id="convLabelsContainer" class="flex flex-wrap gap-1.5">
+            ${(conversation.label_names || []).map(l => `
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium text-white" style="background:${l.color}" data-label-id="${l.id}">
+                ${this.escapeHtml(l.title)}
+                <button type="button" class="hover:opacity-70 leading-none ml-0.5" data-remove-label="${l.id}" title="Убрать">&times;</button>
+              </span>
+            `).join('')}
+            <button type="button" id="addLabelBtn" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-soft/30 text-[11px] text-brand-dark/60 hover:bg-brand-soft/50 transition">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+              Добавить
+            </button>
+          </div>
+        </div>
       </div>
     `;
 
@@ -1330,6 +1380,77 @@ class MessengerOperatorPanel {
           statusSelect.value = prev;
         });
       });
+    }
+
+    // Метки: удаление
+    infoArea.querySelectorAll('[data-remove-label]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const labelId = parseInt(btn.getAttribute('data-remove-label'));
+        const currentIds = (conversation.label_names || []).map(l => l.id).filter(id => id !== labelId);
+        this.patchConversation(conversation.id, { label_ids: currentIds });
+      });
+    });
+
+    // Метки: добавление
+    const addLabelBtn = document.getElementById('addLabelBtn');
+    if (addLabelBtn) {
+      addLabelBtn.addEventListener('click', () => this.showAddLabelPopup(conversation));
+    }
+  }
+
+  async showAddLabelPopup(conversation) {
+    // Загружаем все доступные метки
+    try {
+      const response = await fetch('/api/conversation-labels/', {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) return;
+      const allLabels = await response.json();
+      const currentIds = new Set((conversation.label_names || []).map(l => l.id));
+      const available = (Array.isArray(allLabels) ? allLabels : allLabels.results || []).filter(l => !currentIds.has(l.id));
+
+      const btn = document.getElementById('addLabelBtn');
+      if (!btn) return;
+
+      // Убираем предыдущий popup
+      const existing = document.getElementById('addLabelPopup');
+      if (existing) { existing.remove(); return; }
+
+      if (available.length === 0) {
+        this.showNotification('Все метки уже добавлены', 'info');
+        return;
+      }
+
+      const popup = document.createElement('div');
+      popup.id = 'addLabelPopup';
+      popup.className = 'absolute z-50 bg-white border border-brand-soft/80 rounded-xl shadow-lg p-2 mt-1 w-48 max-h-40 overflow-y-auto';
+      popup.innerHTML = available.map(l => `
+        <button type="button" class="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-xs hover:bg-brand-soft/30 transition" data-add-label="${l.id}">
+          <span class="w-3 h-3 rounded-full flex-shrink-0" style="background:${l.color}"></span>
+          <span>${this.escapeHtml(l.title)}</span>
+        </button>
+      `).join('');
+
+      btn.parentElement.style.position = 'relative';
+      btn.parentElement.appendChild(popup);
+
+      popup.querySelectorAll('[data-add-label]').forEach(item => {
+        item.addEventListener('click', () => {
+          const labelId = parseInt(item.getAttribute('data-add-label'));
+          const newIds = [...currentIds, labelId];
+          popup.remove();
+          this.patchConversation(conversation.id, { label_ids: newIds });
+        });
+      });
+
+      // Закрыть popup при клике вне
+      setTimeout(() => {
+        const close = (e) => { if (!popup.contains(e.target) && e.target !== btn) { popup.remove(); document.removeEventListener('click', close); } };
+        document.addEventListener('click', close);
+      }, 10);
+    } catch (e) {
+      console.error('Failed to load labels:', e);
     }
   }
 
@@ -1703,7 +1824,7 @@ class MessengerOperatorPanel {
       : '';
 
     return `
-      <div class="flex gap-3 mb-4 ${isOutgoing ? 'flex-row-reverse' : 'flex-row'}" data-message-id="${message.id}">
+      <div class="flex gap-3 mb-4 msg-appear ${isOutgoing ? 'flex-row-reverse' : 'flex-row'}" data-message-id="${message.id}">
         <div class="flex-shrink-0">
           <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
             isInternal
@@ -1904,27 +2025,7 @@ class MessengerOperatorPanel {
   }
 
   playIncomingSound() {
-    if (typeof window === 'undefined' || typeof AudioContext === 'undefined') return;
-
-    // Короткий «ping» через Web Audio API
-    const Ctor = window.AudioContext || window.webkitAudioContext;
-    if (!Ctor) return;
-
-    const ctx = new Ctor();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = 'sine';
-    osc.frequency.value = 880; // A5
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start();
-    osc.stop(ctx.currentTime + 0.3);
+    this.playIncomingSoundV2();
   }
 
   startTypingPolling(conversationId) {
@@ -2287,6 +2388,295 @@ class MessengerOperatorPanel {
     }
   }
 
+  // =========================================================================
+  // Canned Responses — загрузка и "/" триггер (как в Chatwoot)
+  // =========================================================================
+
+  async loadCannedResponses() {
+    try {
+      const response = await fetch('/api/canned-responses/', {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        this._cannedResponses = Array.isArray(data) ? data : (data.results || []);
+      }
+    } catch (e) {
+      // не критично
+    }
+  }
+
+  initCannedResponsesTrigger() {
+    // Отслеживаем ввод "/" в поле сообщения
+    document.addEventListener('input', (e) => {
+      const el = e.target;
+      if (!el || el.id !== 'messageBody') return;
+      const text = el.innerText || '';
+      if (text.startsWith('/')) {
+        this._cannedFilterText = text.slice(1).toLowerCase();
+        this.showCannedDropdown();
+      } else {
+        this.hideCannedDropdown();
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (!this._cannedDropdownVisible) return;
+      const dropdown = document.getElementById('cannedResponseDropdown');
+      if (!dropdown) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        this.hideCannedDropdown();
+        return;
+      }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const items = dropdown.querySelectorAll('[data-canned-id]');
+        if (!items.length) return;
+        let activeIdx = -1;
+        items.forEach((item, idx) => { if (item.classList.contains('bg-brand-teal/10')) activeIdx = idx; });
+        items.forEach(i => i.classList.remove('bg-brand-teal/10'));
+        if (e.key === 'ArrowDown') activeIdx = (activeIdx + 1) % items.length;
+        else activeIdx = activeIdx <= 0 ? items.length - 1 : activeIdx - 1;
+        items[activeIdx].classList.add('bg-brand-teal/10');
+        items[activeIdx].scrollIntoView({ block: 'nearest' });
+        return;
+      }
+      if (e.key === 'Enter') {
+        const active = dropdown.querySelector('[data-canned-id].bg-brand-teal\\/10');
+        if (active) {
+          e.preventDefault();
+          this.applyCannedResponse(active.getAttribute('data-canned-id'));
+        }
+      }
+    });
+  }
+
+  showCannedDropdown() {
+    const input = document.getElementById('messageBody');
+    if (!input) return;
+    let dropdown = document.getElementById('cannedResponseDropdown');
+    if (!dropdown) {
+      dropdown = document.createElement('div');
+      dropdown.id = 'cannedResponseDropdown';
+      dropdown.className = 'absolute bottom-full left-0 right-0 mb-1 bg-white border border-brand-soft/80 rounded-xl shadow-lg max-h-48 overflow-y-auto z-50';
+      dropdown.style.display = 'none';
+      const row = input.closest('.messenger-operator-form-row') || input.parentElement;
+      if (row) { row.style.position = 'relative'; row.appendChild(dropdown); }
+    }
+    const filter = this._cannedFilterText;
+    const filtered = this._cannedResponses.filter(cr => {
+      const t = (cr.title || '').toLowerCase();
+      const b = (cr.body || '').toLowerCase();
+      return !filter || t.includes(filter) || b.includes(filter);
+    });
+    if (filtered.length === 0) {
+      dropdown.innerHTML = '<div class="px-3 py-2 text-xs text-brand-dark/50">Шаблоны не найдены</div>';
+    } else {
+      dropdown.innerHTML = filtered.map((cr, idx) => `
+        <div data-canned-id="${cr.id}" class="px-3 py-2 cursor-pointer hover:bg-brand-teal/10 transition ${idx === 0 ? 'bg-brand-teal/10' : ''}">
+          <div class="text-sm font-medium text-brand-dark">${this.escapeHtml(cr.title)}</div>
+          <div class="text-xs text-brand-dark/60 truncate">${this.escapeHtml((cr.body || '').slice(0, 80))}</div>
+        </div>
+      `).join('');
+    }
+    dropdown.style.display = '';
+    this._cannedDropdownVisible = true;
+    dropdown.querySelectorAll('[data-canned-id]').forEach(item => {
+      item.addEventListener('click', () => this.applyCannedResponse(item.getAttribute('data-canned-id')));
+    });
+  }
+
+  hideCannedDropdown() {
+    const dropdown = document.getElementById('cannedResponseDropdown');
+    if (dropdown) dropdown.style.display = 'none';
+    this._cannedDropdownVisible = false;
+  }
+
+  applyCannedResponse(id) {
+    const cr = this._cannedResponses.find(r => String(r.id) === String(id));
+    if (!cr) return;
+    const input = document.getElementById('messageBody');
+    if (input) {
+      input.innerText = cr.body;
+      input.focus();
+      // Поставить каретку в конец
+      const range = document.createRange();
+      range.selectNodeContents(input);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    this.hideCannedDropdown();
+  }
+
+  // =========================================================================
+  // Skeleton Loaders (как в Chatwoot / JivoChat)
+  // =========================================================================
+
+  renderSkeletonList() {
+    const shimmer = 'animate-pulse bg-brand-soft/40 rounded';
+    let html = '';
+    for (let i = 0; i < 8; i++) {
+      html += `
+        <div class="flex items-start gap-3 px-3 py-3 border-b border-brand-soft/30">
+          <div class="w-10 h-10 rounded-full ${shimmer} flex-shrink-0"></div>
+          <div class="flex-1 space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="h-3.5 ${shimmer}" style="width:${60 + Math.random() * 40}%"></div>
+              <div class="h-3 ${shimmer} w-10"></div>
+            </div>
+            <div class="h-3 ${shimmer}" style="width:${50 + Math.random() * 30}%"></div>
+          </div>
+        </div>
+      `;
+    }
+    return html;
+  }
+
+  renderSkeletonMessages() {
+    const shimmer = 'animate-pulse bg-brand-soft/40 rounded';
+    let html = '<div class="space-y-4 p-4">';
+    const patterns = ['left', 'left', 'right', 'left', 'right', 'right', 'left'];
+    patterns.forEach(side => {
+      const w = 40 + Math.random() * 35;
+      html += `
+        <div class="flex ${side === 'right' ? 'justify-end' : ''}">
+          <div class="${shimmer}" style="width:${w}%;height:${32 + Math.random() * 24}px;border-radius:16px;"></div>
+        </div>
+      `;
+    });
+    html += '</div>';
+    return html;
+  }
+
+  // =========================================================================
+  // Drag-and-drop файлов в зону чата
+  // =========================================================================
+
+  initDragDrop() {
+    const mainArea = document.querySelector('.messenger-unified-main');
+    if (!mainArea) return;
+
+    mainArea.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      this._dragCounter++;
+      this.showDragOverlay();
+    });
+    mainArea.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      this._dragCounter--;
+      if (this._dragCounter <= 0) {
+        this._dragCounter = 0;
+        this.hideDragOverlay();
+      }
+    });
+    mainArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    });
+    mainArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      this._dragCounter = 0;
+      this.hideDragOverlay();
+      if (!this.currentConversationId) return;
+      const files = e.dataTransfer.files;
+      if (!files || !files.length) return;
+      const fileInput = document.getElementById('messageAttachments');
+      if (fileInput) {
+        const dt = new DataTransfer();
+        Array.from(files).forEach(f => dt.items.add(f));
+        fileInput.files = dt.files;
+        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+  }
+
+  showDragOverlay() {
+    if (!this.currentConversationId || !window.MESSENGER_CAN_REPLY) return;
+    let overlay = document.getElementById('messengerDragOverlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'messengerDragOverlay';
+      overlay.className = 'absolute inset-0 z-40 flex items-center justify-center pointer-events-none';
+      overlay.innerHTML = `
+        <div class="bg-brand-teal/10 border-2 border-dashed border-brand-teal rounded-2xl p-8 text-center backdrop-blur-sm">
+          <svg class="w-12 h-12 mx-auto mb-3 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+          </svg>
+          <div class="text-sm font-medium text-brand-teal">Перетащите файлы сюда</div>
+          <div class="text-xs text-brand-dark/50 mt-1">Изображения и PDF, до 5 МБ</div>
+        </div>
+      `;
+      const main = document.querySelector('.messenger-unified-main');
+      if (main) { main.style.position = 'relative'; main.appendChild(overlay); }
+    }
+    overlay.style.display = '';
+  }
+
+  hideDragOverlay() {
+    const overlay = document.getElementById('messengerDragOverlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
+  // =========================================================================
+  // Улучшенный звук уведомления (двухтональный chime)
+  // =========================================================================
+
+  playIncomingSoundV2() {
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    if (!Ctor) return;
+    try {
+      const ctx = new Ctor();
+      const now = ctx.currentTime;
+
+      // Нота 1: C6 (1046 Hz)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.value = 1046;
+      gain1.gain.setValueAtTime(0.0001, now);
+      gain1.gain.exponentialRampToValueAtTime(0.15, now + 0.02);
+      gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.4);
+
+      // Нота 2: E6 (1318 Hz), задержка 0.12s
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.value = 1318;
+      gain2.gain.setValueAtTime(0.0001, now + 0.12);
+      gain2.gain.exponentialRampToValueAtTime(0.12, now + 0.14);
+      gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.12);
+      osc2.stop(now + 0.55);
+
+      // Нота 3: G6 (1568 Hz), задержка 0.24s — мажорный аккорд
+      const osc3 = ctx.createOscillator();
+      const gain3 = ctx.createGain();
+      osc3.type = 'sine';
+      osc3.frequency.value = 1568;
+      gain3.gain.setValueAtTime(0.0001, now + 0.24);
+      gain3.gain.exponentialRampToValueAtTime(0.10, now + 0.26);
+      gain3.gain.exponentialRampToValueAtTime(0.0001, now + 0.65);
+      osc3.connect(gain3);
+      gain3.connect(ctx.destination);
+      osc3.start(now + 0.24);
+      osc3.stop(now + 0.7);
+
+      // Закрыть контекст после завершения
+      setTimeout(() => { try { ctx.close(); } catch(_) {} }, 1000);
+    } catch (e) {
+      // fallback: без звука
+    }
+  }
+
   /**
    * Получить CSRF токен
    */
@@ -2319,6 +2709,145 @@ class MessengerOperatorPanel {
     if (!element || element.tagName !== 'DIV') return;
     element.style.height = 'auto';
     element.style.height = Math.min(element.scrollHeight, 120) + 'px';
+  }
+
+  // ── Bulk Actions ──────────────────────────────────────────────
+
+  initBulkActions() {
+    // Inject bulk action bar into the left column header
+    const listCol = document.querySelector('.messenger-col-left');
+    if (!listCol) return;
+
+    const bar = document.createElement('div');
+    bar.id = 'bulk-action-bar';
+    bar.className = 'bulk-action-bar hidden';
+    bar.innerHTML = `
+      <div class="bulk-bar-info">
+        <button type="button" class="bulk-bar-close" onclick="window.MessengerPanel.exitBulkMode()" title="Отмена">&times;</button>
+        <span class="bulk-bar-count">0 выбрано</span>
+      </div>
+      <div class="bulk-bar-actions">
+        <button type="button" class="bulk-btn bulk-btn-close" onclick="window.MessengerPanel.bulkAction('close')" title="Закрыть выбранные">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          Закрыть
+        </button>
+        <button type="button" class="bulk-btn bulk-btn-reopen" onclick="window.MessengerPanel.bulkAction('reopen')" title="Переоткрыть">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 019-9 9 9 0 010 18 9 9 0 01-9-9z"/><path d="M12 8v4l3 3"/></svg>
+          Открыть
+        </button>
+      </div>
+    `;
+    listCol.insertBefore(bar, listCol.firstChild);
+
+    // Long-press / right-click to enter bulk mode on conversation cards
+    const listContainer = document.getElementById('conversation-list');
+    if (listContainer) {
+      listContainer.addEventListener('contextmenu', (e) => {
+        const card = e.target.closest('.conversation-card');
+        if (!card) return;
+        e.preventDefault();
+        const id = parseInt(card.dataset.conversationId);
+        if (!this._bulkMode) {
+          this._bulkMode = true;
+          this._bulkSelected.clear();
+        }
+        this._bulkSelected.add(id);
+        this.updateBulkUI();
+        this.refreshListUI();
+      });
+    }
+  }
+
+  toggleBulkSelect(conversationId, checked) {
+    if (checked) {
+      this._bulkSelected.add(conversationId);
+    } else {
+      this._bulkSelected.delete(conversationId);
+    }
+    this.updateBulkUI();
+    // Update card highlight
+    const card = document.querySelector(`.conversation-card[data-conversation-id="${conversationId}"]`);
+    if (card) card.classList.toggle('bulk-selected', checked);
+  }
+
+  updateBulkUI() {
+    const bar = document.getElementById('bulk-action-bar');
+    if (!bar) return;
+    const count = this._bulkSelected.size;
+    if (this._bulkMode && count > 0) {
+      bar.classList.remove('hidden');
+      bar.querySelector('.bulk-bar-count').textContent = `${count} выбрано`;
+    } else if (this._bulkMode && count === 0) {
+      // Keep bar visible but show 0
+      bar.classList.remove('hidden');
+      bar.querySelector('.bulk-bar-count').textContent = '0 выбрано';
+    } else {
+      bar.classList.add('hidden');
+    }
+  }
+
+  exitBulkMode() {
+    this._bulkMode = false;
+    this._bulkSelected.clear();
+    this.updateBulkUI();
+    this.refreshListUI();
+  }
+
+  refreshListUI() {
+    // Re-render the conversation list to add/remove checkboxes
+    const listContainer = document.getElementById('conversation-list');
+    if (!listContainer) return;
+    const cards = listContainer.querySelectorAll('.conversation-card');
+    cards.forEach(card => {
+      const id = parseInt(card.dataset.conversationId);
+      const existing = card.querySelector('.conversation-bulk-checkbox');
+      if (this._bulkMode && !existing) {
+        const label = document.createElement('label');
+        label.className = 'conversation-bulk-checkbox';
+        label.onclick = (e) => e.stopPropagation();
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = this._bulkSelected.has(id);
+        cb.onchange = () => this.toggleBulkSelect(id, cb.checked);
+        label.appendChild(cb);
+        card.insertBefore(label, card.firstChild);
+      } else if (!this._bulkMode && existing) {
+        existing.remove();
+      } else if (existing) {
+        existing.querySelector('input').checked = this._bulkSelected.has(id);
+      }
+      card.classList.toggle('bulk-selected', this._bulkSelected.has(id));
+    });
+  }
+
+  async bulkAction(actionType) {
+    const ids = Array.from(this._bulkSelected);
+    if (ids.length === 0) return;
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+      || document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1]
+      || '';
+
+    try {
+      const resp = await this._fetch('/api/conversations/bulk/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ ids, action: actionType }),
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        this.showToast(`Обновлено: ${data.updated} диалогов`, 'success');
+        this.exitBulkMode();
+        // Refresh list
+        this.fetchConversations();
+      } else {
+        this.showToast(data.detail || 'Ошибка', 'error');
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        this.showToast('Ошибка сети', 'error');
+      }
+    }
   }
 }
 

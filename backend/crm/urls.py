@@ -42,7 +42,7 @@ from phonebridge.api import (
     UserInfoView,
     QrTokenStatusView,
 )
-from messenger.api import ConversationViewSet, CannedResponseViewSet
+from messenger.api import ConversationViewSet, CannedResponseViewSet, ConversationLabelViewSet
 from messenger.widget_api import (
     widget_attachment_download,
     widget_bootstrap,
@@ -83,6 +83,7 @@ router.register(r"task-types", TaskTypeViewSet, basename="task-type")
 router.register(r"tasks", TaskViewSet, basename="task")
 router.register(r"conversations", ConversationViewSet, basename="conversation")
 router.register(r"canned-responses", CannedResponseViewSet, basename="canned-response")
+router.register(r"conversation-labels", ConversationLabelViewSet, basename="conversation-label")
 
 # Versioned router at /api/v1/ — same viewsets, separate basenames to avoid URL name conflicts.
 # SimpleRouter = no API root browser page (cleaner for versioned endpoint).
