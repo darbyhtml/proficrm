@@ -968,3 +968,127 @@ class PushSubscription(models.Model):
 
     def __str__(self) -> str:
         return f"Push: {self.user} ({self.endpoint[:50]}...)"
+
+
+class Campaign(models.Model):
+    """
+    Проактивные кампании (аналог Chatwoot ongoing campaigns).
+    Показывают сообщение посетителю после N секунд на странице с URL-match.
+    Вся логика триггера — на клиенте (как у Chatwoot).
+    """
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Активна"
+        DISABLED = "disabled", "Отключена"
+
+    inbox = models.ForeignKey(
+        Inbox, on_delete=models.CASCADE, related_name="campaigns",
+    )
+    title = models.CharField("Название", max_length=255)
+    message = models.TextField("Сообщение")
+    url_pattern = models.CharField(
+        "URL-паттерн", max_length=500, blank=True, default="*",
+        help_text="Wildcard-паттерн URL страницы (например, */pricing*)",
+    )
+    time_on_page = models.PositiveIntegerField(
+        "Секунд на странице", default=10,
+        help_text="Через сколько секунд показать сообщение",
+    )
+    status = models.CharField(
+        "Статус", max_length=16, choices=Status.choices, default=Status.ACTIVE,
+    )
+    only_during_business_hours = models.BooleanField(
+        "Только в рабочее время", default=False,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Кампания"
+        verbose_name_plural = "Кампании"
+        indexes = [
+            models.Index(fields=["inbox", "status"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.title
+
+
+class AutomationRule(models.Model):
+    """
+    Правила автоматизации (аналог Chatwoot automation_rules).
+    Event-driven: при событии проверяются условия → выполняются действия.
+    """
+    class EventName(models.TextChoices):
+        CONVERSATION_CREATED = "conversation_created", "Диалог создан"
+        MESSAGE_CREATED = "message_created", "Сообщение создано"
+        CONVERSATION_UPDATED = "conversation_updated", "Диалог обновлён"
+
+    inbox = models.ForeignKey(
+        Inbox, on_delete=models.CASCADE, related_name="automation_rules",
+        null=True, blank=True,
+        help_text="Если пусто — правило для всех инбоксов",
+    )
+    name = models.CharField("Название", max_length=255)
+    description = models.TextField("Описание", blank=True, default="")
+    event_name = models.CharField(
+        "Событие", max_length=32, choices=EventName.choices,
+    )
+    conditions = models.JSONField(
+        "Условия", default=list,
+        help_text='[{"attribute_key": "status", "filter_operator": "equal_to", "values": ["open"]}]',
+    )
+    actions = models.JSONField(
+        "Действия", default=list,
+        help_text='[{"action_name": "assign_agent", "action_params": [42]}]',
+    )
+    is_active = models.BooleanField("Активно", default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Правило автоматизации"
+        verbose_name_plural = "Правила автоматизации"
+        indexes = [
+            models.Index(fields=["event_name", "is_active"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.event_name})"
+
+
+class ReportingEvent(models.Model):
+    """
+    События для аналитики (аналог Chatwoot reporting_events).
+    Создаются при ключевых событиях для агрегации в дашборде.
+    """
+    class EventType(models.TextChoices):
+        FIRST_RESPONSE = "first_response", "Первый ответ"
+        REPLY_TIME = "reply_time", "Время ответа"
+        CONVERSATION_RESOLVED = "conversation_resolved", "Решён"
+        CONVERSATION_OPENED = "conversation_opened", "Открыт"
+
+    name = models.CharField("Тип", max_length=32, choices=EventType.choices)
+    value = models.FloatField("Значение (секунды)", default=0)
+    conversation = models.ForeignKey(
+        Conversation, on_delete=models.CASCADE, related_name="reporting_events",
+        null=True, blank=True,
+    )
+    inbox = models.ForeignKey(
+        Inbox, on_delete=models.SET_NULL, null=True, blank=True,
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        help_text="Оператор (для метрик по агентам)",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Событие аналитики"
+        verbose_name_plural = "События аналитики"
+        indexes = [
+            models.Index(fields=["name", "created_at"]),
+            models.Index(fields=["name", "inbox", "created_at"]),
+            models.Index(fields=["name", "user", "created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name}: {self.value:.1f}s"

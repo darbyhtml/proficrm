@@ -42,13 +42,17 @@ from phonebridge.api import (
     UserInfoView,
     QrTokenStatusView,
 )
-from messenger.api import ConversationViewSet, CannedResponseViewSet, ConversationLabelViewSet, PushSubscriptionViewSet
+from messenger.api import (
+    ConversationViewSet, CannedResponseViewSet, ConversationLabelViewSet,
+    PushSubscriptionViewSet, CampaignViewSet, AutomationRuleViewSet, ReportingViewSet,
+)
 from messenger.widget_api import (
     widget_attachment_download,
     widget_bootstrap,
     widget_contact_update,
     widget_mark_read,
     widget_poll,
+    widget_campaigns,
     widget_rate,
     widget_send,
     widget_stream,
@@ -85,6 +89,9 @@ router.register(r"conversations", ConversationViewSet, basename="conversation")
 router.register(r"canned-responses", CannedResponseViewSet, basename="canned-response")
 router.register(r"conversation-labels", ConversationLabelViewSet, basename="conversation-label")
 router.register(r"push", PushSubscriptionViewSet, basename="push")
+router.register(r"campaigns", CampaignViewSet, basename="campaign")
+router.register(r"automation-rules", AutomationRuleViewSet, basename="automation-rule")
+router.register(r"messenger-reports", ReportingViewSet, basename="messenger-report")
 
 # Versioned router at /api/v1/ — same viewsets, separate basenames to avoid URL name conflicts.
 # SimpleRouter = no API root browser page (cleaner for versioned endpoint).
@@ -141,6 +148,7 @@ urlpatterns = [
     path("api/widget/typing/", widget_typing, name="widget-typing"),
     path("api/widget/mark_read/", widget_mark_read, name="widget-mark-read"),
     path("api/widget/rate/", widget_rate, name="widget-rate"),
+    path("api/widget/campaigns/", widget_campaigns, name="widget-campaigns"),
     path("api/widget/attachment/<int:attachment_id>/", widget_attachment_download, name="widget-attachment"),
     # Phonebridge: /api/v1/phone/ aliases (no names to avoid conflicts)
     path("api/v1/phone/devices/register/", RegisterDeviceView.as_view()),

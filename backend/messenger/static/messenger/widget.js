@@ -94,6 +94,8 @@
       this.fileInput = null;
       this.pendingFilesEl = null;
       this.markReadTimer = null;
+      this.campaignTimers = [];
+      this.campaignBubble = null;
 
       // DOM элементы (будут созданы в render)
       this.button = null;
@@ -265,6 +267,9 @@
           this.startPolling();
         }
       }
+
+      // Проактивные кампании — загрузить и запланировать показ
+      this._initCampaigns();
     }
 
     /**
@@ -778,7 +783,10 @@
       if (!this.popup) {
         return;
       }
-      
+
+      // Убрать пузырёк кампании при открытии чата
+      this._dismissCampaignBubble();
+
       // Если нет сессии - выполнить bootstrap при открытии чата
       if (!this.sessionToken) {
         const success = await this.bootstrap();
@@ -1875,6 +1883,148 @@
 
       // Если капча нужна — покажем строку
       this.renderCaptchaRow();
+    }
+
+    // ─── Proactive Campaigns (Chatwoot-style) ───────────────────────────
+
+    /**
+     * Загрузить кампании и запланировать показ по URL + time_on_page
+     */
+    async _initCampaigns() {
+      try {
+        const resp = await fetch(
+          CONFIG.API_BASE_URL + '/api/widget/campaigns/?widget_token=' + encodeURIComponent(this.widgetToken)
+        );
+        if (!resp.ok) return;
+        const campaigns = await resp.json();
+        if (!Array.isArray(campaigns) || campaigns.length === 0) return;
+
+        const shown = this._getShownCampaignIds();
+        const pageUrl = window.location.href;
+
+        for (const c of campaigns) {
+          if (shown.has(c.id)) continue;
+          if (!this._matchUrlPattern(pageUrl, c.url_pattern || '*')) continue;
+
+          const delaySec = Math.max(c.time_on_page || 10, 1);
+          const timer = setTimeout(() => {
+            // Не показывать, если чат уже открыт
+            if (this.isOpen) return;
+            this._showCampaignBubble(c);
+          }, delaySec * 1000);
+          this.campaignTimers.push(timer);
+        }
+      } catch (e) {
+        // Кампании некритичны — молча проглатываем ошибку
+      }
+    }
+
+    /**
+     * Wildcard-паттерн → совпадение с URL.
+     * Поддержка: * = любая подстрока. Пример: * /pricing* совпадает с https://site.com/pricing?ref=1
+     */
+    _matchUrlPattern(url, pattern) {
+      if (!pattern || pattern === '*') return true;
+      // Превратить wildcard-паттерн в RegExp: экранировать спецсимволы, заменить * на .*
+      const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+      try {
+        return new RegExp('^' + escaped + '$', 'i').test(url);
+      } catch (e) {
+        return false;
+      }
+    }
+
+    /**
+     * Показать пузырёк кампании (как в Chatwoot — над кнопкой чата)
+     */
+    _showCampaignBubble(campaign) {
+      this._dismissCampaignBubble();
+
+      const bubble = document.createElement('div');
+      bubble.className = 'messenger-widget-campaign-bubble';
+      // Позиция совпадает с кнопкой виджета
+      bubble.style.cssText = `
+        position:fixed;bottom:90px;${this.position === 'left' ? 'left' : 'right'}:20px;
+        max-width:320px;background:#fff;border-radius:16px;
+        box-shadow:0 8px 32px rgba(0,0,0,.18);padding:16px 18px;
+        z-index:2147483646;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+        font-size:14px;line-height:1.5;color:#1a1a1a;
+        animation:messengerCampaignSlideIn .35s ease-out;
+        cursor:pointer;
+      `;
+
+      // Кнопка закрытия
+      const closeBtn = document.createElement('span');
+      closeBtn.textContent = '\u00d7';
+      closeBtn.style.cssText = `
+        position:absolute;top:6px;right:10px;font-size:18px;color:#999;
+        cursor:pointer;line-height:1;
+      `;
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._dismissCampaignBubble();
+        this._markCampaignShown(campaign.id);
+      });
+
+      const msgEl = document.createElement('div');
+      msgEl.innerHTML = this.renderFormattedBody(campaign.message);
+
+      bubble.appendChild(closeBtn);
+      bubble.appendChild(msgEl);
+
+      bubble.addEventListener('click', () => {
+        this._dismissCampaignBubble();
+        this._markCampaignShown(campaign.id);
+        this.open();
+      });
+
+      // Добавить CSS-анимацию если ещё нет
+      if (!document.getElementById('messenger-campaign-css')) {
+        const style = document.createElement('style');
+        style.id = 'messenger-campaign-css';
+        style.textContent = `
+          @keyframes messengerCampaignSlideIn {
+            from { opacity:0; transform:translateY(20px); }
+            to { opacity:1; transform:translateY(0); }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+
+      document.body.appendChild(bubble);
+      this.campaignBubble = bubble;
+
+      // Автоскрытие через 30 секунд
+      setTimeout(() => {
+        if (this.campaignBubble === bubble) {
+          this._dismissCampaignBubble();
+          this._markCampaignShown(campaign.id);
+        }
+      }, 30000);
+    }
+
+    _dismissCampaignBubble() {
+      if (this.campaignBubble) {
+        this.campaignBubble.remove();
+        this.campaignBubble = null;
+      }
+    }
+
+    _getShownCampaignIds() {
+      try {
+        const raw = localStorage.getItem(this._storageKey('campaigns_shown'));
+        return new Set(raw ? JSON.parse(raw) : []);
+      } catch (e) {
+        return new Set();
+      }
+    }
+
+    _markCampaignShown(campaignId) {
+      const shown = this._getShownCampaignIds();
+      shown.add(campaignId);
+      try {
+        localStorage.setItem(this._storageKey('campaigns_shown'), JSON.stringify([...shown]));
+      } catch (e) { /* quota exceeded — ignore */ }
     }
   }
 

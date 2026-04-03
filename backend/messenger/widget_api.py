@@ -45,7 +45,8 @@ from .utils import (
 )
 from .logging_utils import widget_logger, safe_log_widget_error
 from .integrations import notify_conversation_created, notify_message
-from .automation import run_automation_for_incoming_message
+from .automation import run_automation_for_incoming_message, dispatch_event
+from .reporting import record_conversation_opened
 from .throttles import WidgetBootstrapThrottle, WidgetSendThrottle, WidgetPollThrottle
 
 
@@ -259,6 +260,15 @@ def widget_bootstrap(request):
             within_working_hours = is_within_working_hours(inbox)
             if within_working_hours:
                 services.auto_assign_conversation(conversation)
+
+            # Reporting: conversation opened
+            record_conversation_opened(conversation)
+
+            # Automation Rules: conversation_created event
+            try:
+                dispatch_event("conversation_created", conversation=conversation)
+            except Exception:
+                widget_logger.warning("Automation dispatch_event(conversation_created) failed", exc_info=True)
 
         # Вне рабочих часов (для ответа виджету)
         outside_working_hours = False
@@ -780,6 +790,12 @@ def widget_send(request):
                     "message_id": message.id,
                 },
             )
+
+        # Automation Rules engine: message_created event
+        try:
+            dispatch_event("message_created", conversation=conversation, message=message)
+        except Exception:
+            widget_logger.warning("Automation dispatch_event(message_created) failed", exc_info=True)
 
         attachments_payload = build_message_attachments_payload(
             message, request, widget_token, widget_session_token
@@ -1424,3 +1440,28 @@ def widget_rate(request):
     conversation.rated_at = now
     conversation.save(update_fields=["rating_score", "rating_comment", "rated_at"])
     return Response({"status": "ok"}, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def widget_campaigns(request):
+    """
+    GET /api/widget/campaigns/?widget_token=...
+    Возвращает активные кампании для виджета (аналог Chatwoot GET /campaigns).
+    Клиент сам решает, когда показать (по URL + time_on_page).
+    """
+    widget_token = request.query_params.get("widget_token", "")
+    if not widget_token:
+        return Response({"detail": "widget_token required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        inbox = models.Inbox.objects.get(widget_token=widget_token, is_active=True)
+    except models.Inbox.DoesNotExist:
+        return Response({"detail": "Invalid widget_token"}, status=status.HTTP_404_NOT_FOUND)
+
+    campaigns = models.Campaign.objects.filter(
+        inbox=inbox, status=models.Campaign.Status.ACTIVE,
+    ).values("id", "title", "message", "url_pattern", "time_on_page", "only_during_business_hours")
+
+    return Response(list(campaigns))

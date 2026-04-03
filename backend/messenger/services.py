@@ -16,6 +16,7 @@ from django.utils import timezone
 from accounts.models import User
 from .models import Conversation, Message, Contact
 from .integrations import notify_message
+from .reporting import record_first_response, record_reply_time
 
 
 def create_or_get_contact(
@@ -175,6 +176,12 @@ def record_message(
             exc_info=True,
             extra={"conversation_id": conversation.id, "message_id": msg.id, "direction": direction},
         )
+
+    # Reporting events для исходящих сообщений (ответ оператора)
+    if direction == Message.Direction.OUT and sender_user:
+        record_first_response(conversation, msg)
+        record_reply_time(conversation, msg)
+
     return msg
 
 

@@ -25,6 +25,8 @@ from . import models, selectors, serializers, services
 from .utils import ensure_messenger_enabled_api
 from django.db.models import Q
 from django.http import StreamingHttpResponse
+from django.utils import timezone
+from rest_framework import serializers as drf_serializers
 import json
 import time
 
@@ -743,3 +745,91 @@ class PushSubscriptionViewSet(MessengerEnabledApiMixin, viewsets.ViewSet):
                 user=request.user, endpoint=endpoint
             ).update(is_active=False)
         return Response({"status": "unsubscribed"})
+
+
+class CampaignViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
+    """API для проактивных кампаний (CRUD для операторов)."""
+    queryset = models.Campaign.objects.all()
+    permission_classes = [IsAuthenticated]
+
+    class CampaignSerializer(drf_serializers.ModelSerializer):
+        class Meta:
+            model = models.Campaign
+            fields = "__all__"
+
+    serializer_class = CampaignSerializer
+
+    def get_queryset(self):
+        return models.Campaign.objects.select_related("inbox").order_by("-created_at")
+
+
+class AutomationRuleViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
+    """API для правил автоматизации (CRUD для администраторов)."""
+    queryset = models.AutomationRule.objects.all()
+    permission_classes = [IsAuthenticated]
+
+    class AutomationRuleSerializer(drf_serializers.ModelSerializer):
+        class Meta:
+            model = models.AutomationRule
+            fields = "__all__"
+
+    serializer_class = AutomationRuleSerializer
+
+    def get_queryset(self):
+        return models.AutomationRule.objects.select_related("inbox").order_by("-created_at")
+
+
+class ReportingViewSet(MessengerEnabledApiMixin, viewsets.ViewSet):
+    """
+    API аналитики мессенджера (аналог Chatwoot reports).
+    GET /api/messenger-reports/overview/ — обзор метрик.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @action(detail=False, methods=["get"], url_path="overview")
+    def overview(self, request):
+        """Обзорные метрики за период."""
+        from django.db.models import Avg, Count
+        from datetime import timedelta
+
+        days = int(request.query_params.get("days", "7"))
+        since = timezone.now() - timedelta(days=days)
+
+        events = models.ReportingEvent.objects.filter(created_at__gte=since)
+
+        # Средний FRT
+        avg_frt = events.filter(
+            name=models.ReportingEvent.EventType.FIRST_RESPONSE
+        ).aggregate(avg=Avg("value"))["avg"]
+
+        # Средний reply time
+        avg_reply = events.filter(
+            name=models.ReportingEvent.EventType.REPLY_TIME
+        ).aggregate(avg=Avg("value"))["avg"]
+
+        # Решённые диалоги
+        resolved_count = events.filter(
+            name=models.ReportingEvent.EventType.CONVERSATION_RESOLVED
+        ).count()
+
+        # Общее кол-во диалогов за период
+        total_conversations = models.Conversation.objects.filter(
+            created_at__gte=since
+        ).count()
+
+        # CSAT
+        rated = models.Conversation.objects.filter(
+            rated_at__gte=since, rating_score__gt=0
+        )
+        avg_csat = rated.aggregate(avg=Avg("rating_score"))["avg"]
+        csat_count = rated.count()
+
+        return Response({
+            "period_days": days,
+            "total_conversations": total_conversations,
+            "resolved_conversations": resolved_count,
+            "avg_first_response_time_seconds": round(avg_frt, 1) if avg_frt else None,
+            "avg_reply_time_seconds": round(avg_reply, 1) if avg_reply else None,
+            "avg_csat_score": round(avg_csat, 2) if avg_csat else None,
+            "csat_responses_count": csat_count,
+        })

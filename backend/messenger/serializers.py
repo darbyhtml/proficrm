@@ -88,6 +88,7 @@ class ConversationSerializer(serializers.ModelSerializer):
         # M2M поле labels обрабатываем отдельно
         labels = validated_data.pop("labels", None)
 
+        old_status = instance.status
         for field in allowed_fields:
             if field != "labels" and field in validated_data:
                 setattr(instance, field, validated_data[field])
@@ -98,6 +99,19 @@ class ConversationSerializer(serializers.ModelSerializer):
 
         if labels is not None:
             instance.labels.set(labels)
+
+        # Reporting: conversation resolved
+        if instance.status == models.Conversation.Status.RESOLVED and old_status != instance.status:
+            from .reporting import record_conversation_resolved
+            record_conversation_resolved(instance)
+
+        # Automation Rules: conversation_updated
+        if old_status != instance.status:
+            try:
+                from .automation import dispatch_event
+                dispatch_event("conversation_updated", conversation=instance)
+            except Exception:
+                pass
 
         return instance
 
