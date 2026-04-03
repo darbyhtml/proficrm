@@ -56,7 +56,10 @@ def widget_test_page(request):
         return HttpResponse("No active inbox", status=404)
 
     # Определяем base URL для API (схема + хост текущего запроса)
-    scheme = request.scheme
+    # X-Forwarded-Proto от nginx, иначе fallback на request.scheme
+    scheme = request.META.get("HTTP_X_FORWARDED_PROTO", request.scheme)
+    if scheme != "https":
+        scheme = "https"  # Всегда HTTPS в production
     host = request.get_host()
     api_base = f"{scheme}://{host}"
     token = inbox.widget_token
