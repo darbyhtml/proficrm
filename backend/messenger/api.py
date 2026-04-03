@@ -890,7 +890,11 @@ class CampaignViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
     class CampaignSerializer(drf_serializers.ModelSerializer):
         class Meta:
             model = models.Campaign
-            fields = "__all__"
+            fields = (
+                "id", "inbox", "title", "message", "url_pattern",
+                "time_on_page", "status", "only_during_business_hours",
+                "created_at",
+            )
 
     serializer_class = CampaignSerializer
 
@@ -906,7 +910,10 @@ class AutomationRuleViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
     class AutomationRuleSerializer(drf_serializers.ModelSerializer):
         class Meta:
             model = models.AutomationRule
-            fields = "__all__"
+            fields = (
+                "id", "inbox", "name", "description", "event_name",
+                "conditions", "actions", "is_active", "created_at",
+            )
 
     serializer_class = AutomationRuleSerializer
 
