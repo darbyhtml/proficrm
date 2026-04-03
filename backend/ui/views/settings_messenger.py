@@ -233,8 +233,6 @@ def settings_messenger_analytics(request: HttpRequest) -> HttpResponse:
 
     # Детальная аналитика по операторам и филиалам считаем в Python,
     # чтобы избежать ошибок вложенных агрегатов в Django.
-    from collections import defaultdict
-    from datetime import timedelta
 
     conv_rows = qs_annotated.filter(first_out_at__isnull=False).values(
         "assignee__id",
