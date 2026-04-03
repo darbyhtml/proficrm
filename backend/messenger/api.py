@@ -254,10 +254,11 @@ class ConversationViewSet(
         if str(primary_id) == str(merge_id):
             return Response({"detail": "Cannot merge contact with itself"}, status=status.HTTP_400_BAD_REQUEST)
 
+        from django.core.exceptions import ValidationError as DjangoValidationError
         try:
             primary = models.Contact.objects.get(pk=primary_id)
             merge = models.Contact.objects.get(pk=merge_id)
-        except (models.Contact.DoesNotExist, ValueError, TypeError):
+        except (models.Contact.DoesNotExist, ValueError, TypeError, DjangoValidationError):
             return Response({"detail": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
 
         from django.db import transaction
