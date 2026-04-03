@@ -169,4 +169,6 @@ def widget_test_page(request):
   </script>
 </body>
 </html>"""
-    return HttpResponse(html, content_type="text/html")
+    resp = HttpResponse(html, content_type="text/html")
+    resp._skip_csp = True  # Эта страница имитирует внешний сайт — CSP не нужен
+    return resp

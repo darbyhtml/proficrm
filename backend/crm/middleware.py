@@ -19,6 +19,10 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
         request.csp_nonce = secrets.token_urlsafe(16)
 
     def process_response(self, request, response):
+        # Пропускаем CSP для страниц, помеченных _skip_csp (напр. widget-test)
+        if getattr(response, '_skip_csp', False):
+            return response
+
         # Добавляем CSP только в production
         if not settings.DEBUG and getattr(settings, 'CSP_HEADER', None):
             nonce = getattr(request, 'csp_nonce', None)
