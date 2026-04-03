@@ -155,12 +155,14 @@ class ConversationViewSet(
                     pass
             qs = qs.filter(q_obj)
 
+        valid_statuses = {s[0] for s in models.Conversation.Status.choices}
         status_filter = (qp.get("status") or "").strip()
         if status_filter:
             if "," in status_filter:
-                statuses = [s.strip() for s in status_filter.split(",") if s.strip()]
-                qs = qs.filter(status__in=statuses)
-            else:
+                statuses = [s.strip() for s in status_filter.split(",") if s.strip() and s.strip() in valid_statuses]
+                if statuses:
+                    qs = qs.filter(status__in=statuses)
+            elif status_filter in valid_statuses:
                 qs = qs.filter(status=status_filter)
 
         mine = (qp.get("mine") or "").strip().lower() in ("1", "true", "yes")
@@ -241,8 +243,10 @@ class ConversationViewSet(
 
         Объединяет два контакта: переносит все диалоги merge_contact → primary_contact,
         обновляет пустые поля primary из merge, удаляет merge_contact.
-        Аналог Chatwoot contact merge.
+        Аналог Chatwoot contact merge. Только для администраторов.
         """
+        if not (request.user.is_superuser or request.user.role == User.Role.ADMIN):
+            return Response({"detail": "Only administrators can merge contacts."}, status=status.HTTP_403_FORBIDDEN)
         primary_id = request.data.get("primary_contact_id")
         merge_id = request.data.get("merge_contact_id")
         if not primary_id or not merge_id:
