@@ -607,9 +607,8 @@
     <!-- Список диалогов (скроллируемый) -->
     <div class="messenger-unified-scrollable" id="conversationsList">
       {% for conversation in page.object_list %}
-        <div class="conversation-card {% if selected_conversation and selected_conversation.id == conversation.id %}active{% endif %}" 
-             data-conversation-id="{{ conversation.id }}"
-             onclick="MessengerPanel.openConversation({{ conversation.id }})">
+        <div class="conversation-card {% if selected_conversation and selected_conversation.id == conversation.id %}active{% endif %}"
+             data-conversation-id="{{ conversation.id }}">
           <!-- Аватар -->
           <div class="conversation-avatar" style="background: {% if conversation.status == 'open' %}#01948E{% elif conversation.status == 'pending' %}#FDAD3A{% elif conversation.status == 'resolved' %}#22c55e{% else %}#94a3b8{% endif %};">
             {{ conversation.contact.name|first|default:conversation.contact.email|first|default:conversation.contact.phone|first|default:"К"|upper }}
@@ -657,9 +656,9 @@
             </div>
           </div>
           {% if user.is_superuser or user.role == 'admin' %}
-            <button type="button" 
-                    class="conversation-delete-btn" 
-                    onclick="event.stopPropagation(); window.MessengerPanel.deleteConversation({{ conversation.id }});"
+            <button type="button"
+                    class="conversation-delete-btn"
+                    data-delete-conversation-id="{{ conversation.id }}"
                     title="Удалить диалог"
                     aria-label="Удалить диалог">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -745,7 +744,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
   window.MESSENGER_CONTEXT = {
     currentUserId: {{ current_user_id|default:'null' }},
     selectedConversationId: {% if selected_conversation %}{{ selected_conversation.id }}{% else %}null{% endif %},
@@ -843,8 +842,8 @@
   })();
 </script>
 
-<script src="{% static 'messenger/operator-panel.js' %}"></script>
-<script>
+<script nonce="{{ csp_nonce }}" src="{% static 'messenger/operator-panel.js' %}"></script>
+<script nonce="{{ csp_nonce }}">
   // Права доступа: может ли текущий пользователь отвечать в чатах
   window.MESSENGER_CAN_REPLY = {{ can_reply|yesno:"true,false" }};
 
@@ -853,13 +852,32 @@
     if (window.MessengerPanel && window.MessengerPanel.init) {
       window.MessengerPanel.init();
     }
-    
+
+    // Event delegation для карточек диалогов (вместо inline onclick)
+    var list = document.getElementById('conversationsList');
+    if (list) {
+      list.addEventListener('click', function(e) {
+        // Удаление
+        var delBtn = e.target.closest('[data-delete-conversation-id]');
+        if (delBtn) {
+          e.stopPropagation();
+          window.MessengerPanel.deleteConversation(parseInt(delBtn.dataset.deleteConversationId));
+          return;
+        }
+        // Открытие
+        var card = e.target.closest('.conversation-card');
+        if (card && card.dataset.conversationId) {
+          window.MessengerPanel.openConversation(parseInt(card.dataset.conversationId));
+        }
+      });
+    }
+
     // Обновление статуса оператора
-    const statusForm = document.querySelector('form[action="{% url 'messenger_agent_status' %}"]');
+    var statusForm = document.querySelector('form[action="{% url 'messenger_agent_status' %}"]');
     if (statusForm) {
-      const statusSelect = statusForm.querySelector('select[name="status"]');
+      var statusSelect = statusForm.querySelector('select[name="status"]');
       if (statusSelect) {
-        statusSelect.addEventListener('change', () => { statusForm.submit(); });
+        statusSelect.addEventListener('change', function() { statusForm.submit(); });
       }
     }
   });

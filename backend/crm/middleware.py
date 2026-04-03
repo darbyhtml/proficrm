@@ -27,14 +27,14 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
         if not settings.DEBUG and getattr(settings, 'CSP_HEADER', None):
             nonce = getattr(request, 'csp_nonce', None)
             if nonce:
-                # Nonce заменяет 'unsafe-inline' только в script-src.
-                # В style-src оставляем 'unsafe-inline' — нонс работает только
-                # для <style nonce="...">, но не для атрибутов style="...".
+                # Добавляем nonce в script-src, но сохраняем 'unsafe-inline'
+                # потому что JS-панели используют inline event handlers (onclick=)
+                # которые не поддерживают nonce.
                 parts = settings.CSP_HEADER.split('; ')
                 processed = []
                 for part in parts:
                     if part.startswith('script-src '):
-                        processed.append(part.replace("'unsafe-inline'", f"'nonce-{nonce}'"))
+                        processed.append(f"{part} 'nonce-{nonce}'")
                     else:
                         processed.append(part)
                 csp = '; '.join(processed)
