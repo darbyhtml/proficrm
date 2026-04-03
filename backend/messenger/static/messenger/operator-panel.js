@@ -314,29 +314,46 @@ class MessengerOperatorPanel {
         return;
       }
       
-      // Умное обновление: обновляем карточки и упорядочиваем DOM по ответу API
+      // Умное обновление без мерцания: обновляем карточки in-place,
+      // переставляем порядок DOM, удаляем пропавшие — без innerHTML = ''
       const existingCards = new Map();
       Array.from(listEl.querySelectorAll('.conversation-card')).forEach(card => {
         const id = card.getAttribute('data-conversation-id');
         if (id) existingCards.set(parseInt(id), card);
       });
 
-      const fragment = document.createDocumentFragment();
+      const newIds = new Set();
+      let prevCard = null;
       items.forEach(conversation => {
         const id = conversation.id;
+        newIds.add(id);
         let card = existingCards.get(id);
-        if (!card) {
+        if (card) {
+          // Обновить данные на месте
+          this.updateConversationCardInPlace(card, conversation);
+        } else {
+          // Новая карточка
           const tempDiv = document.createElement('div');
           tempDiv.innerHTML = this.renderConversationCardHtml(conversation);
           card = tempDiv.firstElementChild;
-        } else {
-          this.updateConversationCardInPlace(card, conversation);
         }
-        fragment.appendChild(card);
+        // Переставить в правильную позицию (без удаления/пересоздания)
+        if (prevCard) {
+          if (prevCard.nextElementSibling !== card) {
+            prevCard.after(card);
+          }
+        } else {
+          if (listEl.firstElementChild !== card) {
+            listEl.prepend(card);
+          }
+        }
+        prevCard = card;
       });
 
-      listEl.innerHTML = '';
-      listEl.appendChild(fragment);
+      // Удалить карточки, которых больше нет в ответе API
+      existingCards.forEach((card, id) => {
+        if (!newIds.has(id)) card.remove();
+      });
       
     } catch (e) {
       console.error('refreshConversationList failed:', e);
