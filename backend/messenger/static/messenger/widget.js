@@ -605,7 +605,7 @@
 
           // Сохранить since_id
           if (this.sinceId !== null) {
-            localStorage.setItem(this._storageKey('since_id'), String(this.sinceId));
+            try { localStorage.setItem(this._storageKey('since_id'), String(this.sinceId)); } catch (_) {}
           }
 
           // Добавить сообщения в UI
@@ -630,6 +630,9 @@
     startPolling() {
       if (this.pollTimer || this.pollInterval) {
         return; // Уже запущен
+      }
+      if (this.eventSource) {
+        return; // SSE активен — polling не нужен
       }
       if (!this.sessionToken) {
         return; // Нет сессии
@@ -726,7 +729,7 @@
             this.addMessageToUI(msg);
           }
               if (this.sinceId !== null) {
-                localStorage.setItem(this._storageKey('since_id'), String(this.sinceId));
+                try { localStorage.setItem(this._storageKey('since_id'), String(this.sinceId)); } catch (_) {}
               }
               if (newMessages.length > 0) {
                 this.scheduleMarkOutgoingRead();
@@ -1530,7 +1533,19 @@
       const consentLabel = document.createElement('label');
       consentLabel.htmlFor = 'messenger-widget-prechat-consent';
       consentLabel.className = 'messenger-widget-prechat-consent-label';
-      consentLabel.innerHTML = (this.privacyText || 'Я согласен с обработкой персональных данных.') + (this.privacyUrl ? ' <a href="' + this.privacyUrl + '" target="_blank" rel="noopener" class="messenger-widget-prechat-link">Политика конфиденциальности</a>' : '');
+      // Безопасная вставка privacyText (textContent) + ссылка
+      const privacySpan = document.createElement('span');
+      privacySpan.textContent = this.privacyText || 'Я согласен с обработкой персональных данных.';
+      consentLabel.appendChild(privacySpan);
+      if (this.privacyUrl) {
+        const privacyLink = document.createElement('a');
+        privacyLink.href = this.privacyUrl;
+        privacyLink.target = '_blank';
+        privacyLink.rel = 'noopener';
+        privacyLink.className = 'messenger-widget-prechat-link';
+        privacyLink.textContent = ' Политика конфиденциальности';
+        consentLabel.appendChild(privacyLink);
+      }
       consentWrap.appendChild(this.prechatConsent);
       consentWrap.appendChild(consentLabel);
       prechatForm.appendChild(consentWrap);

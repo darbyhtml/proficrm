@@ -35,6 +35,7 @@ def _get_auto_reply_config(inbox) -> Dict[str, Any]:
 def run_automation_for_incoming_message(message: Message) -> None:
     """
     Простейшая автоматизация: автоответ на первый входящий месседж в диалоге.
+    Защита от race condition: select_for_update на conversation + Redis lock.
     """
     try:
         if message.direction != Message.Direction.IN:
@@ -55,17 +56,31 @@ def run_automation_for_incoming_message(message: Message) -> None:
         if not conversation.assignee_id:
             return
 
-        has_out = conversation.messages.filter(direction=Message.Direction.OUT).exists()
-        if has_out:
-            return
+        # Защита от дублирования автоответов при параллельных входящих:
+        # 1. Redis lock (быстрый путь — отсекает параллельные вызовы)
+        from django.core.cache import cache
+        lock_key = f"messenger:auto_reply_lock:{conversation.id}"
+        if not cache.add(lock_key, "1", timeout=30):
+            return  # Другой процесс уже обрабатывает автоответ
 
-        from .services import record_message
-        record_message(
-            conversation=conversation,
-            direction=Message.Direction.OUT,
-            body=cfg["body"],
-            sender_user=conversation.assignee,
-        )
+        try:
+            # 2. Атомарная проверка: select_for_update + has_out
+            from django.db import transaction
+            with transaction.atomic():
+                conv_locked = Conversation.objects.select_for_update().get(pk=conversation.pk)
+                has_out = conv_locked.messages.filter(direction=Message.Direction.OUT).exists()
+                if has_out:
+                    return
+
+                from .services import record_message
+                record_message(
+                    conversation=conv_locked,
+                    direction=Message.Direction.OUT,
+                    body=cfg["body"],
+                    sender_user=conv_locked.assignee,
+                )
+        finally:
+            cache.delete(lock_key)
 
     except Exception:
         logger.warning(

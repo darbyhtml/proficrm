@@ -100,7 +100,7 @@ def is_messenger_enabled() -> bool:
 # Widget session tokens (для защиты публичного widget API)
 # ---------------------------------------------------------------------------
 
-WIDGET_SESSION_TTL_SECONDS = 60 * 60 * 24  # 24 часа по умолчанию
+WIDGET_SESSION_TTL_SECONDS = 60 * 60 * 4  # 4 часа (сокращено с 24ч для безопасности)
 
 
 @dataclass

@@ -38,12 +38,21 @@ class ConversationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = models.Conversation
-        fields = "__all__"
-        # branch выставляется автоматически из inbox.branch и не редактируется вручную.
-        # inbox/contact/region для v1 считаем неизменяемыми через API (только status/assignee/priority).
+        fields = (
+            "id", "inbox", "contact", "status", "priority",
+            "assignee", "assignee_assigned_at", "assignee_last_read_at",
+            "branch", "region", "created_at",
+            "last_activity_at", "waiting_since", "first_reply_created_at",
+            "snoozed_until", "contact_last_seen_at", "agent_last_seen_at",
+            # annotated / computed
+            "contact_name", "contact_email", "contact_phone",
+            "branch_name", "region_name", "assignee_name",
+            "last_message_body", "unread_count",
+            "label_ids", "label_names",
+        )
         read_only_fields = (
             "created_at", "last_activity_at", "waiting_since",
-            "first_reply_created_at", "contact_last_seen_at", "agent_last_seen_at"
+            "first_reply_created_at", "contact_last_seen_at", "agent_last_seen_at",
         )
 
     def update(self, instance: models.Conversation, validated_data: dict) -> models.Conversation:
