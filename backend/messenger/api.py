@@ -257,7 +257,7 @@ class ConversationViewSet(
         try:
             primary = models.Contact.objects.get(pk=primary_id)
             merge = models.Contact.objects.get(pk=merge_id)
-        except models.Contact.DoesNotExist:
+        except (models.Contact.DoesNotExist, ValueError, TypeError):
             return Response({"detail": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
 
         from django.db import transaction
