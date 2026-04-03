@@ -2614,7 +2614,7 @@ class MessengerOperatorPanel {
 
       try {
         const resp = await fetch('/api/macros/', {
-          headers: { 'Authorization': 'Bearer ' + this.getAccessToken() },
+          credentials: 'same-origin',
         });
         if (!resp.ok) throw new Error(resp.status);
         const macros = await resp.json();
@@ -2658,10 +2658,10 @@ class MessengerOperatorPanel {
     try {
       const resp = await fetch(`/api/macros/${macroId}/execute/`, {
         method: 'POST',
+        credentials: 'same-origin',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + this.getAccessToken(),
-          'X-CSRFToken': this.getCSRFToken(),
+          'X-CSRFToken': this.getCsrfToken(),
         },
         body: JSON.stringify({ conversation_id: conversationId }),
       });
@@ -2696,7 +2696,7 @@ class MessengerOperatorPanel {
     if (!this._mentionUsers) {
       try {
         const resp = await fetch('/api/conversations/agents/', {
-          headers: { 'Authorization': 'Bearer ' + this.getAccessToken() },
+          credentials: 'same-origin',
         });
         if (resp.ok) {
           this._mentionUsers = await resp.json();
