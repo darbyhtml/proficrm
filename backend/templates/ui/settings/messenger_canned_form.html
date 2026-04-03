@@ -1,49 +1,56 @@
 {% extends "ui/base.html" %}
-{% block title %}{% if canned %}Редактирование шаблона{% else %}Создание шаблона{% endif %} — CRM ПРОФИ{% endblock %}
+{% block title %}{% if canned %}Редактирование шаблона{% else %}Новый шаблон{% endif %} — CRM ПРОФИ{% endblock %}
 
 {% block content %}
-  <div class="space-y-4 max-w-3xl">
-    <div>
-      <div class="text-sm text-brand-dark/70"><a class="underline" href="{% url 'settings_dashboard' %}">Настройки</a> / <a class="underline" href="{% url 'settings_messenger_overview' %}">Live-chat</a> / <a class="underline" href="{% url 'settings_messenger_canned_list' %}">Шаблоны</a> /</div>
-      <h1 class="text-2xl font-semibold">{% if canned %}Редактирование шаблона{% else %}Создание шаблона{% endif %}</h1>
+<div class="space-y-6 max-w-3xl mx-auto py-4 px-4">
+  <div class="space-y-2">
+    <div class="text-sm text-brand-dark/70">
+      <a class="underline" href="{% url 'settings_dashboard' %}">Настройки</a> /
+      <a class="underline" href="{% url 'settings_messenger_overview' %}">Live-chat</a> /
+      <a class="underline" href="{% url 'settings_messenger_canned_list' %}">Шаблоны</a>
     </div>
+    <h1 class="text-2xl font-bold text-brand-dark">{% if canned %}Редактирование шаблона{% else %}Новый шаблон{% endif %}</h1>
+    <p class="text-sm text-brand-dark/60">Шаблонные ответы позволяют быстро отвечать на частые вопросы в чате</p>
+  </div>
 
-    <form method="post" class="space-y-4">
-      {% csrf_token %}
+  <form method="post" class="space-y-6">
+    {% csrf_token %}
 
-      <div class="card">
-        <div class="card-pad">
-          <h2 class="text-lg font-semibold mb-4">Шаблонный ответ</h2>
+    <div class="bg-white rounded-2xl border border-brand-soft/60 p-5 space-y-5">
+      <h2 class="font-semibold text-brand-dark">Содержание</h2>
 
-          <div class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Название *</label>
-              <input type="text" name="title" value="{{ canned.title|default:'' }}" class="input" required>
-            </div>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-brand-dark mb-1">Название <span class="text-red-400">*</span></label>
+          <input type="text" name="title" value="{{ canned.title|default:'' }}" class="input w-full" required placeholder="Например: Приветствие клиента">
+        </div>
 
-            <div>
-              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Текст ответа *</label>
-              <textarea name="body" rows="4" class="input" required>{{ canned.body|default:'' }}</textarea>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Филиал</label>
-              <select name="branch" class="select">
-                <option value="">Все филиалы</option>
-                {% for branch in branches %}
-                  <option value="{{ branch.id }}" {% if canned and canned.branch_id == branch.id %}selected{% endif %}>{{ branch.name }}</option>
-                {% endfor %}
-              </select>
-              <div class="text-xs text-brand-dark/60 mt-1">Если выбран филиал, шаблон будет доступен только операторам этого филиала</div>
-            </div>
-          </div>
+        <div>
+          <label class="block text-sm font-medium text-brand-dark mb-1">Текст ответа <span class="text-red-400">*</span></label>
+          <textarea name="body" rows="5" class="input w-full" required placeholder="Здравствуйте! Чем могу помочь?">{{ canned.body|default:'' }}</textarea>
         </div>
       </div>
+    </div>
 
-      <div class="flex items-center gap-3">
-        <button type="submit" class="btn btn-primary">Сохранить</button>
-        <a href="{% url 'settings_messenger_canned_list' %}" class="btn btn-outline">Отмена</a>
+    <div class="bg-white rounded-2xl border border-brand-soft/60 p-5 space-y-4">
+      <h2 class="font-semibold text-brand-dark">Область действия</h2>
+
+      <div>
+        <label class="block text-sm font-medium text-brand-dark mb-1">Филиал</label>
+        <select name="branch" class="select w-full">
+          <option value="">Все филиалы</option>
+          {% for branch in branches %}
+            <option value="{{ branch.id }}" {% if canned and canned.branch_id == branch.id %}selected{% endif %}>{{ branch.name }}</option>
+          {% endfor %}
+        </select>
+        <p class="text-xs text-brand-dark/50 mt-1">Если указан филиал — шаблон будет доступен только операторам этого филиала</p>
       </div>
-    </form>
-  </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button type="submit" class="btn btn-primary">Сохранить</button>
+      <a href="{% url 'settings_messenger_canned_list' %}" class="btn btn-outline">Отмена</a>
+    </div>
+  </form>
+</div>
 {% endblock %}
