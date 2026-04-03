@@ -33,7 +33,10 @@ class MessengerEnabledApiMixin:
         ensure_messenger_enabled_api()
 
 
-class ConversationViewSet(MessengerEnabledApiMixin, viewsets.ReadOnlyModelViewSet):
+class ConversationViewSet(
+    MessengerEnabledApiMixin,
+    viewsets.ModelViewSet,
+):
     """
     API для диалогов (conversations) - по образцу Chatwoot.
     

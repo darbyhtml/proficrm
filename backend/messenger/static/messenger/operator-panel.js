@@ -39,6 +39,36 @@ class MessengerOperatorPanel {
     this.sseReconnectAttempts = 0;
     this.sseReconnectDelayMs = 1000;
     this.maxSseReconnectAttempts = 5;
+    this._sseTimeoutId = null; // Таймер автозакрытия SSE
+    this._activeAbortControllers = new Set(); // Для отмены fetch при смене диалога
+    this._appendLock = false; // Защита от race condition при append
+    this._toastContainer = null; // Контейнер для toast-уведомлений
+  }
+
+  /** Fetch с таймаутом и AbortController */
+  _fetch(url, options = {}, timeoutMs = 30000) {
+    const controller = new AbortController();
+    this._activeAbortControllers.add(controller);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const mergedOptions = {
+      ...options,
+      credentials: 'same-origin',
+      signal: controller.signal,
+      headers: {
+        'Accept': 'application/json',
+        ...(options.headers || {}),
+      },
+    };
+    return fetch(url, mergedOptions).finally(() => {
+      clearTimeout(timeoutId);
+      this._activeAbortControllers.delete(controller);
+    });
+  }
+
+  /** Отменить все активные запросы (при смене диалога) */
+  _abortAllFetches() {
+    this._activeAbortControllers.forEach(c => c.abort());
+    this._activeAbortControllers.clear();
   }
 
   init() {
@@ -250,7 +280,7 @@ class MessengerOperatorPanel {
         `;
       }
 
-      const response = await fetch(`/api/messenger/conversations/?${params.toString()}`, {
+      const response = await fetch(`/api/conversations/?${params.toString()}`, {
         credentials: 'same-origin',
         headers: { 'Accept': 'application/json' },
       });
@@ -537,32 +567,19 @@ class MessengerOperatorPanel {
     }
 
     try {
-      // Загрузить диалог через API
-      const response = await fetch(`/api/messenger/conversations/${conversationId}/`, {
-        credentials: 'same-origin',
-        headers: {
-          'Accept': 'application/json',
-        }
-      });
+      // Отменить предыдущие запросы при быстрой смене диалога
+      this._abortAllFetches();
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
+      // Загрузить диалог и сообщения параллельно
+      const [response, messagesResponse] = await Promise.all([
+        this._fetch(`/api/conversations/${conversationId}/`),
+        this._fetch(`/api/conversations/${conversationId}/messages/?limit=${this.initialMessagesLimit}`),
+      ]);
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!messagesResponse.ok) throw new Error(`HTTP ${messagesResponse.status}`);
 
       const conversation = await response.json();
-      
-      // Загрузить последние сообщения (ленивая история)
-      const messagesResponse = await fetch(`/api/messenger/conversations/${conversationId}/messages/?limit=${this.initialMessagesLimit}`, {
-        credentials: 'same-origin',
-        headers: {
-          'Accept': 'application/json',
-        }
-      });
-
-      if (!messagesResponse.ok) {
-        throw new Error(`HTTP ${messagesResponse.status}`);
-      }
-
       const messages = await messagesResponse.json();
       
       // Рендерить диалог
@@ -613,7 +630,7 @@ class MessengerOperatorPanel {
   }
 
   async markConversationRead(conversationId) {
-    await fetch(`/api/messenger/conversations/${conversationId}/read/`, {
+    await fetch(`/api/conversations/${conversationId}/read/`, {
       method: 'POST',
       credentials: 'same-origin',
       headers: {
@@ -759,9 +776,26 @@ class MessengerOperatorPanel {
     }
     if (fileInput) {
       fileInput.addEventListener('change', function() {
-        const names = Array.from(this.files).map(f => f.name).join(', ');
+        const MAX_SIZE = 5 * 1024 * 1024; // 5 МБ
+        const ALLOWED_TYPES = ['image/png','image/jpeg','image/gif','image/webp','application/pdf'];
+        const rejected = [];
+        const accepted = [];
+        Array.from(this.files).forEach(f => {
+          if (f.size > MAX_SIZE) rejected.push(`${f.name}: > 5 МБ`);
+          else if (ALLOWED_TYPES.length && !ALLOWED_TYPES.some(t => f.type.startsWith(t.split('/')[0])) && !f.name.toLowerCase().endsWith('.pdf')) rejected.push(`${f.name}: неподдерживаемый тип`);
+          else accepted.push(f.name);
+        });
         const namesEl = document.getElementById('messageAttachmentsNames');
-        if (namesEl) namesEl.textContent = names || '';
+        if (namesEl) {
+          if (rejected.length > 0) {
+            namesEl.innerHTML = `<span class="text-red-500">${rejected.join('; ')}</span>` + (accepted.length ? ` • ${accepted.join(', ')}` : '');
+          } else {
+            namesEl.textContent = accepted.join(', ') || '';
+          }
+        }
+        if (rejected.length > 0 && window.MessengerPanel) {
+          window.MessengerPanel.showNotification('Некоторые файлы отклонены: ' + rejected[0], 'error');
+        }
       });
     }
 
@@ -784,6 +818,17 @@ class MessengerOperatorPanel {
       messageBody.addEventListener('input', () => {
         this.updateOperatorInputHeight(messageBody);
         this.sendOperatorTypingPing(conversation.id);
+        // Счётчик символов
+        const charCount = (messageBody.textContent || '').length;
+        const MAX_CHARS = 2000;
+        const hintEl = document.getElementById('composeModeHint');
+        if (hintEl) {
+          if (charCount > MAX_CHARS * 0.9) {
+            hintEl.innerHTML = `<span class="${charCount > MAX_CHARS ? 'text-red-500 font-medium' : 'text-orange-500'}">${charCount}/${MAX_CHARS}</span>`;
+          } else if (charCount > 0) {
+            hintEl.textContent = this.composeMode === 'INTERNAL' ? 'Заметка видна только сотрудникам' : 'Сообщение увидит клиент';
+          }
+        }
       });
       messageBody.addEventListener('paste', (e) => {
         e.preventDefault();
@@ -993,7 +1038,7 @@ class MessengerOperatorPanel {
       const limit = 30;
       const beforeTs = encodeURIComponent(this.earliestMessageTimestamp);
       const beforeId = this.earliestMessageId ? `&before_id=${encodeURIComponent(this.earliestMessageId)}` : '';
-      const url = `/api/messenger/conversations/${conversationId}/messages/?before=${beforeTs}${beforeId}&limit=${limit}`;
+      const url = `/api/conversations/${conversationId}/messages/?before=${beforeTs}${beforeId}&limit=${limit}`;
       const response = await fetch(url, {
         credentials: 'same-origin',
         headers: { 'Accept': 'application/json' },
@@ -1290,7 +1335,7 @@ class MessengerOperatorPanel {
 
   async patchConversation(conversationId, payload, onError) {
     try {
-      const response = await fetch(`/api/messenger/conversations/${conversationId}/`, {
+      const response = await fetch(`/api/conversations/${conversationId}/`, {
         method: 'PATCH',
         credentials: 'same-origin',
         headers: {
@@ -1340,7 +1385,7 @@ class MessengerOperatorPanel {
     }
 
     try {
-      const response = await fetch(`/api/messenger/conversations/${conversationId}/`, {
+      const response = await fetch(`/api/conversations/${conversationId}/`, {
         method: 'DELETE',
         credentials: 'same-origin',
         headers: {
@@ -1403,7 +1448,7 @@ class MessengerOperatorPanel {
       this.refreshConversationList();
     } catch (e) {
       console.error('deleteConversation failed:', e);
-      alert('Ошибка при удалении диалога. Попробуйте обновить страницу.');
+      this.showNotification('Ошибка при удалении диалога', 'error');
     }
   }
 
@@ -1466,7 +1511,17 @@ class MessengerOperatorPanel {
     const fileInput = form.querySelector('[name="attachments"]');
     const files = fileInput ? Array.from(fileInput.files) : [];
     
-    if (!body && files.length === 0) {
+    if (!body && files.length === 0) return;
+
+    // Клиентская валидация
+    if (body.length > 2000) {
+      this.showNotification('Сообщение слишком длинное (макс. 2000 символов)', 'error');
+      return;
+    }
+    const MAX_FILE_SIZE = 5 * 1024 * 1024;
+    const oversized = files.filter(f => f.size > MAX_FILE_SIZE);
+    if (oversized.length > 0) {
+      this.showNotification(`Файл «${oversized[0].name}» больше 5 МБ`, 'error');
       return;
     }
 
@@ -1485,7 +1540,7 @@ class MessengerOperatorPanel {
         formData.append('attachments', file);
       });
 
-      const response = await fetch(`/api/messenger/conversations/${conversationId}/messages/`, {
+      const response = await fetch(`/api/conversations/${conversationId}/messages/`, {
         method: 'POST',
         credentials: 'same-origin',
         headers: {
@@ -1536,23 +1591,50 @@ class MessengerOperatorPanel {
   }
 
   /**
-   * Показать уведомление (toast)
+   * Показать уведомление (toast) — стекируемые, анимированные
    */
   showNotification(message, type = 'info') {
+    // Создать контейнер при первом вызове
+    if (!this._toastContainer) {
+      this._toastContainer = document.createElement('div');
+      this._toastContainer.className = 'fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none';
+      this._toastContainer.style.maxWidth = '360px';
+      document.body.appendChild(this._toastContainer);
+    }
+
+    const icons = {
+      success: '<svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>',
+      error: '<svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>',
+      info: '<svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+    };
+    const colors = {
+      success: 'bg-green-600 text-white',
+      error: 'bg-red-600 text-white',
+      info: 'bg-brand-dark text-white',
+    };
+
     const toast = document.createElement('div');
-    toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm ${
-      type === 'success' ? 'bg-green-500 text-white' :
-      type === 'error' ? 'bg-red-500 text-white' :
-      'bg-blue-500 text-white'
-    }`;
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    
-    setTimeout(() => {
+    toast.className = `pointer-events-auto flex items-center gap-2 px-4 py-3 rounded-xl shadow-xl text-sm font-medium ${colors[type] || colors.info}`;
+    toast.style.cssText = 'opacity:0;transform:translateX(20px);transition:opacity .25s ease,transform .25s ease;';
+    toast.innerHTML = `${icons[type] || icons.info}<span>${this.escapeHtml(message)}</span>`;
+
+    this._toastContainer.appendChild(toast);
+    // Trigger анимация входа
+    requestAnimationFrame(() => { toast.style.opacity = '1'; toast.style.transform = 'translateX(0)'; });
+
+    // Удаление через 4с с анимацией
+    const dismiss = () => {
       toast.style.opacity = '0';
-      toast.style.transition = 'opacity 0.3s';
+      toast.style.transform = 'translateX(20px)';
       setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    };
+    toast.addEventListener('click', dismiss);
+    setTimeout(dismiss, 4000);
+
+    // Ограничить до 4 тостов
+    while (this._toastContainer.children.length > 4) {
+      this._toastContainer.firstChild.remove();
+    }
   }
 
   /**
@@ -1853,7 +1935,7 @@ class MessengerOperatorPanel {
       if (document.hidden) return;
       if (this.currentConversationId !== conversationId) return;
       try {
-        const response = await fetch(`/api/messenger/conversations/${conversationId}/typing/`, {
+        const response = await fetch(`/api/conversations/${conversationId}/typing/`, {
           credentials: 'same-origin',
           headers: { 'Accept': 'application/json' },
         });
@@ -1888,7 +1970,7 @@ class MessengerOperatorPanel {
     if (now - this.lastOperatorTypingSentAt < 2500) return;
     this.lastOperatorTypingSentAt = now;
     try {
-      await fetch(`/api/messenger/conversations/${conversationId}/typing/`, {
+      await fetch(`/api/conversations/${conversationId}/typing/`, {
         method: 'POST',
         credentials: 'same-origin',
         headers: {
@@ -1916,41 +1998,37 @@ class MessengerOperatorPanel {
   }
 
   /**
-   * SSE стрим для real-time обновлений
+   * SSE стрим для real-time обновлений (по образцу Chatwoot).
+   * Корректная очистка ресурсов: EventSource + таймер автозакрытия.
    */
   startSSEStream(conversationId) {
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
+    // Полная очистка предыдущего SSE
+    this._cleanupSSE();
 
     if (this.currentConversationId !== conversationId) return;
     if (document.hidden) return;
 
     try {
-      const es = new EventSource(`/api/messenger/conversations/${conversationId}/stream/`);
+      const es = new EventSource(`/api/conversations/${conversationId}/stream/`);
       this.eventSource = es;
-      this.sseReconnectAttempts = 0;
 
       es.addEventListener('ready', () => {
-        // Handshake успешен
         this.sseReconnectAttempts = 0;
+        this.sseReconnectDelayMs = 1000;
       });
 
       es.addEventListener('message.created', (e) => {
         try {
           const message = JSON.parse(e.data || '{}');
           if (message && message.id && !this.lastMessageIds.has(message.id)) {
-            this.appendNewMessages([message]);
+            this._safeAppendMessages([message]);
             this.refreshConversationList();
-            
-            // Уведомление если не в фокусе
             if (document.hidden && this.notificationsEnabled) {
               this.showNotification(`Новое сообщение от ${message.sender_contact_name || 'контакта'}`);
             }
           }
         } catch (err) {
-          console.error('SSE message.created parse error:', err);
+          console.warn('SSE message.created parse error:', err);
         }
       });
 
@@ -1958,66 +2036,77 @@ class MessengerOperatorPanel {
         try {
           const data = JSON.parse(e.data || '{}');
           if (data && data.id === conversationId) {
-            // Обновить информацию о диалоге
             this.refreshConversationList();
-            // Обновить правую панель если открыта
             if (this.currentConversationId === conversationId) {
-              fetch(`/api/messenger/conversations/${conversationId}/`)
-                .then(r => r.json())
-                .then(conv => this.renderConversationInfo(conv))
+              this._fetch(`/api/conversations/${conversationId}/`)
+                .then(r => r.ok ? r.json() : null)
+                .then(conv => conv && this.renderConversationInfo(conv))
                 .catch(() => {});
             }
           }
         } catch (err) {
-          console.error('SSE conversation.updated parse error:', err);
+          console.warn('SSE conversation.updated parse error:', err);
         }
       });
 
-      es.addEventListener('conversation.typing_started', () => {
-        this.setContactTypingIndicator(true);
-      });
-
-      es.addEventListener('conversation.typing_stopped', () => {
-        this.setContactTypingIndicator(false);
-      });
+      es.addEventListener('conversation.typing_started', () => this.setContactTypingIndicator(true));
+      es.addEventListener('conversation.typing_stopped', () => this.setContactTypingIndicator(false));
 
       es.onerror = () => {
-        es.close();
-        this.eventSource = null;
-        
-        // Переподключение с экспоненциальной задержкой
-        if (this.sseReconnectAttempts < this.maxSseReconnectAttempts && 
-            this.currentConversationId === conversationId && 
+        this._cleanupSSE();
+        // Экспоненциальный backoff
+        if (this.sseReconnectAttempts < this.maxSseReconnectAttempts &&
+            this.currentConversationId === conversationId &&
             !document.hidden) {
           this.sseReconnectAttempts++;
-          this.sseReconnectDelayMs = Math.min(this.sseReconnectDelayMs * 2, 10000);
+          const delay = Math.min(this.sseReconnectDelayMs * Math.pow(2, this.sseReconnectAttempts - 1), 15000);
           setTimeout(() => {
-            if (this.currentConversationId === conversationId) {
+            if (this.currentConversationId === conversationId && !document.hidden) {
               this.startSSEStream(conversationId);
             }
-          }, this.sseReconnectDelayMs);
+          }, delay);
         } else {
-          // Fallback на polling после неудачных попыток
           this.startPollingFallback(conversationId);
         }
       };
 
-      // Закрыть соединение через 25 секунд (как в Chatwoot, сервер закрывает через 30)
-      setTimeout(() => {
+      // Автозакрытие через 25с (сервер через 30с) — чистый reconnect цикл
+      this._sseTimeoutId = setTimeout(() => {
         if (this.eventSource === es && this.currentConversationId === conversationId) {
-          es.close();
-          this.eventSource = null;
-          // Переподключиться
-          if (!document.hidden) {
-            this.startSSEStream(conversationId);
-          }
+          this._cleanupSSE();
+          if (!document.hidden) this.startSSEStream(conversationId);
         }
       }, 25000);
 
     } catch (err) {
       console.error('SSE start error:', err);
-      // Fallback на polling
       this.startPollingFallback(conversationId);
+    }
+  }
+
+  /** Безопасная очистка SSE — EventSource + таймер */
+  _cleanupSSE() {
+    if (this._sseTimeoutId) {
+      clearTimeout(this._sseTimeoutId);
+      this._sseTimeoutId = null;
+    }
+    if (this.eventSource) {
+      try { this.eventSource.close(); } catch (_) {}
+      this.eventSource = null;
+    }
+  }
+
+  /** Append с защитой от race condition (SSE + polling одновременно) */
+  _safeAppendMessages(messages) {
+    if (this._appendLock) return;
+    this._appendLock = true;
+    try {
+      const newMessages = messages.filter(m => m && m.id && !this.lastMessageIds.has(m.id));
+      if (newMessages.length > 0) {
+        this.appendNewMessages(newMessages);
+      }
+    } finally {
+      this._appendLock = false;
     }
   }
 
@@ -2030,44 +2119,29 @@ class MessengerOperatorPanel {
         this.stopPolling(conversationId);
         return;
       }
-
       if (document.hidden) return;
-
       try {
-        const url = `/api/messenger/conversations/${conversationId}/messages/` + 
+        const url = `/api/conversations/${conversationId}/messages/` +
                     (this.lastMessageTimestamp ? `?since=${encodeURIComponent(this.lastMessageTimestamp)}` : '');
-        
-        const response = await fetch(url, {
-          credentials: 'same-origin',
-          headers: {
-            'Accept': 'application/json',
-          }
-        });
-
+        const response = await this._fetch(url);
         if (response.ok) {
           const messages = await response.json();
           if (messages.length > 0) {
-            this.appendNewMessages(messages);
+            this._safeAppendMessages(messages);
             this.refreshConversationList();
           }
         }
       } catch (error) {
-        console.error('Polling error:', error);
+        if (error.name !== 'AbortError') console.warn('Polling error:', error);
       }
-    }, 3000); // Каждые 3 секунды
+    }, 3000);
   }
 
   /**
-   * Остановить polling/SSE
+   * Остановить polling/SSE — полная очистка
    */
   stopPolling(conversationId) {
-    // Закрыть SSE
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
-    
-    // Остановить polling fallback
+    this._cleanupSSE();
     if (this.pollingIntervals[conversationId]) {
       clearInterval(this.pollingIntervals[conversationId]);
       delete this.pollingIntervals[conversationId];

@@ -220,7 +220,15 @@
           localStorage.setItem(this._storageKey('messages'), JSON.stringify(messagesToSave));
         }
       } catch (e) {
-        console.error('[MessengerWidget] Error saving to storage:', e);
+        // Обработка QuotaExceededError — очистить старые данные и повторить
+        if (e && (e.name === 'QuotaExceededError' || e.code === 22)) {
+          try {
+            localStorage.removeItem(this._storageKey('messages'));
+            console.warn('[MessengerWidget] localStorage quota exceeded, cleared messages cache');
+          } catch (_) {}
+        } else {
+          console.error('[MessengerWidget] Error saving to storage:', e);
+        }
       }
     }
 

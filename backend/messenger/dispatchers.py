@@ -55,24 +55,24 @@ class EventDispatcher:
         self._async_listeners: Dict[str, List[Callable]] = {}
     
     def dispatch(
-        self, 
-        event_name: str, 
-        timestamp: datetime, 
-        data: Dict[str, Any], 
-        async: bool = False
+        self,
+        event_name: str,
+        timestamp: datetime,
+        data: Dict[str, Any],
+        run_async: bool = False,
     ) -> None:
         """
         Отправить событие всем подписанным слушателям (по образцу Chatwoot).
-        
+
         Args:
             event_name: Имя события (из Events)
             timestamp: Время события
             data: Данные события (словарь с объектами/данными)
-            async: Асинхронная обработка (через Celery, если будет)
-        
+            run_async: Асинхронная обработка (через Celery, если будет)
+
         Note:
             Синхронные слушатели вызываются всегда.
-            Асинхронные слушатели вызываются только если async=True.
+            Асинхронные слушатели вызываются только если run_async=True.
             Ошибки в слушателях логируются, но не прерывают выполнение.
         """
         # Синхронные слушатели всегда вызываются
@@ -86,9 +86,9 @@ class EventDispatcher:
                     exc_info=True,
                     extra={"event": event_name, "data": data}
                 )
-        
-        # Асинхронные слушатели (если async=True)
-        if async:
+
+        # Асинхронные слушатели (если run_async=True)
+        if run_async:
             async_listeners = self._async_listeners.get(event_name, [])
             for listener in async_listeners:
                 try:
@@ -102,24 +102,15 @@ class EventDispatcher:
                     )
     
     def subscribe(
-        self, 
-        event_name: str, 
-        listener: Callable[[str, datetime, Dict[str, Any]], None], 
-        async: bool = False
+        self,
+        event_name: str,
+        listener: Callable[[str, datetime, Dict[str, Any]], None],
+        run_async: bool = False,
     ) -> None:
         """
         Подписаться на событие (по образцу Chatwoot).
-        
-        Args:
-            event_name: Имя события (из Events)
-            listener: Функция-обработчик с сигнатурой (event_name, timestamp, data) -> None
-            async: Асинхронная обработка (через Celery, если будет)
-        
-        Note:
-            Один и тот же listener можно подписать на несколько событий.
-            Порядок вызова слушателей не гарантируется.
         """
-        if async:
+        if run_async:
             if event_name not in self._async_listeners:
                 self._async_listeners[event_name] = []
             self._async_listeners[event_name].append(listener)
@@ -127,17 +118,10 @@ class EventDispatcher:
             if event_name not in self._sync_listeners:
                 self._sync_listeners[event_name] = []
             self._sync_listeners[event_name].append(listener)
-    
-    def unsubscribe(self, event_name: str, listener: Callable, async: bool = False):
-        """
-        Отписаться от события.
-        
-        Args:
-            event_name: Имя события
-            listener: Функция-обработчик для удаления
-            async: Асинхронный слушатель
-        """
-        if async:
+
+    def unsubscribe(self, event_name: str, listener: Callable, run_async: bool = False):
+        """Отписаться от события."""
+        if run_async:
             if event_name in self._async_listeners and listener in self._async_listeners[event_name]:
                 self._async_listeners[event_name].remove(listener)
         else:

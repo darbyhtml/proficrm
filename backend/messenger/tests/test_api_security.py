@@ -144,7 +144,7 @@ class MessengerAPISecurityTests(TestCase):
         client = APIClient()
         client.force_authenticate(user=self.operator_a)
 
-        response = client.get("/api/messenger/conversations/")
+        response = client.get("/api/conversations/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         conversation_ids = [conv["id"] for conv in response.data["results"]]
@@ -156,7 +156,7 @@ class MessengerAPISecurityTests(TestCase):
         client = APIClient()
         client.force_authenticate(user=self.admin)
 
-        response = client.get("/api/messenger/conversations/")
+        response = client.get("/api/conversations/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         data = _get_response_data(response)
@@ -169,7 +169,7 @@ class MessengerAPISecurityTests(TestCase):
         client = APIClient()
         client.force_authenticate(user=self.operator_self)
 
-        response = client.get("/api/messenger/conversations/")
+        response = client.get("/api/conversations/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         data = _get_response_data(response)
@@ -181,7 +181,7 @@ class MessengerAPISecurityTests(TestCase):
         self.conversation_a.assignee = self.operator_self
         self.conversation_a.save()
 
-        response = client.get("/api/messenger/conversations/")
+        response = client.get("/api/conversations/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
         data = _get_response_data(response)
@@ -213,7 +213,7 @@ class MessengerAPISecurityTests(TestCase):
         client.force_authenticate(user=self.operator_a)
 
         response = client.patch(
-            f"/api/messenger/conversations/{self.conversation_a.id}/",
+            f"/api/conversations/{self.conversation_a.id}/",
             {"inbox": self.inbox_b.id},
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -225,7 +225,7 @@ class MessengerAPISecurityTests(TestCase):
         client.force_authenticate(user=self.operator_a)
 
         response = client.patch(
-            f"/api/messenger/conversations/{self.conversation_a.id}/",
+            f"/api/conversations/{self.conversation_a.id}/",
             {"branch": self.branch_b.id},
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -237,7 +237,7 @@ class MessengerAPISecurityTests(TestCase):
         client.force_authenticate(user=self.operator_a)
 
         response = client.patch(
-            f"/api/messenger/conversations/{self.conversation_a.id}/",
+            f"/api/conversations/{self.conversation_a.id}/",
             {"contact": self.contact_b.id},
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -249,7 +249,7 @@ class MessengerAPISecurityTests(TestCase):
         client.force_authenticate(user=self.operator_a)
 
         response = client.patch(
-            f"/api/messenger/conversations/{self.conversation_a.id}/",
+            f"/api/conversations/{self.conversation_a.id}/",
             {
                 "status": Conversation.Status.PENDING,
                 "priority": Conversation.Priority.HIGH,
@@ -271,7 +271,7 @@ class MessengerAPISecurityTests(TestCase):
         client.force_authenticate(user=self.operator_a)
 
         response = client.post(
-            f"/api/messenger/conversations/{self.conversation_a.id}/messages/",
+            f"/api/conversations/{self.conversation_a.id}/messages/",
             {
                 "direction": Message.Direction.IN,
                 "body": "Test inbound message",
@@ -287,7 +287,7 @@ class MessengerAPISecurityTests(TestCase):
         client.force_authenticate(user=self.operator_a)
 
         response = client.post(
-            f"/api/messenger/conversations/{self.conversation_a.id}/messages/",
+            f"/api/conversations/{self.conversation_a.id}/messages/",
             {
                 "direction": Message.Direction.OUT,
                 "body": "Test outbound message",
@@ -306,7 +306,7 @@ class MessengerAPISecurityTests(TestCase):
 
         # Пытаемся передать другого пользователя
         response = client.post(
-            f"/api/messenger/conversations/{self.conversation_a.id}/messages/",
+            f"/api/conversations/{self.conversation_a.id}/messages/",
             {
                 "direction": Message.Direction.OUT,
                 "body": "Test message",
@@ -325,7 +325,7 @@ class MessengerAPISecurityTests(TestCase):
         client.force_authenticate(user=self.operator_a)
 
         response = client.post(
-            f"/api/messenger/conversations/{self.conversation_a.id}/messages/",
+            f"/api/conversations/{self.conversation_a.id}/messages/",
             {
                 "direction": Message.Direction.INTERNAL,
                 "body": "Internal note",
@@ -356,7 +356,7 @@ class MessengerAPISecurityTests(TestCase):
         client = APIClient()
         client.force_authenticate(user=self.operator_a)
 
-        response = client.get(f"/api/messenger/conversations/{self.conversation_a.id}/messages/")
+        response = client.get(f"/api/conversations/{self.conversation_a.id}/messages/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 2)
 
@@ -373,9 +373,9 @@ class MessengerAPISecurityTests(TestCase):
 
         # Проверяем разные endpoints
         endpoints = [
-            "/api/messenger/conversations/",
-            f"/api/messenger/conversations/{self.conversation_a.id}/",
-            "/api/messenger/canned-responses/",
+            "/api/conversations/",
+            f"/api/conversations/{self.conversation_a.id}/",
+            "/api/canned-responses/",
         ]
 
         for endpoint in endpoints:
