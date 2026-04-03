@@ -256,7 +256,8 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         + [{"date": d.created_at, "kind": "deal", "obj": d} for d in timeline_deals]
         + [{"date": c.created_at, "kind": "call", "obj": c} for c in timeline_calls]
         + [{"date": m.updated_at, "kind": "mailing", "obj": m} for m in timeline_mailings]
-        + [{"date": r.created_at, "kind": "delreq", "obj": r} for r in timeline_delreqs],
+        + [{"date": r.created_at, "kind": "delreq_created", "obj": r} for r in timeline_delreqs]
+        + [{"date": r.decided_at, "kind": "delreq_decided", "obj": r} for r in timeline_delreqs if r.decided_at],
         key=lambda x: x["date"],
         reverse=True,
     )
