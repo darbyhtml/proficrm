@@ -335,6 +335,7 @@ MESSENGER_OUTSIDE_WORKING_HOURS_MESSAGE = os.getenv(
 )
 # Таймаут эскалации (секунды): если оператор не открыл диалог за это время — переназначение следующему. По умолчанию 4 мин.
 MESSENGER_ESCALATION_TIMEOUT_SECONDS = int(os.getenv("MESSENGER_ESCALATION_TIMEOUT_SECONDS", "240"))
+MESSENGER_AUTO_RESOLVE_HOURS = int(os.getenv("MESSENGER_AUTO_RESOLVE_HOURS", "24"))
 
 # Политика хранения: через сколько дней переводить RESOLVED → CLOSED (архивировать). По умолчанию 90 дней.
 MESSENGER_RETENTION_RESOLVED_TO_CLOSED_DAYS = int(os.getenv("MESSENGER_RETENTION_RESOLVED_TO_CLOSED_DAYS", "90"))
@@ -576,6 +577,16 @@ CELERY_BEAT_SCHEDULE = {
     "purge-old-notifications": {
         "task": "notifications.tasks.purge_old_notifications",
         "schedule": crontab(hour=3, minute=30, day_of_week=0),
+    },
+    # Messenger: auto-resolve неактивных диалогов (каждые 15 минут)
+    "messenger-auto-resolve": {
+        "task": "messenger.tasks.auto_resolve_conversations",
+        "schedule": 900.0,  # 15 минут
+    },
+    # Messenger: эскалация зависших диалогов (каждые 2 минуты)
+    "messenger-escalate-stalled": {
+        "task": "messenger.tasks.escalate_stalled_conversations",
+        "schedule": 120.0,  # 2 минуты
     },
 }
 

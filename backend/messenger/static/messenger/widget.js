@@ -77,6 +77,9 @@
       this.title = 'Чат с поддержкой';
       this.greeting = '';
       this.color = '#01948E';
+      this.position = 'right';
+      this.replyTime = '';
+      this.welcomeTagline = '';
       this.unreadCount = 0;
       this.privacyUrl = '';
       this.privacyText = '';
@@ -301,6 +304,9 @@
         this.title = data.title || 'Чат с поддержкой';
         this.greeting = data.greeting || '';
         this.color = data.color || '#01948E';
+        this.position = data.position || 'right';
+        this.replyTime = data.reply_time || '';
+        this.welcomeTagline = data.welcome_tagline || '';
         this.privacyUrl = data.privacy_url || '';
         this.privacyText = data.privacy_text || '';
         this.prechatRequired = data.prechat_required === true;
@@ -1374,6 +1380,11 @@
       if (this.color) {
         this.button.style.backgroundColor = this.color;
       }
+      // Position: left or right
+      if (this.position === 'left') {
+        this.button.style.right = 'auto';
+        this.button.style.left = '20px';
+      }
       const badge = document.createElement('span');
       badge.className = 'messenger-widget-badge';
       badge.style.display = 'none';
@@ -1390,6 +1401,10 @@
       // Popup окно
       this.popup = document.createElement('div');
       this.popup.className = 'messenger-widget-popup';
+      if (this.position === 'left') {
+        this.popup.style.right = 'auto';
+        this.popup.style.left = '20px';
+      }
 
       // Заголовок
       const header = document.createElement('div');
@@ -1405,11 +1420,22 @@
       titleSpan.textContent = this.title || 'Чат с поддержкой';
       headerText.appendChild(titleSpan);
 
-      if (this.greeting) {
+      if (this.greeting || this.welcomeTagline) {
         const subtitle = document.createElement('div');
         subtitle.className = 'messenger-widget-header-subtitle';
-        subtitle.textContent = this.greeting;
+        subtitle.textContent = this.greeting || this.welcomeTagline;
         headerText.appendChild(subtitle);
+      }
+      if (this.replyTime) {
+        const replyBadge = document.createElement('div');
+        replyBadge.className = 'messenger-widget-header-reply-time';
+        const replyTexts = {
+          'in_a_few_minutes': 'Обычно отвечаем за несколько минут',
+          'in_a_few_hours': 'Обычно отвечаем за несколько часов',
+          'in_a_day': 'Обычно отвечаем в течение дня',
+        };
+        replyBadge.textContent = replyTexts[this.replyTime] || this.replyTime;
+        headerText.appendChild(replyBadge);
       }
       if (this.workingHoursDisplay && this.workingHoursDisplay !== 'Обычно отвечаем в течение нескольких минут') {
         const hoursLine = document.createElement('div');

@@ -88,6 +88,14 @@
   opacity: 0.92;
   line-height: 1.35;
 }
+.messenger-widget-header-reply-time {
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.75;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .messenger-widget-header-hours {
   margin-top: 6px;
   font-size: 12px;

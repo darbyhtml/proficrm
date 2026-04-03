@@ -332,9 +332,12 @@ def widget_bootstrap(request):
             ),
             "offline_mode": offline_mode,
             "offline_message": offline_message,
-            "title": settings_cfg.get("title") or "",
+            "title": settings_cfg.get("title") or "Чат с поддержкой",
             "greeting": settings_cfg.get("greeting") or "",
-            "color": settings_cfg.get("color") or "",
+            "color": settings_cfg.get("color") or "#01948E",
+            "position": settings_cfg.get("position") or "right",
+            "reply_time": settings_cfg.get("reply_time") or "in_a_few_minutes",
+            "welcome_tagline": settings_cfg.get("welcome_tagline") or "Обычно отвечаем в течение нескольких минут",
             # privacy: можно задать в настройках inbox, иначе берём глобальные значения
             "privacy_url": (settings_cfg.get("privacy") or {}).get("url")
             or getattr(settings, "MESSENGER_PRIVACY_URL", ""),
@@ -344,7 +347,13 @@ def widget_bootstrap(request):
                 "MESSENGER_PRIVACY_TEXT",
                 "Отправляя сообщение, вы соглашаетесь с обработкой персональных данных.",
             ),
-            "prechat_required": bool((settings_cfg.get("privacy") or {}).get("text") or getattr(settings, "MESSENGER_PRIVACY_TEXT", "")),
+            "prechat_required": bool((inbox.settings or {}).get("pre_chat_form", {}).get("enabled", True)),
+            "prechat_fields": (inbox.settings or {}).get("pre_chat_form", {}).get("fields", [
+                {"name": "name", "label": "Имя", "type": "text", "required": False, "enabled": True},
+                {"name": "email", "label": "Email", "type": "email", "required": False, "enabled": True},
+                {"name": "phone", "label": "Телефон", "type": "tel", "required": False, "enabled": True},
+            ]),
+            "prechat_message": (inbox.settings or {}).get("pre_chat_form", {}).get("message", "Перед началом диалога"),
         }
         features_cfg = (inbox.settings or {}).get("features") or {}
         response_data["sse_enabled"] = bool(features_cfg.get("sse", True))
