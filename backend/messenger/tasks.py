@@ -13,7 +13,7 @@ from django.utils import timezone
 logger = logging.getLogger("messenger.tasks")
 
 
-@shared_task(bind=True, max_retries=0, soft_time_limit=120)
+@shared_task(bind=True, max_retries=0, soft_time_limit=120, acks_late=True)
 def auto_resolve_conversations(self):
     """
     Автоматически закрывать диалоги без активности (аналог Chatwoot auto_resolve).
@@ -54,7 +54,7 @@ def auto_resolve_conversations(self):
     return {"closed": closed_count, "resolved": resolved_count}
 
 
-@shared_task(bind=True, max_retries=0, soft_time_limit=60)
+@shared_task(bind=True, max_retries=0, soft_time_limit=60, acks_late=True)
 def escalate_stalled_conversations(self):
     """
     Переназначить диалоги, где оператор не открыл чат в течение таймаута.
@@ -77,7 +77,7 @@ def escalate_stalled_conversations(self):
     return {"escalated": escalated}
 
 
-@shared_task(bind=True, max_retries=2, soft_time_limit=30)
+@shared_task(bind=True, max_retries=2, soft_time_limit=30, acks_late=True)
 def dispatch_async_listeners(self, event_name: str, timestamp_iso: str, data: dict):
     """
     Выполнить асинхронные event-слушатели через Celery.
@@ -119,7 +119,7 @@ def dispatch_async_listeners(self, event_name: str, timestamp_iso: str, data: di
     return {"event": event_name, "listeners": executed}
 
 
-@shared_task(bind=True, max_retries=1, soft_time_limit=30)
+@shared_task(bind=True, max_retries=1, soft_time_limit=30, acks_late=True)
 def send_offline_email_notification(self, conversation_id: int, message_id: int):
     """
     Отправить email оператору, если он офлайн и получил новое сообщение.

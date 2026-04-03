@@ -55,22 +55,27 @@ class OperatorConsumer(AsyncWebsocketConsumer):
         self.user_id = self.user.pk
         await self.accept()
 
-        # Подписка на личный канал оператора
-        await self.channel_layer.group_add(
-            f"operator_{self.user_id}",
-            self.channel_name,
-        )
-
-        # Подписка на все inbox, к которым есть доступ
-        inbox_ids = await self._get_accessible_inbox_ids()
-        for inbox_id in inbox_ids:
+        try:
+            # Подписка на личный канал оператора
             await self.channel_layer.group_add(
-                f"inbox_{inbox_id}",
+                f"operator_{self.user_id}",
                 self.channel_name,
             )
-            self.subscribed_inboxes.add(inbox_id)
 
-        await self._set_operator_online()
+            # Подписка на все inbox, к которым есть доступ
+            inbox_ids = await self._get_accessible_inbox_ids()
+            for inbox_id in inbox_ids:
+                await self.channel_layer.group_add(
+                    f"inbox_{inbox_id}",
+                    self.channel_name,
+                )
+                self.subscribed_inboxes.add(inbox_id)
+
+            await self._set_operator_online()
+        except Exception:
+            logger.error("Operator %s connect failed (Redis down?)", self.user_id, exc_info=True)
+            await self.close(code=4500)
+            return
 
         logger.info("Operator %s connected via WebSocket", self.user_id)
 
@@ -108,7 +113,12 @@ class OperatorConsumer(AsyncWebsocketConsumer):
         action = content.get("action")
 
         if action == "subscribe" and "conversation_id" in content:
-            conv_id = int(content["conversation_id"])
+            try:
+                conv_id = int(content["conversation_id"])
+            except (ValueError, TypeError):
+                return
+            if len(self.subscribed_conversations) >= 50:
+                return  # Лимит подписок
             if await self._can_access_conversation(conv_id):
                 await self.channel_layer.group_add(
                     f"conversation_{conv_id}",
@@ -117,7 +127,10 @@ class OperatorConsumer(AsyncWebsocketConsumer):
                 self.subscribed_conversations.add(conv_id)
 
         elif action == "unsubscribe" and "conversation_id" in content:
-            conv_id = int(content["conversation_id"])
+            try:
+                conv_id = int(content["conversation_id"])
+            except (ValueError, TypeError):
+                return
             await self.channel_layer.group_discard(
                 f"conversation_{conv_id}",
                 self.channel_name,
@@ -125,7 +138,10 @@ class OperatorConsumer(AsyncWebsocketConsumer):
             self.subscribed_conversations.discard(conv_id)
 
         elif action == "typing" and "conversation_id" in content:
-            conv_id = int(content["conversation_id"])
+            try:
+                conv_id = int(content["conversation_id"])
+            except (ValueError, TypeError):
+                return
             if conv_id in self.subscribed_conversations:
                 await self.channel_layer.group_send(
                     f"conversation_{conv_id}",
@@ -241,7 +257,12 @@ class WidgetConsumer(AsyncWebsocketConsumer):
 
     async def connect(self):
         self.widget_token = self.scope["url_route"]["kwargs"].get("widget_token", "")
-        inbox_exists = await self._validate_inbox()
+        try:
+            inbox_exists = await self._validate_inbox()
+        except Exception:
+            logger.error("Widget WS connect failed (DB/Redis error)", exc_info=True)
+            await self.close(code=4500)
+            return
         if not inbox_exists:
             await self.close(code=4404)
             return

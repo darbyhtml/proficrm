@@ -697,6 +697,26 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        "messenger": {
+            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "messenger.security": {
+            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "messenger.ws": {
+            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "messenger.tasks": {
+            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
     },
 }
 
