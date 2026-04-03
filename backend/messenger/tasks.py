@@ -77,6 +77,48 @@ def escalate_stalled_conversations(self):
     return {"escalated": escalated}
 
 
+@shared_task(bind=True, max_retries=2, soft_time_limit=30)
+def dispatch_async_listeners(self, event_name: str, timestamp_iso: str, data: dict):
+    """
+    Выполнить асинхронные event-слушатели через Celery.
+
+    Получает сериализованные данные от EventDispatcher и вызывает
+    все зарегистрированные async-слушатели для данного события.
+    """
+    from importlib import import_module
+    from datetime import datetime
+
+    from .dispatchers import get_async_listener_registry
+
+    registry = get_async_listener_registry()
+    listener_paths = registry.get(event_name, [])
+    if not listener_paths:
+        return {"event": event_name, "listeners": 0}
+
+    timestamp = datetime.fromisoformat(timestamp_iso)
+    executed = 0
+
+    for path in listener_paths:
+        try:
+            module_path, func_name = path.rsplit(".", 1)
+            module = import_module(module_path)
+            listener = getattr(module, func_name)
+            listener(event_name, timestamp, data)
+            executed += 1
+        except Exception:
+            logger.error(
+                "Error in async listener %s for event %s",
+                path, event_name,
+                exc_info=True,
+            )
+
+    logger.info(
+        "Async dispatch: event=%s, listeners=%d/%d executed",
+        event_name, executed, len(listener_paths),
+    )
+    return {"event": event_name, "listeners": executed}
+
+
 @shared_task(bind=True, max_retries=1, soft_time_limit=30)
 def send_offline_email_notification(self, conversation_id: int, message_id: int):
     """

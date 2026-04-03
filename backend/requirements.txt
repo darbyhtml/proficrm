@@ -19,6 +19,9 @@ requests==2.32.3
 firebase-admin==7.1.0
 phonenumbers==9.0.21
 gunicorn==23.0.0
+channels==4.2.0
+channels-redis==4.2.1
+daphne==4.1.2
 nh3==0.3.3
 drf-spectacular==0.28.0
 python-dateutil==2.9.0

@@ -73,6 +73,35 @@ services:
     networks:
       - crm_staging_network
 
+  websocket:
+    build:
+      context: .
+      dockerfile: Dockerfile.staging
+    container_name: crm_staging_websocket
+    working_dir: /app/backend
+    volumes:
+      - ./backend:/app/backend
+    env_file:
+      - .env.staging
+    environment:
+      DB_ENGINE: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-crm_staging}
+      POSTGRES_USER: ${POSTGRES_USER:-crm_staging}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: python -m daphne -b 0.0.0.0 -p 8001 crm.asgi:application
+    restart: unless-stopped
+    networks:
+      - crm_staging_network
+
   celery:
     build:
       context: .
@@ -153,6 +182,7 @@ services:
       - media_staging:/usr/share/nginx/html/media:ro
     depends_on:
       - web
+      - websocket
     restart: unless-stopped
     networks:
       - crm_staging_network

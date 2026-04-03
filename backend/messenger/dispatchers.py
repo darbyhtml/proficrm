@@ -3,9 +3,11 @@ Event Dispatcher для messenger (по образцу Chatwoot).
 
 Централизованная система событий для real-time обновлений, webhooks, уведомлений.
 Все события отправляются через единый dispatcher для консистентности.
+
+Асинхронные слушатели выполняются через Celery task для надёжности.
 """
 
-from typing import Dict, Any, Callable, List, Optional
+from typing import Dict, Any, Callable, List
 from django.utils import timezone
 from datetime import datetime
 import logging
@@ -16,7 +18,7 @@ logger = logging.getLogger(__name__)
 # События (по образцу Chatwoot)
 class Events:
     """Константы событий для Event Dispatcher."""
-    
+
     # Conversation события
     CONVERSATION_CREATED = "conversation.created"
     CONVERSATION_UPDATED = "conversation.updated"
@@ -27,33 +29,38 @@ class Events:
     ASSIGNEE_CHANGED = "assignee.changed"
     CONVERSATION_TYPING_STARTED = "conversation.typing_started"
     CONVERSATION_TYPING_STOPPED = "conversation.typing_stopped"
-    
+
     # Message события
     MESSAGE_CREATED = "message.created"
     MESSAGE_UPDATED = "message.updated"
     FIRST_REPLY_CREATED = "first_reply.created"
     REPLY_CREATED = "reply.created"
-    
+
     # Contact события
     CONTACT_CREATED = "contact.created"
     CONTACT_UPDATED = "contact.updated"
-    
+
     # Agent события
     AGENT_STATUS_CHANGED = "agent.status_changed"
+
+
+# Реестр именованных async-слушателей (имя → import path)
+_ASYNC_LISTENER_REGISTRY: Dict[str, List[str]] = {}
 
 
 class EventDispatcher:
     """
     Event Dispatcher (по образцу Chatwoot).
-    
+
     Централизованная система событий для real-time обновлений, webhooks, уведомлений.
-    Поддерживает синхронные и асинхронные слушатели.
+    Синхронные слушатели вызываются в текущем потоке.
+    Асинхронные слушатели — через Celery task (надёжно, с retry и логированием).
     """
-    
+
     def __init__(self):
         self._sync_listeners: Dict[str, List[Callable]] = {}
         self._async_listeners: Dict[str, List[Callable]] = {}
-    
+
     def dispatch(
         self,
         event_name: str,
@@ -62,81 +69,89 @@ class EventDispatcher:
         run_async: bool = False,
     ) -> None:
         """
-        Отправить событие всем подписанным слушателям (по образцу Chatwoot).
+        Отправить событие всем подписанным слушателям.
 
-        Args:
-            event_name: Имя события (из Events)
-            timestamp: Время события
-            data: Данные события (словарь с объектами/данными)
-            run_async: Асинхронная обработка (через Celery, если будет)
-
-        Note:
-            Синхронные слушатели вызываются всегда.
-            Асинхронные слушатели вызываются только если run_async=True.
-            Ошибки в слушателях логируются, но не прерывают выполнение.
+        Синхронные слушатели вызываются всегда.
+        Асинхронные — через Celery task при run_async=True.
+        Ошибки в слушателях логируются, но не прерывают выполнение.
         """
-        # Синхронные слушатели всегда вызываются
-        sync_listeners = self._sync_listeners.get(event_name, [])
-        for listener in sync_listeners:
+        # Синхронные слушатели — всегда
+        for listener in self._sync_listeners.get(event_name, []):
             try:
                 listener(event_name, timestamp, data)
-            except Exception as e:
+            except Exception:
                 logger.error(
-                    f"Error in sync event listener for {event_name}",
+                    "Error in sync event listener for %s",
+                    event_name,
                     exc_info=True,
-                    extra={"event": event_name, "data": data}
+                    extra={"event": event_name},
                 )
 
-        # Асинхронные слушатели (если run_async=True)
+        # Асинхронные слушатели — через Celery
         if run_async:
             async_listeners = self._async_listeners.get(event_name, [])
-            for listener in async_listeners:
-                try:
-                    # TODO: Интеграция с Celery для асинхронной обработки
-                    listener(event_name, timestamp, data)
-                except Exception as e:
-                    logger.error(
-                        f"Error in async event listener for {event_name}",
-                        exc_info=True,
-                        extra={"event": event_name, "data": data}
-                    )
-    
+            if async_listeners:
+                from messenger.tasks import dispatch_async_listeners
+                # Сериализуем данные для Celery (datetime → ISO string)
+                serializable_data = _serialize_for_celery(data)
+                dispatch_async_listeners.delay(
+                    event_name=event_name,
+                    timestamp_iso=timestamp.isoformat(),
+                    data=serializable_data,
+                )
+
     def subscribe(
         self,
         event_name: str,
         listener: Callable[[str, datetime, Dict[str, Any]], None],
         run_async: bool = False,
     ) -> None:
-        """
-        Подписаться на событие (по образцу Chatwoot).
-        """
+        """Подписаться на событие."""
         if run_async:
-            if event_name not in self._async_listeners:
-                self._async_listeners[event_name] = []
-            self._async_listeners[event_name].append(listener)
+            self._async_listeners.setdefault(event_name, []).append(listener)
+            # Регистрируем в реестре для Celery десериализации
+            listener_path = f"{listener.__module__}.{listener.__qualname__}"
+            _ASYNC_LISTENER_REGISTRY.setdefault(event_name, [])
+            if listener_path not in _ASYNC_LISTENER_REGISTRY[event_name]:
+                _ASYNC_LISTENER_REGISTRY[event_name].append(listener_path)
         else:
-            if event_name not in self._sync_listeners:
-                self._sync_listeners[event_name] = []
-            self._sync_listeners[event_name].append(listener)
+            self._sync_listeners.setdefault(event_name, []).append(listener)
 
     def unsubscribe(self, event_name: str, listener: Callable, run_async: bool = False):
         """Отписаться от события."""
-        if run_async:
-            if event_name in self._async_listeners and listener in self._async_listeners[event_name]:
-                self._async_listeners[event_name].remove(listener)
+        target = self._async_listeners if run_async else self._sync_listeners
+        if event_name in target and listener in target[event_name]:
+            target[event_name].remove(listener)
+
+
+def _serialize_for_celery(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Преобразовать данные для передачи через Celery (JSON-сериализуемые)."""
+    result = {}
+    for key, value in data.items():
+        if isinstance(value, datetime):
+            result[key] = value.isoformat()
+        elif hasattr(value, 'pk'):
+            # Django model → передаём pk и тип
+            result[key] = {"_model": f"{value.__class__.__module__}.{value.__class__.__name__}", "_pk": value.pk}
         else:
-            if event_name in self._sync_listeners and listener in self._sync_listeners[event_name]:
-                self._sync_listeners[event_name].remove(listener)
+            try:
+                import json
+                json.dumps(value)
+                result[key] = value
+            except (TypeError, ValueError):
+                result[key] = str(value)
+    return result
 
 
-# Глобальный экземпляр (Singleton по образцу Chatwoot)
+# Глобальный экземпляр (Singleton)
 _dispatcher = EventDispatcher()
 
 
 def get_dispatcher() -> EventDispatcher:
-    """
-    Получить глобальный Event Dispatcher.
-    
-    По образцу Chatwoot: единый экземпляр для всего приложения.
-    """
+    """Получить глобальный Event Dispatcher."""
     return _dispatcher
+
+
+def get_async_listener_registry() -> Dict[str, List[str]]:
+    """Получить реестр async-слушателей (для Celery task)."""
+    return _ASYNC_LISTENER_REGISTRY

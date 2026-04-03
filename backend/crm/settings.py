@@ -154,6 +154,7 @@ INSTALLED_APPS = [
     'django_filters',
     'corsheaders',
     'drf_spectacular',  # OpenAPI 3.0 schema generation
+    'channels',  # Django Channels for WebSocket support
 
     # Local apps
     'accounts',
@@ -474,6 +475,26 @@ else:
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
             "LOCATION": "unique-snowflake",
+        }
+    }
+
+# Django Channels — WebSocket support for messenger real-time
+if REDIS_URL and not DEBUG:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [REDIS_URL],
+                "prefix": "crm:ws",
+                "capacity": 1500,
+                "expiry": 60,
+            },
+        }
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
         }
     }
 
