@@ -92,34 +92,5 @@
     </ul>
   </div>
 
-  {# --- Код виджета --- #}
-  {% if snippet_inbox %}
-  <div class="bg-white rounded-2xl border border-brand-soft/60 p-5 space-y-3">
-    <h2 class="font-semibold text-brand-dark">Код виджета для сайта</h2>
-    <p class="text-sm text-brand-dark/60">
-      Вставьте этот код перед <code class="text-xs bg-brand-soft/30 px-1 py-0.5 rounded">&lt;/body&gt;</code> на вашем сайте.
-      Источник: <span class="font-medium text-brand-dark">{{ snippet_inbox.name }}</span>
-    </p>
-    <pre class="bg-brand-dark text-white/90 p-4 rounded-xl text-xs leading-relaxed overflow-x-auto" id="messenger-embed-code"><code>&lt;script src="{{ base_url }}/static/messenger/widget.js" data-widget-token="{{ snippet_inbox.widget_token }}" data-api-base-url="{{ base_url }}"&gt;&lt;/script&gt;</code></pre>
-    <button type="button" class="btn btn-primary btn-sm" onclick="copyMessengerEmbedCode()">Копировать код</button>
-  </div>
-  {% endif %}
 </div>
-
-<script>
-function copyMessengerEmbedCode() {
-  var code = '<script src="{{ base_url }}/static/messenger/widget.js" data-widget-token="{{ snippet_inbox.widget_token }}" data-api-base-url="{{ base_url }}"><' + '/script>';
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(code).then(function () { alert('Код скопирован'); });
-  } else {
-    var ta = document.createElement('textarea');
-    ta.value = code;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    alert('Код скопирован');
-  }
-}
-</script>
 {% endblock %}
