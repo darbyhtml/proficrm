@@ -1099,6 +1099,14 @@ class MessengerOperatorPanel {
             <div id="messageBody" class="messenger-operator-input messenger-operator-input-contenteditable" contenteditable="true" data-placeholder="Введите сообщение..." role="textbox" aria-multiline="true" style="min-height:40px;max-height:120px;"></div>
             <input type="hidden" name="body" id="messageBodyHidden">
             <button type="button" id="messageEmojiBtn" class="messenger-operator-icon-btn" title="Эмодзи"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></button>
+            <div class="relative">
+              <button type="button" id="macroBtn" class="messenger-operator-icon-btn" title="Макросы">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              </button>
+              <div id="macroDropdown" class="hidden absolute bottom-full right-0 mb-1 w-56 bg-white rounded-lg shadow-lg border border-brand-soft/40 z-50 max-h-60 overflow-y-auto">
+                <div id="macroList" class="py-1 text-sm"></div>
+              </div>
+            </div>
             <button type="submit" id="messageSendBtn" class="messenger-operator-send-btn" title="Отправить (Ctrl+Enter)">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
             </button>
@@ -1154,6 +1162,7 @@ class MessengerOperatorPanel {
     }
 
     this.initOperatorEmojiPicker(conversation.id);
+    this.initMacros(conversation.id);
 
     // Ctrl+Enter для отправки
     const messageBody = document.getElementById('messageBody');
@@ -1172,6 +1181,12 @@ class MessengerOperatorPanel {
       messageBody.addEventListener('input', () => {
         this.updateOperatorInputHeight(messageBody);
         this.sendOperatorTypingPing(conversation.id);
+        // @mention autocomplete для внутренних заметок
+        if (this.composeMode === 'INTERNAL') {
+          this._handleMentionInput(messageBody);
+        } else {
+          this._hideMentionDropdown();
+        }
         // Счётчик символов
         const charCount = (messageBody.textContent || '').length;
         const MAX_CHARS = 2000;
@@ -2576,6 +2591,191 @@ class MessengerOperatorPanel {
   /**
    * Эмодзи-пикер в форме сообщения оператора
    */
+  /**
+   * Макросы — загрузить список и привязать dropdown
+   */
+  initMacros(conversationId) {
+    const macroBtn = document.getElementById('macroBtn');
+    const dropdown = document.getElementById('macroDropdown');
+    const macroList = document.getElementById('macroList');
+    if (!macroBtn || !dropdown || !macroList) return;
+
+    // Toggle dropdown
+    macroBtn.addEventListener('click', async () => {
+      if (!dropdown.classList.contains('hidden')) {
+        dropdown.classList.add('hidden');
+        return;
+      }
+      // Загрузить макросы
+      macroList.innerHTML = '<div class="px-3 py-2 text-brand-dark/50">Загрузка...</div>';
+      dropdown.classList.remove('hidden');
+
+      try {
+        const resp = await fetch('/api/macros/', {
+          headers: { 'Authorization': 'Bearer ' + this.getAccessToken() },
+        });
+        if (!resp.ok) throw new Error(resp.status);
+        const macros = await resp.json();
+        const items = Array.isArray(macros) ? macros : (macros.results || []);
+
+        if (items.length === 0) {
+          macroList.innerHTML = '<div class="px-3 py-2 text-brand-dark/50 text-xs">Нет макросов</div>';
+          return;
+        }
+
+        macroList.innerHTML = '';
+        for (const m of items) {
+          const item = document.createElement('button');
+          item.type = 'button';
+          item.className = 'w-full text-left px-3 py-2 hover:bg-brand-soft/30 flex items-center gap-2 text-brand-dark';
+          item.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-brand-teal shrink-0"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            <span class="truncate">${this.escapeHtml(m.name)}</span>
+            <span class="ml-auto text-[10px] text-brand-dark/40">${m.actions?.length || 0} действий</span>
+          `;
+          item.addEventListener('click', () => {
+            dropdown.classList.add('hidden');
+            this.executeMacro(m.id, conversationId);
+          });
+          macroList.appendChild(item);
+        }
+      } catch (e) {
+        macroList.innerHTML = '<div class="px-3 py-2 text-red-500 text-xs">Ошибка загрузки</div>';
+      }
+    });
+
+    // Закрыть dropdown при клике вне
+    document.addEventListener('click', (e) => {
+      if (!macroBtn.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.add('hidden');
+      }
+    });
+  }
+
+  async executeMacro(macroId, conversationId) {
+    try {
+      const resp = await fetch(`/api/macros/${macroId}/execute/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + this.getAccessToken(),
+          'X-CSRFToken': this.getCSRFToken(),
+        },
+        body: JSON.stringify({ conversation_id: conversationId }),
+      });
+      if (!resp.ok) throw new Error(resp.status);
+      const data = await resp.json();
+      // Обновить диалог после выполнения макроса
+      this.openConversation(conversationId, { force: true });
+    } catch (e) {
+      console.error('[MessengerPanel] Macro execution failed:', e);
+    }
+  }
+
+  /**
+   * @mention autocomplete — обнаружение @query в тексте
+   */
+  _handleMentionInput(inputEl) {
+    const text = inputEl.textContent || '';
+    // Найти последнюю незакрытую @mention (от позиции курсора назад)
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) { this._hideMentionDropdown(); return; }
+    const range = sel.getRangeAt(0);
+    const textBefore = text.substring(0, range.startOffset);
+    const match = textBefore.match(/@(\w*)$/);
+    if (!match) { this._hideMentionDropdown(); return; }
+
+    const query = match[1].toLowerCase();
+    this._showMentionDropdown(inputEl, query);
+  }
+
+  async _showMentionDropdown(inputEl, query) {
+    // Загрузить пользователей если ещё не загружены
+    if (!this._mentionUsers) {
+      try {
+        const resp = await fetch('/api/conversations/agents/', {
+          headers: { 'Authorization': 'Bearer ' + this.getAccessToken() },
+        });
+        if (resp.ok) {
+          this._mentionUsers = await resp.json();
+        } else {
+          this._mentionUsers = [];
+        }
+      } catch (e) {
+        this._mentionUsers = [];
+      }
+    }
+
+    const filtered = query
+      ? this._mentionUsers.filter(u =>
+          u.name.toLowerCase().includes(query) || u.username.toLowerCase().includes(query)
+        )
+      : this._mentionUsers;
+
+    if (filtered.length === 0) { this._hideMentionDropdown(); return; }
+
+    let dropdown = document.getElementById('mentionDropdown');
+    if (!dropdown) {
+      dropdown = document.createElement('div');
+      dropdown.id = 'mentionDropdown';
+      dropdown.className = 'absolute bottom-full left-0 mb-1 w-56 bg-white rounded-lg shadow-lg border border-brand-soft/40 z-50 max-h-48 overflow-y-auto';
+      inputEl.parentElement.style.position = 'relative';
+      inputEl.parentElement.appendChild(dropdown);
+    }
+
+    dropdown.innerHTML = '';
+    dropdown.classList.remove('hidden');
+    for (const user of filtered.slice(0, 8)) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'w-full text-left px-3 py-2 hover:bg-brand-soft/30 flex items-center gap-2 text-sm text-brand-dark';
+      item.innerHTML = `
+        <span class="w-6 h-6 rounded-full bg-brand-teal/20 text-brand-teal flex items-center justify-center text-xs font-bold">${this.escapeHtml((user.name || '?')[0])}</span>
+        <span>${this.escapeHtml(user.name)}</span>
+      `;
+      item.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        this._insertMention(inputEl, user.username || user.name);
+      });
+      dropdown.appendChild(item);
+    }
+  }
+
+  _hideMentionDropdown() {
+    const dropdown = document.getElementById('mentionDropdown');
+    if (dropdown) dropdown.classList.add('hidden');
+  }
+
+  _insertMention(inputEl, username) {
+    // Заменить @query на @username
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+
+    const text = inputEl.textContent || '';
+    const range = sel.getRangeAt(0);
+    const textBefore = text.substring(0, range.startOffset);
+    const atIndex = textBefore.lastIndexOf('@');
+    if (atIndex === -1) return;
+
+    // Перестроить содержимое
+    const before = text.substring(0, atIndex);
+    const after = text.substring(range.startOffset);
+    inputEl.textContent = before + '@' + username + ' ' + after;
+
+    // Установить курсор после вставленного mention
+    const newRange = document.createRange();
+    const textNode = inputEl.firstChild;
+    if (textNode) {
+      const pos = (before + '@' + username + ' ').length;
+      newRange.setStart(textNode, Math.min(pos, textNode.length));
+      newRange.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(newRange);
+    }
+
+    this._hideMentionDropdown();
+  }
+
   initOperatorEmojiPicker(conversationId) {
     const pickerEl = document.getElementById('operatorEmojiPicker');
     const emojiBtn = document.getElementById('messageEmojiBtn');

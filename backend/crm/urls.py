@@ -45,6 +45,7 @@ from phonebridge.api import (
 from messenger.api import (
     ConversationViewSet, CannedResponseViewSet, ConversationLabelViewSet,
     PushSubscriptionViewSet, CampaignViewSet, AutomationRuleViewSet, ReportingViewSet,
+    MacroViewSet,
 )
 from messenger.widget_api import (
     widget_attachment_download,
@@ -92,6 +93,7 @@ router.register(r"push", PushSubscriptionViewSet, basename="push")
 router.register(r"campaigns", CampaignViewSet, basename="campaign")
 router.register(r"automation-rules", AutomationRuleViewSet, basename="automation-rule")
 router.register(r"messenger-reports", ReportingViewSet, basename="messenger-report")
+router.register(r"macros", MacroViewSet, basename="macro")
 
 # Versioned router at /api/v1/ — same viewsets, separate basenames to avoid URL name conflicts.
 # SimpleRouter = no API root browser page (cleaner for versioned endpoint).

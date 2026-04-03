@@ -96,6 +96,7 @@
       this.markReadTimer = null;
       this.campaignTimers = [];
       this.campaignBubble = null;
+      this._operatorReadUpTo = null;
 
       // DOM элементы (будут созданы в render)
       this.button = null;
@@ -574,6 +575,10 @@
         if (data.operator_typing !== undefined) {
           this.setOperatorTypingVisible(data.operator_typing === true);
         }
+        // Обновить чекмарки прочтения оператором
+        if (data.operator_read_up_to != null) {
+          this._updateOperatorReadStatus(data.operator_read_up_to);
+        }
         if (data.rating_requested === true) {
           this.ratingRequested = true;
           this.ratingType = data.rating_type || 'stars';
@@ -697,6 +702,9 @@
             const data = JSON.parse(e.data || '{}');
             if (data.operator_typing !== undefined) {
               this.setOperatorTypingVisible(data.operator_typing === true);
+            }
+            if (data.operator_read_up_to != null) {
+              this._updateOperatorReadStatus(data.operator_read_up_to);
             }
             if (data.rating_requested === true) {
               this.ratingRequested = true;
@@ -1159,6 +1167,7 @@
       metaEl.appendChild(timeEl);
 
       if (message.direction === 'out') {
+        // Сообщения от оператора — delivered/read
         const statusEl = document.createElement('span');
         statusEl.className = 'messenger-widget-message-status';
         if (message.read_at) {
@@ -1167,6 +1176,19 @@
         } else {
           statusEl.textContent = '✓';
           statusEl.title = 'Доставлено';
+        }
+        metaEl.appendChild(statusEl);
+      } else if (message.direction === 'in' && message.id) {
+        // Сообщения от посетителя — sent / read by operator
+        const statusEl = document.createElement('span');
+        statusEl.className = 'messenger-widget-message-status';
+        statusEl.setAttribute('data-msg-status', String(message.id));
+        if (this._operatorReadUpTo && message.id <= this._operatorReadUpTo) {
+          statusEl.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#01948E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/><path d="M16 6L5 17"/></svg>';
+          statusEl.title = 'Прочитано оператором';
+        } else {
+          statusEl.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+          statusEl.title = 'Отправлено';
         }
         metaEl.appendChild(statusEl);
       }
@@ -1883,6 +1905,28 @@
 
       // Если капча нужна — покажем строку
       this.renderCaptchaRow();
+    }
+
+    // ─── Message delivery status ──────────────────────────────────────
+
+    /**
+     * Обновить чекмарки прочтения оператором на IN-сообщениях (от посетителя).
+     * operator_read_up_to = ID последнего прочитанного IN-сообщения.
+     */
+    _updateOperatorReadStatus(readUpTo) {
+      if (!readUpTo || readUpTo === this._operatorReadUpTo) return;
+      this._operatorReadUpTo = readUpTo;
+
+      // Обновить уже отрендеренные чекмарки
+      if (!this.messagesContainer) return;
+      const statusEls = this.messagesContainer.querySelectorAll('[data-msg-status]');
+      for (const el of statusEls) {
+        const msgId = parseInt(el.getAttribute('data-msg-status'), 10);
+        if (msgId && msgId <= readUpTo) {
+          el.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#01948E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/><path d="M16 6L5 17"/></svg>';
+          el.title = 'Прочитано оператором';
+        }
+      }
     }
 
     // ─── Proactive Campaigns (Chatwoot-style) ───────────────────────────

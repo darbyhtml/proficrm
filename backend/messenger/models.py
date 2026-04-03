@@ -1092,3 +1092,38 @@ class ReportingEvent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name}: {self.value:.1f}s"
+
+
+class Macro(models.Model):
+    """
+    Макросы оператора (аналог Chatwoot macros).
+    Один клик = несколько действий (назначить + метка + ответ + статус).
+    Могут быть личные (user) или общие (user=null).
+    """
+    name = models.CharField("Название", max_length=255)
+    actions = models.JSONField(
+        "Действия", default=list,
+        help_text='[{"action_name": "assign_agent", "action_params": [42]}, {"action_name": "send_message", "action_params": ["Спасибо!"]}]',
+    )
+    visibility = models.CharField(
+        "Видимость", max_length=16,
+        choices=[("personal", "Личный"), ("global", "Общий")],
+        default="personal",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="messenger_macros",
+        null=True, blank=True,
+        help_text="Владелец макроса (null = общий)",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Макрос"
+        verbose_name_plural = "Макросы"
+        indexes = [
+            models.Index(fields=["user", "visibility"]),
+        ]
+
+    def __str__(self) -> str:
+        return self.name

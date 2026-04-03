@@ -207,6 +207,9 @@ class ConversationViewSet(
 
         Только менеджеры могут отмечать прочитанным — просмотр другими ролями
         не считается прочтением.
+
+        Помимо assignee_last_read_at на диалоге, ставит read_at на все
+        непрочитанные IN-сообщения — чтобы виджет мог показать чекмарки.
         """
         # Только менеджеры могут помечать прочитанным
         if request.user.role != User.Role.MANAGER:
@@ -218,10 +221,78 @@ class ConversationViewSet(
 
         # Обновляем last_seen оператора с троттлингом (по образцу Chatwoot)
         now = services.touch_assignee_last_seen(conversation, request.user)
+
+        # Пометить все IN-сообщения как прочитанные оператором
+        conversation.messages.filter(
+            direction=models.Message.Direction.IN,
+            read_at__isnull=True,
+        ).update(read_at=now)
+
         return Response(
             {"status": "ok", "assignee_last_read_at": now.isoformat()},
             status=status.HTTP_200_OK,
         )
+
+    @action(detail=False, methods=["post"], url_path="merge-contacts")
+    def merge_contacts(self, request):
+        """
+        POST /api/conversations/merge-contacts/
+        Body: {"primary_contact_id": "uuid", "merge_contact_id": "uuid"}
+
+        Объединяет два контакта: переносит все диалоги merge_contact → primary_contact,
+        обновляет пустые поля primary из merge, удаляет merge_contact.
+        Аналог Chatwoot contact merge.
+        """
+        primary_id = request.data.get("primary_contact_id")
+        merge_id = request.data.get("merge_contact_id")
+        if not primary_id or not merge_id:
+            return Response({"detail": "primary_contact_id and merge_contact_id required"}, status=status.HTTP_400_BAD_REQUEST)
+        if str(primary_id) == str(merge_id):
+            return Response({"detail": "Cannot merge contact with itself"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            primary = models.Contact.objects.get(pk=primary_id)
+            merge = models.Contact.objects.get(pk=merge_id)
+        except models.Contact.DoesNotExist:
+            return Response({"detail": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        from django.db import transaction
+        with transaction.atomic():
+            # Перенести диалоги
+            moved = models.Conversation.objects.filter(contact=merge).update(contact=primary)
+            # Перенести ContactInbox записи
+            models.ContactInbox.objects.filter(contact=merge).update(contact=primary)
+            # Заполнить пустые поля primary из merge
+            for field in ("name", "email", "phone"):
+                if not getattr(primary, field) and getattr(merge, field):
+                    setattr(primary, field, getattr(merge, field))
+            if not primary.region_detected and merge.region_detected:
+                primary.region_detected = merge.region_detected
+            primary.save()
+            # Удалить merge-контакт
+            merge.delete()
+
+        return Response({
+            "status": "ok",
+            "primary_contact_id": str(primary.id),
+            "conversations_moved": moved,
+        })
+
+    @action(detail=False, methods=["get"])
+    def agents(self, request):
+        """GET /api/conversations/agents/ — список менеджеров для @mention и назначения."""
+        users = User.objects.filter(
+            is_active=True, role=User.Role.MANAGER,
+        ).values("id", "username", "first_name", "last_name").order_by("first_name", "last_name")
+        result = [
+            {
+                "id": u["id"],
+                "username": u["username"],
+                "name": f'{u["first_name"]} {u["last_name"]}'.strip() or u["username"],
+            }
+            for u in users
+        ]
+        return Response(result)
 
     def destroy(self, request, pk=None):
         """
@@ -513,10 +584,45 @@ class ConversationViewSet(
             for f in files:
                 models.MessageAttachment.objects.create(message=message, file=f)
 
+            # @mentions в внутренних заметках — уведомить упомянутых
+            if direction == models.Message.Direction.INTERNAL and body:
+                self._process_mentions(body, conversation, request.user)
+
             # Перезагрузить сообщение из БД, чтобы получить вложения в сериализаторе
             message.refresh_from_db()
-            
+
             return Response(serializers.MessageSerializer(message).data, status=status.HTTP_201_CREATED)
+
+    @staticmethod
+    def _process_mentions(body, conversation, author):
+        """Найти @username в тексте и отправить уведомления упомянутым пользователям."""
+        import re
+        mentions = set(re.findall(r'@(\w+)', body))
+        if not mentions:
+            return
+        mentioned_users = User.objects.filter(username__in=mentions, is_active=True).exclude(pk=author.pk)
+        for user in mentioned_users:
+            try:
+                from notifications.service import notify
+                notify(
+                    user=user,
+                    title=f"{author.get_full_name() or author.username} упомянул вас",
+                    body=body[:200],
+                    url=f"/messenger/?conversation={conversation.id}",
+                    kind="info",
+                    dedupe_seconds=60,
+                )
+                # Также отправить push-уведомление
+                from .push import send_push_to_user
+                send_push_to_user(
+                    user=user,
+                    title=f"Упоминание от {author.get_full_name() or author.username}",
+                    body=body[:100],
+                    url=f"/messenger/?conversation={conversation.id}",
+                    tag=f"mention-{conversation.id}",
+                )
+            except Exception:
+                pass
 
     @action(detail=True, methods=["get"], url_path="stream", renderer_classes=[EventStreamRenderer])
     def stream(self, request, pk=None):
@@ -833,3 +939,51 @@ class ReportingViewSet(MessengerEnabledApiMixin, viewsets.ViewSet):
             "avg_csat_score": round(avg_csat, 2) if avg_csat else None,
             "csat_responses_count": csat_count,
         })
+
+
+class MacroSerializer(drf_serializers.ModelSerializer):
+    class Meta:
+        model = models.Macro
+        fields = ("id", "name", "actions", "visibility", "user", "created_at")
+        read_only_fields = ("user", "created_at")
+
+
+class MacroViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
+    """
+    CRUD для макросов (аналог Chatwoot /api/v1/accounts/:id/macros).
+    Личные + общие макросы. Есть action execute для применения к диалогу.
+    """
+    serializer_class = MacroSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        from django.db.models import Q
+        user = self.request.user
+        return models.Macro.objects.filter(
+            Q(user=user) | Q(visibility="global")
+        ).order_by("name")
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=["post"])
+    def execute(self, request, pk=None):
+        """
+        POST /api/macros/{id}/execute/
+        Body: {"conversation_id": 123}
+        Выполняет все действия макроса на указанном диалоге.
+        """
+        macro = self.get_object()
+        conversation_id = request.data.get("conversation_id")
+        if not conversation_id:
+            return Response({"detail": "conversation_id required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            conversation = models.Conversation.objects.get(pk=conversation_id)
+        except models.Conversation.DoesNotExist:
+            return Response({"detail": "Conversation not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        from .automation import _execute_actions
+        _execute_actions(macro.actions, conversation, message=None)
+
+        return Response({"status": "ok", "actions_count": len(macro.actions)})

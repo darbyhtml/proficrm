@@ -75,3 +75,81 @@ def escalate_stalled_conversations(self):
         logger.info("Escalated %d conversations", escalated)
 
     return {"escalated": escalated}
+
+
+@shared_task(bind=True, max_retries=1, soft_time_limit=30)
+def send_offline_email_notification(self, conversation_id: int, message_id: int):
+    """
+    Отправить email оператору, если он офлайн и получил новое сообщение.
+
+    Throttle: максимум 1 email на диалог каждые 15 минут (через Redis cache).
+    """
+    from django.core.cache import cache
+    from .models import Conversation, Message, AgentProfile
+
+    try:
+        conversation = Conversation.objects.select_related("assignee", "contact", "inbox").get(pk=conversation_id)
+        message = Message.objects.get(pk=message_id)
+    except (Conversation.DoesNotExist, Message.DoesNotExist):
+        return {"status": "not_found"}
+
+    assignee = conversation.assignee
+    if not assignee or not assignee.email:
+        return {"status": "no_assignee_or_email"}
+
+    # Проверяем офлайн/away статус оператора
+    try:
+        profile = assignee.agent_profile
+        if profile.status not in (AgentProfile.Status.OFFLINE, AgentProfile.Status.AWAY):
+            return {"status": "agent_online"}
+    except AgentProfile.DoesNotExist:
+        pass  # Нет профиля = считаем офлайн
+
+    # Throttle: 1 email на диалог каждые 15 минут
+    cache_key = f"messenger:email_notify:{conversation_id}"
+    if cache.get(cache_key):
+        return {"status": "throttled"}
+    cache.set(cache_key, "1", timeout=900)
+
+    # Собираем данные для письма
+    contact_name = conversation.contact.name if conversation.contact else "Посетитель"
+    inbox_name = conversation.inbox.name if conversation.inbox else "Мессенджер"
+    msg_preview = (message.body or "")[:200]
+
+    subject = f"Новое сообщение от {contact_name} — {inbox_name}"
+    body = (
+        f"Здравствуйте, {assignee.get_full_name() or assignee.username}!\n\n"
+        f"Вам пришло новое сообщение в мессенджере:\n\n"
+        f"От: {contact_name}\n"
+        f"Сообщение: {msg_preview}\n\n"
+        f"Откройте CRM, чтобы ответить.\n"
+    )
+
+    try:
+        from mailer.models import GlobalMailAccount
+        account = GlobalMailAccount.load()
+        if not account.is_enabled or not account.smtp_username:
+            logger.info("Email notification skipped: GlobalMailAccount disabled")
+            return {"status": "smtp_disabled"}
+
+        from mailer.smtp_sender import build_message, send_via_smtp
+        msg = build_message(
+            account=account,
+            to_email=assignee.email,
+            subject=subject,
+            body_text=body,
+            body_html="",
+        )
+        send_via_smtp(account=account, msg=msg)
+        logger.info(
+            "Sent offline email notification to %s for conversation %d",
+            assignee.email, conversation_id,
+        )
+        return {"status": "sent"}
+    except Exception:
+        logger.warning(
+            "Failed to send offline email notification",
+            exc_info=True,
+            extra={"conversation_id": conversation_id, "assignee_id": assignee.id},
+        )
+        raise  # Позволяет retry

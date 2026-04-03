@@ -776,6 +776,13 @@ def widget_send(request):
         except Exception:
             widget_logger.warning("Push notification failed", exc_info=True)
 
+        # Email-уведомление офлайн-оператору (async через Celery)
+        try:
+            from .tasks import send_offline_email_notification
+            send_offline_email_notification.delay(conversation.id, message.id)
+        except Exception:
+            widget_logger.warning("Email notification task dispatch failed", exc_info=True)
+
         # Автоматизация: автоответ на первый входящий месседж (если включено в Inbox)
         try:
             run_automation_for_incoming_message(message)
@@ -997,9 +1004,19 @@ def widget_poll(request):
             rating_type = rating_cfg.get("type", "stars")
             rating_max_score = int(rating_cfg.get("max_score", 5)) if rating_type == "stars" else 10
 
+        # Последний IN-месседж, прочитанный оператором (для чекмарков в виджете)
+        operator_read_up_to = (
+            conversation.messages
+            .filter(direction=models.Message.Direction.IN, read_at__isnull=False)
+            .order_by("-id")
+            .values_list("id", flat=True)
+            .first()
+        )
+
         return Response({
             "messages": result,
             "operator_typing": typing_status["operator_typing"],
+            "operator_read_up_to": operator_read_up_to,
             "rating_requested": rating_requested,
             "rating_type": rating_type,
             "rating_max_score": rating_max_score,
@@ -1124,6 +1141,8 @@ def widget_stream(request):
         last_keepalive = 0.0
         last_typing = None
         last_rating = None
+        last_read_up_to = None
+        last_read_check = 0.0
 
         # Первое событие (handshake) — чтобы браузер сразу «увидел» поток
         yield "event: ready\ndata: {}\n\n"
@@ -1167,6 +1186,21 @@ def widget_stream(request):
             rating_requested, rating_type, rating_max_score = _rating_payload()
             rating_tuple = (rating_requested, rating_type, rating_max_score)
 
+            # Последний IN-месседж, прочитанный оператором (проверяем раз в 5 сек)
+            current_read_up_to = last_read_up_to
+            if now - last_read_check >= 5:
+                last_read_check = now
+                current_read_up_to = (
+                    conversation.messages
+                    .filter(direction=models.Message.Direction.IN, read_at__isnull=False)
+                    .order_by("-id")
+                    .values_list("id", flat=True)
+                    .first()
+                )
+                if current_read_up_to != last_read_up_to:
+                    last_read_up_to = current_read_up_to
+                    changed = True
+
             changed = False
             if messages_payload:
                 changed = True
@@ -1182,8 +1216,9 @@ def widget_stream(request):
                     last_id = max_id
 
                 data = {
-                    "messages": messages_payload if messages_payload else [],  # Всегда отправляем массив, даже пустой
+                    "messages": messages_payload if messages_payload else [],
                     "operator_typing": operator_typing,
+                    "operator_read_up_to": current_read_up_to,
                     "rating_requested": rating_requested,
                     "rating_type": rating_type,
                     "rating_max_score": rating_max_score,
