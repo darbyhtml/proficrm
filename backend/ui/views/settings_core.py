@@ -34,6 +34,7 @@ from ui.views._base import (
     timedelta,
     timezone,
 )
+from django.conf import settings
 import logging
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,9 @@ def settings_dashboard(request: HttpRequest) -> HttpResponse:
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
-    return render(request, "ui/settings/dashboard.html", {})
+    return render(request, "ui/settings/dashboard.html", {
+        "MESSENGER_ENABLED": getattr(settings, "MESSENGER_ENABLED", False),
+    })
 
 
 @login_required
