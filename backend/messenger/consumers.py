@@ -16,13 +16,13 @@ import logging
 from datetime import datetime
 
 from channels.db import database_sync_to_async
-from channels.generic.websocket import AsyncJsonWebSocketConsumer
+from channels.generic.websocket import AsyncWebsocketConsumer
 from django.utils import timezone
 
 logger = logging.getLogger("messenger.ws")
 
 
-class OperatorConsumer(AsyncJsonWebSocketConsumer):
+class OperatorConsumer(AsyncWebsocketConsumer):
     """
     WebSocket для операторов CRM.
 
@@ -97,7 +97,14 @@ class OperatorConsumer(AsyncJsonWebSocketConsumer):
         await self._set_operator_offline()
         logger.info("Operator %s disconnected (code=%s)", self.user_id, close_code)
 
-    async def receive_json(self, content, **kwargs):
+    async def receive(self, text_data=None, bytes_data=None):
+        if not text_data:
+            return
+        try:
+            content = json.loads(text_data)
+        except json.JSONDecodeError:
+            return
+
         action = content.get("action")
 
         if action == "subscribe" and "conversation_id" in content:
@@ -130,51 +137,51 @@ class OperatorConsumer(AsyncJsonWebSocketConsumer):
                 )
 
         elif action == "ping":
-            await self.send_json({"type": "pong", "ts": timezone.now().isoformat()})
+            await self.send(text_data=json.dumps({"type": "pong", "ts": timezone.now().isoformat()}))
 
     # ─── Group message handlers ──────────────────────────────────────
 
     async def new_message(self, event):
         """Новое сообщение в диалоге."""
-        await self.send_json({
+        await self.send(text_data=json.dumps({
             "type": "new_message",
             "conversation_id": event.get("conversation_id"),
             "message": event.get("message"),
-        })
+        }))
 
     async def conversation_updated(self, event):
         """Обновление диалога (статус, assignee и т.д.)."""
-        await self.send_json({
+        await self.send(text_data=json.dumps({
             "type": "conversation_updated",
             "conversation_id": event.get("conversation_id"),
             "changes": event.get("changes"),
-        })
+        }))
 
     async def new_conversation(self, event):
         """Новый диалог в inbox."""
-        await self.send_json({
+        await self.send(text_data=json.dumps({
             "type": "new_conversation",
             "conversation": event.get("conversation"),
-        })
+        }))
 
     async def typing_indicator(self, event):
         """Индикатор набора текста."""
         if event.get("user_id") != self.user_id:
-            await self.send_json({
+            await self.send(text_data=json.dumps({
                 "type": "typing",
                 "conversation_id": event.get("conversation_id"),
                 "user_id": event.get("user_id"),
                 "is_typing": event.get("is_typing", True),
-            })
+            }))
 
     async def operator_notification(self, event):
         """Личное уведомление оператору."""
-        await self.send_json({
+        await self.send(text_data=json.dumps({
             "type": "notification",
             "title": event.get("title"),
             "body": event.get("body"),
             "conversation_id": event.get("conversation_id"),
-        })
+        }))
 
     # ─── DB helpers ──────────────────────────────────────────────────
 
@@ -214,7 +221,7 @@ class OperatorConsumer(AsyncJsonWebSocketConsumer):
         )
 
 
-class WidgetConsumer(AsyncJsonWebSocketConsumer):
+class WidgetConsumer(AsyncWebsocketConsumer):
     """
     WebSocket для виджета посетителя.
 
@@ -247,7 +254,14 @@ class WidgetConsumer(AsyncJsonWebSocketConsumer):
                 self.channel_name,
             )
 
-    async def receive_json(self, content, **kwargs):
+    async def receive(self, text_data=None, bytes_data=None):
+        if not text_data:
+            return
+        try:
+            content = json.loads(text_data)
+        except json.JSONDecodeError:
+            return
+
         action = content.get("action")
 
         if action == "authenticate":
@@ -261,13 +275,13 @@ class WidgetConsumer(AsyncJsonWebSocketConsumer):
                     f"conversation_{self.conversation_id}",
                     self.channel_name,
                 )
-                await self.send_json({"type": "authenticated", "conversation_id": self.conversation_id})
+                await self.send(text_data=json.dumps({"type": "authenticated", "conversation_id": self.conversation_id}))
             else:
-                await self.send_json({"type": "error", "code": "auth_failed"})
+                await self.send(text_data=json.dumps({"type": "error", "code": "auth_failed"}))
                 await self.close(code=4401)
 
         elif not self.authenticated:
-            await self.send_json({"type": "error", "code": "not_authenticated"})
+            await self.send(text_data=json.dumps({"type": "error", "code": "not_authenticated"}))
             return
 
         elif action == "typing":
@@ -282,7 +296,7 @@ class WidgetConsumer(AsyncJsonWebSocketConsumer):
                 )
 
         elif action == "ping":
-            await self.send_json({"type": "pong"})
+            await self.send(text_data=json.dumps({"type": "pong"}))
 
     # ─── Group message handlers ──────────────────────────────────────
 
@@ -290,25 +304,25 @@ class WidgetConsumer(AsyncJsonWebSocketConsumer):
         """Новое сообщение — показать посетителю только исходящие (от оператора)."""
         msg = event.get("message", {})
         if msg.get("direction") == "out":
-            await self.send_json({
+            await self.send(text_data=json.dumps({
                 "type": "new_message",
                 "message": msg,
-            })
+            }))
 
     async def typing_indicator(self, event):
         """Оператор печатает."""
         if event.get("user_id") is not None:
-            await self.send_json({
+            await self.send(text_data=json.dumps({
                 "type": "typing",
                 "is_typing": event.get("is_typing", True),
-            })
+            }))
 
     async def conversation_updated(self, event):
         """Статус диалога изменился."""
-        await self.send_json({
+        await self.send(text_data=json.dumps({
             "type": "conversation_updated",
             "changes": event.get("changes"),
-        })
+        }))
 
     # ─── DB helpers ──────────────────────────────────────────────────
 
