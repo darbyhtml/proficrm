@@ -586,6 +586,12 @@ class ConversationViewSet(
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
+            if len(body) > models.Message.MAX_CONTENT_LENGTH:
+                return Response(
+                    {"detail": f"Текст сообщения слишком длинный (максимум {models.Message.MAX_CONTENT_LENGTH} символов)."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
             from .services import record_message
 
             message = record_message(
