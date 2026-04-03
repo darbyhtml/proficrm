@@ -942,3 +942,29 @@ class AgentProfile(models.Model):
     def __str__(self) -> str:
         return self.display_name or str(self.user)
 
+
+class PushSubscription(models.Model):
+    """
+    Browser Push подписки операторов (Web Push API + VAPID).
+    Аналог Chatwoot notification_subscriptions.
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="push_subscriptions",
+    )
+    endpoint = models.URLField("Push endpoint", max_length=500, unique=True)
+    p256dh = models.CharField("p256dh key", max_length=200)
+    auth = models.CharField("Auth secret", max_length=100)
+    created_at = models.DateTimeField("Создано", auto_now_add=True)
+    is_active = models.BooleanField("Активна", default=True)
+
+    class Meta:
+        verbose_name = "Push-подписка"
+        verbose_name_plural = "Push-подписки"
+        indexes = [
+            models.Index(fields=["user", "is_active"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"Push: {self.user} ({self.endpoint[:50]}...)"

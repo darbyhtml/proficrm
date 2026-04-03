@@ -750,6 +750,13 @@ def widget_send(request):
                 },
             )
 
+        # Browser Push уведомление назначенному оператору
+        try:
+            from .push import send_push_new_message
+            send_push_new_message(conversation, message)
+        except Exception:
+            widget_logger.warning("Push notification failed", exc_info=True)
+
         # Автоматизация: автоответ на первый входящий месседж (если включено в Inbox)
         try:
             run_automation_for_incoming_message(message)

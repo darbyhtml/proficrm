@@ -209,11 +209,18 @@ def assign_conversation(conversation: Conversation, user: User) -> None:
         conv.assignee_opened_at = None
         conv.waiting_since = conv.waiting_since or now
         conv.save(update_fields=[
-            "assignee", 
-            "assignee_assigned_at", 
+            "assignee",
+            "assignee_assigned_at",
             "assignee_opened_at",
             "waiting_since"
         ])
+
+        # Push-уведомление назначенному оператору
+        try:
+            from .push import send_push_assignment
+            send_push_assignment(conv, user)
+        except Exception:
+            pass  # push не критичен
 
 
 def auto_assign_conversation(conversation: Conversation) -> Optional[User]:

@@ -49,6 +49,10 @@ class MessengerOperatorPanel {
     this._dragCounter = 0; // Для корректного отслеживания drag-and-drop
     this._bulkSelected = new Set(); // Выделенные диалоги для bulk-действий
     this._bulkMode = false;
+    this._globalEventSource = null; // Глобальный SSE для уведомлений
+    this._globalSSETimeoutId = null;
+    this._globalSSEReconnectAttempts = 0;
+    this._soundEnabled = localStorage.getItem('messenger_sound') !== 'off'; // Звук вкл по умолчанию
   }
 
   /** Fetch с таймаутом и AbortController */
@@ -87,7 +91,8 @@ class MessengerOperatorPanel {
     this.initDragDrop();
     this.loadCannedResponses();
     this.initBulkActions();
-    
+    this.startGlobalNotificationStream();
+
     // Обработка URL hash для открытия диалога
     const hash = window.location.hash;
     if (hash && hash.startsWith('#conversation/')) {
@@ -251,7 +256,6 @@ class MessengerOperatorPanel {
     if (Notification.permission === 'granted') {
       this.notificationsEnabled = true;
     } else if (Notification.permission === 'default') {
-      // Попросим разрешение один раз, тихо
       Notification.requestPermission().then((result) => {
         this.notificationsEnabled = result === 'granted';
       }).catch(() => {
@@ -259,6 +263,253 @@ class MessengerOperatorPanel {
       });
     } else {
       this.notificationsEnabled = false;
+    }
+
+    // Sound toggle button
+    this._updateSoundToggleUI();
+    const soundBtn = document.getElementById('soundToggleBtn');
+    if (soundBtn) {
+      soundBtn.addEventListener('click', () => {
+        this._soundEnabled = !this._soundEnabled;
+        localStorage.setItem('messenger_sound', this._soundEnabled ? 'on' : 'off');
+        this._updateSoundToggleUI();
+        if (this._soundEnabled) this.playIncomingSoundV2();
+      });
+    }
+
+    // Browser Push — register Service Worker + subscribe
+    this._registerPushSubscription();
+  }
+
+  async _registerPushSubscription() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+    try {
+      const reg = await navigator.serviceWorker.register('/sw-push.js', { scope: '/' });
+
+      // Получить VAPID public key с сервера
+      const resp = await fetch('/api/push/vapid-key/', { credentials: 'same-origin' });
+      if (!resp.ok) return;
+      const { public_key } = await resp.json();
+      if (!public_key) return;
+
+      // Проверить/создать подписку
+      let subscription = await reg.pushManager.getSubscription();
+      if (!subscription) {
+        const applicationServerKey = this._urlBase64ToUint8Array(public_key);
+        subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: applicationServerKey,
+        });
+      }
+
+      // Отправить подписку на сервер
+      const subJson = subscription.toJSON();
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+        || document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+
+      await fetch('/api/push/subscribe/', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify({
+          endpoint: subJson.endpoint,
+          p256dh: subJson.keys.p256dh,
+          auth: subJson.keys.auth,
+        }),
+      });
+    } catch (err) {
+      // Push registration не критична — продолжаем без неё
+      console.warn('Push subscription failed:', err);
+    }
+  }
+
+  _urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; i++) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  _updateSoundToggleUI() {
+    const onIcon = document.getElementById('soundOnIcon');
+    const offIcon = document.getElementById('soundOffIcon');
+    if (onIcon) onIcon.style.display = this._soundEnabled ? '' : 'none';
+    if (offIcon) offIcon.style.display = this._soundEnabled ? 'none' : '';
+  }
+
+  /**
+   * Глобальный SSE стрим уведомлений (аналог Chatwoot account-wide ActionCable).
+   * Получает ВСЕ новые входящие сообщения по всем видимым диалогам.
+   * Играет звук и показывает push/toast даже если оператор в другом диалоге.
+   */
+  startGlobalNotificationStream() {
+    this._cleanupGlobalSSE();
+    this._globalSSEReconnectAttempts = 0;
+    this._connectGlobalSSE();
+  }
+
+  _connectGlobalSSE() {
+    if (this._globalSSEReconnectAttempts > 10) {
+      console.warn('Global notification SSE: max reconnects reached, falling back to polling');
+      return;
+    }
+
+    try {
+      const es = new EventSource('/api/conversations/notifications/stream/');
+      this._globalEventSource = es;
+
+      es.addEventListener('ready', () => {
+        this._globalSSEReconnectAttempts = 0;
+      });
+
+      es.addEventListener('notification.message', (e) => {
+        try {
+          const data = JSON.parse(e.data || '{}');
+          // Не уведомлять о сообщениях в текущем открытом диалоге (SSE per-conversation уже обработает)
+          if (data.conversation_id === this.currentConversationId) return;
+
+          // Звук
+          this.playIncomingSound();
+
+          // Обновить список диалогов (новое сообщение поднимет диалог наверх)
+          this.refreshConversationList();
+
+          // Toast уведомление внутри панели
+          const name = data.contact_name || 'Посетитель';
+          const preview = data.preview || 'Новое сообщение';
+          this._showNotificationToast(name, preview, data.conversation_id);
+
+          // Browser Notification (если вкладка в фоне)
+          if (document.hidden && this.notificationsEnabled && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            const n = new Notification(`${name}`, {
+              body: preview,
+              tag: `messenger-global-${data.message_id}`,
+              icon: '/static/messenger/icon-chat.png',
+              requireInteraction: false,
+            });
+            n.onclick = () => {
+              window.focus();
+              this.openConversation(data.conversation_id);
+              n.close();
+            };
+            setTimeout(() => n.close(), 8000);
+          }
+        } catch (err) {
+          console.warn('Global SSE notification.message error:', err);
+        }
+      });
+
+      es.addEventListener('notification.assignment', (e) => {
+        try {
+          const data = JSON.parse(e.data || '{}');
+          this.playIncomingSound();
+          this.refreshConversationList();
+          const name = data.contact_name || 'Новый диалог';
+          this._showNotificationToast('Назначен диалог', name, data.conversation_id);
+
+          if (this.notificationsEnabled && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            const n = new Notification('Назначен новый диалог', {
+              body: name,
+              tag: `messenger-assign-${data.conversation_id}`,
+              requireInteraction: true,
+            });
+            n.onclick = () => {
+              window.focus();
+              this.openConversation(data.conversation_id);
+              n.close();
+            };
+            setTimeout(() => n.close(), 15000);
+          }
+        } catch (err) {
+          console.warn('Global SSE notification.assignment error:', err);
+        }
+      });
+
+      es.onerror = () => {
+        this._cleanupGlobalSSE();
+        this._globalSSEReconnectAttempts++;
+        const delay = Math.min(2000 * Math.pow(1.5, this._globalSSEReconnectAttempts - 1), 30000);
+        setTimeout(() => this._connectGlobalSSE(), delay);
+      };
+
+      // Reconnect через 50сек (сервер закрывает через 55сек)
+      this._globalSSETimeoutId = setTimeout(() => {
+        if (this._globalEventSource === es) {
+          this._cleanupGlobalSSE();
+          this._connectGlobalSSE();
+        }
+      }, 50000);
+
+    } catch (err) {
+      console.error('Global notification SSE start error:', err);
+    }
+  }
+
+  _cleanupGlobalSSE() {
+    if (this._globalSSETimeoutId) {
+      clearTimeout(this._globalSSETimeoutId);
+      this._globalSSETimeoutId = null;
+    }
+    if (this._globalEventSource) {
+      try { this._globalEventSource.close(); } catch (_) {}
+      this._globalEventSource = null;
+    }
+  }
+
+  /**
+   * Toast-уведомление внутри панели оператора (не browser notification).
+   * Появляется в углу, исчезает через 6 секунд, кликабельно.
+   */
+  _showNotificationToast(title, body, conversationId) {
+    if (!this._toastContainer) {
+      this._toastContainer = document.createElement('div');
+      this._toastContainer.id = 'messenger-toast-container';
+      this._toastContainer.style.cssText = 'position:fixed;top:16px;right:16px;z-index:10000;display:flex;flex-direction:column;gap:8px;max-width:360px;';
+      document.body.appendChild(this._toastContainer);
+      // Inject animation keyframes
+      if (!document.getElementById('messenger-toast-keyframes')) {
+        const style = document.createElement('style');
+        style.id = 'messenger-toast-keyframes';
+        style.textContent = '@keyframes slideInRight{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}';
+        document.head.appendChild(style);
+      }
+    }
+
+    const toast = document.createElement('div');
+    toast.style.cssText = 'background:#1e293b;color:#f1f5f9;padding:12px 16px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25);cursor:pointer;display:flex;align-items:flex-start;gap:10px;animation:slideInRight .3s ease;border-left:4px solid #01948E;min-width:280px;';
+    toast.innerHTML = `
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px;margin-bottom:2px">${this.escapeHtml(title)}</div>
+        <div style="font-size:12px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${this.escapeHtml(body)}</div>
+      </div>
+      <div style="font-size:11px;color:#64748b;white-space:nowrap">сейчас</div>
+    `;
+    toast.addEventListener('click', () => {
+      if (conversationId) this.openConversation(conversationId);
+      toast.remove();
+    });
+
+    this._toastContainer.prepend(toast);
+
+    // Автоудаление через 6 секунд
+    setTimeout(() => {
+      toast.style.transition = 'opacity .3s, transform .3s';
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(100%)';
+      setTimeout(() => toast.remove(), 300);
+    }, 6000);
+
+    // Максимум 5 toast'ов
+    while (this._toastContainer.children.length > 5) {
+      this._toastContainer.lastChild.remove();
     }
   }
 
@@ -354,10 +605,65 @@ class MessengerOperatorPanel {
       existingCards.forEach((card, id) => {
         if (!newIds.has(id)) card.remove();
       });
-      
+
+      // Обновить счётчик непрочитанных в заголовке вкладки (Chatwoot-style)
+      const totalUnread = items.reduce((sum, c) => sum + (Number(c.unread_count) || 0), 0);
+      this._updateTabTitle(totalUnread);
+
     } catch (e) {
       console.error('refreshConversationList failed:', e);
     }
+  }
+
+  _updateTabTitle(unreadCount) {
+    const base = 'Мессенджер';
+    document.title = unreadCount > 0 ? `(${unreadCount}) ${base}` : base;
+    // Также обновим favicon badge (если поддерживается)
+    this._updateFaviconBadge(unreadCount);
+  }
+
+  _updateFaviconBadge(count) {
+    // Рисуем красный кружок с числом на favicon (canvas-based)
+    if (!this._originalFavicon) {
+      const link = document.querySelector('link[rel="icon"]') || document.querySelector('link[rel="shortcut icon"]');
+      if (link) this._originalFavicon = link.href;
+    }
+    const link = document.querySelector('link[rel="icon"]') || document.querySelector('link[rel="shortcut icon"]');
+    if (!link) return;
+
+    if (count <= 0) {
+      if (this._originalFavicon) link.href = this._originalFavicon;
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 32;
+    canvas.height = 32;
+    const ctx = canvas.getContext('2d');
+
+    // Базовый favicon (зелёный чат-иконка)
+    ctx.fillStyle = '#01948E';
+    ctx.beginPath();
+    ctx.roundRect(0, 0, 32, 32, 6);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('💬', 16, 16);
+
+    // Красный badge
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.arc(24, 8, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(count > 99 ? '99+' : String(count), 24, 8);
+
+    link.href = canvas.toDataURL('image/png');
   }
 
   /**
@@ -2042,6 +2348,7 @@ class MessengerOperatorPanel {
   }
 
   playIncomingSound() {
+    if (!this._soundEnabled) return;
     this.playIncomingSoundV2();
   }
 
@@ -2654,7 +2961,7 @@ class MessengerOperatorPanel {
       osc1.type = 'sine';
       osc1.frequency.value = 1046;
       gain1.gain.setValueAtTime(0.0001, now);
-      gain1.gain.exponentialRampToValueAtTime(0.15, now + 0.02);
+      gain1.gain.exponentialRampToValueAtTime(0.35, now + 0.02);
       gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
       osc1.connect(gain1);
       gain1.connect(ctx.destination);
@@ -2667,7 +2974,7 @@ class MessengerOperatorPanel {
       osc2.type = 'sine';
       osc2.frequency.value = 1318;
       gain2.gain.setValueAtTime(0.0001, now + 0.12);
-      gain2.gain.exponentialRampToValueAtTime(0.12, now + 0.14);
+      gain2.gain.exponentialRampToValueAtTime(0.30, now + 0.14);
       gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
       osc2.connect(gain2);
       gain2.connect(ctx.destination);
@@ -2680,7 +2987,7 @@ class MessengerOperatorPanel {
       osc3.type = 'sine';
       osc3.frequency.value = 1568;
       gain3.gain.setValueAtTime(0.0001, now + 0.24);
-      gain3.gain.exponentialRampToValueAtTime(0.10, now + 0.26);
+      gain3.gain.exponentialRampToValueAtTime(0.25, now + 0.26);
       gain3.gain.exponentialRampToValueAtTime(0.0001, now + 0.65);
       osc3.connect(gain3);
       gain3.connect(ctx.destination);

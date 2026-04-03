@@ -42,7 +42,7 @@ from phonebridge.api import (
     UserInfoView,
     QrTokenStatusView,
 )
-from messenger.api import ConversationViewSet, CannedResponseViewSet, ConversationLabelViewSet
+from messenger.api import ConversationViewSet, CannedResponseViewSet, ConversationLabelViewSet, PushSubscriptionViewSet
 from messenger.widget_api import (
     widget_attachment_download,
     widget_bootstrap,
@@ -84,6 +84,7 @@ router.register(r"tasks", TaskViewSet, basename="task")
 router.register(r"conversations", ConversationViewSet, basename="conversation")
 router.register(r"canned-responses", CannedResponseViewSet, basename="canned-response")
 router.register(r"conversation-labels", ConversationLabelViewSet, basename="conversation-label")
+router.register(r"push", PushSubscriptionViewSet, basename="push")
 
 # Versioned router at /api/v1/ — same viewsets, separate basenames to avoid URL name conflicts.
 # SimpleRouter = no API root browser page (cleaner for versioned endpoint).
@@ -100,6 +101,8 @@ urlpatterns = [
     path("robots.txt", robots_txt, name="robots_txt"),
     path(".well-known/security.txt", security_txt, name="security_txt"),
     path("health/", health_check, name="health_check"),
+    # Service Worker для push-уведомлений (должен быть на корневом scope)
+    path("sw-push.js", RedirectView.as_view(url=static("messenger/sw-push.js"), permanent=False), name="sw_push"),
     path("favicon.ico", RedirectView.as_view(url=static("ui/favicon-v2.svg"), permanent=True)),
     path('admin/', admin.site.urls),
     path("", include("ui.urls")),

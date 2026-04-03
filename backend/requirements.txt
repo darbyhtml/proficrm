@@ -22,4 +22,5 @@ gunicorn==23.0.0
 nh3==0.3.3
 drf-spectacular==0.28.0
 python-dateutil==2.9.0
+pywebpush==2.3.0
 

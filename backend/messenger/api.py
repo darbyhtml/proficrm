@@ -283,6 +283,113 @@ class ConversationViewSet(
 
         return Response({"status": "ok", "updated": updated})
 
+    @action(detail=False, methods=["get"], url_path="notifications/stream",
+            renderer_classes=[EventStreamRenderer])
+    def notifications_stream(self, request):
+        """
+        Глобальный SSE стрим уведомлений оператора (аналог Chatwoot account-wide ActionCable).
+
+        Транслирует ВСЕ новые входящие сообщения по всем видимым диалогам оператора.
+        Оператор получает звук/push даже если смотрит другой диалог или вкладка в фоне.
+
+        GET /api/conversations/notifications/stream/
+
+        События:
+        - ready: handshake
+        - notification.message: новое входящее сообщение (conversation_id, contact_name, preview)
+        - notification.assignment: новый диалог назначен оператору
+        - keep-alive: каждые 5 секунд
+        """
+        user = request.user
+        visible_qs = selectors.visible_conversations_qs(user)
+        visible_ids = set(visible_qs.values_list("id", flat=True))
+
+        def event_stream():
+            started = time.time()
+            last_keepalive = 0.0
+            # Запоминаем последний ID сообщения на старте, чтобы отдавать только новые
+            from django.db.models import Max
+            last_seen_msg_id = models.Message.objects.filter(
+                conversation_id__in=visible_ids
+            ).aggregate(max_id=Max("id"))["max_id"] or 0
+
+            # Запоминаем текущие assignee для отслеживания новых назначений
+            my_assigned_ids = set(
+                visible_qs.filter(assignee=user).values_list("id", flat=True)
+            )
+
+            yield "event: ready\ndata: {}\n\n"
+
+            while True:
+                now = time.time()
+                if now - started > 55:  # 55сек (длиннее чем per-conversation)
+                    break
+
+                # Новые входящие сообщения по всем видимым диалогам
+                new_messages = list(
+                    models.Message.objects.filter(
+                        conversation_id__in=visible_ids,
+                        id__gt=last_seen_msg_id,
+                        direction=models.Message.Direction.IN,
+                    ).select_related(
+                        "conversation__contact", "sender_contact"
+                    ).order_by("id")[:20]
+                )
+
+                for msg in new_messages:
+                    last_seen_msg_id = max(last_seen_msg_id, msg.id)
+                    contact_name = ""
+                    if msg.conversation and msg.conversation.contact:
+                        c = msg.conversation.contact
+                        contact_name = c.name or c.email or c.phone or ""
+                    payload = {
+                        "message_id": msg.id,
+                        "conversation_id": msg.conversation_id,
+                        "contact_name": contact_name,
+                        "preview": (msg.body or "")[:140],
+                        "created_at": msg.created_at.isoformat() if msg.created_at else None,
+                    }
+                    yield f"event: notification.message\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+                # Проверяем новые назначения на текущего оператора
+                current_assigned = set(
+                    visible_qs.filter(assignee=user).values_list("id", flat=True)
+                )
+                newly_assigned = current_assigned - my_assigned_ids
+                for conv_id in newly_assigned:
+                    try:
+                        conv = visible_qs.get(id=conv_id)
+                        contact_name = ""
+                        if conv.contact:
+                            contact_name = conv.contact.name or conv.contact.email or conv.contact.phone or ""
+                        payload = {
+                            "conversation_id": conv_id,
+                            "contact_name": contact_name,
+                            "status": conv.status,
+                        }
+                        yield f"event: notification.assignment\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                    except models.Conversation.DoesNotExist:
+                        pass
+                my_assigned_ids = current_assigned
+
+                # Обновляем список видимых диалогов (могут появиться новые)
+                if int(now - started) % 15 == 0 and int(now - started) > 0:
+                    visible_ids.update(
+                        selectors.visible_conversations_qs(user).values_list("id", flat=True)
+                    )
+
+                # Keep-alive
+                if now - last_keepalive > 5:
+                    last_keepalive = now
+                    yield ": keep-alive\n\n"
+
+                time.sleep(2)
+
+        resp = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
+        resp["Cache-Control"] = "no-cache"
+        resp["X-Accel-Buffering"] = "no"
+        return resp
+
     @action(detail=True, methods=["get", "post"], url_path="messages")
     def messages(self, request, pk=None):
         """
@@ -586,3 +693,53 @@ class ConversationLabelViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         return models.ConversationLabel.objects.order_by("title")
+
+
+class PushSubscriptionViewSet(MessengerEnabledApiMixin, viewsets.ViewSet):
+    """
+    API для управления Browser Push подписками (Web Push API + VAPID).
+    Аналог Chatwoot notification_subscriptions.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @action(detail=False, methods=["get"], url_path="vapid-key")
+    def vapid_key(self, request):
+        """GET /api/push/vapid-key/ — публичный VAPID-ключ для подписки."""
+        from django.conf import settings
+        return Response({
+            "public_key": getattr(settings, "VAPID_PUBLIC_KEY", ""),
+        })
+
+    @action(detail=False, methods=["post"], url_path="subscribe")
+    def subscribe(self, request):
+        """POST /api/push/subscribe/ — сохранить push-подписку."""
+        endpoint = request.data.get("endpoint", "")
+        p256dh = request.data.get("p256dh", "")
+        auth = request.data.get("auth", "")
+
+        if not endpoint or not p256dh or not auth:
+            return Response(
+                {"detail": "endpoint, p256dh, auth are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        sub, created = models.PushSubscription.objects.update_or_create(
+            endpoint=endpoint,
+            defaults={
+                "user": request.user,
+                "p256dh": p256dh,
+                "auth": auth,
+                "is_active": True,
+            },
+        )
+        return Response({"status": "subscribed", "created": created})
+
+    @action(detail=False, methods=["post"], url_path="unsubscribe")
+    def unsubscribe(self, request):
+        """POST /api/push/unsubscribe/ — деактивировать push-подписку."""
+        endpoint = request.data.get("endpoint", "")
+        if endpoint:
+            models.PushSubscription.objects.filter(
+                user=request.user, endpoint=endpoint
+            ).update(is_active=False)
+        return Response({"status": "unsubscribed"})

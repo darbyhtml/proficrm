@@ -559,15 +559,21 @@
     <div class="border-b border-brand-soft/60 p-3 bg-white">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-semibold">Диалоги</h2>
-        <form method="post" action="{% url 'messenger_agent_status' %}" class="inline">
-          {% csrf_token %}
-          <select name="status" class="select text-xs py-1" style="min-width: 6rem" title="Статус оператора">
-            <option value="online" {% if agent_status == 'online' %}selected{% endif %}>Онлайн</option>
-            <option value="away" {% if agent_status == 'away' %}selected{% endif %}>Отошёл</option>
-            <option value="busy" {% if agent_status == 'busy' %}selected{% endif %}>Занят</option>
-            <option value="offline" {% if agent_status == 'offline' %}selected{% endif %}>Офлайн</option>
-          </select>
-        </form>
+        <div class="flex items-center gap-2">
+          <button id="soundToggleBtn" type="button" class="p-1.5 rounded-lg hover:bg-brand-soft/30 transition-colors" title="Звук уведомлений">
+            <svg id="soundOnIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            <svg id="soundOffIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+          </button>
+          <form method="post" action="{% url 'messenger_agent_status' %}" class="inline">
+            {% csrf_token %}
+            <select name="status" class="select text-xs py-1" style="min-width: 6rem" title="Статус оператора">
+              <option value="online" {% if agent_status == 'online' %}selected{% endif %}>Онлайн</option>
+              <option value="away" {% if agent_status == 'away' %}selected{% endif %}>Отошёл</option>
+              <option value="busy" {% if agent_status == 'busy' %}selected{% endif %}>Занят</option>
+              <option value="offline" {% if agent_status == 'offline' %}selected{% endif %}>Офлайн</option>
+            </select>
+          </form>
+        </div>
       </div>
       
       <!-- Компактные фильтры -->
