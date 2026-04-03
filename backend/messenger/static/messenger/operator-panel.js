@@ -707,7 +707,7 @@ class MessengerOperatorPanel {
     // Форма отправки сообщения
     html += `
       <div class="border-t border-brand-soft/60 p-3 bg-white flex-shrink-0">
-        <div class="flex items-center justify-between mb-2">
+        ${window.MESSENGER_CAN_REPLY ? `<div class="flex items-center justify-between mb-2">
           <div class="inline-flex rounded-xl border border-brand-soft/80 bg-white overflow-hidden">
             <button type="button" id="composeModeOut" class="px-3 py-1.5 text-xs font-medium ${this.composeMode === 'OUT' ? 'bg-brand-teal text-white' : 'text-brand-dark/70 hover:bg-brand-soft/30'}">Ответить</button>
             <button type="button" id="composeModeInternal" class="px-3 py-1.5 text-xs font-medium ${this.composeMode === 'INTERNAL' ? 'bg-brand-orange text-brand-dark' : 'text-brand-dark/70 hover:bg-brand-soft/30'}">Заметка</button>
@@ -735,7 +735,10 @@ class MessengerOperatorPanel {
           <div id="messageAttachmentsNames" class="text-xs text-brand-dark/60 mt-1 px-1"></div>
           <div id="composeModeHint" class="text-[10px] text-brand-dark/40 mt-1 px-1">Сообщение увидит клиент. Внутренние заметки доступны только сотрудникам.</div>
           <p class="text-[10px] text-brand-dark/40 mt-1.5 px-1">Макс. 5 МБ на файл • изображения и PDF</p>
-        </form>
+        </form>` : `<div class="text-center py-3 text-xs text-brand-dark/50 border-t border-brand-soft/40">
+          <svg class="w-4 h-4 inline-block mr-1 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+          Только менеджеры могут отвечать в чатах
+        </div>`}
       </div>
     `;
 

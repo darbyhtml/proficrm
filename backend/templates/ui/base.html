@@ -1074,6 +1074,15 @@
                 </span>
                 <span>Почта</span>
               </a>
+              <a class="flex flex-col items-center gap-1 px-2 py-2 rounded-lg hover:bg-brand-soft/40 text-[12px] text-center {% if request.resolver_match.url_name == 'messenger_conversations_unified' %}bg-brand-soft/50 font-medium{% endif %}" href="/messenger/">
+                <span class="nav-ico-wrap relative">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                  </svg>
+                  <span id="messengerUnreadBadge" class="hidden absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none"></span>
+                </span>
+                <span>Чат</span>
+              </a>
               {% policy_can 'ui:analytics' as can_nav_analytics %}
               {% if can_nav_analytics and not view_as_enabled or view_can_view_activity %}
                 <a class="flex flex-col items-center gap-1 px-2 py-2 rounded-lg hover:bg-brand-soft/40 text-[12px] text-center {% if request.resolver_match.url_name == 'analytics' or request.resolver_match.url_name == 'analytics_user' %}bg-brand-soft/50 font-medium{% endif %}" href="/analytics/">

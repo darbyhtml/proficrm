@@ -190,18 +190,14 @@ class ConversationViewSet(MessengerEnabledApiMixin, viewsets.ReadOnlyModelViewSe
     def read(self, request, pk=None):
         """
         Отметить диалог прочитанным текущим оператором (по образцу Chatwoot).
-        
-        Args:
-            request: HTTP запрос
-            pk: ID диалога
-        
-        Returns:
-            Response с статусом и временем обновления
-        
-        Note:
-            Использует троттлинг для предотвращения частых обновлений БД.
-            Обновляет assignee_last_read_at и agent_last_seen_at.
+
+        Только менеджеры могут отмечать прочитанным — просмотр другими ролями
+        не считается прочтением.
         """
+        # Только менеджеры могут помечать прочитанным
+        if request.user.role != User.Role.MANAGER:
+            return Response({"status": "ignored"}, status=status.HTTP_200_OK)
+
         conversation = self.get_object()
         if conversation.assignee_id != request.user.id:
             return Response({"status": "ignored"}, status=status.HTTP_200_OK)
@@ -316,6 +312,13 @@ class ConversationViewSet(MessengerEnabledApiMixin, viewsets.ReadOnlyModelViewSe
             return Response(serializer.data)
 
         elif request.method == "POST":
+            # Только менеджеры могут отправлять сообщения клиентам
+            if request.user.role != User.Role.MANAGER:
+                return Response(
+                    {"detail": "Только менеджеры могут отвечать в чатах."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
             # POST: создание сообщения оператором (+ вложения)
             direction = (request.data.get("direction") or models.Message.Direction.OUT).strip().lower()
             body = (request.data.get("body") or "").strip()

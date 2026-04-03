@@ -788,6 +788,9 @@
 
 <script src="{% static 'messenger/operator-panel.js' %}"></script>
 <script>
+  // Права доступа: может ли текущий пользователь отвечать в чатах
+  window.MESSENGER_CAN_REPLY = {{ can_reply|yesno:"true,false" }};
+
   // Инициализация панели при загрузке страницы
   document.addEventListener('DOMContentLoaded', function() {
     if (window.MessengerPanel && window.MessengerPanel.init) {

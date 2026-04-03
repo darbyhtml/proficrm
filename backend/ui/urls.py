@@ -150,6 +150,10 @@ urlpatterns = [
     path("settings/messenger/health/", views.settings_messenger_health, name="settings_messenger_health"),
     path("settings/messenger/analytics/", views.settings_messenger_analytics, name="settings_messenger_analytics"),
 
+    # Messenger operator panel
+    path("messenger/", views.messenger_conversations_unified, name="messenger_conversations_unified"),
+    path("messenger/me/status/", views.messenger_agent_status, name="messenger_agent_status"),
+
     # Мобильное приложение
     path("mobile-app/", views.mobile_app_page, name="mobile_app_page"),
     path("mobile-app/download/<uuid:build_id>/", views.mobile_app_download, name="mobile_app_download"),

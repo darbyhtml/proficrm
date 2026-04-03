@@ -81,6 +81,8 @@ router.register(r"contacts", ContactViewSet, basename="contact")
 router.register(r"company-notes", CompanyNoteViewSet, basename="company-note")
 router.register(r"task-types", TaskTypeViewSet, basename="task-type")
 router.register(r"tasks", TaskViewSet, basename="task")
+router.register(r"conversations", ConversationViewSet, basename="conversation")
+router.register(r"canned-responses", CannedResponseViewSet, basename="canned-response")
 
 # Versioned router at /api/v1/ — same viewsets, separate basenames to avoid URL name conflicts.
 # SimpleRouter = no API root browser page (cleaner for versioned endpoint).
@@ -90,6 +92,8 @@ router_v1.register(r"contacts", ContactViewSet, basename="v1-contact")
 router_v1.register(r"company-notes", CompanyNoteViewSet, basename="v1-company-note")
 router_v1.register(r"task-types", TaskTypeViewSet, basename="v1-task-type")
 router_v1.register(r"tasks", TaskViewSet, basename="v1-task")
+router_v1.register(r"conversations", ConversationViewSet, basename="v1-conversation")
+router_v1.register(r"canned-responses", CannedResponseViewSet, basename="v1-canned-response")
 
 urlpatterns = [
     path("robots.txt", robots_txt, name="robots_txt"),

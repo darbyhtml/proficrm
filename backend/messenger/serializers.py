@@ -66,6 +66,16 @@ class ConversationSerializer(serializers.ModelSerializer):
                 {field: "Это поле нельзя изменять через API." for field in sorted(forbidden)}
             )
 
+        # Назначить можно только менеджера
+        if "assignee" in validated_data:
+            assignee = validated_data["assignee"]
+            if assignee is not None:
+                from accounts.models import User
+                if assignee.role != User.Role.MANAGER:
+                    raise serializers.ValidationError(
+                        {"assignee": "Ответственным можно назначить только менеджера."}
+                    )
+
         for field in allowed_fields:
             if field in validated_data:
                 setattr(instance, field, validated_data[field])
