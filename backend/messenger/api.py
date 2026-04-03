@@ -7,7 +7,16 @@ DRF API для messenger.
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
+
+
+class EventStreamRenderer(BaseRenderer):
+    media_type = "text/event-stream"
+    format = "text"
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        return data
 
 from accounts.models import User
 from policy.drf import PolicyPermission
@@ -400,7 +409,7 @@ class ConversationViewSet(
             
             return Response(serializers.MessageSerializer(message).data, status=status.HTTP_201_CREATED)
 
-    @action(detail=True, methods=["get"], url_path="stream")
+    @action(detail=True, methods=["get"], url_path="stream", renderer_classes=[EventStreamRenderer])
     def stream(self, request, pk=None):
         """
         SSE стрим обновлений для операторской панели (по образцу Chatwoot).
