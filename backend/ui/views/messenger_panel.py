@@ -47,8 +47,8 @@ def messenger_conversations_unified(request: HttpRequest) -> HttpResponse:
 
     user: User = get_effective_user(request)
 
-    # Определяем, может ли пользователь отвечать (только менеджеры)
-    can_reply = user.role == User.Role.MANAGER
+    # Определяем, может ли пользователь отвечать (менеджеры, админы, суперюзеры)
+    can_reply = user.is_superuser or user.role in (User.Role.MANAGER, User.Role.ADMIN)
 
     # Базовую видимость берём из domain policy слоя
     qs = visible_conversations_qs(user).select_related(

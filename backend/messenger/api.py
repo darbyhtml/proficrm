@@ -213,8 +213,8 @@ class ConversationViewSet(
         Помимо assignee_last_read_at на диалоге, ставит read_at на все
         непрочитанные IN-сообщения — чтобы виджет мог показать чекмарки.
         """
-        # Только менеджеры могут помечать прочитанным
-        if request.user.role != User.Role.MANAGER:
+        # Менеджеры, админы и суперюзеры могут помечать прочитанным
+        if not (request.user.is_superuser or request.user.role in (User.Role.MANAGER, User.Role.ADMIN)):
             return Response({"status": "ignored"}, status=status.HTTP_200_OK)
 
         conversation = self.get_object()
@@ -555,8 +555,8 @@ class ConversationViewSet(
             return Response(serializer.data)
 
         elif request.method == "POST":
-            # Только менеджеры могут отправлять сообщения клиентам
-            if request.user.role != User.Role.MANAGER:
+            # Менеджеры, админы и суперюзеры могут отправлять сообщения клиентам
+            if not (request.user.is_superuser or request.user.role in (User.Role.MANAGER, User.Role.ADMIN)):
                 return Response(
                     {"detail": "Только менеджеры могут отвечать в чатах."},
                     status=status.HTTP_403_FORBIDDEN,

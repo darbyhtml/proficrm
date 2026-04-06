@@ -737,15 +737,16 @@
               const newMessages = data.messages.filter(msg => {
                 if (!msg.id) return false;
                 if (this.receivedMessageIds.has(msg.id)) return false;
-                this.receivedMessageIds.add(msg.id);
+                // НЕ добавляем в receivedMessageIds здесь —
+                // это делает addMessageToUI, чтобы дедупликация не блокировала рендер
                 return true;
               });
               for (const msg of newMessages) {
-            if (msg.id && (this.sinceId === null || msg.id > this.sinceId)) {
-              this.sinceId = msg.id;
-            }
-            this.addMessageToUI(msg);
-          }
+                if (msg.id && (this.sinceId === null || msg.id > this.sinceId)) {
+                  this.sinceId = msg.id;
+                }
+                this.addMessageToUI(msg);
+              }
               if (this.sinceId !== null) {
                 try { localStorage.setItem(this._storageKey('since_id'), String(this.sinceId)); } catch (_) {}
               }
