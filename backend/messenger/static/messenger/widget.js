@@ -721,7 +721,6 @@
         es.addEventListener('update', (e) => {
           try {
             const data = JSON.parse(e.data || '{}');
-            console.log('[SSE] update event received, messages:', data.messages?.length || 0, 'typing:', data.operator_typing, 'since_id:', data.since_id);
             if (data.operator_typing !== undefined) {
               this.setOperatorTypingVisible(data.operator_typing === true);
             }
@@ -737,18 +736,13 @@
             if (Array.isArray(data.messages)) {
               const newMessages = data.messages.filter(msg => {
                 if (!msg.id) return false;
-                if (this.receivedMessageIds.has(msg.id)) {
-                  console.log('[SSE] msg #' + msg.id + ' SKIPPED (already in receivedMessageIds)');
-                  return false;
-                }
+                if (this.receivedMessageIds.has(msg.id)) return false;
                 return true;
               });
-              console.log('[SSE] newMessages after filter:', newMessages.length, 'receivedIds size:', this.receivedMessageIds.size);
               for (const msg of newMessages) {
                 if (msg.id && (this.sinceId === null || msg.id > this.sinceId)) {
                   this.sinceId = msg.id;
                 }
-                console.log('[SSE] calling addMessageToUI for msg #' + msg.id, 'direction:', msg.direction, 'body:', (msg.body || '').substring(0, 40));
                 this.addMessageToUI(msg);
               }
               if (this.sinceId !== null) {
@@ -759,7 +753,7 @@
               }
             }
           } catch (err) {
-            console.error('[SSE] Error in update handler:', err);
+            // ignore
           }
         });
 
@@ -1095,19 +1089,16 @@
      */
     addMessageToUI(message) {
       if (!this.messagesContainer) {
-        console.warn('[addMessageToUI] ABORT: messagesContainer is null/undefined');
         return;
       }
 
       // Проверка на дубликаты по ID
       if (message.id && this.receivedMessageIds.has(message.id)) {
-        console.log('[addMessageToUI] SKIP: msg #' + message.id + ' already in receivedMessageIds');
         return; // Сообщение уже добавлено
       }
       if (message.id) {
         this.receivedMessageIds.add(message.id);
       }
-      console.log('[addMessageToUI] RENDERING msg #' + message.id, 'direction:', message.direction, 'body:', (message.body || '').substring(0, 40));
 
       const messageEl = document.createElement('div');
       messageEl.className = 'messenger-widget-message';
