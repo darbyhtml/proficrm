@@ -1199,6 +1199,7 @@ def widget_stream(request):
 
             # Последний IN-месседж, прочитанный оператором (проверяем раз в 5 сек)
             current_read_up_to = last_read_up_to
+            changed = False
             if now - last_read_check >= 5:
                 last_read_check = now
                 current_read_up_to = (
@@ -1212,7 +1213,6 @@ def widget_stream(request):
                     last_read_up_to = current_read_up_to
                     changed = True
 
-            changed = False
             if messages_payload:
                 changed = True
             if last_typing is None or last_typing != operator_typing:

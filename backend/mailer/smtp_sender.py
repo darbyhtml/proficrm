@@ -109,7 +109,7 @@ def build_message(
     _from_name = _sanitize_header((from_name or account.from_name or "").strip())
     msg["From"] = formataddr((_from_name, _from_email)) if _from_name else _from_email
     msg["To"] = _sanitize_header(to_email or "")
-    _reply_to = _sanitize_header((reply_to or account.reply_to or "").strip())
+    _reply_to = _sanitize_header((reply_to or getattr(account, "reply_to", "") or "").strip())
     if _reply_to:
         msg["Reply-To"] = _reply_to
 

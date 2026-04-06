@@ -181,6 +181,7 @@ def send_offline_email_notification(self, conversation_id: int, message_id: int)
             subject=subject,
             body_text=body,
             body_html="",
+            reply_to="",
         )
         send_via_smtp(account=account, msg=msg)
         logger.info(

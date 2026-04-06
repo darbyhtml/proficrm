@@ -702,7 +702,10 @@ class ConversationViewSet(
             """SSE стрим для операторской панели."""
             started = time.time()
             last_keepalive = 0.0
-            last_message_id = 0
+            # Начинаем с последнего существующего сообщения, чтобы не дублировать
+            last_message_id = (
+                conversation.messages.order_by("-id").values_list("id", flat=True).first() or 0
+            )
             last_typing = None
             last_conversation_data = None
             
@@ -734,7 +737,7 @@ class ConversationViewSet(
                 
                 # Проверяем статус печати
                 typing_status = get_typing_status(conversation.id)
-                contact_typing = typing_status.get("contact_typing") is False
+                contact_typing = typing_status.get("contact_typing") is True
                 
                 if last_typing != contact_typing:
                     last_typing = contact_typing
