@@ -1518,4 +1518,5 @@ def widget_campaigns(request):
         inbox=inbox, status=models.Campaign.Status.ACTIVE,
     ).values("id", "title", "message", "url_pattern", "time_on_page", "only_during_business_hours")
 
-    return Response(list(campaigns))
+    resp = Response(list(campaigns))
+    return _add_widget_cors_headers(request, resp)
