@@ -154,6 +154,21 @@
     }
 
     /**
+     * Подгрузить widget.css, если его ещё нет на странице (внешнее встраивание).
+     */
+    _ensureCSS() {
+      if (document.getElementById('messenger-widget-css')) return;
+      const existing = document.querySelector('link[href*="messenger/widget.css"]');
+      if (existing) return;
+      const base = CONFIG.API_BASE_URL || '';
+      const link = document.createElement('link');
+      link.id = 'messenger-widget-css';
+      link.rel = 'stylesheet';
+      link.href = base + '/static/messenger/widget.css';
+      document.head.appendChild(link);
+    }
+
+    /**
      * Получить ключ для localStorage с namespace по widget_token
      */
     _storageKey(key) {
@@ -255,6 +270,9 @@
      * Инициализация виджета
      */
     async init() {
+      // Подгрузить CSS виджета, если ещё не на странице
+      this._ensureCSS();
+
       // Загрузить сохранённые данные
       this.loadFromStorage();
 
