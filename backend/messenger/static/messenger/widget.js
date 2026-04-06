@@ -1613,22 +1613,16 @@
       // Важно: загружать ДО initialMessages, чтобы не дублировать
       if (this.savedMessages && Array.isArray(this.savedMessages) && this.savedMessages.length > 0) {
         for (const msg of this.savedMessages) {
-          // Проверяем, что сообщение еще не добавлено (по ID)
-          if (msg.id && !this.receivedMessageIds.has(msg.id)) {
-            this.receivedMessageIds.add(msg.id);
-            this.addMessageToUI(msg);
-          }
+          // addMessageToUI сам проверяет и добавляет в receivedMessageIds
+          this.addMessageToUI(msg);
         }
       }
 
       // Предзагруженные сообщения после bootstrap
       if (this.initialMessages && this.initialMessages.length) {
         for (const msg of this.initialMessages) {
-          // Проверяем, что сообщение еще не добавлено (по ID)
-          if (!this.receivedMessageIds.has(msg.id)) {
-            this.receivedMessageIds.add(msg.id);
-            this.addMessageToUI(msg);
-          }
+          // addMessageToUI сам проверяет и добавляет в receivedMessageIds
+          this.addMessageToUI(msg);
         }
       }
       this.scheduleMarkOutgoingRead();
