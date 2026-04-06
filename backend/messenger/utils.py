@@ -109,6 +109,8 @@ class WidgetSession:
     inbox_id: int
     conversation_id: int
     contact_id: str
+    bound_ip: str = ""
+    created_at: str = ""
 
 
 def _widget_session_cache_key(token: str) -> str:
