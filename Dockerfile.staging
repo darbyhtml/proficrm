@@ -36,4 +36,4 @@ RUN useradd -m -u 1000 crmuser && \
 EXPOSE 8000
 
 # Команда по умолчанию (переопределяется в docker-compose)
-CMD ["gunicorn", "crm.wsgi:application", "--bind", "0.0.0.0:8000", "--worker-class", "gevent", "--workers", "4", "--worker-connections", "1000", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]
+CMD ["gunicorn", "crm.wsgi:application", "--bind", "0.0.0.0:8000", "--worker-class", "gthread", "--workers", "4", "--threads", "8", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]
