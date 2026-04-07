@@ -729,9 +729,11 @@
                   }
                   const msg = document.createElement('div');
                   msg.className = 'fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg bg-green-600 text-white text-sm';
-                  msg.textContent = 'Переназначено ' + (data.updated || 0) + ' компаний → ' + (data.new_responsible || '');
+                  let text = 'Переназначено ' + (data.updated || 0) + ' компаний → ' + (data.new_responsible || '');
+                  if (data.skipped > 0) text += '. Пропущено (нет прав): ' + data.skipped;
+                  msg.textContent = text;
                   document.body.appendChild(msg);
-                  setTimeout(() => msg.remove(), 4000);
+                  setTimeout(() => msg.remove(), 5000);
                 } else {
                   const errMsg = data.error || (resp.status === 400 ? 'Проверьте права или выбранные компании.' : 'Ошибка переназначения');
                   modalContent.innerHTML = '<div class="py-8"><div class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">' + errMsg + '</div><p class="text-sm mt-2 text-red-600">Если ошибка повторяется — попробуйте обновить страницу и повторить.</p></div>';

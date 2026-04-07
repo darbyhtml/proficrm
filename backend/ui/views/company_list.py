@@ -712,22 +712,16 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
             messages.error(request, msg)
             return redirect("company_list")
 
-    # Проверка прав на передачу каждой компании (используем новую функцию)
+    # Проверка прав на передачу каждой компании
     transfer_check = can_transfer_companies(user, ids)
-    if transfer_check["forbidden"]:
+
+    # Используем только разрешённые компании (запрещённые пропускаем, не блокируем)
+    ids = transfer_check["allowed"]
+    if not ids:
         forbidden_names = [f["name"] for f in transfer_check["forbidden"][:5]]
         if len(transfer_check["forbidden"]) > 5:
             forbidden_names.append(f"... и ещё {len(transfer_check['forbidden']) - 5}")
-        msg = f"Некоторые компании нельзя передать ({len(transfer_check['forbidden'])} из {len(ids)}): {', '.join(forbidden_names)}"
-        if is_ajax:
-            return JsonResponse({"success": False, "error": msg}, status=400)
-        messages.error(request, msg)
-        return redirect("company_list")
-
-    # Используем только разрешённые компании
-    ids = transfer_check["allowed"]
-    if not ids:
-        msg = "Нет компаний, доступных для переназначения."
+        msg = f"Нет компаний, доступных для переназначения: {', '.join(forbidden_names)}"
         if is_ajax:
             return JsonResponse({"success": False, "error": msg}, status=400)
         messages.error(request, msg)
@@ -861,6 +855,7 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
             "success": True,
             "updated": updated,
             "new_responsible": str(new_resp),
+            "skipped": forbidden_count,
         })
     return redirect(f"/companies/?responsible={new_resp.id}")
 
