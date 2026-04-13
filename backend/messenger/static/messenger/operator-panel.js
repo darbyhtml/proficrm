@@ -3369,6 +3369,9 @@ class MessengerOperatorPanel {
   updateTitleBadge(unreadCount) {
     const base = this._titleBase || (this._titleBase = document.title.replace(/^\(\d+\)\s*/, ''));
     document.title = unreadCount > 0 ? `(${unreadCount}) ${base}` : base;
+    if (typeof window.setFaviconBadge === 'function') {
+      window.setFaviconBadge(unreadCount);
+    }
   }
 
   startTypingPolling(conversationId) {
