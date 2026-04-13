@@ -8,6 +8,18 @@ from .models import PolicyConfig, PolicyRule
 @admin.register(PolicyConfig)
 class PolicyConfigAdmin(admin.ModelAdmin):
     list_display = ("id", "mode", "updated_at")
+    fieldsets = (
+        (None, {"fields": ("mode",)}),
+        (
+            "Live-chat эскалация",
+            {
+                "fields": ("livechat_escalation",),
+                "description": (
+                    "Пороги в минутах: warn_min, urgent_min, rop_alert_min, pool_return_min"
+                ),
+            },
+        ),
+    )
 
 
 @admin.register(PolicyRule)

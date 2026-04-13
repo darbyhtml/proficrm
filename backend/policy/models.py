@@ -15,6 +15,15 @@ class PolicyConfig(models.Model):
         ENFORCE = "enforce", "Применять (блокировать запрещённые действия)"
 
     mode = models.CharField(max_length=32, choices=Mode.choices, default=Mode.OBSERVE_ONLY, db_index=True)
+    livechat_escalation = models.JSONField(
+        "Пороги эскалации live-chat (минуты)",
+        blank=True,
+        default=dict,
+        help_text=(
+            "Ключи: warn_min, urgent_min, rop_alert_min, pool_return_min. "
+            "Пустые значения → дефолты 3/10/20/40."
+        ),
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     @classmethod

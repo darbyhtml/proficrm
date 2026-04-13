@@ -3,6 +3,7 @@ from django.test import TestCase
 
 from accounts.models import Branch
 from messenger.models import Contact, Conversation, Inbox
+from policy.models import PolicyConfig
 
 
 class ConversationEscalationFieldsTests(TestCase):
@@ -42,3 +43,22 @@ class ConversationEscalationFieldsTests(TestCase):
 
     def test_last_escalated_at_nullable(self):
         self.assertIsNone(self.conv.last_escalated_at)
+
+
+class EscalationThresholdsFromPolicyTests(TestCase):
+    def test_defaults_when_policy_empty(self):
+        cfg = PolicyConfig.load()
+        cfg.livechat_escalation = {}
+        cfg.save()
+        thresholds = Conversation.escalation_thresholds()
+        self.assertEqual(thresholds["warn_min"], 3)
+        self.assertEqual(thresholds["pool_return_min"], 40)
+
+    def test_policy_overrides_defaults(self):
+        cfg = PolicyConfig.load()
+        cfg.livechat_escalation = {"warn_min": 5, "pool_return_min": 60}
+        cfg.save()
+        thresholds = Conversation.escalation_thresholds()
+        self.assertEqual(thresholds["warn_min"], 5)
+        self.assertEqual(thresholds["pool_return_min"], 60)
+        self.assertEqual(thresholds["urgent_min"], 10)  # дефолт
