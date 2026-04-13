@@ -258,6 +258,15 @@ class Conversation(models.Model):
         related_name="messenger_conversations",
         editable=False,
     )
+    company = models.ForeignKey(
+        "companies.Company",
+        verbose_name="Компания клиента",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="messenger_conversations",
+        help_text="Автосвязь по email/phone контакта. Может быть переназначена вручную.",
+    )
     client_region = models.CharField(
         "Регион клиента",
         max_length=128,
