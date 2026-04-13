@@ -979,6 +979,18 @@ class MessengerOperatorPanel {
       ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700 border border-red-300 animate-pulse" title="Позван старший"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>SOS</span>'
       : '';
 
+    // Plan 3 Task 8: бейдж минут ожидания (warn/urgent/rop)
+    const waitingMin = Number(conversation.waiting_minutes || 0);
+    const thresholds = { warn: 3, urgent: 10, rop: 20 };
+    let waitingBadge = '';
+    if (waitingMin >= thresholds.rop) {
+      waitingBadge = `<span class="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-red-600 text-white animate-pulse" title="Ждёт ${waitingMin} мин">${waitingMin}м</span>`;
+    } else if (waitingMin >= thresholds.urgent) {
+      waitingBadge = `<span class="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-orange-500 text-white" title="Ждёт ${waitingMin} мин">${waitingMin}м</span>`;
+    } else if (waitingMin >= thresholds.warn) {
+      waitingBadge = `<span class="inline-flex items-center px-2 py-0.5 text-xs rounded-full bg-yellow-400 text-yellow-900" title="Ждёт ${waitingMin} мин">${waitingMin}м</span>`;
+    }
+
     const isAdmin = window.MESSENGER_CONTEXT && window.MESSENGER_CONTEXT.isAdmin === true;
     const deleteBtn = isAdmin ? `
       <button type="button" 
@@ -1012,6 +1024,7 @@ class MessengerOperatorPanel {
             ${unread > 0 ? `<span class="conversation-badge">${unread}</span>` : ''}
             ${statusBadge}
             ${needsHelpBadge}
+            ${waitingBadge}
           </div>
         </div>
         ${deleteBtn}
