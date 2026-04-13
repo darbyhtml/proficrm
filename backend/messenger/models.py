@@ -220,6 +220,28 @@ class Conversation(models.Model):
         related_name="messenger_conversations",
         editable=False,
     )
+    client_region = models.CharField(
+        "Регион клиента",
+        max_length=128,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Определён по GeoIP / pre-chat анкете / компании клиента",
+    )
+
+    class RegionSource(models.TextChoices):
+        GEOIP = "geoip", "GeoIP"
+        FORM = "form", "Анкета"
+        COMPANY = "company", "Компания"
+        UNKNOWN = "", "Не определён"
+
+    client_region_source = models.CharField(
+        "Источник региона",
+        max_length=16,
+        choices=RegionSource.choices,
+        blank=True,
+        default=RegionSource.UNKNOWN,
+    )
     region = models.ForeignKey(
         "companies.Region",
         verbose_name="Регион",
