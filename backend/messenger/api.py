@@ -1042,3 +1042,60 @@ def heartbeat_view(request):
     user.messenger_last_seen = timezone.now()
     user.save(update_fields=["messenger_online", "messenger_last_seen"])
     return Response({"ok": True, "last_seen": user.messenger_last_seen.isoformat()})
+
+
+class TransferRequestSerializer(drf_serializers.Serializer):
+    """Валидация запроса на передачу диалога."""
+
+    to_user_id = drf_serializers.IntegerField()
+    reason = drf_serializers.CharField(min_length=5, max_length=2000)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def transfer_conversation(request, conversation_id):
+    """Передача диалога другому оператору с обязательной причиной."""
+    from messenger.models import Conversation, ConversationTransfer
+    from accounts.models import User as UserModel
+
+    try:
+        conv = Conversation.objects.select_related("assignee", "branch").get(pk=conversation_id)
+    except Conversation.DoesNotExist:
+        return Response({"error": "not_found"}, status=404)
+
+    serializer = TransferRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    try:
+        to_user = UserModel.objects.select_related("branch").get(
+            pk=serializer.validated_data["to_user_id"]
+        )
+    except UserModel.DoesNotExist:
+        return Response({"error": "to_user_not_found"}, status=400)
+
+    from_user = conv.assignee
+    from_branch = conv.branch
+    to_branch = to_user.branch
+    cross_branch = bool(
+        from_branch and to_branch and from_branch.id != to_branch.id
+    )
+
+    ConversationTransfer.objects.create(
+        conversation=conv,
+        from_user=from_user,
+        to_user=to_user,
+        from_branch=from_branch,
+        to_branch=to_branch,
+        reason=serializer.validated_data["reason"],
+        cross_branch=cross_branch,
+    )
+
+    # Используем .update() чтобы обойти Conversation.save(), который запрещает
+    # смену branch при не-глобальном inbox. Для передач (в т.ч. межфилиальных)
+    # это корректное поведение: лог в ConversationTransfer сохраняет аудит.
+    update_fields = {"assignee": to_user}
+    if to_branch:
+        update_fields["branch"] = to_branch
+    Conversation.objects.filter(pk=conv.pk).update(**update_fields)
+
+    return Response({"ok": True, "cross_branch": cross_branch})

@@ -1149,3 +1149,57 @@ class Macro(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class ConversationTransfer(models.Model):
+    """Лог передачи диалога между операторами/филиалами."""
+
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name="transfers",
+        verbose_name="Диалог",
+    )
+    from_user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="messenger_transfers_from",
+        verbose_name="От кого",
+    )
+    to_user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.PROTECT,
+        related_name="messenger_transfers_to",
+        verbose_name="Кому",
+    )
+    from_branch = models.ForeignKey(
+        "accounts.Branch",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="messenger_transfers_out",
+        verbose_name="Филиал-источник",
+    )
+    to_branch = models.ForeignKey(
+        "accounts.Branch",
+        on_delete=models.PROTECT,
+        related_name="messenger_transfers_in",
+        verbose_name="Филиал-получатель",
+    )
+    reason = models.TextField("Причина передачи")
+    cross_branch = models.BooleanField("Межфилиальная передача", default=False)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        verbose_name = "Передача диалога"
+        verbose_name_plural = "Передачи диалогов"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["conversation", "-created_at"]),
+            models.Index(fields=["to_user", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Transfer #{self.pk}: conv={self.conversation_id} {self.from_user_id}→{self.to_user_id}"

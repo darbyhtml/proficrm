@@ -5,7 +5,7 @@ URL configuration for messenger app.
 from django.urls import path
 
 from . import views
-from messenger.api import heartbeat_view
+from messenger.api import heartbeat_view, transfer_conversation
 
 urlpatterns = [
     path("widget-demo/", views.widget_demo, name="messenger_widget_demo"),
@@ -13,4 +13,9 @@ urlpatterns = [
     # Heartbeat онлайн-статуса оператора (префикс api/messenger/ задаётся здесь,
     # т.к. messenger.urls подключён в crm/urls.py с пустым префиксом)
     path("api/messenger/heartbeat/", heartbeat_view, name="messenger-heartbeat"),
+    path(
+        "api/messenger/conversations/<int:conversation_id>/transfer/",
+        transfer_conversation,
+        name="messenger-transfer",
+    ),
 ]
