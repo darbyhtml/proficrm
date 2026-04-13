@@ -212,6 +212,18 @@ class Conversation(models.Model):
         db_index=True,
         help_text="Для подсчёта непрочитанных входящих сообщений.",
     )
+    # Флаг эскалации: менеджер нажимает «Нужна помощь», диалог подсвечивается
+    # РОПу/директору филиала. Поведение будет реализовано в Plan 3.
+    needs_help = models.BooleanField(
+        "Требует помощи",
+        default=False,
+        db_index=True,
+    )
+    needs_help_at = models.DateTimeField(
+        "Время запроса помощи",
+        null=True,
+        blank=True,
+    )
     # ВАЖНО: branch определяется строго из inbox.branch и не редактируется вручную.
     branch = models.ForeignKey(
         "accounts.Branch",
