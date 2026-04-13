@@ -41,6 +41,19 @@ class User(AbstractUser):
         SELF = "self", "Только мои компании"
 
     role = models.CharField("Роль", max_length=32, choices=Role.choices, default=Role.MANAGER)
+
+    # Онлайн-статус оператора в мессенджере (обновляется heartbeat-эндпоинтом)
+    messenger_online = models.BooleanField(
+        "Онлайн в мессенджере",
+        default=False,
+        db_index=True,
+    )
+    messenger_last_seen = models.DateTimeField(
+        "Последняя активность в мессенджере",
+        null=True,
+        blank=True,
+    )
+
     branch = models.ForeignKey(Branch, verbose_name="Филиал", null=True, blank=True, on_delete=models.SET_NULL, related_name="users")
 
     # По умолчанию доступ "вся база", но админ может ограничить.

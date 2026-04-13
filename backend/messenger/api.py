@@ -5,7 +5,7 @@ DRF API для messenger.
 """
 
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
@@ -1031,3 +1031,14 @@ class MacroViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
         _execute_actions(macro.actions, conversation, message=None)
 
         return Response({"status": "ok", "actions_count": len(macro.actions)})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def heartbeat_view(request):
+    """Обновить messenger_online/messenger_last_seen для текущего пользователя."""
+    user = request.user
+    user.messenger_online = True
+    user.messenger_last_seen = timezone.now()
+    user.save(update_fields=["messenger_online", "messenger_last_seen"])
+    return Response({"ok": True, "last_seen": user.messenger_last_seen.isoformat()})
