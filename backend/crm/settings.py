@@ -609,6 +609,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "messenger.tasks.escalate_stalled_conversations",
         "schedule": 120.0,  # 2 минуты
     },
+    # Messenger: эскалация молчаливых диалогов по waiting_minutes (каждые 30 сек)
+    "messenger-escalate-waiting": {
+        "task": "messenger.escalate_waiting_conversations",
+        "schedule": 30.0,
+    },
     # Messenger: перевод операторов в offline по таймауту heartbeat (каждую минуту)
     "messenger-check-offline-operators": {
         "task": "messenger.check_offline_operators",

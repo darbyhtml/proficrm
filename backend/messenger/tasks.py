@@ -200,6 +200,114 @@ def send_offline_email_notification(self, conversation_id: int, message_id: int)
         raise  # Позволяет retry
 
 
+@shared_task(name="messenger.escalate_waiting_conversations")
+def escalate_waiting_conversations():
+    """Эскалация молчаливых диалогов по waiting_minutes.
+
+    Идемпотентна: каждый уровень триггерит события ровно один раз
+    через Conversation.escalation_level (0/1/2/3/4):
+      1 — warn (тихо, без уведомлений)
+      2 — urgent (уведомление ассигни)
+      3 — rop_alert (уведомления всем РОП филиала)
+      4 — pool_return (снять ассигни + уведомить онлайн-менеджеров филиала)
+    """
+    from django.db import models as dj_models
+
+    from accounts.models import User
+    from notifications.models import Notification
+
+    from .models import Conversation
+
+    thresholds = Conversation.escalation_thresholds()
+    now = timezone.now()
+    stats = {"warn": 0, "urgent": 0, "rop_alert": 0, "pool_return": 0}
+
+    candidates = Conversation.objects.filter(
+        status__in=[Conversation.Status.OPEN, Conversation.Status.PENDING],
+        last_customer_msg_at__isnull=False,
+    ).exclude(
+        last_agent_msg_at__gte=dj_models.F("last_customer_msg_at"),
+    )
+
+    for conv in candidates.select_related("assignee", "branch", "contact"):
+        waiting = (now - conv.last_customer_msg_at).total_seconds() / 60
+        target_level = 0
+        if waiting >= thresholds["pool_return_min"]:
+            target_level = 4
+        elif waiting >= thresholds["rop_alert_min"]:
+            target_level = 3
+        elif waiting >= thresholds["urgent_min"]:
+            target_level = 2
+        elif waiting >= thresholds["warn_min"]:
+            target_level = 1
+
+        if target_level <= conv.escalation_level:
+            continue
+
+        contact_name = conv.contact.name if conv.contact else ""
+
+        if target_level == 1:
+            stats["warn"] += 1
+        elif target_level == 2 and conv.assignee_id:
+            Notification.objects.create(
+                user=conv.assignee,
+                kind=Notification.Kind.INFO,
+                title=f"Клиент ждёт {int(waiting)} мин",
+                body=f"Диалог #{conv.id} — {contact_name}",
+                url=f"/messenger/?conv={conv.id}",
+                payload={"conversation_id": conv.id, "level": "urgent"},
+            )
+            stats["urgent"] += 1
+        elif target_level == 3 and conv.branch_id:
+            rops = User.objects.filter(
+                branch_id=conv.branch_id,
+                role=User.Role.SALES_HEAD,
+                is_active=True,
+            )
+            assignee_name = (
+                conv.assignee.get_full_name() or conv.assignee.username
+                if conv.assignee
+                else "не назначен"
+            )
+            for rop in rops:
+                Notification.objects.create(
+                    user=rop,
+                    kind=Notification.Kind.INFO,
+                    title=f"Клиент ждёт {int(waiting)} мин — требуется вмешательство",
+                    body=f"Диалог #{conv.id} у {assignee_name}",
+                    url=f"/messenger/?conv={conv.id}",
+                    payload={"conversation_id": conv.id, "level": "rop_alert"},
+                )
+            stats["rop_alert"] += 1
+        elif target_level == 4 and conv.branch_id:
+            Conversation.objects.filter(pk=conv.pk).update(assignee=None)
+            branch_managers = User.objects.filter(
+                branch_id=conv.branch_id,
+                role=User.Role.MANAGER,
+                is_active=True,
+                messenger_online=True,
+            )
+            for m in branch_managers:
+                Notification.objects.create(
+                    user=m,
+                    kind=Notification.Kind.INFO,
+                    title=f"Диалог возвращён в пул — ждёт {int(waiting)} мин",
+                    body=f"Диалог #{conv.id} ожидает свободного оператора",
+                    url=f"/messenger/?conv={conv.id}",
+                    payload={"conversation_id": conv.id, "level": "pool_return"},
+                )
+            stats["pool_return"] += 1
+
+        Conversation.objects.filter(pk=conv.pk).update(
+            escalation_level=target_level,
+            last_escalated_at=now,
+        )
+
+    if any(stats.values()):
+        logger.info("escalate_waiting_conversations stats: %s", stats)
+    return stats
+
+
 @shared_task(name="messenger.check_offline_operators")
 def check_offline_operators(stale_seconds: int = 90):
     """Переводит операторов в offline, если heartbeat не приходил дольше stale_seconds.
