@@ -964,6 +964,11 @@ class MessengerOperatorPanel {
     else if (status === 'resolved') statusBadge = '<span class="badge badge-done badge-xs">Решён</span>';
     else if (status === 'closed') statusBadge = '<span class="badge badge-cancel badge-xs">Закрыт</span>';
 
+    // Бейдж «Позван старший» (Plan 2 Task 12)
+    const needsHelpBadge = conversation.needs_help
+      ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700 border border-red-300 animate-pulse" title="Позван старший"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>SOS</span>'
+      : '';
+
     const isAdmin = window.MESSENGER_CONTEXT && window.MESSENGER_CONTEXT.isAdmin === true;
     const deleteBtn = isAdmin ? `
       <button type="button" 
@@ -996,6 +1001,7 @@ class MessengerOperatorPanel {
           <div class="conversation-meta">
             ${unread > 0 ? `<span class="conversation-badge">${unread}</span>` : ''}
             ${statusBadge}
+            ${needsHelpBadge}
           </div>
         </div>
         ${deleteBtn}
@@ -1202,6 +1208,7 @@ class MessengerOperatorPanel {
             ${conversation.status === 'pending' ? '<span class="badge badge-progress">В ожидании</span>' : ''}
             ${conversation.status === 'resolved' ? '<span class="badge badge-done">Решён</span>' : ''}
             ${conversation.status === 'closed' ? '<span class="badge badge-cancel">Закрыт</span>' : ''}
+            ${conversation.needs_help ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700 border border-red-300" title="Позван старший"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>Позван старший</span>' : ''}
             <div id="headerActionsSlot" class="flex items-center gap-2"></div>
           </div>
         </div>

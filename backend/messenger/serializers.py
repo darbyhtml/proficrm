@@ -48,6 +48,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             "branch", "region", "created_at",
             "last_activity_at", "waiting_since", "first_reply_created_at",
             "snoozed_until", "contact_last_seen_at", "agent_last_seen_at",
+            "needs_help", "needs_help_at",
             # annotated / computed
             "contact_name", "contact_email", "contact_phone",
             "branch_name", "region_name", "assignee_name",
@@ -58,6 +59,7 @@ class ConversationSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "created_at", "last_activity_at", "waiting_since",
             "first_reply_created_at", "contact_last_seen_at", "agent_last_seen_at",
+            "needs_help", "needs_help_at",
         )
 
     def update(self, instance: models.Conversation, validated_data: dict) -> models.Conversation:

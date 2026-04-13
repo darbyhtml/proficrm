@@ -179,6 +179,21 @@ class NeedsHelpActionTests(TestCase):
         self.assertTrue(self.conv.needs_help)
         self.assertIsNotNone(self.conv.needs_help_at)
 
+    def test_needs_help_fields_exposed_in_serializer(self):
+        """После POST /needs-help/ GET диалога отдаёт needs_help и needs_help_at."""
+        self.client.force_authenticate(self.assignee)
+        post_resp = self.client.post(
+            f"/api/conversations/{self.conv.id}/needs-help/"
+        )
+        self.assertEqual(post_resp.status_code, 200, post_resp.data)
+
+        get_resp = self.client.get(f"/api/conversations/{self.conv.id}/")
+        self.assertEqual(get_resp.status_code, 200, get_resp.data)
+        self.assertIn("needs_help", get_resp.data)
+        self.assertIn("needs_help_at", get_resp.data)
+        self.assertTrue(get_resp.data["needs_help"])
+        self.assertIsNotNone(get_resp.data["needs_help_at"])
+
     def test_admin_can_raise_needs_help(self):
         self.client.force_authenticate(self.admin)
         resp = self.client.post(
