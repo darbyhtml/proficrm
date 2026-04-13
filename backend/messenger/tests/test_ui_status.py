@@ -114,3 +114,44 @@ class UiStatusPropertyTests(TestCase):
         c2 = self._conv(status=Conversation.Status.CLOSED)
         self.assertEqual(c1.ui_status, Conversation.UiStatus.CLOSED)
         self.assertEqual(c2.ui_status, Conversation.UiStatus.CLOSED)
+
+
+class WaitingMinutesTests(TestCase):
+    def setUp(self):
+        post_save.disconnect(auto_assign_new_conversation, sender=Conversation)
+        self.addCleanup(post_save.connect, auto_assign_new_conversation, sender=Conversation)
+        self.branch = Branch.objects.create(name="Br", code="br")
+        self.inbox = Inbox.objects.create(name="Widget", branch=self.branch)
+        self.contact = Contact.objects.create(name="C", email="c@example.com")
+        from django.contrib.auth import get_user_model
+        self.User = get_user_model()
+        self.op = self.User.objects.create_user(
+            "op", password="pw", branch=self.branch, role=self.User.Role.MANAGER,
+        )
+
+    def test_zero_when_not_waiting(self):
+        c = Conversation.objects.create(inbox=self.inbox, contact=self.contact, assignee=self.op)
+        self.assertEqual(c.waiting_minutes, 0)
+
+    def test_zero_when_new_unassigned(self):
+        c = Conversation.objects.create(inbox=self.inbox, contact=self.contact)
+        self.assertEqual(c.waiting_minutes, 0)
+
+    def test_positive_when_customer_last(self):
+        from django.utils import timezone
+        from datetime import timedelta
+        c = Conversation.objects.create(inbox=self.inbox, contact=self.contact, assignee=self.op)
+        ten_ago = timezone.now() - timedelta(minutes=10)
+        Conversation.objects.filter(pk=c.pk).update(last_customer_msg_at=ten_ago)
+        c.refresh_from_db()
+        self.assertGreaterEqual(c.waiting_minutes, 10)
+        self.assertLess(c.waiting_minutes, 11)
+
+
+class EscalationThresholdsTests(TestCase):
+    def test_defaults_returned_when_no_policy(self):
+        thresholds = Conversation.escalation_thresholds()
+        self.assertEqual(thresholds["warn_min"], 3)
+        self.assertEqual(thresholds["urgent_min"], 10)
+        self.assertEqual(thresholds["rop_alert_min"], 20)
+        self.assertEqual(thresholds["pool_return_min"], 40)

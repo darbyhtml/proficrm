@@ -396,6 +396,43 @@ class Conversation(models.Model):
             return self.UiStatus.WAITING
         return self.UiStatus.IN_PROGRESS
 
+    @property
+    def waiting_minutes(self) -> int:
+        """Минуты ожидания клиента в состоянии 'Ждёт ответа'. Ноль в остальных статусах."""
+        if self.ui_status != self.UiStatus.WAITING:
+            return 0
+        if not self.last_customer_msg_at:
+            return 0
+        from django.utils import timezone
+        delta = timezone.now() - self.last_customer_msg_at
+        return int(delta.total_seconds() // 60)
+
+    @classmethod
+    def escalation_thresholds(cls) -> dict:
+        """Пороги эскалации в минутах: warn/urgent/rop_alert/pool_return.
+
+        Берутся из PolicyConfig.livechat_escalation, при отсутствии — дефолты.
+        """
+        defaults = {
+            "warn_min": 3,
+            "urgent_min": 10,
+            "rop_alert_min": 20,
+            "pool_return_min": 40,
+        }
+        try:
+            from policy.models import PolicyConfig
+            cfg = None
+            if hasattr(PolicyConfig, "load"):
+                cfg = PolicyConfig.load()
+            else:
+                cfg = PolicyConfig.objects.first()
+            data = getattr(cfg, "livechat_escalation", None) if cfg else None
+            if isinstance(data, dict):
+                return {**defaults, **data}
+        except Exception:
+            pass
+        return defaults
+
     def clean(self):
         """
         Инварианты безопасности:
