@@ -153,3 +153,7 @@ class MagicLinkToken(models.Model):
             created_by=created_by,
         )
         return magic_link, token
+
+
+# Справочник регионов филиалов (в отдельном файле чтобы не раздувать models.py)
+from accounts.models_region import BranchRegion  # noqa: E402, F401
