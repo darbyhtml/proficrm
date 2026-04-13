@@ -300,10 +300,32 @@ class ConversationViewSet(
 
     @action(detail=False, methods=["get"])
     def agents(self, request):
-        """GET /api/conversations/agents/ — список менеджеров для @mention и назначения."""
-        users = User.objects.filter(
-            is_active=True, role=User.Role.MANAGER,
-        ).values("id", "username", "first_name", "last_name").order_by("first_name", "last_name")
+        """GET /api/conversations/agents/ — список менеджеров для @mention и назначения.
+
+        Параметры запроса (Plan 2 Task 5):
+        - branch_id: фильтровать по филиалу (User.branch_id)
+        - online: 1/true — только онлайн (критерий: User.messenger_online=True,
+          обновляется heartbeat-эндпоинтом каждые ~60с, TTL 5 минут).
+        """
+        qs = User.objects.filter(is_active=True, role=User.Role.MANAGER)
+
+        branch_id = request.query_params.get("branch_id")
+        if branch_id:
+            try:
+                qs = qs.filter(branch_id=int(branch_id))
+            except (TypeError, ValueError):
+                return Response(
+                    {"detail": "branch_id должен быть числом."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        online_param = (request.query_params.get("online") or "").lower()
+        if online_param in ("1", "true", "yes"):
+            qs = qs.filter(messenger_online=True)
+
+        users = qs.values(
+            "id", "username", "first_name", "last_name",
+        ).order_by("first_name", "last_name")
         result = [
             {
                 "id": u["id"],
@@ -313,6 +335,41 @@ class ConversationViewSet(
             for u in users
         ]
         return Response(result)
+
+    @action(detail=True, methods=["post"], url_path="needs-help")
+    def needs_help(self, request, pk=None):
+        """POST /api/conversations/{id}/needs-help/ — поднять флаг «нужна помощь».
+
+        Права: только назначенный assignee или роли ADMIN / BRANCH_DIRECTOR /
+        SALES_HEAD (а также суперпользователь).
+
+        Обновление выполняется через queryset.update(), чтобы обойти инвариант
+        Conversation.save() (см. Plan 1).
+        """
+        conv = self.get_object()
+        user = request.user
+
+        is_assignee = conv.assignee_id == user.id
+        elevated_roles = {
+            User.Role.ADMIN,
+            User.Role.BRANCH_DIRECTOR,
+            User.Role.SALES_HEAD,
+        }
+        is_elevated = (
+            user.is_superuser or getattr(user, "role", None) in elevated_roles
+        )
+        if not (is_assignee or is_elevated):
+            return Response(
+                {"detail": "Только назначенный оператор или руководитель могут запросить помощь."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        models.Conversation.objects.filter(pk=conv.pk).update(
+            needs_help=True,
+            needs_help_at=timezone.now(),
+        )
+        conv.refresh_from_db()
+        return Response(self.get_serializer(conv).data)
 
     def destroy(self, request, pk=None):
         """
@@ -1031,6 +1088,23 @@ class MacroViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
         _execute_actions(macro.actions, conversation, message=None)
 
         return Response({"status": "ok", "actions_count": len(macro.actions)})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def branches_list_view(request):
+    """GET /api/messenger/branches/ — список активных филиалов.
+
+    Используется операторской панелью для фильтрации операторов/диалогов по филиалу.
+    Возвращает [{id, name, code}], отсортированные по имени.
+    """
+    ensure_messenger_enabled_api()
+    from accounts.models import Branch
+
+    branches = Branch.objects.filter(is_active=True).order_by("name").values(
+        "id", "name", "code",
+    )
+    return Response(list(branches))
 
 
 @api_view(["POST"])
