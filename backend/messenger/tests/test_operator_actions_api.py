@@ -64,6 +64,8 @@ class AgentsActionFilterTests(TestCase):
         self.assertIn(self.op_ekb_online.id, ids)
         self.assertIn(self.op_ekb_offline.id, ids)
         self.assertIn(self.op_krd_online.id, ids)
+        # admin не является MANAGER — должен быть отфильтрован
+        self.assertNotIn(self.admin.id, ids)
 
     def test_agents_filter_by_branch(self):
         resp = self.client.get(
@@ -118,6 +120,8 @@ class BranchesEndpointTests(TestCase):
         codes = {b["code"] for b in resp.data}
         self.assertIn("ekb", codes)
         self.assertIn("krd", codes)
+        # Неактивный филиал не должен возвращаться
+        self.assertNotIn("old", codes)
         # Каждый элемент имеет нужные поля
         first = resp.data[0]
         self.assertIn("id", first)
@@ -192,3 +196,35 @@ class NeedsHelpActionTests(TestCase):
         self.assertEqual(resp.status_code, 403)
         self.conv.refresh_from_db()
         self.assertFalse(self.conv.needs_help)
+
+    def test_needs_help_branch_director_not_assignee_allowed(self):
+        """BRANCH_DIRECTOR, не являющийся assignee, может поднять флаг."""
+        director = User.objects.create_user(
+            "director",
+            password="pw",
+            role=User.Role.BRANCH_DIRECTOR,
+            branch=self.branch,
+        )
+        self.client.force_authenticate(director)
+        resp = self.client.post(
+            f"/api/conversations/{self.conv.id}/needs-help/"
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.conv.refresh_from_db()
+        self.assertTrue(self.conv.needs_help)
+
+    def test_needs_help_sales_head_not_assignee_allowed(self):
+        """SALES_HEAD, не являющийся assignee, может поднять флаг."""
+        rop = User.objects.create_user(
+            "rop",
+            password="pw",
+            role=User.Role.SALES_HEAD,
+            branch=self.branch,
+        )
+        self.client.force_authenticate(rop)
+        resp = self.client.post(
+            f"/api/conversations/{self.conv.id}/needs-help/"
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.conv.refresh_from_db()
+        self.assertTrue(self.conv.needs_help)

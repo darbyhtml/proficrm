@@ -18,7 +18,7 @@ class EventStreamRenderer(BaseRenderer):
     def render(self, data, accepted_media_type=None, renderer_context=None):
         return data
 
-from accounts.models import User
+from accounts.models import Branch, User
 from policy.drf import PolicyPermission
 
 from . import models, selectors, serializers, services
@@ -1099,7 +1099,6 @@ def branches_list_view(request):
     Возвращает [{id, name, code}], отсортированные по имени.
     """
     ensure_messenger_enabled_api()
-    from accounts.models import Branch
 
     branches = Branch.objects.filter(is_active=True).order_by("name").values(
         "id", "name", "code",
