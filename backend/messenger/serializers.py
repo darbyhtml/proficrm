@@ -26,6 +26,8 @@ class ConversationSerializer(serializers.ModelSerializer):
     assignee_name = serializers.CharField(source="assignee.get_full_name", read_only=True)
     last_message_body = serializers.CharField(read_only=True)
     unread_count = serializers.IntegerField(read_only=True)
+    # UI-статус: NEW / WAITING / IN_PROGRESS / CLOSED — читается из property.
+    ui_status = serializers.CharField(read_only=True)
     label_ids = serializers.PrimaryKeyRelatedField(
         source="labels", many=True,
         queryset=models.ConversationLabel.objects.all(),
@@ -48,6 +50,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             "contact_name", "contact_email", "contact_phone",
             "branch_name", "region_name", "assignee_name",
             "last_message_body", "unread_count",
+            "ui_status",
             "label_ids", "label_names",
         )
         read_only_fields = (

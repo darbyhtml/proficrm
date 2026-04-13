@@ -57,3 +57,60 @@ class MessageTimestampsTests(TestCase):
         self.conv.refresh_from_db()
         self.assertIsNone(self.conv.last_customer_msg_at)
         self.assertIsNone(self.conv.last_agent_msg_at)
+
+
+class UiStatusPropertyTests(TestCase):
+    def setUp(self):
+        post_save.disconnect(auto_assign_new_conversation, sender=Conversation)
+        self.addCleanup(
+            post_save.connect, auto_assign_new_conversation, sender=Conversation
+        )
+        self.branch = Branch.objects.create(name="Br", code="br")
+        self.inbox = Inbox.objects.create(name="Widget", branch=self.branch)
+        self.contact = Contact.objects.create(name="C", email="c@example.com")
+        from django.contrib.auth import get_user_model
+        self.User = get_user_model()
+        self.op = self.User.objects.create_user(
+            "op", password="pw", branch=self.branch, role=self.User.Role.MANAGER,
+        )
+
+    def _conv(self, **kw):
+        return Conversation.objects.create(
+            inbox=self.inbox, contact=self.contact, **kw
+        )
+
+    def test_status_new_when_open_and_unassigned(self):
+        c = self._conv()
+        self.assertEqual(c.ui_status, Conversation.UiStatus.NEW)
+
+    def test_status_waiting_when_customer_last(self):
+        from django.utils import timezone
+        c = self._conv(assignee=self.op)
+        Conversation.objects.filter(pk=c.pk).update(
+            last_customer_msg_at=timezone.now(),
+            last_agent_msg_at=None,
+        )
+        c.refresh_from_db()
+        self.assertEqual(c.ui_status, Conversation.UiStatus.WAITING)
+
+    def test_status_in_progress_when_agent_replied(self):
+        from django.utils import timezone
+        now = timezone.now()
+        c = self._conv(assignee=self.op)
+        Conversation.objects.filter(pk=c.pk).update(
+            last_customer_msg_at=now,
+            last_agent_msg_at=now,
+        )
+        c.refresh_from_db()
+        self.assertEqual(c.ui_status, Conversation.UiStatus.IN_PROGRESS)
+
+    def test_status_in_progress_when_no_customer_yet(self):
+        """Оператор назначен, клиент ещё не писал — считаем 'В работе'."""
+        c = self._conv(assignee=self.op)
+        self.assertEqual(c.ui_status, Conversation.UiStatus.IN_PROGRESS)
+
+    def test_status_closed_for_resolved_and_closed(self):
+        c1 = self._conv(status=Conversation.Status.RESOLVED)
+        c2 = self._conv(status=Conversation.Status.CLOSED)
+        self.assertEqual(c1.ui_status, Conversation.UiStatus.CLOSED)
+        self.assertEqual(c2.ui_status, Conversation.UiStatus.CLOSED)

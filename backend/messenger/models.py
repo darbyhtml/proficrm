@@ -159,6 +159,14 @@ class Conversation(models.Model):
         NORMAL = 20, "Обычный"
         HIGH = 30, "Высокий"
 
+    class UiStatus(models.TextChoices):
+        # UI-статусы поверх DB-статусов: вычисляются property ui_status
+        # на основе status / assignee / last_customer_msg_at / last_agent_msg_at.
+        NEW = "new", "Новый"
+        WAITING = "waiting", "Ждёт ответа"
+        IN_PROGRESS = "in_progress", "В работе"
+        CLOSED = "closed", "Завершён"
+
     inbox = models.ForeignKey(
         Inbox,
         verbose_name="Inbox",
@@ -369,6 +377,24 @@ class Conversation(models.Model):
 
     def __str__(self) -> str:
         return f"Conversation #{self.pk} ({self.inbox})"
+
+    @property
+    def ui_status(self) -> str:
+        """UI-статус диалога: NEW / WAITING / IN_PROGRESS / CLOSED.
+
+        Вычисляется поверх DB-статуса: закрытые и решённые → CLOSED;
+        без оператора → NEW; если последнее сообщение от клиента —
+        WAITING, иначе IN_PROGRESS.
+        """
+        if self.status in (self.Status.RESOLVED, self.Status.CLOSED):
+            return self.UiStatus.CLOSED
+        if self.assignee_id is None:
+            return self.UiStatus.NEW
+        agent = self.last_agent_msg_at
+        customer = self.last_customer_msg_at
+        if customer and (not agent or customer > agent):
+            return self.UiStatus.WAITING
+        return self.UiStatus.IN_PROGRESS
 
     def clean(self):
         """
