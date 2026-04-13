@@ -4,9 +4,18 @@
 
 Live-chat UX Completion — реализация по спецификации `docs/superpowers/specs/2026-04-13-livechat-ux-completion-design.md`.
 
-**Статус:** Plan 1, Plan 2, Plan 3 завершены 2026-04-13. Следующее — Plan 4 (Right panel: Client Context).
+**Статус:** Plan 1, Plan 2, Plan 3, Plan 4 завершены 2026-04-13. Live-chat UX Completion — все 4 плана закрыты.
 
 ## Сделано в этом спринте
+
+**[2026-04-13]** — Live-chat Client Context Panel (Plan 4) ✅
+- 5 задач выполнено, коммиты `3696406..00fc2a6` (+ docs commit)
+- Модель: `Conversation.company` FK (nullable, on_delete=SET_NULL, db_index) → миграция `messenger.0023_conversation_company`
+- Автосвязь диалога с компанией по email/phone клиента (нормализация, поиск в `Company/Contact/CompanyPhone/ContactPhone/CompanyEmail/ContactEmail`), срабатывает при создании conversation и при первом заполнении контактов; не перезаписывает уже проставленную вручную связь
+- API: `GET /api/messenger/conversations/{id}/context/` — отдаёт блоки `company` (название, responsible, branch, deal'ы, next contract alert), `conversations_history` (последние 10 диалогов клиента), `audit` (transfers + escalations)
+- Фронтенд оператора: правая панель с тремя collapsible-блоками «Компания / История диалогов / Аудит», ссылки в карточку компании, ленивая загрузка при выборе диалога
+- Тесты: 134/134 messenger + общий прогон `messenger accounts policy notifications companies` = 354/354 OK
+- Миграция: `messenger.0023_conversation_company`
 
 **[2026-04-13]** — Live-chat Notifications + Escalation (Plan 3) ✅
 - 9 задач выполнено (коммиты `a909afa..3f2355f`)
@@ -39,8 +48,8 @@ Live-chat UX Completion — реализация по спецификации `
 
 ## Следующее
 
-1. **Plan 4: Right panel — Client Context** — карточка клиента (компания, регион, deal'ы), история диалогов, заметки.
-2. **Полировка Task 6/7** (nice-to-have, не блокеры): secondary стиль кнопки "Переоткрыть"; подтверждение при Вернуть в очередь; focus trap в модалках.
+1. **Полировка Task 6/7 из Plan 2** (nice-to-have, не блокеры): secondary стиль кнопки "Переоткрыть"; подтверждение при Вернуть в очередь; focus trap в модалках.
+2. **Round 2 P0 backlog:** test.sh harden, MAILER_FERNET_KEY ротация, RRULE, Policy.
 
 ---
 

@@ -8,6 +8,37 @@ tags: [журнал, changelog]
 
 ---
 
+## 2026-04-13 (дополнение 2)
+
+### Feat: Live-chat Client Context Panel (Plan 4)
+**Коммиты:** `3696406..00fc2a6` (4 коммита)
+
+Правая контекстная панель оператора live-chat с информацией о клиенте: связанная компания, история диалогов, аудит действий.
+
+**Модель и миграция:**
+- `Conversation.company` — ForeignKey на `companies.Company` (nullable, `on_delete=SET_NULL`, `db_index=True`, `related_name='conversations'`)
+- Миграция `messenger.0023_conversation_company`
+
+**Автосвязь диалога с компанией:**
+- Нормализация email/phone клиента и поиск в `Company`, `Contact`, `CompanyPhone`, `ContactPhone`, `CompanyEmail`, `ContactEmail`
+- Срабатывает при создании `Conversation` и при первом заполнении контактов клиента
+- Не перезаписывает уже проставленную вручную связь (идемпотентно)
+
+**API `GET /api/messenger/conversations/{id}/context/`:**
+- `company`: id, name, responsible (id/full_name), branch (id/name), active deals, next contract alert
+- `conversations_history`: последние 10 диалогов того же клиента (по email/phone/company) с `ui_status`, `waiting_minutes`, `last_customer_msg_at`
+- `audit`: список `ConversationTransfer` + записи эскалаций (`last_escalated_at`, `escalation_level`)
+
+**Фронтенд (operator panel):**
+- Правая панель с тремя collapsible-блоками: «Компания», «История диалогов», «Аудит»
+- Ленивая загрузка контекста при выборе диалога
+- Ссылки в карточку компании и на предыдущие диалоги
+- Скрывается на узких экранах (< 1280px)
+
+**Тесты:** 134/134 messenger, общий прогон `messenger accounts policy notifications companies` = 354/354 OK.
+
+---
+
 ## 2026-04-13 (дополнение)
 
 ### Feat: Live-chat Notifications + Escalation (Plan 3)
