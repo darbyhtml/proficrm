@@ -56,6 +56,9 @@ class MessengerOperatorPanel {
     this._resolveModalConversationId = null; // id диалога, для которого открыта resolve-модалка
     this._pendingResolve = null; // {id, outcome, comment, timerId, toast}
     this._resolveModalInitialized = false; // защита от дублей слушателей
+    this._transferModalInitialized = false; // Plan 2 Task 8
+    this._pendingTransferId = null;
+    this._pendingTransferOriginBranch = null;
   }
 
   /** Fetch с таймаутом и AbortController */
@@ -96,6 +99,7 @@ class MessengerOperatorPanel {
     this.initBulkActions();
     this.startGlobalNotificationStream();
     this.initResolveModal();
+    this.initTransferModal();
 
     // Обработка URL hash для открытия диалога
     const hash = window.location.hash;
@@ -2192,6 +2196,280 @@ class MessengerOperatorPanel {
     }, 5000);
 
     this._pendingResolve = { id, outcome, comment, timerId, toast };
+  }
+
+  // ============================================================
+  // Plan 2 Task 8 — модалка передачи диалога оператору
+  // ============================================================
+
+  /**
+   * Инициализация модалки передачи (Plan 2 Task 8).
+   * Навешивает слушатель messenger:open-transfer-modal, кнопок и полей формы.
+   * Идемпотентна — защищена флагом _transferModalInitialized.
+   */
+  initTransferModal() {
+    if (this._transferModalInitialized) return;
+    this._transferModalInitialized = true;
+
+    window.addEventListener('messenger:open-transfer-modal', (e) => {
+      const id = e && e.detail && e.detail.id;
+      if (id) this.openTransferModal(id);
+    });
+
+    const modal = document.getElementById('transferDialogModal');
+    if (!modal) return;
+
+    modal.querySelectorAll('[data-close-transfer-modal]').forEach((el) => {
+      el.addEventListener('click', () => this.closeTransferModal());
+    });
+
+    const submitBtn = document.getElementById('transferDialogSubmit');
+    if (submitBtn) {
+      submitBtn.addEventListener('click', () => this.submitTransferModal());
+    }
+
+    const branchSel = document.getElementById('transferBranchSelect');
+    const agentSel = document.getElementById('transferAgentSelect');
+    const offlineCb = document.getElementById('transferShowOffline');
+    const reasonTa = document.getElementById('transferReason');
+    const warn = document.getElementById('transferCrossBranchWarn');
+
+    if (branchSel) {
+      branchSel.addEventListener('change', () => {
+        // Показ/скрытие предупреждения cross-branch
+        if (warn) {
+          const origin = this._pendingTransferOriginBranch;
+          const isCross = origin != null && String(branchSel.value) !== String(origin);
+          warn.classList.toggle('hidden', !isCross);
+        }
+        // Перезагрузить операторов для выбранного филиала
+        this.loadTransferAgents(branchSel.value, !(offlineCb && offlineCb.checked));
+      });
+    }
+    if (offlineCb && branchSel) {
+      offlineCb.addEventListener('change', () => {
+        this.loadTransferAgents(branchSel.value, !offlineCb.checked);
+      });
+    }
+    if (agentSel) {
+      agentSel.addEventListener('change', () => this._updateTransferSubmitState());
+    }
+    if (reasonTa) {
+      reasonTa.addEventListener('input', () => this._updateTransferSubmitState());
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+        this.closeTransferModal();
+      }
+    });
+  }
+
+  /** Обновляет состояние disabled у кнопки «Передать». */
+  _updateTransferSubmitState() {
+    const submitBtn = document.getElementById('transferDialogSubmit');
+    const agentSel = document.getElementById('transferAgentSelect');
+    const reasonTa = document.getElementById('transferReason');
+    if (!submitBtn) return;
+    const agentOk = !!(agentSel && agentSel.value);
+    const reasonOk = !!(reasonTa && reasonTa.value.trim().length >= 5);
+    submitBtn.disabled = !(agentOk && reasonOk);
+  }
+
+  /**
+   * Открыть модалку передачи для conversationId.
+   * Загружает филиалы и операторов, сбрасывает форму.
+   */
+  async openTransferModal(conversationId) {
+    if (!conversationId) return;
+
+    this._pendingTransferId = conversationId;
+    this._pendingTransferOriginBranch = null;
+
+    const modal = document.getElementById('transferDialogModal');
+    const branchSel = document.getElementById('transferBranchSelect');
+    const agentSel = document.getElementById('transferAgentSelect');
+    const reasonTa = document.getElementById('transferReason');
+    const offlineCb = document.getElementById('transferShowOffline');
+    const warn = document.getElementById('transferCrossBranchWarn');
+
+    if (reasonTa) reasonTa.value = '';
+    if (offlineCb) offlineCb.checked = false;
+    if (warn) warn.classList.add('hidden');
+    if (agentSel) agentSel.innerHTML = '<option value="">— загрузка —</option>';
+    if (branchSel) branchSel.innerHTML = '<option value="">— загрузка —</option>';
+    this._updateTransferSubmitState();
+
+    if (modal) modal.classList.remove('hidden');
+
+    // Загружаем детали диалога, чтобы узнать текущий branch
+    let originBranchId = null;
+    try {
+      const convResp = await fetch(`/api/conversations/${conversationId}/`, { credentials: 'same-origin' });
+      if (convResp.ok) {
+        const conv = await convResp.json();
+        originBranchId = conv.branch || null;
+      }
+    } catch (err) {
+      console.error('openTransferModal: не удалось загрузить диалог:', err);
+    }
+    this._pendingTransferOriginBranch = originBranchId;
+
+    // Загружаем филиалы
+    try {
+      const brResp = await fetch('/api/messenger/branches/', { credentials: 'same-origin' });
+      if (brResp.ok && branchSel) {
+        const branches = await brResp.json();
+        branchSel.innerHTML = '';
+        const emptyOpt = document.createElement('option');
+        emptyOpt.value = '';
+        emptyOpt.textContent = '— не указан —';
+        branchSel.appendChild(emptyOpt);
+        (branches || []).forEach((b) => {
+          const opt = document.createElement('option');
+          opt.value = String(b.id);
+          opt.textContent = b.name + (b.code ? ` (${b.code})` : '');
+          branchSel.appendChild(opt);
+        });
+        if (originBranchId != null) {
+          branchSel.value = String(originBranchId);
+        }
+      }
+    } catch (err) {
+      console.error('openTransferModal: не удалось загрузить филиалы:', err);
+    }
+
+    // Загружаем операторов
+    const currentBranch = branchSel ? branchSel.value : '';
+    await this.loadTransferAgents(currentBranch, true);
+
+    if (agentSel) {
+      setTimeout(() => agentSel.focus(), 50);
+    }
+  }
+
+  /**
+   * Загружает список операторов из /api/conversations/agents/ и заполняет select.
+   * Исключает текущего пользователя (нельзя передать самому себе).
+   */
+  async loadTransferAgents(branchId, onlineOnly) {
+    const agentSel = document.getElementById('transferAgentSelect');
+    if (!agentSel) return;
+
+    agentSel.innerHTML = '<option value="">— загрузка —</option>';
+    this._updateTransferSubmitState();
+
+    const params = new URLSearchParams();
+    if (branchId) params.append('branch_id', String(branchId));
+    if (onlineOnly) params.append('online', '1');
+
+    let agents = [];
+    try {
+      const resp = await fetch('/api/conversations/agents/?' + params.toString(), { credentials: 'same-origin' });
+      if (resp.ok) {
+        agents = await resp.json();
+      } else {
+        console.error('loadTransferAgents: HTTP', resp.status);
+      }
+    } catch (err) {
+      console.error('loadTransferAgents failed:', err);
+    }
+
+    const ctx = window.MESSENGER_CONTEXT || {};
+    const currentUserId = ctx.currentUserId;
+
+    const filtered = (agents || []).filter((a) => a && a.id !== currentUserId);
+
+    agentSel.innerHTML = '';
+    if (filtered.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'Нет подходящих операторов';
+      opt.disabled = true;
+      opt.selected = true;
+      agentSel.appendChild(opt);
+    } else {
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = '— выберите оператора —';
+      agentSel.appendChild(placeholder);
+      filtered.forEach((a) => {
+        const opt = document.createElement('option');
+        opt.value = String(a.id);
+        const name = a.full_name || a.name || a.username || ('User #' + a.id);
+        const statusMark = a.messenger_online ? ' ●' : ' ○';
+        opt.textContent = name + statusMark;
+        agentSel.appendChild(opt);
+      });
+    }
+    this._updateTransferSubmitState();
+  }
+
+  /** Закрыть модалку передачи. */
+  closeTransferModal() {
+    const modal = document.getElementById('transferDialogModal');
+    if (modal) modal.classList.add('hidden');
+    this._pendingTransferId = null;
+    this._pendingTransferOriginBranch = null;
+  }
+
+  /**
+   * Отправить передачу через POST /api/messenger/conversations/{id}/transfer/.
+   * Серверный endpoint обрабатывает смену branch (через .update(), обходит
+   * запрет Conversation.save()) и сохраняет запись в ConversationTransfer
+   * с причиной — аудит реализован на бэке.
+   */
+  async submitTransferModal() {
+    const id = this._pendingTransferId;
+    const agentSel = document.getElementById('transferAgentSelect');
+    const reasonTa = document.getElementById('transferReason');
+    const submitBtn = document.getElementById('transferDialogSubmit');
+
+    const agentId = agentSel ? parseInt(agentSel.value, 10) : NaN;
+    const reason = reasonTa ? reasonTa.value.trim() : '';
+
+    if (!id) {
+      this.closeTransferModal();
+      return;
+    }
+    if (!agentId) {
+      this.showNotification('Выберите оператора', 'error');
+      return;
+    }
+    if (reason.length < 5) {
+      this.showNotification('Укажите причину (минимум 5 символов)', 'error');
+      return;
+    }
+
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      const resp = await fetch(`/api/messenger/conversations/${id}/transfer/`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRFToken': this.getCsrfToken(),
+        },
+        body: JSON.stringify({ to_user_id: agentId, reason }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || err.error || `HTTP ${resp.status}`);
+      }
+      this.closeTransferModal();
+      this.showNotification('Диалог передан', 'success');
+      // Обновить карточку/список
+      try {
+        await this.openConversation(id, { force: true });
+      } catch {}
+      this.refreshConversationList && this.refreshConversationList();
+    } catch (e) {
+      console.error('submitTransferModal failed:', e);
+      this.showNotification('Не удалось передать диалог: ' + (e.message || e), 'error');
+      if (submitBtn) submitBtn.disabled = false;
+    }
   }
 
   /**
