@@ -1551,7 +1551,8 @@
             if(reminderCountEl) reminderCountEl.textContent = String(data.reminder_count || 0);
 
             const newIds = new Set((data.notif_items || []).map(n => String(n.id)));
-            const hasNew = Array.from(newIds).some(id => !lastIds.has(id));
+            const prevIds = lastIds;
+            const hasNew = Array.from(newIds).some(id => !prevIds.has(id));
             const newest = (data.notif_items && data.notif_items.length) ? data.notif_items[0] : null;
             lastIds = newIds;
 
@@ -1568,6 +1569,20 @@
               }
               // Браузерное уведомление + системный/браузерный звук (если браузер/ОС его позволяют)
               if(newest) showBrowserNotification(newest);
+              // Plan 3 Task 9: подсветка эскалированного диалога в операторской панели
+              try {
+                (data.notif_items || []).forEach(n => {
+                  if (prevIds.has(String(n.id))) return; // уже видели
+                  const convId = n.payload && n.payload.conversation_id;
+                  if (!convId) return;
+                  if (window.MessengerPanel && typeof window.MessengerPanel.playNotificationSound === 'function') {
+                    window.MessengerPanel.playNotificationSound();
+                  }
+                  if (window.MessengerPanel && typeof window.MessengerPanel.highlightConversation === 'function') {
+                    window.MessengerPanel.highlightConversation(convId);
+                  }
+                });
+              } catch(_e) {}
             }
           }catch(_e){
           }finally{

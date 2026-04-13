@@ -4480,6 +4480,18 @@ class MessengerOperatorPanel {
       }
     }
   }
+
+  /**
+   * Plan 3 Task 9: подсветить карточку диалога в списке (при эскалации/нотификации).
+   * Добавляет красное кольцо на 3 секунды.
+   */
+  highlightConversation(convId) {
+    if (!convId) return;
+    const el = document.querySelector(`[data-conversation-id="${convId}"]`);
+    if (!el) return;
+    el.classList.add('ring-2', 'ring-red-500');
+    setTimeout(() => el.classList.remove('ring-2', 'ring-red-500'), 3000);
+  }
 }
 
 // Глобальный экземпляр
