@@ -8,6 +8,54 @@ tags: [журнал, changelog]
 
 ---
 
+## 2026-04-13 (дополнение)
+
+### Feat: Live-chat Notifications + Escalation (Plan 3)
+**Коммиты:** `a909afa..3f2355f` (9 коммитов)
+
+Автоматическая эскалация молчаливых диалогов по порогам `waiting_minutes` + звуковые/desktop/визуальные уведомления:
+
+**Модель и API:**
+- `Conversation.resolution` (JSONField, default=dict) — outcome/comment/resolved_at из resolve modal
+- `Conversation.escalation_level` (PositiveSmallIntegerField, db_index, 0..4) — идемпотентность эскалации
+- `Conversation.last_escalated_at` — timestamp последней эскалации
+- `PolicyConfig.livechat_escalation` (JSONField) — настройки порогов (warn/urgent/rop_alert/pool_return, дефолты 3/10/20/40 мин)
+- `ConversationSerializer` расширен: `resolution` (editable, в whitelist PATCH), `escalation_level`/`last_escalated_at` (read-only)
+
+**Celery task `escalate_waiting_conversations`:**
+- Регистрация в `CELERY_BEAT_SCHEDULE` — раз в 30 секунд
+- Идемпотентна через `escalation_level` (каждый уровень триггерит ровно одно событие)
+- Level 1 (warn, 3 мин) — только бейдж
+- Level 2 (urgent, 10 мин) — Notification для assignee
+- Level 3 (rop_alert, 20 мин) — Notification всем SALES_HEAD филиала
+- Level 4 (pool_return, 40 мин) — assignee=None + Notification всем онлайн-менеджерам филиала
+- Обход инварианта `Conversation.save()` через `.filter(pk=...).update(...)`
+- Фильтр candidates исключает отвеченные (`last_agent_msg_at >= last_customer_msg_at`) и RESOLVED
+
+**Frontend (`operator-panel.js`):**
+- Resolve modal отправляет `resolution: {outcome, comment, resolved_at}` в PATCH (Plan 2 Task 7 был заглушкой)
+- `playNotificationSound()` — WebAudio beep 880→440 Гц, без бинарных файлов
+- `showDesktopNotification(conv, message)` — Notification API с tag, onclick открывает диалог
+- `updateTitleBadge(unread)` — формат `(N) <base>`, вызывает `window.setFaviconBadge`
+- `visibilitychange` — сброс счётчика при возврате на вкладку
+- `requestNotificationPermission` — запрос прав на первом клике
+- `highlightConversation(convId)` — ring-2 ring-red-500 на 3 секунды
+- Бейдж `waiting_minutes` в списке диалогов (yellow ≥3, orange ≥10, red+pulse ≥20)
+
+**Новый файл `backend/messenger/static/messenger/favicon-badge.js`:**
+- Canvas-рендер поверх favicon, бейдж с числом, кэш по count
+- `window.setFaviconBadge(count)` — глобальный API
+
+**Глобальный notification handler (`templates/ui/base.html`):**
+- `pollOnce()` (`/notifications/poll/`) расширен: для новых нотификаций с `payload.conversation_id` вызывает `MessengerPanel.playNotificationSound()` + `highlightConversation(id)`
+- Эскалационные Notification из celery-таски имеют `payload={"conversation_id": id, "level": "urgent|rop_alert|pool_return"}`
+
+**Тесты:** 6 в `test_escalation.py` + 2 в `test_resolution_field.py` (EscalationThresholdsFromPolicy) + 2 (ResolutionApi) + 4 (ConversationEscalationFields). Регрессия messenger: 123/123. Полный прогон `messenger accounts policy notifications`: 214/214 OK.
+
+**Миграции:** `messenger.0022_conversation_escalation_fields`, `policy.0003_policyconfig_livechat_escalation`.
+
+---
+
 ## 2026-04-13
 
 ### Feat: Live-chat Operator UX Panel (Plan 2)

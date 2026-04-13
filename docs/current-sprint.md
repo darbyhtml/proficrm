@@ -4,9 +4,16 @@
 
 Live-chat UX Completion — реализация по спецификации `docs/superpowers/specs/2026-04-13-livechat-ux-completion-design.md`.
 
-**Статус:** Plan 1 (Backend Foundation) и Plan 2 (Operator UX Panel) завершены 2026-04-13. Следующее — staging деплой + Plan 3 (Notifications + Escalation).
+**Статус:** Plan 1, Plan 2, Plan 3 завершены 2026-04-13. Следующее — Plan 4 (Right panel: Client Context).
 
 ## Сделано в этом спринте
+
+**[2026-04-13]** — Live-chat Notifications + Escalation (Plan 3) ✅
+- 9 задач выполнено (коммиты `a909afa..3f2355f`)
+- Backend: `Conversation.resolution/escalation_level/last_escalated_at` + миграция `0022`; `PolicyConfig.livechat_escalation` JSONField + миграция `policy.0003`; Celery task `escalate_waiting_conversations` (warn/urgent/rop_alert/pool_return, идемпотентна, 30с); расширен `ConversationSerializer` (`resolution` editable, `escalation_level`/`last_escalated_at` read-only) + whitelist в update
+- Frontend: resolve modal сохраняет `resolution` (outcome+comment+resolved_at) в PATCH; звук WebAudio beep на новое сообщение; Desktop Notification API; title badge `(N)`; favicon-badge canvas; бейдж `waiting_minutes` в списке диалогов (yellow/orange/red+pulse); `highlightConversation` при эскалационной нотификации; интеграция в `/notifications/poll/` handler
+- Тесты: 123/123 messenger зелёные, 8 новых (resolution_field + escalation task); общий прогон `messenger accounts policy notifications` — 214/214 OK
+- Миграции: `messenger.0022_conversation_escalation_fields`, `policy.0003_policyconfig_livechat_escalation`
 
 **[2026-04-13]** — Live-chat Operator UX Panel (Plan 2) ✅
 - 13 задач выполнено (включая полировку и фикс предсуществующих тестов)
@@ -32,10 +39,8 @@ Live-chat UX Completion — реализация по спецификации `
 
 ## Следующее
 
-1. **Деплой Plan 2 на staging** — `git pull` + `docker build` + `up -d` + миграции `messenger.0020/0021` + smoke-test сценарии (Взять→Ответить→Завершить→Undo; Передать с cross-branch; draft autosave; quick replies; SOS бейдж).
-2. **Plan 3: Notifications + Escalation** — эскалация диалогов по `waiting_minutes` (warn/urgent/rop-alert/pool-return), Celery periodic task, in-app уведомления, `Conversation.resolution` поле для хранения outcome/comment из Task 7, integration причины передачи из Task 8 в `ConversationTransfer` (уже сохраняется серверно). `PolicyConfig.livechat_escalation` настройки.
-3. **Plan 4: Right panel — Client Context** — карточка клиента (компания, регион, deal'ы), история диалогов, заметки.
-4. **Полировка Task 6/7** (nice-to-have, не блокеры): secondary стиль кнопки "Переоткрыть"; подтверждение при Вернуть в очередь; focus trap в модалках.
+1. **Plan 4: Right panel — Client Context** — карточка клиента (компания, регион, deal'ы), история диалогов, заметки.
+2. **Полировка Task 6/7** (nice-to-have, не блокеры): secondary стиль кнопки "Переоткрыть"; подтверждение при Вернуть в очередь; focus trap в модалках.
 
 ---
 
