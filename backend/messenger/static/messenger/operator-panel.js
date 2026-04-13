@@ -1040,6 +1040,8 @@ class MessengerOperatorPanel {
     if (!force && this.currentConversationId === conversationId) {
       return; // Уже открыт
     }
+    // Plan 4 Task 4 — инвалидация кэша контекста при смене диалога
+    this.clearConversationContextCache();
 
     const prevConversationId = this.currentConversationId;
     if (prevConversationId && prevConversationId !== conversationId) {
@@ -1742,6 +1744,114 @@ class MessengerOperatorPanel {
   /**
    * Рендерить информацию о диалоге в правой колонке
    */
+  // Plan 4 Task 4 — загрузка контекста диалога (компания, история, аудит)
+  async loadConversationContext(convId) {
+    if (!convId) return null;
+    if (this._contextCache && this._contextCache[convId]) {
+      return this._contextCache[convId];
+    }
+    try {
+      const resp = await fetch(`/api/conversations/${convId}/context/`, {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      this._contextCache = this._contextCache || {};
+      this._contextCache[convId] = data;
+      return data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  clearConversationContextCache(convId) {
+    if (!this._contextCache) return;
+    if (convId) { delete this._contextCache[convId]; }
+    else { this._contextCache = {}; }
+  }
+
+  _renderCompanyBlock(company) {
+    const el = document.getElementById('panelCompanyBlock');
+    if (!el) return;
+    if (!company) {
+      el.hidden = false;
+      el.innerHTML = `
+        <h3 class="text-sm font-semibold mb-2">Компания</h3>
+        <p class="text-xs text-brand-dark/60">Не привязана</p>
+      `;
+      return;
+    }
+    el.hidden = false;
+    const statusLine = company.status_name ? `<div class="text-xs text-brand-dark/60 mt-1">Статус: ${this.escapeHtml(company.status_name)}</div>` : '';
+    const respLine = company.responsible_name ? `<div class="text-xs text-brand-dark/60">Ответственный: ${this.escapeHtml(company.responsible_name)}</div>` : '';
+    const innLine = company.inn ? `<div class="text-xs text-brand-dark/60">ИНН: ${this.escapeHtml(company.inn)}</div>` : '';
+    el.innerHTML = `
+      <h3 class="text-sm font-semibold mb-2">Компания</h3>
+      <div class="text-sm font-medium">${this.escapeHtml(company.name || '')}</div>
+      ${statusLine}
+      ${respLine}
+      ${innLine}
+      <a href="${this.escapeHtml(company.url || '#')}" target="_blank" rel="noopener" class="inline-block mt-2 text-xs text-brand-teal hover:underline">Открыть в CRM →</a>
+    `;
+  }
+
+  _renderHistoryBlock(previous) {
+    const el = document.getElementById('panelHistoryBlock');
+    if (!el) return;
+    if (!previous || !previous.length) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    const items = previous.slice(0, 10).map(p => {
+      const date = p.created_at ? new Date(p.created_at).toLocaleDateString('ru-RU') : '';
+      const status = this.escapeHtml(p.ui_status || p.status || '');
+      return `<li><button type="button" class="text-left w-full px-2 py-1 hover:bg-brand-soft/30 rounded text-xs flex items-center gap-2" data-history-conv-id="${p.id}">
+        <span class="text-brand-dark/60">${date}</span>
+        <span class="inline-block px-1.5 rounded bg-brand-soft/50">${status}</span>
+      </button></li>`;
+    }).join('');
+    el.innerHTML = `
+      <h3 class="text-sm font-semibold mb-2">История обращений (${previous.length})</h3>
+      <ul class="space-y-1">${items}</ul>
+    `;
+    el.querySelectorAll('[data-history-conv-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-history-conv-id');
+        if (id) this.openConversation(parseInt(id, 10));
+      });
+    });
+  }
+
+  _renderAuditBlock(audit) {
+    const el = document.getElementById('panelAuditBlock');
+    if (!el) return;
+    if (!audit || !audit.length) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    const items = audit.slice(0, 10).map(a => {
+      const date = a.created_at ? new Date(a.created_at).toLocaleString('ru-RU') : '';
+      const kind = a.kind === 'transfer' ? 'Передача' : (a.kind === 'resolution' ? 'Резолюция' : '—');
+      const from = a.from_user ? `от ${this.escapeHtml(a.from_user)}` : '';
+      const to = a.to_user ? `к ${this.escapeHtml(a.to_user)}` : '';
+      const text = this.escapeHtml(a.text || '');
+      return `<li class="text-xs text-brand-dark/70">
+        <div class="font-medium">${kind} <span class="text-brand-dark/50">· ${date}</span></div>
+        ${(from || to) ? `<div class="text-brand-dark/50">${from} ${to}</div>` : ''}
+        ${text ? `<div class="mt-0.5">${text}</div>` : ''}
+      </li>`;
+    }).join('');
+    el.innerHTML = `
+      <details class="group" open>
+        <summary class="text-sm font-semibold cursor-pointer select-none">Аудит диалога (${audit.length})</summary>
+        <ul class="space-y-2 mt-2">${items}</ul>
+      </details>
+    `;
+  }
+
   renderConversationInfo(conversation) {
     const infoArea = document.getElementById('conversationInfo');
     if (!infoArea) return;
@@ -1895,10 +2005,24 @@ class MessengerOperatorPanel {
             </button>
           </div>
         </div>
+
+        <!-- Plan 4 — контекстные блоки, заполняются асинхронно из /context/ API -->
+        <div id="panelCompanyBlock" class="bg-white rounded-lg border border-brand-soft/60 p-3" hidden></div>
+        <div id="panelHistoryBlock" class="bg-white rounded-lg border border-brand-soft/60 p-3" hidden></div>
+        <div id="panelAuditBlock" class="bg-white rounded-lg border border-brand-soft/60 p-3" hidden></div>
       </div>
     `;
 
     infoArea.innerHTML = html;
+
+    // Plan 4 Task 4 — асинхронно загружаем и рендерим контекст
+    this.loadConversationContext(conversation.id).then(ctx => {
+      if (!ctx) return;
+      if (this.currentConversationId !== conversation.id) return; // переключились на другой
+      this._renderCompanyBlock(ctx.company);
+      this._renderHistoryBlock(ctx.previous_conversations || []);
+      this._renderAuditBlock(ctx.audit_log || []);
+    });
 
     const closeInfoBtn = document.getElementById('closeInfoBtn');
     if (closeInfoBtn) closeInfoBtn.addEventListener('click', () => this.closeInfoPanel());
@@ -2696,6 +2820,8 @@ class MessengerOperatorPanel {
       }
       this.closeTransferModal();
       this.showNotification('Диалог передан', 'success');
+      // Plan 4 Task 4 — сбросить кэш контекста, чтобы аудит обновился
+      this.clearConversationContextCache(id);
       // Обновить карточку/список
       try {
         await this.openConversation(id, { force: true });
