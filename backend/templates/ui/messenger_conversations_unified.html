@@ -727,6 +727,44 @@
   </div>
 </div>
 
+{# Модалка завершения диалога (Plan 2 Task 7) #}
+<div id="resolveDialogModal" class="fixed inset-0 z-[210] hidden">
+  <div class="fixed inset-0 bg-black/50" data-close-resolve-modal></div>
+  <div class="absolute inset-x-4 top-16 mx-auto max-w-md">
+    <div class="bg-white border rounded-2xl p-5 shadow-2xl">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-brand-dark">Завершить диалог</h2>
+        <button type="button" class="btn btn-outline btn-sm flex-shrink-0" data-close-resolve-modal aria-label="Закрыть" title="Закрыть">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <label for="resolveDialogOutcome" class="block text-sm font-medium text-brand-dark mb-1">Исход <span class="text-red-600">*</span></label>
+          <select id="resolveDialogOutcome" class="w-full border border-brand-soft rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal">
+            <option value="">— выберите исход —</option>
+            <option value="success">Успешно закрыт</option>
+            <option value="no_response">Клиент не ответил</option>
+            <option value="spam">Спам / не по делу</option>
+            <option value="duplicate">Дубликат</option>
+            <option value="other">Другое</option>
+          </select>
+        </div>
+        <div>
+          <label for="resolveDialogComment" class="block text-sm font-medium text-brand-dark mb-1">Комментарий</label>
+          <textarea id="resolveDialogComment" rows="3" placeholder="Кратко опишите результат" class="w-full border border-brand-soft rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal resize-none"></textarea>
+        </div>
+        <div class="flex gap-2 pt-2 border-t">
+          <button type="button" class="btn btn-outline flex-1" data-close-resolve-modal>Отмена</button>
+          <button type="button" id="resolveDialogSubmit" class="flex-1 inline-flex items-center justify-center px-3 py-2 rounded-lg bg-brand-teal text-white text-sm font-medium hover:bg-brand-teal/90 shadow-sm">Завершить</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 {# Модалка для просмотра изображений #}
 <div id="messengerImagePreviewModal" class="fixed inset-0 z-[220] hidden">
   <div class="fixed inset-0 bg-black/60" data-close-messenger-img></div>

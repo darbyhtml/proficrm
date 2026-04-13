@@ -53,6 +53,9 @@ class MessengerOperatorPanel {
     this._globalSSETimeoutId = null;
     this._globalSSEReconnectAttempts = 0;
     this._soundEnabled = localStorage.getItem('messenger_sound') !== 'off'; // Звук вкл по умолчанию
+    this._resolveModalConversationId = null; // id диалога, для которого открыта resolve-модалка
+    this._pendingResolve = null; // {id, outcome, comment, timerId, toast}
+    this._resolveModalInitialized = false; // защита от дублей слушателей
   }
 
   /** Fetch с таймаутом и AbortController */
@@ -92,6 +95,7 @@ class MessengerOperatorPanel {
     this.loadCannedResponses();
     this.initBulkActions();
     this.startGlobalNotificationStream();
+    this.initResolveModal();
 
     // Обработка URL hash для открытия диалога
     const hash = window.location.hash;
@@ -2060,6 +2064,198 @@ class MessengerOperatorPanel {
         submitButton.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
       }
     }
+  }
+
+  /**
+   * Инициализация модалки завершения диалога (Plan 2 Task 7).
+   * Навешивает обработчики на backdrop, кнопки и событие messenger:open-resolve-modal.
+   * Идемпотентна — защищена флагом _resolveModalInitialized от дублей слушателей.
+   */
+  initResolveModal() {
+    if (this._resolveModalInitialized) return;
+    this._resolveModalInitialized = true;
+
+    // Слушатель кастом-события от primary CTA «Завершить»
+    window.addEventListener('messenger:open-resolve-modal', (e) => {
+      const id = e && e.detail && e.detail.id;
+      if (id) this.openResolveModal(id);
+    });
+
+    const modal = document.getElementById('resolveDialogModal');
+    if (!modal) return;
+
+    // Закрытие по backdrop / кнопкам с data-close-resolve-modal
+    modal.querySelectorAll('[data-close-resolve-modal]').forEach((el) => {
+      el.addEventListener('click', () => this.closeResolveModal());
+    });
+
+    // Submit — запуск undo-flow
+    const submitBtn = document.getElementById('resolveDialogSubmit');
+    if (submitBtn) {
+      submitBtn.addEventListener('click', () => this.submitResolveModal());
+    }
+
+    // Escape закрывает модалку (но не отменяет pending resolve)
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+        this.closeResolveModal();
+      }
+    });
+  }
+
+  /**
+   * Открыть модалку завершения диалога для conversationId.
+   * Сбрасывает форму, ставит фокус на select. Если уже есть pending resolve —
+   * отменяет предыдущий таймер (новая модалка подразумевает пересмотр решения).
+   */
+  openResolveModal(conversationId) {
+    if (!conversationId) return;
+    // Если был активный pending — отменить (юзер передумал и открыл новую модалку)
+    if (this._pendingResolve && this._pendingResolve.timerId) {
+      clearTimeout(this._pendingResolve.timerId);
+      if (this._pendingResolve.toast && this._pendingResolve.toast.cancel) {
+        this._pendingResolve.toast.cancel();
+      }
+      this._pendingResolve = null;
+    }
+
+    this._resolveModalConversationId = conversationId;
+    const modal = document.getElementById('resolveDialogModal');
+    const outcomeSel = document.getElementById('resolveDialogOutcome');
+    const commentTa = document.getElementById('resolveDialogComment');
+    if (outcomeSel) outcomeSel.value = '';
+    if (commentTa) commentTa.value = '';
+    if (modal) modal.classList.remove('hidden');
+    if (outcomeSel) {
+      setTimeout(() => outcomeSel.focus(), 50);
+    }
+  }
+
+  /** Закрыть модалку завершения диалога (без отмены pending resolve). */
+  closeResolveModal() {
+    const modal = document.getElementById('resolveDialogModal');
+    if (modal) modal.classList.add('hidden');
+    this._resolveModalConversationId = null;
+  }
+
+  /**
+   * Обработать нажатие «Завершить» в модалке. Валидация выбранного исхода,
+   * закрытие модалки и запуск undo-flow через showUndoToast (5 сек).
+   */
+  submitResolveModal() {
+    const outcomeSel = document.getElementById('resolveDialogOutcome');
+    const commentTa = document.getElementById('resolveDialogComment');
+    const outcome = outcomeSel ? outcomeSel.value : '';
+    const comment = commentTa ? commentTa.value.trim() : '';
+    const id = this._resolveModalConversationId;
+
+    if (!outcome) {
+      this.showNotification('Выберите исход', 'error');
+      return;
+    }
+    if (!id) {
+      this.closeResolveModal();
+      return;
+    }
+
+    this.closeResolveModal();
+
+    // Если был предыдущий pending — отменить (новый перетирает старый).
+    if (this._pendingResolve && this._pendingResolve.timerId) {
+      clearTimeout(this._pendingResolve.timerId);
+      if (this._pendingResolve.toast && this._pendingResolve.toast.cancel) {
+        this._pendingResolve.toast.cancel();
+      }
+      this._pendingResolve = null;
+    }
+
+    // Запустить undo-flow: 5с окно для отмены, затем PATCH status=resolved.
+    const timerId = setTimeout(() => {
+      const pending = this._pendingResolve;
+      this._pendingResolve = null;
+      if (!pending) return;
+      // TODO(Plan 3): сохранять outcome/comment как internal-сообщение
+      // или в поле Conversation.resolution (поле ещё не добавлено в модель).
+      // Сейчас отправляем только обновление статуса — безопасный минимум.
+      this.patchConversation(pending.id, { status: 'resolved' });
+    }, 5000);
+
+    const toast = this.showUndoToast('Диалог будет завершён', () => {
+      // onUndo — пользователь нажал «Отменить» в тосте.
+      if (this._pendingResolve && this._pendingResolve.timerId) {
+        clearTimeout(this._pendingResolve.timerId);
+      }
+      this._pendingResolve = null;
+      this.showNotification('Отменено', 'info');
+    }, 5000);
+
+    this._pendingResolve = { id, outcome, comment, timerId, toast };
+  }
+
+  /**
+   * Показать undo-тост с кнопкой «Отменить» и прогресс-баром.
+   * Возвращает {cancel} — cancel() принудительно удаляет тост (без вызова onUndo).
+   * Через timeoutMs тост удаляется автоматически (callback отправки вызывается в
+   * таймере submitResolveModal, а НЕ здесь).
+   */
+  showUndoToast(message, onUndo, timeoutMs = 5000) {
+    // Контейнер снизу по центру (отдельный от toastContainer)
+    let container = this._undoToastContainer;
+    if (!container) {
+      container = document.createElement('div');
+      container.className = 'fixed bottom-6 left-1/2 z-[9999] pointer-events-none';
+      container.style.transform = 'translateX(-50%)';
+      document.body.appendChild(container);
+      this._undoToastContainer = container;
+    }
+
+    const toast = document.createElement('div');
+    toast.className = 'pointer-events-auto bg-brand-dark text-white rounded-xl shadow-2xl overflow-hidden';
+    toast.style.cssText = 'min-width:320px;max-width:420px;opacity:0;transform:translateY(12px);transition:opacity .25s ease,transform .25s ease;';
+    toast.innerHTML = `
+      <div class="flex items-center gap-3 px-4 py-3">
+        <span class="text-sm flex-1">${this.escapeHtml(message)}</span>
+        <button type="button" class="text-sm font-semibold text-brand-orange hover:text-brand-orange/80 whitespace-nowrap" data-undo-btn>Отменить</button>
+      </div>
+      <div class="h-1 bg-white/10">
+        <div class="h-full bg-brand-orange" data-undo-progress style="width:100%;transition:width ${timeoutMs}ms linear;"></div>
+      </div>
+    `;
+    container.appendChild(toast);
+
+    requestAnimationFrame(() => {
+      toast.style.opacity = '1';
+      toast.style.transform = 'translateY(0)';
+      const bar = toast.querySelector('[data-undo-progress]');
+      if (bar) bar.style.width = '0%';
+    });
+
+    let removed = false;
+    const remove = () => {
+      if (removed) return;
+      removed = true;
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(12px)';
+      setTimeout(() => {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+      }, 300);
+    };
+
+    const undoBtn = toast.querySelector('[data-undo-btn]');
+    if (undoBtn) {
+      undoBtn.addEventListener('click', () => {
+        if (removed) return;
+        remove();
+        if (typeof onUndo === 'function') {
+          try { onUndo(); } catch (e) { console.error('undo callback failed:', e); }
+        }
+      });
+    }
+
+    // Автоудаление тоста по таймауту (callback отправки — снаружи).
+    setTimeout(remove, timeoutMs);
+
+    return { cancel: remove };
   }
 
   /**
