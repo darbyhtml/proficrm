@@ -856,6 +856,106 @@ class ConversationViewSet(
             return Response({"status": "ok"}, status=status.HTTP_200_OK)
         return Response(get_typing_status(conversation.id), status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=["get"], url_path="context")
+    def context(self, request, pk=None):
+        """Plan 4 Task 3 — агрегированные данные правой панели live-chat.
+
+        Возвращает:
+            - client: блок контакта (имя/email/phone/регион/блокировка)
+            - company: блок связанной компании (или null)
+            - previous_conversations: последние 20 прошлых диалогов этого контакта
+            - audit_log: хронология (transfers + resolution)
+        """
+        conv = self.get_object()
+        contact = conv.contact
+
+        client_block = {
+            "id": str(contact.id),
+            "name": contact.name,
+            "email": contact.email,
+            "phone": contact.phone,
+            "region": getattr(conv, "client_region", "") or "",
+            "region_source": getattr(conv, "client_region_source", "") or "",
+            "last_activity_at": contact.last_activity_at,
+            "blocked": contact.blocked,
+        }
+
+        company_block = None
+        if conv.company_id:
+            c = conv.company
+            company_block = {
+                "id": str(c.id),
+                "name": c.name,
+                "inn": c.inn,
+                "status_id": c.status_id,
+                "status_name": c.status.name if c.status_id else None,
+                "branch_id": c.branch_id,
+                "responsible_id": c.responsible_id,
+                "responsible_name": (
+                    c.responsible.get_full_name() or c.responsible.username
+                ) if c.responsible_id else None,
+                "url": f"/companies/{c.id}/",
+            }
+            if hasattr(c, "deals"):
+                try:
+                    company_block["deals_count"] = c.deals.count()
+                except Exception:
+                    company_block["deals_count"] = 0
+
+        previous_qs = (
+            models.Conversation.objects
+            .filter(contact=contact)
+            .exclude(pk=conv.pk)
+            .order_by("-created_at")[:20]
+        )
+        previous_list = [
+            {
+                "id": p.id,
+                "status": p.status,
+                "ui_status": p.ui_status,
+                "created_at": p.created_at,
+                "resolution": p.resolution,
+            }
+            for p in previous_qs
+        ]
+
+        audit_log = []
+        transfers_qs = (
+            conv.transfers
+            .select_related("from_user", "to_user", "from_branch", "to_branch")
+            .order_by("-created_at")[:20]
+        )
+        for t in transfers_qs:
+            audit_log.append({
+                "kind": "transfer",
+                "created_at": t.created_at,
+                "from_user": (
+                    t.from_user.get_full_name() or t.from_user.username
+                ) if t.from_user_id else None,
+                "to_user": (
+                    t.to_user.get_full_name() or t.to_user.username
+                ) if t.to_user_id else None,
+                "from_branch": t.from_branch.name if t.from_branch_id else None,
+                "to_branch": t.to_branch.name if t.to_branch_id else None,
+                "cross_branch": t.cross_branch,
+                "text": t.reason or "",
+            })
+
+        if conv.resolution and isinstance(conv.resolution, dict) and conv.resolution.get("outcome"):
+            audit_log.insert(0, {
+                "kind": "resolution",
+                "created_at": conv.resolution.get("resolved_at"),
+                "text": conv.resolution.get("comment", ""),
+                "outcome": conv.resolution.get("outcome"),
+            })
+
+        return Response({
+            "client": client_block,
+            "company": company_block,
+            "previous_conversations": previous_list,
+            "audit_log": audit_log,
+        })
+
 
 class CannedResponseViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
     """
