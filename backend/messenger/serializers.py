@@ -49,6 +49,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             "last_activity_at", "waiting_since", "first_reply_created_at",
             "snoozed_until", "contact_last_seen_at", "agent_last_seen_at",
             "needs_help", "needs_help_at",
+            "resolution", "escalation_level", "last_escalated_at",
             # annotated / computed
             "contact_name", "contact_email", "contact_phone",
             "branch_name", "region_name", "assignee_name",
@@ -60,6 +61,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             "created_at", "last_activity_at", "waiting_since",
             "first_reply_created_at", "contact_last_seen_at", "agent_last_seen_at",
             "needs_help", "needs_help_at",
+            "escalation_level", "last_escalated_at",
         )
 
     def update(self, instance: models.Conversation, validated_data: dict) -> models.Conversation:
@@ -84,7 +86,7 @@ class ConversationSerializer(serializers.ModelSerializer):
         Запрещённые поля:
         - inbox, branch, contact, region и любые другие системные поля
         """
-        allowed_fields = {"status", "assignee", "priority", "labels"}
+        allowed_fields = {"status", "assignee", "priority", "labels", "resolution"}
         forbidden = {field for field in validated_data.keys() if field not in allowed_fields}
         if forbidden:
             raise serializers.ValidationError(
