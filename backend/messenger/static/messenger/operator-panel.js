@@ -2383,10 +2383,15 @@ class MessengerOperatorPanel {
       const pending = this._pendingResolve;
       this._pendingResolve = null;
       if (!pending) return;
-      // TODO(Plan 3): сохранять outcome/comment как internal-сообщение
-      // или в поле Conversation.resolution (поле ещё не добавлено в модель).
-      // Сейчас отправляем только обновление статуса — безопасный минимум.
-      this.patchConversation(pending.id, { status: 'resolved' }, () => {
+      const payload = {
+        status: 'resolved',
+        resolution: {
+          outcome: pending.outcome,
+          comment: pending.comment || '',
+          resolved_at: new Date().toISOString(),
+        },
+      };
+      this.patchConversation(pending.id, payload, () => {
         this.showNotification('Не удалось завершить диалог — проверьте статус', 'error');
       });
     }, 5000);
