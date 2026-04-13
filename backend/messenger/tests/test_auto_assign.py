@@ -3,8 +3,9 @@
 from django.core.cache import cache
 from django.test import TestCase
 
-from accounts.models import Branch
+from accounts.models import Branch, User
 from accounts.models_region import BranchRegion
+from messenger.assignment_services.branch_load_balancer import BranchLoadBalancer
 from messenger.assignment_services.region_router import MultiBranchRouter
 from messenger.models import Inbox, Conversation, Contact
 
@@ -112,3 +113,71 @@ class MultiBranchRouterTests(TestCase):
         # и повторяться циклически.
         expected_cycle = pool_ids + pool_ids
         self.assertEqual(picks, expected_cycle)
+
+
+class BranchLoadBalancerTests(TestCase):
+    """Выбор наименее загруженного онлайн-менеджера филиала."""
+
+    def setUp(self):
+        self.branch = Branch.objects.create(name="ЕКБ", code="ekb")
+        self.inbox = Inbox.objects.create(name="LB Inbox", branch=self.branch)
+        self.contact = Contact.objects.create(
+            name="LB Test", email="lb@example.com"
+        )
+
+        # Свободный менеджер (0 открытых диалогов).
+        self.op_free = User.objects.create_user(
+            username="op_free",
+            password="pass12345",
+            role=User.Role.MANAGER,
+            branch=self.branch,
+            messenger_online=True,
+        )
+        # Загруженный менеджер (3 открытых диалога).
+        self.op_loaded = User.objects.create_user(
+            username="op_loaded",
+            password="pass12345",
+            role=User.Role.MANAGER,
+            branch=self.branch,
+            messenger_online=True,
+        )
+        # Менеджер из того же филиала — по умолчанию offline.
+        self.op_offline = User.objects.create_user(
+            username="op_offline",
+            password="pass12345",
+            role=User.Role.MANAGER,
+            branch=self.branch,
+            messenger_online=False,
+        )
+
+        for _ in range(3):
+            Conversation.objects.create(
+                inbox=self.inbox,
+                contact=self.contact,
+                assignee=self.op_loaded,
+                status=Conversation.Status.OPEN,
+            )
+
+        self.balancer = BranchLoadBalancer()
+
+    def test_picks_least_loaded_online_manager(self):
+        picked = self.balancer.pick(self.branch)
+        self.assertEqual(picked, self.op_free)
+
+    def test_offline_manager_excluded(self):
+        self.op_free.messenger_online = False
+        self.op_free.save(update_fields=["messenger_online"])
+        picked = self.balancer.pick(self.branch)
+        self.assertEqual(picked, self.op_loaded)
+
+    def test_returns_none_when_nobody_online(self):
+        for op in (self.op_free, self.op_loaded, self.op_offline):
+            op.messenger_online = False
+            op.save(update_fields=["messenger_online"])
+        self.assertIsNone(self.balancer.pick(self.branch))
+
+    def test_non_manager_excluded(self):
+        self.op_free.role = User.Role.BRANCH_DIRECTOR
+        self.op_free.save(update_fields=["role"])
+        picked = self.balancer.pick(self.branch)
+        self.assertEqual(picked, self.op_loaded)
