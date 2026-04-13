@@ -261,6 +261,16 @@ class MessengerOperatorPanel {
     this.initTransferModal();
     this.pruneOldDrafts();
 
+    // Plan 3 Task 6: сброс title-badge при возврате на вкладку
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        this._pendingUnread = 0;
+        this.updateTitleBadge(0);
+      }
+    });
+    // Plan 3 Task 6: запрос разрешения Notification при первом клике (user gesture)
+    document.addEventListener('click', () => this.requestNotificationPermission(), { once: true });
+
     // Обработка URL hash для открытия диалога
     const hash = window.location.hash;
     if (hash && hash.startsWith('#conversation/')) {
@@ -1033,6 +1043,9 @@ class MessengerOperatorPanel {
     this.currentConversationId = conversationId;
     this.selectedConversationId = conversationId;
     this.pendingNewMessagesCount = 0;
+    // Plan 3 Task 6: сброс title-badge при открытии диалога
+    this._pendingUnread = 0;
+    this.updateTitleBadge(0);
     
     // Обновить URL hash (без перезагрузки страницы)
     if (window.location.hash !== `#conversation/${conversationId}`) {
@@ -3284,6 +3297,80 @@ class MessengerOperatorPanel {
     this.playIncomingSoundV2();
   }
 
+  /**
+   * Plan 3 Task 6 — унифицированный API уведомлений.
+   * Короткий WebAudio beep для входящих сообщений (независимая реализация
+   * от playIncomingSoundV2 — не требует _soundEnabled, управляется _soundMuted).
+   */
+  playNotificationSound() {
+    try {
+      if (this._soundMuted) return;
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = this._audioCtx || (this._audioCtx = new AudioCtx());
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.value = 0.08;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc.stop(ctx.currentTime + 0.18);
+    } catch (e) { /* ignore */ }
+  }
+
+  /**
+   * Plan 3 Task 6 — запрос разрешения Desktop Notification API.
+   * Вызывается один раз при первом клике (user gesture), чтобы не получать
+   * ошибку "permission was denied" в Chrome.
+   */
+  requestNotificationPermission() {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'default') {
+      try { Notification.requestPermission(); } catch (_) { /* ignore */ }
+    }
+  }
+
+  /**
+   * Plan 3 Task 6 — Desktop notification для входящих сообщений.
+   * Не показывает уведомление, если вкладка активна и это текущий диалог.
+   */
+  showDesktopNotification(conv, message) {
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    if (!conv) return;
+    const currentId = this.currentConversationId || (this.currentConversation && this.currentConversation.id);
+    if (!document.hidden && currentId === conv.id) return;
+    try {
+      const contactName = conv.contact_name || (conv.contact && conv.contact.name) || 'Клиент';
+      const text = (message && (message.text || message.body)) || '';
+      const notif = new Notification(`Новое сообщение — ${contactName}`, {
+        body: text.slice(0, 120),
+        icon: '/static/img/notification-icon.png',
+        tag: `conv-${conv.id}`,
+      });
+      notif.onclick = () => {
+        window.focus();
+        this.openConversation(conv.id);
+        notif.close();
+      };
+    } catch (e) { /* ignore */ }
+  }
+
+  /**
+   * Plan 3 Task 6 — счётчик непрочитанных в заголовке вкладки.
+   * Используется для per-conversation SSE, когда вкладка в фоне.
+   * Основной счётчик по всем диалогам — _updateTabTitle (вызывается
+   * из refreshConversationList).
+   */
+  updateTitleBadge(unreadCount) {
+    const base = this._titleBase || (this._titleBase = document.title.replace(/^\(\d+\)\s*/, ''));
+    document.title = unreadCount > 0 ? `(${unreadCount}) ${base}` : base;
+  }
+
   startTypingPolling(conversationId) {
     this.stopTypingPolling();
     if (!conversationId) return;
@@ -3382,6 +3469,20 @@ class MessengerOperatorPanel {
             this.refreshConversationList();
             if (document.hidden && this.notificationsEnabled) {
               this.showNotification(`Новое сообщение от ${message.sender_contact_name || 'контакта'}`);
+            }
+            // Plan 3 Task 6: звук + desktop notification + title-badge для входящих
+            const dir = (message.direction || '').toString().toLowerCase();
+            if (dir === 'in') {
+              this.playNotificationSound();
+              const conv = {
+                id: conversationId,
+                contact_name: message.sender_contact_name,
+              };
+              this.showDesktopNotification(conv, { text: message.body || message.text || '' });
+              if (document.hidden) {
+                this._pendingUnread = (this._pendingUnread || 0) + 1;
+                this.updateTitleBadge(this._pendingUnread);
+              }
             }
           }
         } catch (err) {
