@@ -232,6 +232,24 @@ class Conversation(models.Model):
         null=True,
         blank=True,
     )
+    # Plan 3 Task 1 — резолюция и уровень эскалации диалога.
+    resolution = models.JSONField(
+        "Итог резолюции",
+        blank=True,
+        default=dict,
+        help_text="Структура {outcome, comment, resolved_at} из resolve modal",
+    )
+    escalation_level = models.PositiveSmallIntegerField(
+        "Уровень эскалации",
+        default=0,
+        db_index=True,
+        help_text="0=нет, 1=warn, 2=urgent, 3=rop_alert, 4=pool_return",
+    )
+    last_escalated_at = models.DateTimeField(
+        "Время последней эскалации",
+        null=True,
+        blank=True,
+    )
     # ВАЖНО: branch определяется строго из inbox.branch и не редактируется вручную.
     branch = models.ForeignKey(
         "accounts.Branch",
