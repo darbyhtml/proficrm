@@ -875,6 +875,11 @@ class CannedResponseViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
         # Фильтруем по филиалу пользователя + глобальные (без филиала)
         if user.branch_id:
             qs = qs.filter(Q(branch_id=user.branch_id) | Q(branch__isnull=True))
+        # Plan 2 Task 11 — фильтр быстрых кнопок ?quick=1
+        quick = self.request.query_params.get("quick")
+        if quick in ("1", "true", "True"):
+            qs = qs.filter(is_quick_button=True)
+            return qs.order_by("sort_order", "title")
         return qs.order_by("title")
 
     def perform_create(self, serializer):

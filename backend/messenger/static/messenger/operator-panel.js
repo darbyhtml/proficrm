@@ -208,6 +208,16 @@ class MessengerOperatorPanel {
     const hint = document.getElementById('internalNoteHint');
     const sendBtn = document.getElementById('messageSendBtn');
     if (!wrapper || !hint) return;
+    // Plan 2 Task 11 — быстрые ответы только для OUT-режима
+    const quickRow = document.getElementById('quickRepliesRow');
+    if (quickRow) {
+      // Ре-рендер (HTML диалога пересоздаётся при открытии — кнопок может не быть)
+      if (!quickRow.childElementCount && this._quickReplies && this._quickReplies.length) {
+        this.renderQuickReplies();
+      }
+      const hasItems = !!(this._quickReplies && this._quickReplies.length);
+      quickRow.classList.toggle('hidden', mode === 'INTERNAL' || !hasItems);
+    }
     if (mode === 'INTERNAL') {
       wrapper.classList.add('bg-yellow-50', 'ring-2', 'ring-yellow-400/50');
       hint.classList.remove('hidden');
@@ -244,6 +254,7 @@ class MessengerOperatorPanel {
     this.initCannedResponsesTrigger();
     this.initDragDrop();
     this.loadCannedResponses();
+    this.loadQuickReplies();
     this.initBulkActions();
     this.startGlobalNotificationStream();
     this.initResolveModal();
@@ -1257,6 +1268,7 @@ class MessengerOperatorPanel {
             <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
             <span>Внутренняя заметка — клиент её не увидит</span>
           </div>
+          <div id="quickRepliesRow" class="hidden flex flex-wrap gap-2 px-3 pt-2" aria-label="Быстрые ответы"></div>
           <div class="messenger-operator-form-row">
             <input type="file" name="attachments" id="messageAttachments" class="hidden" multiple accept="image/*,.pdf">
             <button type="button" id="messageAttachBtn" class="messenger-operator-icon-btn" title="Прикрепить файл">
@@ -3822,6 +3834,79 @@ class MessengerOperatorPanel {
     } catch (e) {
       // не критично
     }
+  }
+
+  // Plan 2 Task 11 — быстрые кнопки ответов над полем ввода
+  async loadQuickReplies() {
+    try {
+      const response = await fetch('/api/canned-responses/?quick=1', {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        this._quickReplies = Array.isArray(data) ? data : (data.results || []);
+      } else {
+        this._quickReplies = [];
+      }
+    } catch (e) {
+      this._quickReplies = [];
+    }
+    this.renderQuickReplies();
+  }
+
+  renderQuickReplies() {
+    const row = document.getElementById('quickRepliesRow');
+    if (!row) return;
+    row.innerHTML = '';
+    const items = (this._quickReplies || []).slice(0, 8);
+    if (!items.length || this.composeMode === 'INTERNAL') {
+      row.classList.add('hidden');
+      return;
+    }
+    items.forEach((cr) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'text-xs px-3 py-1 rounded-full bg-brand-soft/50 hover:bg-brand-soft text-brand-teal border border-brand-teal/30';
+      btn.title = cr.body || '';
+      btn.textContent = cr.title || '';
+      btn.addEventListener('click', () => this.insertQuickReply(cr));
+      row.appendChild(btn);
+    });
+    row.classList.remove('hidden');
+  }
+
+  insertQuickReply(cr) {
+    const input = document.getElementById('messageBody');
+    if (!input || !cr) return;
+    const body = cr.body || '';
+    const current = (input.innerText || '').trim();
+    input.focus();
+    let ok = false;
+    try {
+      if (!current) {
+        input.innerText = '';
+        ok = document.execCommand('insertText', false, body);
+      } else {
+        ok = document.execCommand('insertText', false, ' ' + body);
+      }
+    } catch (e) {
+      ok = false;
+    }
+    if (!ok) {
+      input.innerText = current ? (current + ' ' + body) : body;
+    }
+    // Каретка в конец
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(input);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (e) { /* noop */ }
+    // Триггер input — автосейв черновика и пересчёт высоты
+    input.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   initCannedResponsesTrigger() {
