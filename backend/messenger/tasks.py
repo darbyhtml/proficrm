@@ -3,8 +3,10 @@ Celery-задачи мессенджера (аналог Chatwoot Sidekiq jobs).
 
 - auto_resolve: закрытие неактивных диалогов
 - escalate: переназначение диалогов при таймауте
+- check_offline_operators: перевод операторов в offline по таймауту heartbeat
 """
 import logging
+from datetime import timedelta
 
 from celery import shared_task
 from django.conf import settings
@@ -196,3 +198,19 @@ def send_offline_email_notification(self, conversation_id: int, message_id: int)
             extra={"conversation_id": conversation_id, "assignee_id": assignee.id},
         )
         raise  # Позволяет retry
+
+
+@shared_task(name="messenger.check_offline_operators")
+def check_offline_operators(stale_seconds: int = 90):
+    """Переводит операторов в offline, если heartbeat не приходил дольше stale_seconds.
+
+    Запускается celery-beat раз в минуту. Порог 90 секунд = 3 интервала
+    heartbeat (30с × 3). Это страховка от падения клиента без явного logout.
+    """
+    from accounts.models import User
+    threshold = timezone.now() - timedelta(seconds=stale_seconds)
+    updated = User.objects.filter(
+        messenger_online=True,
+        messenger_last_seen__lt=threshold,
+    ).update(messenger_online=False)
+    return {"marked_offline": updated}

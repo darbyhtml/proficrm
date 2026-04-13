@@ -1,11 +1,14 @@
 """Тесты heartbeat endpoint и онлайн-статуса мессенджера."""
 
+from datetime import timedelta
+
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 from django.contrib.auth import get_user_model
 
 from accounts.models import Branch
+from messenger.tasks import check_offline_operators
 
 User = get_user_model()
 
@@ -36,3 +39,24 @@ class HeartbeatEndpointTests(TestCase):
         self.client.force_authenticate(None)
         resp = self.client.post("/api/messenger/heartbeat/")
         self.assertIn(resp.status_code, [401, 403])
+
+
+class CheckOfflineOperatorsTests(TestCase):
+    def setUp(self):
+        self.branch = Branch.objects.create(name="Br", code="br")
+        self.op_active = User.objects.create_user(
+            "a", password="pw", role=User.Role.MANAGER, branch=self.branch,
+            messenger_online=True, messenger_last_seen=timezone.now(),
+        )
+        self.op_stale = User.objects.create_user(
+            "b", password="pw", role=User.Role.MANAGER, branch=self.branch,
+            messenger_online=True,
+            messenger_last_seen=timezone.now() - timedelta(seconds=120),
+        )
+
+    def test_stale_operator_marked_offline(self):
+        check_offline_operators()
+        self.op_active.refresh_from_db()
+        self.op_stale.refresh_from_db()
+        self.assertTrue(self.op_active.messenger_online)
+        self.assertFalse(self.op_stale.messenger_online)
