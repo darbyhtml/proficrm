@@ -2,9 +2,32 @@
 
 ## Текущая задача
 
-Мессенджер (live-chat) — доведение до production-grade SaaS качества.
+Live-chat UX Completion — реализация по спецификации `docs/superpowers/specs/2026-04-13-livechat-ux-completion-design.md`.
+
+**Статус:** Plan 1 (Backend Foundation) завершён 2026-04-13. Следующий — Plan 2 (UI Status Simplification + Operator CTA).
 
 ## Сделано в этом спринте
+
+**[2026-04-13]** — Live-chat Backend Foundation (Plan 1) ✅
+- 12 задач выполнено, коммиты `5f461e7..3a62b66` (12 коммитов)
+- Региональная автомаршрутизация: `Conversation.client_region` + `MultiBranchRouter` + `BranchLoadBalancer` + `auto_assign_conversation` post_save сигнал
+- Справочник `BranchRegion` (95 записей) + fixture из Положения 2025-2026 + management-команда `load_branch_regions`
+- Ролевая видимость `get_visible_conversations(user)` (MANAGER/РОП/BRANCH_DIRECTOR/ADMIN)
+- Модель `ConversationTransfer` + endpoint `POST /api/messenger/conversations/{id}/transfer/` с cross-branch аудитом
+- Приватные заметки `Message.is_private` (фильтрация в widget SSE/poll/bootstrap, 5 мест)
+- Heartbeat endpoint `POST /api/messenger/heartbeat/` + celery-beat `check_offline_operators` (TTL 90 c)
+- Флаг эскалации `Conversation.needs_help` / `needs_help_at` (задел для Plan 3)
+- Тесты: 120/120 зелёных (`messenger accounts`)
+- Staging: миграции `accounts.0010-0012` + `messenger.0016-0019` применены; BranchRegion=95, health=200
+- Pre-existing issue в логах celery: Fernet InvalidToken на SMTP (MAILER_FERNET_KEY из Round 2 P0 backlog, не связан с Plan 1)
+
+## Следующее
+
+**Plan 2: UI Status Simplification + Operator CTA** — упрощение DB-статусов до 3 (OPEN/RESOLVED/CLOSED) с оверлеем 🔴/🟡/🔵 по `assignee IS NULL` + последнему сообщению; CTA в operator panel «Взять диалог».
+
+---
+
+## Архив
 
 **[2026-04-06]** — SSE real-time fix + gthread
 - Диагностика: 2 sync workers блокировались 3 SSE стримами → 0 воркеров для API

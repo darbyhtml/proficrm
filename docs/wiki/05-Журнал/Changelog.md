@@ -8,6 +8,44 @@ tags: [журнал, changelog]
 
 ---
 
+## 2026-04-13
+
+### Feat: Live-chat Backend Foundation (Plan 1)
+**Коммиты:** `5f461e7..3a62b66`
+
+Фундамент для автоматической маршрутизации диалогов по филиалам:
+- **Региональная автомаршрутизация:** `Conversation.client_region` + `MultiBranchRouter` (точное совпадение / общий пул round-robin / fallback ЕКБ) + `BranchLoadBalancer` (наименее загруженный онлайн-менеджер) + `auto_assign_conversation` через post_save сигнал
+- **Справочник регионов:** модель `BranchRegion` + fixture из Положения 2025-2026 (95 записей, 4 филиала + общий пул Мск/СПб/Нвг/Пск)
+- **Ролевая видимость:** `get_visible_conversations(user)` — MANAGER видит свои + пул филиала, РОП/BRANCH_DIRECTOR — весь филиал, ADMIN — всё
+- **Передача диалога:** модель `ConversationTransfer` + `POST /api/messenger/conversations/{id}/transfer/` с обязательной причиной и детекцией cross-branch
+- **Приватные заметки:** `Message.is_private` (фильтруется из widget SSE/poll/bootstrap в 5 местах)
+- **Heartbeat:** `POST /api/messenger/heartbeat/` обновляет `User.messenger_online`/`messenger_last_seen`; celery-beat task `check_offline_operators` раз в минуту переводит операторов в offline после 90 с без heartbeat
+- **Флаг эскалации:** `Conversation.needs_help` + `needs_help_at` (заготовка для Plan 3)
+
+Обход инварианта `Conversation.save()` (запрет смены branch) — через `Conversation.objects.filter(pk=...).update(...)`.
+
+**Тесты:** 20+ unit/integration (`messenger.tests.test_auto_assign`, `test_heartbeat`, `test_visibility`, `test_transfer`, `test_private_messages`, `accounts.tests_branch_region`) — все зелёные (120/120 в прогоне `messenger accounts`).
+
+**Staging:** миграции `accounts.0010-0012` + `messenger.0016-0019` применены, фикстура `branch_regions_2025_2026.json` загружена (95 регионов), BranchRegion.objects.count()=95.
+
+---
+
+## 2026-04-07
+
+### Fix: Массовое переназначение компаний
+**Проблема:** Директор филиала не мог массово переназначить базу уволенных сотрудников. Если хоть одна из выбранных компаний не проходила проверку прав, вся операция блокировалась с ошибкой 400.
+
+**Решение:** Разрешённые компании переназначаются, запрещённые пропускаются с информированием. Toast показывает «Переназначено N, пропущено M».
+
+### Harden: Security review — .gitignore hardening
+**Проблема:** `.playwright-mcp/` содержала staging widget token и session token в логах Playwright Browser MCP. `test-screenshots/` и PNG в корне содержали скриншоты staging UI с PII (имена, email). Ни одна из этих директорий не была в `.gitignore` — при `git add .` всё попало бы в репозиторий.
+
+**Исправления:**
+- `.gitignore`: добавлены `.playwright-mcp/`, `test-screenshots/`, PNG-скриншоты
+- Рекомендована ротация staging widget token (Inbox #8)
+
+---
+
 ## 2026-04-06
 
 ### Fix: SSE real-time доставка — тройная дедупликация
