@@ -212,7 +212,16 @@ class ConversationLabelSerializer(serializers.ModelSerializer):
 class CannedResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.CannedResponse
-        fields = ("id", "title", "body", "branch", "created_by", "created_at")
+        fields = (
+            "id",
+            "title",
+            "body",
+            "branch",
+            "created_by",
+            "created_at",
+            "is_quick_button",
+            "sort_order",
+        )
         read_only_fields = ("created_by", "created_at")
 
 

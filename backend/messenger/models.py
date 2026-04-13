@@ -1002,10 +1002,20 @@ class CannedResponse(models.Model):
         related_name="created_canned_responses",
     )
     created_at = models.DateTimeField("Создано", auto_now_add=True, db_index=True)
+    is_quick_button = models.BooleanField(
+        "Показывать как быструю кнопку",
+        default=False,
+        db_index=True,
+    )
+    sort_order = models.PositiveIntegerField(
+        "Порядок сортировки",
+        default=0,
+    )
 
     class Meta:
         verbose_name = "Шаблон ответа"
         verbose_name_plural = "Шаблоны ответов"
+        ordering = ["sort_order", "title"]
 
     def __str__(self) -> str:
         return self.title
