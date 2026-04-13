@@ -202,6 +202,29 @@ class MessengerOperatorPanel {
     }
   }
 
+  /** Plan 2 Task 10 — визуальный стиль compose mode (обёртка, плашка, кнопка Send) */
+  applyComposeModeStyle(mode) {
+    const wrapper = document.getElementById('messageInputWrapper');
+    const hint = document.getElementById('internalNoteHint');
+    const sendBtn = document.getElementById('messageSendBtn');
+    if (!wrapper || !hint) return;
+    if (mode === 'INTERNAL') {
+      wrapper.classList.add('bg-yellow-50', 'ring-2', 'ring-yellow-400/50');
+      hint.classList.remove('hidden');
+      if (sendBtn) {
+        sendBtn.classList.add('messenger-operator-send-btn-internal');
+        sendBtn.setAttribute('title', 'Сохранить заметку (Ctrl+Enter)');
+      }
+    } else {
+      wrapper.classList.remove('bg-yellow-50', 'ring-2', 'ring-yellow-400/50');
+      hint.classList.add('hidden');
+      if (sendBtn) {
+        sendBtn.classList.remove('messenger-operator-send-btn-internal');
+        sendBtn.setAttribute('title', 'Отправить (Ctrl+Enter)');
+      }
+    }
+  }
+
   /** Debounced сохранение черновика (300мс) */
   _scheduleDraftSave(conversationId, composeMode, text) {
     this._draftDebounceTimers = this._draftDebounceTimers || {};
@@ -1229,6 +1252,11 @@ class MessengerOperatorPanel {
         <form id="messageForm" class="messenger-operator-form" onsubmit="window.MessengerPanel.sendMessage(event)" enctype="multipart/form-data">
           <input type="hidden" name="conversation_id" value="${conversation.id}">
           <div id="operatorEmojiPicker" class="messenger-operator-emoji-picker messenger-operator-emoji-picker-hidden"></div>
+          <div id="messageInputWrapper" class="rounded-lg transition-colors">
+          <div id="internalNoteHint" class="hidden flex items-center gap-2 px-3 py-2 text-xs text-yellow-800 bg-yellow-100 border-l-4 border-yellow-500 rounded-t">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+            <span>Внутренняя заметка — клиент её не увидит</span>
+          </div>
           <div class="messenger-operator-form-row">
             <input type="file" name="attachments" id="messageAttachments" class="hidden" multiple accept="image/*,.pdf">
             <button type="button" id="messageAttachBtn" class="messenger-operator-icon-btn" title="Прикрепить файл">
@@ -1248,6 +1276,7 @@ class MessengerOperatorPanel {
             <button type="submit" id="messageSendBtn" class="messenger-operator-send-btn" title="Отправить (Ctrl+Enter)">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
             </button>
+          </div>
           </div>
           <div id="messageAttachmentsNames" class="text-xs text-brand-dark/60 mt-1 px-1"></div>
           <div id="composeModeHint" class="text-[10px] text-brand-dark/40 mt-1 px-1">Сообщение увидит клиент. Внутренние заметки доступны только сотрудникам.</div>
@@ -1465,6 +1494,8 @@ class MessengerOperatorPanel {
           composeHint.textContent = 'Эта заметка видна только сотрудникам и не отправляется клиенту.';
         }
       }
+      // Plan 2 Task 10 — визуальный аффорданс: подсветка обёртки, плашка, кнопка Send
+      this.applyComposeModeStyle(this.composeMode);
     };
     const switchComposeMode = (nextMode) => {
       if (this.composeMode === nextMode) return;
@@ -1483,6 +1514,8 @@ class MessengerOperatorPanel {
 
     // Plan 2 Task 9 — восстановить черновик для текущего режима при открытии диалога
     this.applyDraftToInput(conversation.id, this.composeMode);
+    // Plan 2 Task 10 — применить визуальный стиль compose mode при открытии
+    applyModeUI();
 
     // Мобильные кнопки
     const backBtn = document.getElementById('mobileBackBtn');
