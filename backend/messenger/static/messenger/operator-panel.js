@@ -87,6 +87,131 @@ class MessengerOperatorPanel {
     this._activeAbortControllers.clear();
   }
 
+  // ===== Plan 2 Task 9 — Автосохранение черновиков сообщений =====
+
+  /** Префикс ключей черновиков в localStorage */
+  _draftKeyPrefix() { return 'messenger:draft:v1:'; }
+
+  /** Построить ключ для конкретного диалога и режима */
+  _draftKey(conversationId, composeMode) {
+    return this._draftKeyPrefix() + conversationId + ':' + composeMode;
+  }
+
+  /** Сохранить черновик; если пусто — удалить */
+  saveDraft(conversationId, composeMode, text) {
+    if (!conversationId || !composeMode) return;
+    try {
+      const key = this._draftKey(conversationId, composeMode);
+      const clean = (text || '').trim();
+      if (!clean) {
+        localStorage.removeItem(key);
+        return;
+      }
+      const payload = JSON.stringify({ text: clean, savedAt: Date.now() });
+      localStorage.setItem(key, payload);
+      // Контроль ёмкости — не более 50 черновиков
+      this._enforceDraftLimit(50);
+    } catch (e) {
+      // private mode / quota exceeded — игнорируем
+    }
+  }
+
+  /** Загрузить черновик */
+  loadDraft(conversationId, composeMode) {
+    if (!conversationId || !composeMode) return null;
+    try {
+      const raw = localStorage.getItem(this._draftKey(conversationId, composeMode));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.text === 'string') return parsed;
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** Очистить черновик */
+  clearDraft(conversationId, composeMode) {
+    if (!conversationId || !composeMode) return;
+    try {
+      localStorage.removeItem(this._draftKey(conversationId, composeMode));
+    } catch (e) {}
+  }
+
+  /** Удалить устаревшие черновики (TTL 7 дней) */
+  pruneOldDrafts() {
+    try {
+      const prefix = this._draftKeyPrefix();
+      const ttlMs = 7 * 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      const toRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || !k.startsWith(prefix)) continue;
+        try {
+          const parsed = JSON.parse(localStorage.getItem(k) || 'null');
+          if (!parsed || typeof parsed.savedAt !== 'number' || (now - parsed.savedAt) > ttlMs) {
+            toRemove.push(k);
+          }
+        } catch (e) {
+          toRemove.push(k);
+        }
+      }
+      toRemove.forEach(k => localStorage.removeItem(k));
+    } catch (e) {}
+  }
+
+  /** Ограничить количество черновиков — удалить самые старые */
+  _enforceDraftLimit(maxCount) {
+    try {
+      const prefix = this._draftKeyPrefix();
+      const entries = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || !k.startsWith(prefix)) continue;
+        try {
+          const parsed = JSON.parse(localStorage.getItem(k) || 'null');
+          const savedAt = (parsed && typeof parsed.savedAt === 'number') ? parsed.savedAt : 0;
+          entries.push({ key: k, savedAt });
+        } catch (e) {
+          entries.push({ key: k, savedAt: 0 });
+        }
+      }
+      if (entries.length <= maxCount) return;
+      entries.sort((a, b) => a.savedAt - b.savedAt);
+      const excess = entries.length - maxCount;
+      for (let i = 0; i < excess; i++) {
+        localStorage.removeItem(entries[i].key);
+      }
+    } catch (e) {}
+  }
+
+  /** Применить черновик к полю ввода; показать уведомление */
+  applyDraftToInput(conversationId, composeMode) {
+    const messageBody = document.getElementById('messageBody');
+    if (!messageBody) return;
+    const draft = this.loadDraft(conversationId, composeMode);
+    if (draft && draft.text) {
+      messageBody.textContent = draft.text;
+      this.updateOperatorInputHeight(messageBody);
+      try { this.showNotification('Восстановлен черновик', 'info'); } catch (e) {}
+    } else {
+      // При переключении режима — очистить поле, если для нового режима черновика нет
+      messageBody.innerHTML = '';
+      this.updateOperatorInputHeight(messageBody);
+    }
+  }
+
+  /** Debounced сохранение черновика (300мс) */
+  _scheduleDraftSave(conversationId, composeMode, text) {
+    this._draftDebounceTimers = this._draftDebounceTimers || {};
+    const key = conversationId + ':' + composeMode;
+    clearTimeout(this._draftDebounceTimers[key]);
+    this._draftDebounceTimers[key] = setTimeout(() => {
+      this.saveDraft(conversationId, composeMode, text);
+    }, 300);
+  }
+
   init() {
     this.initSidebarControls();
     this.startListPolling();
@@ -100,6 +225,7 @@ class MessengerOperatorPanel {
     this.startGlobalNotificationStream();
     this.initResolveModal();
     this.initTransferModal();
+    this.pruneOldDrafts();
 
     // Обработка URL hash для открытия диалога
     const hash = window.location.hash;
@@ -1196,6 +1322,8 @@ class MessengerOperatorPanel {
       messageBody.addEventListener('input', () => {
         this.updateOperatorInputHeight(messageBody);
         this.sendOperatorTypingPing(conversation.id);
+        // Plan 2 Task 9 — автосохранение черновика (debounce 300мс)
+        this._scheduleDraftSave(conversation.id, this.composeMode, messageBody.textContent || '');
         // @mention autocomplete для внутренних заметок
         if (this.composeMode === 'INTERNAL') {
           this._handleMentionInput(messageBody);
@@ -1338,8 +1466,23 @@ class MessengerOperatorPanel {
         }
       }
     };
-    if (btnOut) btnOut.addEventListener('click', () => { this.composeMode = 'OUT'; applyModeUI(); });
-    if (btnInternal) btnInternal.addEventListener('click', () => { this.composeMode = 'INTERNAL'; applyModeUI(); });
+    const switchComposeMode = (nextMode) => {
+      if (this.composeMode === nextMode) return;
+      // Сохранить текущий черновик под старым режимом перед переключением
+      const prevMode = this.composeMode;
+      if (messageBody) {
+        this.saveDraft(conversation.id, prevMode, messageBody.textContent || '');
+      }
+      this.composeMode = nextMode;
+      applyModeUI();
+      // Загрузить черновик для нового режима
+      this.applyDraftToInput(conversation.id, nextMode);
+    };
+    if (btnOut) btnOut.addEventListener('click', () => switchComposeMode('OUT'));
+    if (btnInternal) btnInternal.addEventListener('click', () => switchComposeMode('INTERNAL'));
+
+    // Plan 2 Task 9 — восстановить черновик для текущего режима при открытии диалога
+    this.applyDraftToInput(conversation.id, this.composeMode);
 
     // Мобильные кнопки
     const backBtn = document.getElementById('mobileBackBtn');
@@ -2035,7 +2178,17 @@ class MessengerOperatorPanel {
       }
 
       const newMessage = await response.json();
-      
+
+      // Plan 2 Task 9 — очистить черновик после успешной отправки
+      this.clearDraft(conversationId, this.composeMode);
+      if (this._draftDebounceTimers) {
+        const dk = conversationId + ':' + this.composeMode;
+        if (this._draftDebounceTimers[dk]) {
+          clearTimeout(this._draftDebounceTimers[dk]);
+          delete this._draftDebounceTimers[dk];
+        }
+      }
+
       // Очистить форму
       if (messageBodyEl && messageBodyEl.contentEditable === 'true') {
         messageBodyEl.innerHTML = '';
