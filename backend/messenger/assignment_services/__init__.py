@@ -11,9 +11,11 @@
 # Импортируем сервисы автоназначения
 from .round_robin import InboxRoundRobinService
 from .rate_limiter import AssignmentRateLimiter, default_rate_limiter
+from .region_router import MultiBranchRouter
 
 __all__ = [
     'InboxRoundRobinService',
     'AssignmentRateLimiter',
     'default_rate_limiter',
+    'MultiBranchRouter',
 ]
