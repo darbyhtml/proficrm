@@ -547,6 +547,11 @@ class Message(models.Model):
         blank=True,
         help_text="Для исходящих: когда контакт увидел сообщение (виджет).",
     )
+    is_private = models.BooleanField(
+        "Приватная заметка (видна только сотрудникам)",
+        default=False,
+        db_index=True,
+    )
 
     # Временный ID из фронтенда (не сохраняется в БД)
     echo_id = None
@@ -567,6 +572,10 @@ class Message(models.Model):
             # Составные индексы для производительности (по образцу Chatwoot)
             models.Index(fields=["sender_contact", "direction", "created_at"], name="msg_msg_cont_dir_crt_idx"),
             models.Index(fields=["sender_user", "direction", "created_at"], name="msg_msg_user_dir_crt_idx"),
+            models.Index(
+                fields=["conversation", "is_private", "created_at"],
+                name="msg_conv_private_idx",
+            ),
         ]
 
     def __str__(self) -> str:

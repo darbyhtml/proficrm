@@ -310,9 +310,10 @@ def widget_bootstrap(request):
         att_settings = get_attachment_settings(inbox)
         initial_messages = []
 
+        # Приватные заметки (is_private=True) не отдаём в виджет клиенту.
         messages_qs = conversation.messages.exclude(
             direction=models.Message.Direction.INTERNAL
-        ).order_by("-created_at", "-id")
+        ).filter(is_private=False).order_by("-created_at", "-id")
         messages = list(messages_qs[:10])
 
         # Помечаем исходящие сообщения как доставленные при первой выдаче в виджет
@@ -965,9 +966,10 @@ def widget_poll(request):
 
         messenger_services.touch_contact_last_seen(conversation, session.contact_id)
 
-        # Получить новые сообщения (только OUT, без INTERNAL)
+        # Получить новые сообщения (только OUT, без INTERNAL и без приватных заметок)
         messages_qs = conversation.messages.filter(
-            direction=models.Message.Direction.OUT
+            direction=models.Message.Direction.OUT,
+            is_private=False,
         ).order_by("created_at", "id")
 
         if since_id:
@@ -1163,9 +1165,10 @@ def widget_stream(request):
             if now - started > 25:
                 break
 
-            # Новые OUT сообщения
+            # Новые OUT сообщения (приватные заметки не отдаём клиенту)
             msgs_qs = conversation.messages.filter(
                 direction=models.Message.Direction.OUT,
+                is_private=False,
                 id__gt=last_id,
             ).order_by("created_at", "id")[:50]
 
@@ -1403,6 +1406,7 @@ def widget_mark_read(request):
             last_id = int(last_message_id)
             conversation.messages.filter(
                 direction=models.Message.Direction.OUT,
+                is_private=False,
                 id__lte=last_id,
             ).update(read_at=now)
         except (ValueError, TypeError):
@@ -1414,6 +1418,7 @@ def widget_mark_read(request):
         if ids_ok:
             conversation.messages.filter(
                 direction=models.Message.Direction.OUT,
+                is_private=False,
                 id__in=ids_ok,
             ).update(read_at=now)
     else:
