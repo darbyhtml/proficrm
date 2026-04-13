@@ -10,7 +10,7 @@ from accounts.models import Branch, BranchRegion
 class BranchRegionTests(TestCase):
     def setUp(self):
         self.ekb = Branch.objects.create(name="Екатеринбург", code="ekb")
-        self.tmn = Branch.objects.create(name="Тюмень", code="tmn")
+        self.tmn = Branch.objects.create(name="Тюмень", code="tym")
         self.krd = Branch.objects.create(name="Краснодар", code="krd")
 
     def test_load_fixture_creates_regions(self):
