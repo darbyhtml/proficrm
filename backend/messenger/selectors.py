@@ -127,6 +127,53 @@ def get_messenger_unread_count(user: User) -> int:
     
     # Кэшируем результат
     cache.set(cache_key, count, timeout=cache_timeout)
-    
+
     return count
 
+
+def get_visible_conversations(user) -> QuerySet[Conversation]:
+    """Возвращает queryset диалогов, видимых пользователю по его роли.
+
+    Используется live-chat модулем для разграничения доступа к диалогам
+    независимо от общего ``visible_conversations_qs`` (который привязан
+    к ``data_scope``). Правила:
+
+    - ADMIN / is_superuser — все диалоги;
+    - BRANCH_DIRECTOR / SALES_HEAD (РОП) — все диалоги своего филиала
+      (по ``branch_id`` диалога или по ``inbox.branch_id``);
+    - GROUP_MANAGER — диалоги подчинённых (fallback: только свои, если
+      в проекте нет поля иерархии ``group_manager`` у User);
+    - MANAGER — свои назначенные + пул своего филиала
+      (``assignee IS NULL AND branch == user.branch``);
+    - Прочие роли — только свои назначенные.
+    """
+    if user.is_superuser or getattr(user, "role", None) == User.Role.ADMIN:
+        return Conversation.objects.all()
+
+    role = getattr(user, "role", None)
+    branch_id = getattr(user, "branch_id", None)
+
+    if role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD):
+        if not branch_id:
+            return Conversation.objects.none()
+        return Conversation.objects.filter(
+            Q(branch_id=branch_id) | Q(inbox__branch_id=branch_id)
+        ).distinct()
+
+    if role == User.Role.GROUP_MANAGER:
+        if hasattr(User, "group_manager"):
+            sub_ids = list(
+                User.objects.filter(group_manager=user).values_list("id", flat=True)
+            )
+            sub_ids.append(user.id)
+            return Conversation.objects.filter(assignee_id__in=sub_ids)
+        return Conversation.objects.filter(assignee=user)
+
+    if role == User.Role.MANAGER:
+        if not branch_id:
+            return Conversation.objects.filter(assignee=user)
+        return Conversation.objects.filter(
+            Q(assignee=user) | Q(assignee__isnull=True, branch_id=branch_id)
+        ).distinct()
+
+    return Conversation.objects.filter(assignee=user)
