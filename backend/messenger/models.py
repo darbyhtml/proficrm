@@ -269,6 +269,21 @@ class Conversation(models.Model):
         db_index=True,
         help_text="Обновляется при каждом сообщении. Fallback на created_at.",
     )
+    # Временные метки для вычисления UI-статусов («Ждёт ответа» vs «В работе»).
+    # Обновляются в Message.save() при создании IN/OUT-сообщений соответственно.
+    # INTERNAL (служебные заметки) не трогает эти поля.
+    last_customer_msg_at = models.DateTimeField(
+        "Последнее сообщение клиента",
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+    last_agent_msg_at = models.DateTimeField(
+        "Последнее сообщение оператора",
+        null=True,
+        blank=True,
+        db_index=True,
+    )
     waiting_since = models.DateTimeField(
         "Когда начал ждать ответа",
         null=True,
@@ -652,9 +667,14 @@ class Message(models.Model):
         # Обновить last_activity_at диалога с защитой от race condition (по образцу Chatwoot)
         # Используем update с F() для атомарного обновления, чтобы избежать race condition
         from django.db.models import F
-        Conversation.objects.filter(pk=self.conversation_id).update(
-            last_activity_at=created_at_used
-        )
+        update_kwargs = {"last_activity_at": created_at_used}
+        if is_new:
+            if self.direction == self.Direction.IN:
+                update_kwargs["last_customer_msg_at"] = created_at_used
+            elif self.direction == self.Direction.OUT:
+                update_kwargs["last_agent_msg_at"] = created_at_used
+            # INTERNAL: служебная заметка не меняет метки клиента/оператора.
+        Conversation.objects.filter(pk=self.conversation_id).update(**update_kwargs)
         
         # Обновить waiting_since логику (по образцу Chatwoot)
         self._update_waiting_since(created_at_used)
