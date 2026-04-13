@@ -2177,7 +2177,9 @@ class MessengerOperatorPanel {
       // TODO(Plan 3): сохранять outcome/comment как internal-сообщение
       // или в поле Conversation.resolution (поле ещё не добавлено в модель).
       // Сейчас отправляем только обновление статуса — безопасный минимум.
-      this.patchConversation(pending.id, { status: 'resolved' });
+      this.patchConversation(pending.id, { status: 'resolved' }, () => {
+        this.showNotification('Не удалось завершить диалог — проверьте статус', 'error');
+      });
     }, 5000);
 
     const toast = this.showUndoToast('Диалог будет завершён', () => {

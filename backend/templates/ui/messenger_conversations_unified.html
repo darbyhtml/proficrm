@@ -743,7 +743,7 @@
       <div class="space-y-4">
         <div>
           <label for="resolveDialogOutcome" class="block text-sm font-medium text-brand-dark mb-1">Исход <span class="text-red-600">*</span></label>
-          <select id="resolveDialogOutcome" class="w-full border border-brand-soft rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal">
+          <select id="resolveDialogOutcome" required class="w-full border border-brand-soft rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal">
             <option value="">— выберите исход —</option>
             <option value="success">Успешно закрыт</option>
             <option value="no_response">Клиент не ответил</option>
@@ -755,6 +755,7 @@
         <div>
           <label for="resolveDialogComment" class="block text-sm font-medium text-brand-dark mb-1">Комментарий</label>
           <textarea id="resolveDialogComment" rows="3" placeholder="Кратко опишите результат" class="w-full border border-brand-soft rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal resize-none"></textarea>
+          <p class="text-xs text-gray-500 mt-1">Комментарий будет сохраняться в карточке диалога (появится позже).</p>
         </div>
         <div class="flex gap-2 pt-2 border-t">
           <button type="button" class="btn btn-outline flex-1" data-close-resolve-modal>Отмена</button>
