@@ -1,19 +1,28 @@
 """Тесты auto-assignment pipeline для live-chat."""
 
 from django.core.cache import cache
+from django.db.models.signals import post_save
 from django.test import TestCase
 
 from accounts.models import Branch, User
 from accounts.models_region import BranchRegion
+from messenger.assignment_services.auto_assign import auto_assign_conversation
 from messenger.assignment_services.branch_load_balancer import BranchLoadBalancer
 from messenger.assignment_services.region_router import MultiBranchRouter
 from messenger.models import Inbox, Conversation, Contact
+from messenger.signals import auto_assign_new_conversation
 
 
 class ConversationClientRegionTests(TestCase):
     """Проверка новых полей client_region / client_region_source."""
 
     def setUp(self):
+        # Отключаем auto_assign-сигнал — тесты проверяют простые поля,
+        # а сигнал приводил бы к вызову роутера на каждом create.
+        post_save.disconnect(auto_assign_new_conversation, sender=Conversation)
+        self.addCleanup(
+            post_save.connect, auto_assign_new_conversation, sender=Conversation
+        )
         self.branch = Branch.objects.create(name="Test Branch", code="test")
         self.inbox = Inbox.objects.create(name="Test Inbox", branch=self.branch)
         self.contact = Contact.objects.create(
@@ -47,6 +56,12 @@ class MultiBranchRouterTests(TestCase):
     ]
 
     def setUp(self):
+        # Сигнал дергал бы router ещё раз на каждом Conversation.create,
+        # ломая round-robin-счётчик. В этих юнит-тестах роутер вызывается вручную.
+        post_save.disconnect(auto_assign_new_conversation, sender=Conversation)
+        self.addCleanup(
+            post_save.connect, auto_assign_new_conversation, sender=Conversation
+        )
         cache.clear()
 
         # Филиалы (ekb — fallback, tmn — Тюмень, krd — Краснодар).
@@ -181,3 +196,91 @@ class BranchLoadBalancerTests(TestCase):
         self.op_free.save(update_fields=["role"])
         picked = self.balancer.pick(self.branch)
         self.assertEqual(picked, self.op_loaded)
+
+
+class AutoAssignIntegrationTests(TestCase):
+    """Интеграционные тесты оркестратора auto_assign_conversation + post_save."""
+
+    def setUp(self):
+        cache.clear()
+
+        # Два филиала: ekb — fallback, tmn — обслуживает Томскую область.
+        self.ekb = Branch.objects.create(name="ЕКБ", code="ekb")
+        self.tmn = Branch.objects.create(name="Тюмень", code="tmn")
+        BranchRegion.objects.create(
+            branch=self.tmn, region_name="Томская область"
+        )
+
+        # Менеджеры филиалов — оба online.
+        self.op_ekb = User.objects.create_user(
+            username="op_ekb",
+            password="pass12345",
+            role=User.Role.MANAGER,
+            branch=self.ekb,
+            messenger_online=True,
+        )
+        self.op_tmn = User.objects.create_user(
+            username="op_tmn",
+            password="pass12345",
+            role=User.Role.MANAGER,
+            branch=self.tmn,
+            messenger_online=True,
+        )
+
+        # Inbox принадлежит филиалу ekb — при авто-назначении Conversation
+        # должен «переехать» в филиал tmn через queryset.update() (обход
+        # инварианта save, запрещающего менять branch).
+        self.inbox = Inbox.objects.create(name="Auto Inbox", branch=self.ekb)
+        self.contact = Contact.objects.create(
+            name="Auto Test", email="auto@example.com"
+        )
+
+    def test_regional_conversation_assigned_to_branch_manager(self):
+        """Регион матчится в tmn → ставится филиал и менеджер tmn."""
+        conv = Conversation.objects.create(
+            inbox=self.inbox,
+            contact=self.contact,
+            client_region="Томская область",
+        )
+        # post_save сигнал уже отработал на create — проверяем результат.
+        conv.refresh_from_db()
+        self.assertEqual(conv.branch, self.tmn)
+        self.assertEqual(conv.assignee, self.op_tmn)
+
+        # Явный повторный вызов оркестратора также корректен (идемпотентно).
+        result = auto_assign_conversation(conv)
+        self.assertTrue(result["assigned"])
+        self.assertEqual(result["branch"], self.tmn)
+        self.assertEqual(result["user"], self.op_tmn)
+
+    def test_no_online_manager_leaves_pool(self):
+        """Онлайн-менеджеров в филиале нет → branch ставится, assignee=None."""
+        self.op_tmn.messenger_online = False
+        self.op_tmn.save(update_fields=["messenger_online"])
+
+        conv = Conversation.objects.create(
+            inbox=self.inbox,
+            contact=self.contact,
+            client_region="Томская область",
+        )
+        conv.refresh_from_db()
+        self.assertEqual(conv.branch, self.tmn)
+        self.assertIsNone(conv.assignee)
+
+        # Явный вызов — результат: assigned=False, branch=tmn, user=None.
+        result = auto_assign_conversation(conv)
+        self.assertFalse(result["assigned"])
+        self.assertEqual(result["branch"], self.tmn)
+        self.assertIsNone(result["user"])
+
+    def test_signal_triggers_auto_assign_on_create(self):
+        """Сигнал post_save должен сам дёргать оркестратор при create."""
+        conv = Conversation.objects.create(
+            inbox=self.inbox,
+            contact=self.contact,
+            client_region="Томская область",
+        )
+        # Никаких явных вызовов — всё должно произойти автоматически.
+        conv.refresh_from_db()
+        self.assertEqual(conv.assignee, self.op_tmn)
+        self.assertEqual(conv.branch, self.tmn)
