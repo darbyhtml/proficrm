@@ -1024,7 +1024,7 @@ class MessengerOperatorPanel {
             <p class="text-xs text-brand-dark/60">Диалог #${conversation.id}</p>
             <p class="text-xs text-brand-dark/40 mt-1 hidden" id="contactTypingIndicator">Клиент печатает…</p>
           </div>
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2" id="headerActions">
             <button type="button" id="mobileInfoBtn" class="lg:hidden inline-flex items-center justify-center w-8 h-8 rounded-full border border-brand-soft/80 text-brand-dark/60 hover:text-brand-dark hover:border-brand-soft" title="Инфо">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><path d="M12 7h.01"/>
@@ -1034,6 +1034,7 @@ class MessengerOperatorPanel {
             ${conversation.status === 'pending' ? '<span class="badge badge-progress">В ожидании</span>' : ''}
             ${conversation.status === 'resolved' ? '<span class="badge badge-done">Решён</span>' : ''}
             ${conversation.status === 'closed' ? '<span class="badge badge-cancel">Закрыт</span>' : ''}
+            <div id="headerActionsSlot" class="flex items-center gap-2"></div>
           </div>
         </div>
       </div>
@@ -1126,7 +1127,10 @@ class MessengerOperatorPanel {
 
     html += `</div>`;
     contentArea.innerHTML = html;
-    
+
+    // Отрисовать контекстную primary CTA и меню ⋯ в шапке (Plan 2 Task 6)
+    this.renderHeaderActions(conversation);
+
     // Автоскролл к последнему сообщению (при открытии всегда в самый низ)
     this.scrollToBottom(true);
 
@@ -2102,6 +2106,225 @@ class MessengerOperatorPanel {
     // Ограничить до 4 тостов
     while (this._toastContainer.children.length > 4) {
       this._toastContainer.firstChild.remove();
+    }
+  }
+
+  /**
+   * Алиас для showNotification — часть кода использует showToast().
+   */
+  showToast(message, type = 'info') {
+    return this.showNotification(message, type);
+  }
+
+  /**
+   * Определить эффективный ui_status диалога.
+   * Fallback-логика для старых диалогов до миграции: повторяет Conversation.ui_status property.
+   */
+  getEffectiveUiStatus(conversation) {
+    if (conversation && conversation.ui_status) return conversation.ui_status;
+    if (!conversation) return 'in_progress';
+    const s = conversation.status;
+    if (s === 'resolved' || s === 'closed') return 'closed';
+    if (!conversation.assignee) return 'new';
+    return 'in_progress';
+  }
+
+  /**
+   * Получить конфиг контекстной primary CTA для шапки диалога.
+   * Возвращает {label, onClick} в зависимости от ui_status.
+   */
+  getPrimaryCtaConfig(conversation) {
+    const uiStatus = this.getEffectiveUiStatus(conversation);
+    const id = conversation.id;
+    const ctx = window.MESSENGER_CONTEXT || {};
+    const currentUserId = ctx.currentUserId || null;
+
+    if (uiStatus === 'new') {
+      return {
+        label: 'Взять в работу',
+        onClick: () => {
+          if (!currentUserId) {
+            this.showToast('Не удалось определить текущего пользователя', 'error');
+            return;
+          }
+          this.patchConversation(id, { assignee: currentUserId });
+        },
+      };
+    }
+    if (uiStatus === 'waiting') {
+      return {
+        label: 'Ответить',
+        onClick: () => {
+          const body = document.getElementById('messageBody');
+          if (body) {
+            body.focus();
+          }
+          this.scrollToBottom(true);
+        },
+      };
+    }
+    if (uiStatus === 'closed') {
+      return {
+        label: 'Переоткрыть',
+        onClick: () => this.patchConversation(id, { status: 'open' }),
+      };
+    }
+    // in_progress (или fallback)
+    return {
+      label: 'Завершить',
+      onClick: () => {
+        window.dispatchEvent(new CustomEvent('messenger:open-resolve-modal', { detail: { id } }));
+      },
+    };
+  }
+
+  /**
+   * Отрисовать primary CTA + меню ⋯ в слот #headerActionsSlot.
+   * Идемпотентен: каждый вызов перетирает innerHTML и навешивает свежие обработчики.
+   */
+  renderHeaderActions(conversation) {
+    const slot = document.getElementById('headerActionsSlot');
+    if (!slot || !conversation) return;
+
+    // Снять предыдущий document listener меню, если был
+    if (this._headerMenuDocListener) {
+      document.removeEventListener('click', this._headerMenuDocListener);
+      this._headerMenuDocListener = null;
+    }
+    if (this._headerMenuKeyListener) {
+      document.removeEventListener('keydown', this._headerMenuKeyListener);
+      this._headerMenuKeyListener = null;
+    }
+
+    const cta = this.getPrimaryCtaConfig(conversation);
+    slot.innerHTML = `
+      <button type="button" id="headerPrimaryCta" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-teal text-white text-sm font-medium hover:bg-brand-teal/90 shadow-sm">
+        ${this.escapeHtml(cta.label)}
+      </button>
+      <div class="relative">
+        <button type="button" id="headerMenuBtn" class="inline-flex items-center justify-center w-8 h-8 rounded-full border border-brand-soft/80 text-brand-dark/60 hover:text-brand-dark hover:border-brand-soft" title="Действия" aria-haspopup="true" aria-expanded="false">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>
+          </svg>
+        </button>
+        <div id="headerMenuDropdown" class="hidden absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-brand-soft/40 z-50 py-1 text-sm">
+          <button type="button" data-action="transfer" class="w-full text-left px-3 py-2 hover:bg-brand-soft/30 text-brand-dark">Передать оператору</button>
+          <button type="button" data-action="needs-help" class="w-full text-left px-3 py-2 hover:bg-brand-soft/30 text-brand-dark">Позвать старшего</button>
+          <button type="button" data-action="unassign" class="w-full text-left px-3 py-2 hover:bg-brand-soft/30 text-brand-dark">Вернуть в очередь</button>
+        </div>
+      </div>
+    `;
+
+    const ctaBtn = document.getElementById('headerPrimaryCta');
+    if (ctaBtn) {
+      ctaBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        try {
+          cta.onClick();
+        } catch (err) {
+          console.error('Primary CTA failed:', err);
+        }
+      });
+    }
+
+    const menuBtn = document.getElementById('headerMenuBtn');
+    const dropdown = document.getElementById('headerMenuDropdown');
+    if (menuBtn && dropdown) {
+      menuBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.toggleHeaderMenu();
+      });
+      dropdown.querySelectorAll('button[data-action]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const action = btn.getAttribute('data-action');
+          this.closeHeaderMenu();
+          this.handleHeaderMenuAction(action, conversation.id);
+        });
+      });
+    }
+  }
+
+  toggleHeaderMenu() {
+    const dropdown = document.getElementById('headerMenuDropdown');
+    const btn = document.getElementById('headerMenuBtn');
+    if (!dropdown) return;
+    const isHidden = dropdown.classList.contains('hidden');
+    if (isHidden) {
+      dropdown.classList.remove('hidden');
+      if (btn) btn.setAttribute('aria-expanded', 'true');
+      // Навесить listeners на document (закрытие по клику вне / Escape)
+      this._headerMenuDocListener = (ev) => {
+        const dd = document.getElementById('headerMenuDropdown');
+        const bb = document.getElementById('headerMenuBtn');
+        if (!dd) return;
+        if (dd.contains(ev.target)) return;
+        if (bb && bb.contains(ev.target)) return;
+        this.closeHeaderMenu();
+      };
+      this._headerMenuKeyListener = (ev) => {
+        if (ev.key === 'Escape') this.closeHeaderMenu();
+      };
+      // setTimeout чтобы не поймать текущий click
+      setTimeout(() => {
+        document.addEventListener('click', this._headerMenuDocListener);
+        document.addEventListener('keydown', this._headerMenuKeyListener);
+      }, 0);
+    } else {
+      this.closeHeaderMenu();
+    }
+  }
+
+  closeHeaderMenu() {
+    const dropdown = document.getElementById('headerMenuDropdown');
+    const btn = document.getElementById('headerMenuBtn');
+    if (dropdown) dropdown.classList.add('hidden');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+    if (this._headerMenuDocListener) {
+      document.removeEventListener('click', this._headerMenuDocListener);
+      this._headerMenuDocListener = null;
+    }
+    if (this._headerMenuKeyListener) {
+      document.removeEventListener('keydown', this._headerMenuKeyListener);
+      this._headerMenuKeyListener = null;
+    }
+  }
+
+  handleHeaderMenuAction(action, conversationId) {
+    if (action === 'transfer') {
+      window.dispatchEvent(new CustomEvent('messenger:open-transfer-modal', { detail: { id: conversationId } }));
+      return;
+    }
+    if (action === 'needs-help') {
+      this.handleNeedsHelp(conversationId);
+      return;
+    }
+    if (action === 'unassign') {
+      this.patchConversation(conversationId, { assignee: null });
+      return;
+    }
+  }
+
+  async handleNeedsHelp(conversationId) {
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}/needs-help/`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+          'X-CSRFToken': this.getCsrfToken(),
+        },
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || 'Ошибка запроса');
+      }
+      this.showToast('Руководитель уведомлён', 'success');
+    } catch (e) {
+      console.error('handleNeedsHelp failed:', e);
+      this.showToast('Не удалось позвать старшего: ' + (e.message || e), 'error');
     }
   }
 
