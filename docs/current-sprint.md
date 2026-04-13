@@ -4,9 +4,18 @@
 
 Live-chat UX Completion — реализация по спецификации `docs/superpowers/specs/2026-04-13-livechat-ux-completion-design.md`.
 
-**Статус:** Plan 1 (Backend Foundation) завершён 2026-04-13. Следующий — Plan 2 (UI Status Simplification + Operator CTA).
+**Статус:** Plan 1 (Backend Foundation) и Plan 2 (Operator UX Panel) завершены 2026-04-13. Следующее — staging деплой + Plan 3 (Notifications + Escalation).
 
 ## Сделано в этом спринте
+
+**[2026-04-13]** — Live-chat Operator UX Panel (Plan 2) ✅
+- 13 задач выполнено (включая полировку и фикс предсуществующих тестов)
+- Коммиты: `cce8224` (last_*_msg_at) → `5c81536` (ui_status) → `ac93be1` (waiting_minutes + escalation_thresholds) → `40ebff0` (CannedResponse.is_quick_button + sort_order) → `2a6df8b`/`3c57dae` (needs-help API + agents filters + branches + code review fixes) → `0ae5ae4` (контекстная CTA + меню ⋯ в шапке) → `4551b0c`/`5bdef2c` (resolve modal + 5s undo toast) → `f6cbf47` (transfer modal с обязательной причиной и cross-branch warning) → `ae48596` (draft autosave в localStorage) → `75abc68` (внутренние заметки — визуальный аффорданс) → `b7c0104` (quick-reply кнопки) → `9dfa761` (needs_help бейдж SOS) → `53e5808` (fix accounts.tests_branch_region tym)
+- Модель: `last_customer_msg_at`, `last_agent_msg_at`, `ui_status` property (NEW/WAITING/IN_PROGRESS/CLOSED), `waiting_minutes`, `escalation_thresholds`, `CannedResponse.is_quick_button/sort_order`
+- API: `GET /api/conversations/agents/?branch_id=&online=1`, `GET /api/messenger/branches/`, `POST /api/conversations/{id}/needs-help/`, `?quick=1` для canned-responses
+- UI: контекстная primary CTA (Взять / Ответить / Завершить / Переоткрыть) + меню ⋯ (Передать / Позвать старшего / Вернуть в очередь); resolve modal с 5s undo; transfer modal с обязательной причиной (через существующий `/transfer/` endpoint); draft autosave 300ms debounce + TTL 7д + лимит 50; визуальный режим внутренней заметки (жёлтая плашка); быстрые ответы (чипы над полем ввода); SOS бейдж "Позван старший" в списке и шапке
+- Миграции: `messenger.0020_conversation_msg_timestamps`, `messenger.0021_cannedresponse_quick_button`
+- Тесты: все новые Task-тесты зелёные, регрессия messenger 109/109 + accounts 4/4 (fix tym)
 
 **[2026-04-13]** — Live-chat Backend Foundation (Plan 1) ✅
 - 12 задач выполнено, коммиты `5f461e7..3a62b66` (12 коммитов)
@@ -23,7 +32,10 @@ Live-chat UX Completion — реализация по спецификации `
 
 ## Следующее
 
-**Plan 2: UI Status Simplification + Operator CTA** — упрощение DB-статусов до 3 (OPEN/RESOLVED/CLOSED) с оверлеем 🔴/🟡/🔵 по `assignee IS NULL` + последнему сообщению; CTA в operator panel «Взять диалог».
+1. **Деплой Plan 2 на staging** — `git pull` + `docker build` + `up -d` + миграции `messenger.0020/0021` + smoke-test сценарии (Взять→Ответить→Завершить→Undo; Передать с cross-branch; draft autosave; quick replies; SOS бейдж).
+2. **Plan 3: Notifications + Escalation** — эскалация диалогов по `waiting_minutes` (warn/urgent/rop-alert/pool-return), Celery periodic task, in-app уведомления, `Conversation.resolution` поле для хранения outcome/comment из Task 7, integration причины передачи из Task 8 в `ConversationTransfer` (уже сохраняется серверно). `PolicyConfig.livechat_escalation` настройки.
+3. **Plan 4: Right panel — Client Context** — карточка клиента (компания, регион, deal'ы), история диалогов, заметки.
+4. **Полировка Task 6/7** (nice-to-have, не блокеры): secondary стиль кнопки "Переоткрыть"; подтверждение при Вернуть в очередь; focus trap в модалках.
 
 ---
 

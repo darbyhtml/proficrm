@@ -10,6 +10,40 @@ tags: [журнал, changelog]
 
 ## 2026-04-13
 
+### Feat: Live-chat Operator UX Panel (Plan 2)
+**Коммиты:** `cce8224..9dfa761` (13 коммитов) + `53e5808` (fix предсуществующего теста `accounts.tests_branch_region`)
+
+Полная оператор-панель в стиле Chatwoot поверх существующей SSE-инфраструктуры:
+
+**Модель и API:**
+- `Message.save()` теперь обновляет `Conversation.last_customer_msg_at` / `last_agent_msg_at` (только при создании, только для OUT/IN — INTERNAL игнорируется)
+- `Conversation.ui_status` (property) — слой над DB-статусом: `NEW` (без assignee) / `WAITING` (клиент ждёт ответа) / `IN_PROGRESS` / `CLOSED`
+- `Conversation.waiting_minutes` (property) и `escalation_thresholds` (classmethod, читает из `PolicyConfig.livechat_escalation` если есть, иначе дефолты warn=3/urgent=10/rop_alert=20/pool_return=40)
+- `CannedResponse.is_quick_button` + `sort_order` + `Meta.ordering`
+- `GET /api/conversations/agents/?branch_id=X&online=1` — фильтры операторов
+- `GET /api/messenger/branches/` — список активных филиалов
+- `POST /api/conversations/{id}/needs-help/` — флаг "позван старший" (права: assignee/ADMIN/BRANCH_DIRECTOR/SALES_HEAD)
+- `GET /api/canned-responses/?quick=1` — быстрые ответы для чипов
+
+**UI (operator-panel.js, ~600 новых строк):**
+- **Контекстная primary CTA** в шапке диалога: меняется по `ui_status` — «Взять в работу» / «Ответить» / «Завершить» / «Переоткрыть»
+- **Меню ⋯** с пунктами «Передать оператору», «Позвать старшего», «Вернуть в очередь» (dropdown с закрытием по клику вне / Escape)
+- **Resolve modal** (`#resolveDialogModal`): select исхода (success/no_response/spam/duplicate/other, required) + textarea комментария + 5-секундный **undo-тост** с прогресс-баром перед фактическим PATCH
+- **Transfer modal** (`#transferDialogModal`): филиал, оператор (загрузка через агенты API с фильтром `online`), причина (minlength=5), предупреждение cross-branch. Использует существующий `POST /transfer/` endpoint с серверным аудитом `ConversationTransfer`
+- **Draft autosave** в localStorage (300ms debounce, TTL 7 дней, лимит 50 черновиков, ключ `messenger:draft:v1:<id>:<mode>`, отдельные черновики для OUT и INTERNAL режимов)
+- **Визуальный режим внутренней заметки:** жёлтый фон поля ввода + плашка «Внутренняя заметка — клиент её не увидит» + жёлтая кнопка отправки при `composeMode=INTERNAL`
+- **Быстрые ответы:** ряд чипов над полем ввода из `CannedResponse.is_quick_button=True` (первые 8 по `sort_order`); скрывается в INTERNAL режиме
+- **SOS бейдж «Позван старший»:** красный пульсирующий в списке диалогов и статичный в шапке
+
+**Тесты:** 11 новых в `test_operator_actions_api.py` + 3 в `test_ui_status.py` (MessageTimestampsTests) + 5 (UiStatusPropertyTests) + 4 (WaitingMinutesTests + EscalationThresholdsTests) + 2 (CannedResponseFieldsTests) + 2 (QuickButtonFilterTests). Регрессия messenger: 109/109, accounts: 4/4 после фикса `tym`-кода.
+
+**Архитектурные решения:**
+- Текст и комментарий резолва/передачи — через существующие endpoints (`PATCH status` + `/transfer/` для аудита); новых таблиц для резолюции не создавали (задача Plan 3)
+- `Message.is_private` из Plan 1 оставлен deprecated в пользу уже существующего `Direction.INTERNAL` + `composeMode=internal` на фронте — избежали дублирования
+- Cross-branch PATCH через ConversationSerializer не разрешён — найден существующий `POST /transfer/` с `filter(pk=...).update(branch=...)`
+
+---
+
 ### Feat: Live-chat Backend Foundation (Plan 1)
 **Коммиты:** `5f461e7..3a62b66`
 
