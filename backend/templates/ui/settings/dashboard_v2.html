@@ -120,32 +120,6 @@
     </div>
   </div>
 
-  <div class="v2-sec-title">Интерфейс</div>
-  <div class="v2-scale-picker v2-anim" data-v2-scale-picker style="animation-delay:.03s">
-    <div class="v2-scale-picker__label">Масштаб интерфейса:</div>
-    {% with current=ui_font_scale|default:1.0 %}
-    <button type="button" class="v2-scale-btn{% if current < 0.95 %} v2-scale-btn--active{% endif %}" data-scale="0.875">
-      <span class="v2-scale-btn__pct">87.5%</span>
-      <span class="v2-scale-btn__label">Мелкий</span>
-    </button>
-    <button type="button" class="v2-scale-btn{% if current >= 0.95 and current < 1.05 %} v2-scale-btn--active{% endif %}" data-scale="1.000">
-      <span class="v2-scale-btn__pct">100%</span>
-      <span class="v2-scale-btn__label">Обычный</span>
-    </button>
-    <button type="button" class="v2-scale-btn{% if current >= 1.05 and current < 1.18 %} v2-scale-btn--active{% endif %}" data-scale="1.125">
-      <span class="v2-scale-btn__pct">112.5%</span>
-      <span class="v2-scale-btn__label">Крупный</span>
-    </button>
-    <button type="button" class="v2-scale-btn{% if current >= 1.18 %} v2-scale-btn--active{% endif %}" data-scale="1.250">
-      <span class="v2-scale-btn__pct">125%</span>
-      <span class="v2-scale-btn__label">Очень крупный</span>
-    </button>
-    {% endwith %}
-    <div class="v2-scale-picker__label" style="margin-left:auto;opacity:.7;font-size:12px">
-      Применяется мгновенно, сохраняется для вашего аккаунта
-    </div>
-  </div>
-
   <div class="v2-sec-title">CRM</div>
   <div class="v2-settings-grid v2-anim" style="animation-delay:.05s">
 

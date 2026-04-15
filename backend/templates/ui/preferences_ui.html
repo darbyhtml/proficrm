@@ -12,9 +12,58 @@
     </div>
 
     <div class="card card-pad">
+      <div class="font-medium mb-1">Масштаб интерфейса (v2)</div>
+      <div class="text-sm muted mb-3">Четыре пресета для v2-режима (через CSS zoom). Применяется мгновенно и сохраняется для вашего аккаунта.</div>
+      <style>
+        .v2p-scale{display:flex;flex-wrap:wrap;gap:10px}
+        .v2p-btn{display:inline-flex;flex-direction:column;align-items:center;min-width:80px;padding:10px 14px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;cursor:pointer;font-family:inherit;transition:all .15s}
+        .v2p-btn:hover{border-color:#2563eb;background:#eff6ff}
+        .v2p-btn--active{background:#2563eb;border-color:#2563eb;color:#fff}
+        .v2p-btn--active:hover{background:#1d4ed8;border-color:#1d4ed8}
+        .v2p-btn__pct{font-size:15px;font-weight:700;line-height:1.2}
+        .v2p-btn__lbl{font-size:11px;margin-top:2px;opacity:.85}
+      </style>
+      <div class="v2p-scale" data-v2-scale-picker>
+        {% with current=ui_font_scale|default:1.0 %}
+        <button type="button" class="v2p-btn{% if current < 0.95 %} v2p-btn--active{% endif %}" data-scale="0.875">
+          <span class="v2p-btn__pct">87.5%</span><span class="v2p-btn__lbl">Мелкий</span>
+        </button>
+        <button type="button" class="v2p-btn{% if current >= 0.95 and current < 1.05 %} v2p-btn--active{% endif %}" data-scale="1.000">
+          <span class="v2p-btn__pct">100%</span><span class="v2p-btn__lbl">Обычный</span>
+        </button>
+        <button type="button" class="v2p-btn{% if current >= 1.05 and current < 1.18 %} v2p-btn--active{% endif %}" data-scale="1.125">
+          <span class="v2p-btn__pct">112.5%</span><span class="v2p-btn__lbl">Крупный</span>
+        </button>
+        <button type="button" class="v2p-btn{% if current >= 1.18 %} v2p-btn--active{% endif %}" data-scale="1.250">
+          <span class="v2p-btn__pct">125%</span><span class="v2p-btn__lbl">Очень крупный</span>
+        </button>
+        {% endwith %}
+      </div>
+      <script nonce="{{ csp_nonce }}">
+      (function(){
+        const picker=document.querySelector('[data-v2-scale-picker]');
+        if(!picker)return;
+        const csrf=(document.querySelector('[name=csrfmiddlewaretoken]')||{}).value||'';
+        picker.querySelectorAll('.v2p-btn').forEach(function(btn){
+          btn.addEventListener('click',async function(){
+            const scale=parseFloat(btn.getAttribute('data-scale'));
+            picker.querySelectorAll('.v2p-btn').forEach(function(b){b.classList.remove('v2p-btn--active');});
+            btn.classList.add('v2p-btn--active');
+            document.documentElement.style.setProperty('--ui-font-scale',scale.toFixed(3));
+            try{
+              const fd=new FormData();fd.append('font_scale',scale.toFixed(3));
+              await fetch('/preferences/ui/v2-scale/',{method:'POST',headers:{'X-CSRFToken':csrf},body:fd,credentials:'same-origin'});
+            }catch(e){console.warn('v2-scale save error',e);}
+          });
+        });
+      })();
+      </script>
+    </div>
+
+    <div class="card card-pad">
       <div class="flex items-start justify-between gap-3">
         <div>
-          <div class="font-medium mb-1">Размер шрифта</div>
+          <div class="font-medium mb-1">Размер шрифта (v1 — плавная регулировка)</div>
           <div class="text-sm muted">Один ползунок меняет масштаб интерфейса на всех страницах. Диапазон ограничен, чтобы верстка не “ехала”.</div>
         </div>
         <div class="text-sm font-semibold whitespace-nowrap" id="fontScaleLabel"></div>
