@@ -8,6 +8,7 @@ from ui.views.dashboard import (
     analytics, analytics_user,
     help_page,
     preferences, preferences_ui, preferences_company_detail_view_mode,
+    preferences_v2_scale,
     preferences_mail, preferences_profile, preferences_password,
     preferences_mail_signature, preferences_avatar_upload,
     preferences_avatar_delete, preferences_table_settings,

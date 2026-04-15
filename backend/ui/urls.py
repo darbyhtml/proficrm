@@ -13,6 +13,7 @@ urlpatterns = [
     path("preferences/", views.preferences, name="preferences"),
     path("preferences/ui/", views.preferences_ui, name="preferences_ui"),
     path("preferences/ui/company-detail-view-mode/", views.preferences_company_detail_view_mode, name="preferences_company_detail_view_mode"),
+    path("preferences/ui/v2-scale/", views.preferences_v2_scale, name="preferences_v2_scale"),
     path("preferences/mail/", views.preferences_mail, name="preferences_mail"),
     path("preferences/profile/", views.preferences_profile, name="preferences_profile"),
     path("preferences/password/", views.preferences_password, name="preferences_password"),

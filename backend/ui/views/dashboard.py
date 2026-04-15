@@ -831,12 +831,12 @@ def preferences_ui(request: HttpRequest) -> HttpResponse:
         except Exception:
             scale = None
 
-        if scale is None or not (0.90 <= scale <= 1.15):
-            messages.error(request, "Некорректный масштаб. Допустимо от 90% до 115%.")
+        if scale is None or not (0.85 <= scale <= 1.30):
+            messages.error(request, "Некорректный масштаб. Допустимо от 85% до 130%.")
             return redirect("/preferences/#interface")
 
         prefs = UiUserPreference.load_for_user(user)
-        prefs.font_scale = Decimal(f"{scale:.2f}")
+        prefs.font_scale = Decimal(f"{scale:.3f}")
         prefs.save(update_fields=["font_scale", "updated_at"])
         try:
             request.session["ui_font_scale"] = float(prefs.font_scale_float())
@@ -875,6 +875,43 @@ def preferences_company_detail_view_mode(request: HttpRequest) -> JsonResponse:
         pass
 
     return JsonResponse({"success": True, "view_mode": view_mode})
+
+
+@login_required
+@policy_required(resource_type="action", resource="ui:preferences")
+def preferences_v2_scale(request: HttpRequest) -> JsonResponse:
+    """
+    AJAX endpoint для сохранения масштаба v2-интерфейса.
+    POST: {"scale": "0.875" | "1.000" | "1.125" | "1.250"}
+    Применяется через CSS zoom на .v2 обёртке.
+    """
+    if request.method != "POST":
+        return JsonResponse({"success": False, "error": "Метод не разрешен."}, status=405)
+
+    raw = (request.POST.get("scale") or "").strip().replace(",", ".")
+    try:
+        scale = float(raw)
+    except Exception:
+        return JsonResponse({"success": False, "error": "Некорректное значение."}, status=400)
+
+    # Разрешаем только 4 пресета, чтобы не плодить промежуточных значений.
+    allowed = {0.875: "0.875", 1.000: "1.000", 1.125: "1.125", 1.250: "1.250"}
+    key = next((k for k in allowed if abs(k - scale) < 0.001), None)
+    if key is None:
+        return JsonResponse(
+            {"success": False, "error": "Допустимо только 0.875 / 1.000 / 1.125 / 1.250."},
+            status=400,
+        )
+
+    prefs = UiUserPreference.load_for_user(request.user)
+    prefs.font_scale = Decimal(allowed[key])
+    prefs.save(update_fields=["font_scale", "updated_at"])
+    try:
+        request.session["ui_font_scale"] = prefs.font_scale_float()
+    except Exception:
+        pass
+
+    return JsonResponse({"success": True, "scale": allowed[key]})
 
 
 @login_required

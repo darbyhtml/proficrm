@@ -58,6 +58,45 @@
     }
     .v2-tile__hint--ok { color: #15803d; }
     .v2-tile__hint--warn { color: #b45309; }
+
+    /* Пресеты масштаба интерфейса */
+    .v2-scale-picker {
+      display: flex; flex-wrap: wrap; gap: 10px;
+      padding: 14px 16px;
+      background: var(--v2-bg);
+      border: 1px solid var(--v2-border);
+      border-radius: var(--v2-radius-lg);
+      box-shadow: var(--v2-shadow-sm);
+    }
+    .v2-scale-picker__label {
+      font-size: 13px; font-weight: 500; color: var(--v2-text-soft);
+      display: flex; align-items: center; margin-right: 6px;
+    }
+    .v2-scale-btn {
+      display: inline-flex; flex-direction: column; align-items: center;
+      min-width: 74px; padding: 8px 12px;
+      background: var(--v2-bg-soft);
+      border: 1px solid var(--v2-border-strong);
+      border-radius: var(--v2-radius-sm);
+      cursor: pointer;
+      font-family: inherit;
+      transition: all .15s ease;
+    }
+    .v2-scale-btn:hover {
+      border-color: var(--v2-primary);
+      background: var(--v2-primary-50);
+    }
+    .v2-scale-btn--active {
+      background: var(--v2-primary);
+      border-color: var(--v2-primary);
+      color: #ffffff;
+    }
+    .v2-scale-btn--active:hover {
+      background: var(--v2-primary-dark);
+      border-color: var(--v2-primary-dark);
+    }
+    .v2-scale-btn__pct { font-size: 14px; font-weight: 700; line-height: 1.2; }
+    .v2-scale-btn__label { font-size: 11px; margin-top: 2px; opacity: .85; }
   </style>
 {% endblock %}
 
@@ -78,6 +117,32 @@
     <h1 class="v2-h1" style="margin:0">Настройки</h1>
     <div class="v2-item__meta" style="margin-top:4px;margin-bottom:4px">
       Управление CRM, пользователями, справочниками, безопасностью и интеграциями
+    </div>
+  </div>
+
+  <div class="v2-sec-title">Интерфейс</div>
+  <div class="v2-scale-picker v2-anim" data-v2-scale-picker style="animation-delay:.03s">
+    <div class="v2-scale-picker__label">Масштаб интерфейса:</div>
+    {% with current=ui_font_scale|default:1.0 %}
+    <button type="button" class="v2-scale-btn{% if current < 0.95 %} v2-scale-btn--active{% endif %}" data-scale="0.875">
+      <span class="v2-scale-btn__pct">87.5%</span>
+      <span class="v2-scale-btn__label">Мелкий</span>
+    </button>
+    <button type="button" class="v2-scale-btn{% if current >= 0.95 and current < 1.05 %} v2-scale-btn--active{% endif %}" data-scale="1.000">
+      <span class="v2-scale-btn__pct">100%</span>
+      <span class="v2-scale-btn__label">Обычный</span>
+    </button>
+    <button type="button" class="v2-scale-btn{% if current >= 1.05 and current < 1.18 %} v2-scale-btn--active{% endif %}" data-scale="1.125">
+      <span class="v2-scale-btn__pct">112.5%</span>
+      <span class="v2-scale-btn__label">Крупный</span>
+    </button>
+    <button type="button" class="v2-scale-btn{% if current >= 1.18 %} v2-scale-btn--active{% endif %}" data-scale="1.250">
+      <span class="v2-scale-btn__pct">125%</span>
+      <span class="v2-scale-btn__label">Очень крупный</span>
+    </button>
+    {% endwith %}
+    <div class="v2-scale-picker__label" style="margin-left:auto;opacity:.7;font-size:12px">
+      Применяется мгновенно, сохраняется для вашего аккаунта
     </div>
   </div>
 
@@ -261,4 +326,36 @@
 
   {% include "ui/_v2/v2_toggle.html" with target_url="/settings/" target_label="обычную версию" mode="to-v1" %}
 </div>
+
+<script>
+(function(){
+  const picker = document.querySelector('[data-v2-scale-picker]');
+  if(!picker) return;
+  const htmlEl = document.documentElement;
+  const csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+
+  picker.querySelectorAll('.v2-scale-btn').forEach(function(btn){
+    btn.addEventListener('click', async function(){
+      const scale = btn.getAttribute('data-scale');
+      if(!scale) return;
+      // Мгновенное применение: меняем CSS-переменную на <html> (её читает .v2 { zoom: ... }).
+      htmlEl.style.setProperty('--ui-font-scale', scale);
+      // Визуальная подсветка
+      picker.querySelectorAll('.v2-scale-btn').forEach(function(b){ b.classList.remove('v2-scale-btn--active'); });
+      btn.classList.add('v2-scale-btn--active');
+      // Сохранение в профиль (fire-and-forget, но с обработкой ошибок)
+      try{
+        const fd = new FormData();
+        fd.append('csrfmiddlewaretoken', csrf);
+        fd.append('scale', scale);
+        const res = await fetch('/preferences/ui/v2-scale/', {
+          method:'POST', body:fd, credentials:'same-origin',
+          headers:{'X-Requested-With':'XMLHttpRequest'}
+        });
+        if(!res.ok){ console.warn('v2-scale save failed', res.status); }
+      }catch(err){ console.warn('v2-scale save error', err); }
+    });
+  });
+})();
+</script>
 {% endblock %}
