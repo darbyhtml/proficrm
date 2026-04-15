@@ -265,11 +265,17 @@
           {% endif %}
           <div class="v2-td" style="min-width:0">
             <div class="v2-item__title" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              <span>{{ c.name }}</span>
-              {% if 'inn' in company_list_columns and c.inn %}<span class="v2-item__meta" style="font-size:11px">ИНН {{ c.inn }}</span>{% endif %}
+              <span>{% if q and c.search_name_html %}{{ c.search_name_html|safe }}{% else %}{{ c.name }}{% endif %}</span>
+              {% if 'inn' in company_list_columns and c.inn %}<span class="v2-item__meta" style="font-size:11px">ИНН {% if q and c.search_inn_html %}{{ c.search_inn_html|safe }}{% else %}{{ c.inn }}{% endif %}</span>{% endif %}
               {% if 'overdue' in company_list_columns and c.has_overdue %}<span class="v2-count v2-count--danger" style="font-size:10px;padding:1px 6px">просрочка</span>{% endif %}
             </div>
-            {% if c.address %}<div class="v2-item__meta">{{ c.address|truncatechars:60 }}</div>{% endif %}
+            {% if c.address %}<div class="v2-item__meta">{% if q and c.search_address_html %}{{ c.search_address_html|safe }}{% else %}{{ c.address|truncatechars:60 }}{% endif %}</div>{% endif %}
+            {% if q and c.search_reasons %}
+              <div class="v2-item__meta" style="color:#f97316;font-weight:500;font-size:11px;margin-top:2px">
+                Найдено:
+                {% for r in c.search_reasons %}<b>{{ r.label }}</b>: {{ r.value_html|safe }}{% if not forloop.last %} · {% endif %}{% endfor %}
+              </div>
+            {% endif %}
             <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:4px">
               {% if 'spheres' in company_list_columns %}{% for s in c.spheres.all %}
                 <span class="v2-count" style="font-size:10px;padding:1px 6px;background:var(--v2-bg-soft);color:var(--v2-text);font-weight:500">
