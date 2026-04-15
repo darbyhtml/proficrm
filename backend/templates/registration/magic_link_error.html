@@ -4,23 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Ошибка входа — CRM ПРОФИ</title>
-    <script src="https://cdn.tailwindcss.com" nonce="{{ csp_nonce }}"></script>
-    <script nonce="{{ csp_nonce }}">
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              brand: {
-                teal: "#01948E",
-                orange: "#FDAD3A",
-                dark: "#003D38",
-                soft: "#C2E2DE",
-              },
-            },
-          },
-        },
-      };
-    </script>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'ui/css/main.css' %}">
   </head>
   <body class="bg-brand-soft/40 text-brand-dark min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-md bg-white border border-brand-soft rounded-2xl p-6 shadow-sm">

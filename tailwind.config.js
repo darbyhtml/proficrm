@@ -3,6 +3,7 @@ module.exports = {
   content: [
     "./backend/templates/**/*.html",
     "./backend/**/templates/**/*.html",
+    "./backend/static/ui/*.js",
   ],
   theme: {
     extend: {

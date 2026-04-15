@@ -11,23 +11,7 @@
     <link rel="icon" type="image/svg+xml" href="{% static 'ui/favicon-v2.svg' %}">
     <link rel="shortcut icon" href="{% static 'ui/favicon-v2.svg' %}">
     <meta name="theme-color" content="#01948E">
-    <script src="https://cdn.tailwindcss.com" nonce="{{ csp_nonce }}"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              brand: {
-                teal: "#01948E",
-                orange: "#FDAD3A",
-                dark: "#003D38",
-                soft: "#C2E2DE",
-              },
-            },
-          },
-        },
-      };
-    </script>
+    <link rel="stylesheet" href="{% static 'ui/css/main.css' %}">
     <style>
       :root{
         --brand-teal:#01948E;
@@ -813,7 +797,6 @@
       }
     </style>
     {% block extra_head %}{% endblock %}
-    <link rel="stylesheet" href="{% static 'ui/css/main.css' %}">
   </head>
   <body class="bg-brand-soft/40 text-brand-dark">
     <div class="min-h-screen">
