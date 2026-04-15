@@ -76,6 +76,43 @@ services:
       nofile: { soft: 65536, hard: 65536 }
     restart: unless-stopped
 
+  websocket:
+    build:
+      context: .
+      dockerfile: Dockerfile.staging
+    working_dir: /app/backend
+    env_file:
+      - .env
+    environment:
+      DB_ENGINE: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-crm}
+      POSTGRES_USER: ${POSTGRES_USER:-crm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      DJANGO_DEBUG: "0"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8002:8001"
+    command: ["python", "-m", "daphne", "-b", "0.0.0.0", "-p", "8001", "crm.asgi:application"]
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: ${WS_MEM:-256m}
+    cpus: ${WS_CPUS:-0.5}
+    ulimits:
+      nofile: { soft: 65536, hard: 65536 }
+    restart: unless-stopped
+
   celery:
     build:
       context: .
