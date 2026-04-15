@@ -216,7 +216,6 @@
         {# Сохраняем сортировку и текущий per_page при смене фильтров #}
         {% if sort_field %}<input type="hidden" name="sort" value="{{ sort_field }}" />{% endif %}
         {% if sort_dir %}<input type="hidden" name="dir" value="{{ sort_dir }}" />{% endif %}
-        {% if per_page %}<input type="hidden" name="per_page" value="{{ per_page }}" />{% endif %}
       </form>
 
       {% if can_bulk_actions and page.object_list %}
@@ -427,15 +426,27 @@
         {% endfor %}
       </div>
 
-      {% if page.paginator.num_pages > 1 %}
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:12px;border-top:1px solid var(--v2-border);font-size:13px;color:var(--v2-text-muted)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:12px;border-top:1px solid var(--v2-border);font-size:13px;color:var(--v2-text-muted);gap:12px;flex-wrap:wrap">
         <div>Стр. {{ page.number }} из {{ page.paginator.num_pages }} · всего {{ tasks_count }}</div>
-        <div style="display:flex;gap:8px">
-          {% if page.has_previous %}<a class="v2-btn v2-btn--ghost v2-btn--sm" href="?page={{ page.previous_page_number }}{% if qs %}&{{ qs }}{% endif %}">← назад</a>{% endif %}
-          {% if page.has_next %}<a class="v2-btn v2-btn--ghost v2-btn--sm" href="?page={{ page.next_page_number }}{% if qs %}&{{ qs }}{% endif %}">вперёд →</a>{% endif %}
+        <div style="display:flex;gap:10px;align-items:center">
+          <form method="get" style="display:inline-flex;align-items:center;gap:6px">
+            {% for k, v in request.GET.items %}{% if k != 'per_page' and k != 'page' %}<input type="hidden" name="{{ k }}" value="{{ v }}" />{% endif %}{% endfor %}
+            <label style="font-size:12px">На странице</label>
+            <select name="per_page" class="v2-input v2-input--sm" style="width:auto" onchange="this.form.submit()">
+              <option value="25"{% if per_page == 25 %} selected{% endif %}>25</option>
+              <option value="50"{% if per_page == 50 %} selected{% endif %}>50</option>
+              <option value="100"{% if per_page == 100 %} selected{% endif %}>100</option>
+              <option value="200"{% if per_page == 200 %} selected{% endif %}>200</option>
+            </select>
+          </form>
+          {% if page.paginator.num_pages > 1 %}
+          <div style="display:flex;gap:8px">
+            {% if page.has_previous %}<a class="v2-btn v2-btn--ghost v2-btn--sm" href="?page={{ page.previous_page_number }}{% if qs %}&{{ qs }}{% endif %}">← назад</a>{% endif %}
+            {% if page.has_next %}<a class="v2-btn v2-btn--ghost v2-btn--sm" href="?page={{ page.next_page_number }}{% if qs %}&{{ qs }}{% endif %}">вперёд →</a>{% endif %}
+          </div>
+          {% endif %}
         </div>
       </div>
-      {% endif %}
     </div>
   </div>
 

@@ -197,7 +197,12 @@ class UiUserPreference(models.Model):
     tasks_per_page = models.PositiveSmallIntegerField(
         "Строк на странице (задачи)",
         default=25,
-        choices=[(10, "10"), (25, "25"), (50, "50"), (100, "100")],
+        choices=[(25, "25"), (50, "50"), (100, "100"), (200, "200")],
+    )
+    companies_per_page = models.PositiveSmallIntegerField(
+        "Строк на странице (компании)",
+        default=25,
+        choices=[(25, "25"), (50, "50"), (100, "100"), (200, "200")],
     )
     default_task_tab = models.CharField(
         "Вкладка задач по умолчанию",

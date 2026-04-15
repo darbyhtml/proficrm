@@ -147,20 +147,20 @@ def company_list(request: HttpRequest) -> HttpResponse:
     companies_filtered = qs.order_by().count()
     filter_active = bool(q) or f["filter_active"]
 
-    # Количество элементов на странице: из GET или из сессии (по умолчанию 25)
+    # Количество элементов на странице: UiUserPreference.companies_per_page
+    from ui.models import UiUserPreference
+    _ui_prefs = UiUserPreference.load_for_user(user)
+    per_page = int(_ui_prefs.companies_per_page or 25)
     per_page_param = request.GET.get("per_page", "").strip()
     if per_page_param:
         try:
-            per_page = int(per_page_param)
-            # Разрешенные значения: 25, 50, 100, 200
-            if per_page in [25, 50, 100, 200]:
-                request.session["company_list_per_page"] = per_page
-            else:
-                per_page = request.session.get("company_list_per_page", 25)
+            _pp = int(per_page_param)
+            if _pp in (25, 50, 100, 200) and _pp != per_page:
+                _ui_prefs.companies_per_page = _pp
+                _ui_prefs.save(update_fields=["companies_per_page", "updated_at"])
+                per_page = _pp
         except (ValueError, TypeError):
-            per_page = request.session.get("company_list_per_page", 25)
-    else:
-        per_page = request.session.get("company_list_per_page", 25)
+            pass
 
     paginator = Paginator(qs, per_page)
     page = paginator.get_page(request.GET.get("page"))
@@ -406,7 +406,12 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
     companies_filtered = qs.order_by().count()
     
     # Пагинация
-    per_page = int(request.GET.get("per_page", request.session.get("company_list_per_page", 25)))
+    from ui.models import UiUserPreference
+    _ui_prefs = UiUserPreference.load_for_user(user)
+    try:
+        per_page = int(request.GET.get("per_page") or _ui_prefs.companies_per_page or 25)
+    except (ValueError, TypeError):
+        per_page = int(_ui_prefs.companies_per_page or 25)
     if per_page not in [25, 50, 100, 200]:
         per_page = 25
     

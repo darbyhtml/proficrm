@@ -249,19 +249,20 @@ def task_list(request: HttpRequest) -> HttpResponse:
         sort_dir = "desc"
         qs = qs.order_by("-created_at")
 
-    # Пагинация с выбором per_page (как в company_list)
+    # Пагинация с выбором per_page — сохраняется в UiUserPreference.tasks_per_page
+    from ui.models import UiUserPreference
+    _ui_prefs = UiUserPreference.load_for_user(user)
+    per_page = int(_ui_prefs.tasks_per_page or 25)
     per_page_param = request.GET.get("per_page", "").strip()
     if per_page_param:
         try:
-            per_page = int(per_page_param)
-            if per_page in [25, 50, 100, 200]:
-                request.session["task_list_per_page"] = per_page
-            else:
-                per_page = request.session.get("task_list_per_page", 25)
+            _pp = int(per_page_param)
+            if _pp in (25, 50, 100, 200) and _pp != per_page:
+                _ui_prefs.tasks_per_page = _pp
+                _ui_prefs.save(update_fields=["tasks_per_page", "updated_at"])
+                per_page = _pp
         except (ValueError, TypeError):
-            per_page = request.session.get("task_list_per_page", 25)
-    else:
-        per_page = request.session.get("task_list_per_page", 25)
+            pass
 
     paginator = Paginator(qs, per_page)
     page = paginator.get_page(request.GET.get("page"))
