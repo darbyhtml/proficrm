@@ -312,21 +312,33 @@
         </div>
         <div class="v2-card__body">
           {% for item in contracts_soon|slice:":5" %}
-          <a class="v2-item" href="{% url 'company_detail' item.company.id %}">
-            <span class="v2-item__dot {% if item.level == 'danger' %}v2-item__dot--danger{% else %}v2-item__dot--warn{% endif %}"></span>
+          <div class="v2-item" style="align-items:flex-start">
+            <span class="v2-item__dot {% if item.level == 'danger' %}v2-item__dot--danger{% else %}v2-item__dot--warn{% endif %}" style="margin-top:6px"></span>
             <div class="flex-1 min-w-0">
-              <div class="v2-item__title">{{ item.company.name }}</div>
+              <a href="{% url 'company_detail' item.company.id %}" class="v2-item__title" style="color:inherit">{{ item.company.name }}</a>
               <div class="v2-item__meta">
+                {% if item.company.contract_type %}<span>{{ item.company.contract_type.name }}</span>{% else %}<span>—</span>{% endif %}
                 {% if item.is_annual %}
-                  <span>Годовой</span>
-                  {% if item.amount %}<span>·</span><span>{{ item.amount|floatformat:0 }} ₽</span>
-                  {% else %}<span>·</span><span>сумма не указана</span>{% endif %}
+                  <span>·</span><span>Годовой</span>
                 {% else %}
-                  <span>До окончания {{ item.days_left }} дн.</span>
+                  {% if item.company.contract_until %}<span>·</span><span>до {{ item.company.contract_until|date:"d.m.Y" }}</span>{% endif %}
                 {% endif %}
               </div>
             </div>
-          </a>
+            {% if item.is_annual %}
+              <div class="v2-inline-amount" data-company-id="{{ item.company.id }}" style="display:flex;align-items:center;gap:4px">
+                <input type="number" step="0.01" class="v2-input" style="width:100px;padding:4px 6px;font-size:12px"
+                       value="{% if item.amount %}{{ item.amount }}{% endif %}"
+                       placeholder="Сумма, ₽"
+                       data-inline-input />
+                <button type="button" class="v2-quick-btn v2-quick-btn--primary" data-inline-save title="Сохранить">✓</button>
+              </div>
+            {% else %}
+              <span class="v2-count v2-count--{% if item.level == 'danger' %}danger{% else %}warn{% endif %}">
+                {% if item.days_left is not None %}{{ item.days_left }} дн.{% else %}—{% endif %}
+              </span>
+            {% endif %}
+          </div>
           {% empty %}
           <div class="v2-card__empty">Нет предупреждений по договорам</div>
           {% endfor %}
@@ -468,6 +480,42 @@
         }
       }catch(_){
         btn.disabled = false;
+      }
+    });
+  });
+
+  // Inline contract amount edit
+  document.querySelectorAll('.v2-inline-amount [data-inline-save]').forEach(function(btn){
+    btn.addEventListener('click', async function(){
+      const wrap = btn.closest('.v2-inline-amount');
+      const input = wrap.querySelector('[data-inline-input]');
+      const companyId = wrap.getAttribute('data-company-id');
+      const value = (input.value || '').trim();
+      btn.disabled = true;
+      const origText = btn.textContent;
+      try{
+        const fd = new FormData();
+        fd.append('csrfmiddlewaretoken', csrf);
+        fd.append('field', 'contract_amount');
+        fd.append('value', value);
+        const res = await fetch('/companies/' + companyId + '/inline/', {
+          method:'POST', body:fd, credentials:'same-origin',
+          headers:{'X-Requested-With':'XMLHttpRequest'}
+        });
+        const data = await res.json().catch(()=>({}));
+        if(res.ok && data.ok){
+          if(data.updated_value !== undefined) input.value = data.updated_value;
+          btn.textContent = '✓';
+          btn.classList.add('v2-quick-btn--primary');
+          setTimeout(()=>{ btn.textContent = origText; btn.disabled = false; }, 1200);
+        } else {
+          btn.textContent = '✗';
+          btn.title = (data && data.error) || 'Ошибка';
+          setTimeout(()=>{ btn.textContent = origText; btn.disabled = false; }, 2000);
+        }
+      }catch(_){
+        btn.textContent = '✗';
+        setTimeout(()=>{ btn.textContent = origText; btn.disabled = false; }, 2000);
       }
     });
   });

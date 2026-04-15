@@ -256,8 +256,22 @@
           </div>
           {% endif %}
           <div class="v2-td" style="min-width:0">
-            <div class="v2-item__title">{{ c.name }}</div>
+            <div class="v2-item__title" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span>{{ c.name }}</span>
+              {% if c.inn %}<span class="v2-item__meta" style="font-size:11px">ИНН {{ c.inn }}</span>{% endif %}
+              {% if c.has_overdue %}<span class="v2-count v2-count--danger" style="font-size:10px;padding:1px 6px">просрочка</span>{% endif %}
+            </div>
             {% if c.address %}<div class="v2-item__meta">{{ c.address|truncatechars:60 }}</div>{% endif %}
+            <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:4px">
+              {% for s in c.spheres.all %}
+                <span class="v2-count" style="font-size:10px;padding:1px 6px;background:var(--v2-bg-soft);color:var(--v2-text);font-weight:500">
+                  {{ s.name }}{% if s.is_important %}<span title="Важная сфера" style="color:var(--v2-warn);margin-left:2px">★</span>{% endif %}
+                </span>
+              {% endfor %}
+              {% with guessed=c.address|guess_ru_tz %}{% with tz=c.work_timezone|default:guessed %}
+                {% if tz %}<span class="v2-count v2-count--warn" style="font-size:10px;padding:1px 6px" title="{{ tz }}">{{ tz|tz_now_hhmm }} · {{ tz|tz_label }}</span>{% endif %}
+              {% endwith %}{% endwith %}
+            </div>
           </div>
           <div class="v2-td">{% if c.responsible %}{{ c.responsible|full_name }}{% else %}—{% endif %}</div>
           <div class="v2-td">{% if c.branch %}{{ c.branch.name }}{% else %}—{% endif %}</div>
