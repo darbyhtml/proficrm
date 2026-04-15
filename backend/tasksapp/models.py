@@ -77,6 +77,19 @@ class Task(models.Model):
     external_source = models.CharField("Внешний источник", max_length=32, blank=True, default="", db_index=True)
     external_uid = models.CharField("Внешний UID", max_length=120, blank=True, default="", db_index=True)
 
+    class Meta:
+        constraints = [
+            # Защита от race в generate_recurring_tasks: параллельные воркеры
+            # не должны создать два экземпляра одной и той же родительской
+            # задачи с одинаковым due_at. Condition исключает обычные задачи
+            # (parent_recurring_task IS NULL), чтобы не мешать ручному созданию.
+            models.UniqueConstraint(
+                fields=["parent_recurring_task", "due_at"],
+                condition=models.Q(parent_recurring_task__isnull=False),
+                name="uniq_task_recurrence_occurrence",
+            ),
+        ]
+
     def __str__(self) -> str:
         return self.title
 

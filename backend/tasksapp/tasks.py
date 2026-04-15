@@ -140,6 +140,7 @@ def _generate_recurring_tasks_inner():
 def _process_template(template, now, horizon) -> int:
     """Обработка одного шаблона внутри открытой транзакции. Возвращает
     количество созданных экземпляров."""
+    from django.db import IntegrityError, transaction
     from tasksapp.models import Task
 
     # dtstart = оригинальная точка отсчёта правила (для корректного COUNT/UNTIL)
@@ -175,18 +176,30 @@ def _process_template(template, now, horizon) -> int:
         if already_exists:
             continue
 
-        Task.objects.create(
-            title=template.title,
-            description=template.description,
-            status=Task.Status.NEW,
-            created_by=template.created_by,
-            assigned_to=template.assigned_to,
-            company=template.company,
-            type=template.type,
-            due_at=occ_dt,
-            is_urgent=template.is_urgent,
-            parent_recurring_task=template,
-        )
+        try:
+            # savepoint: если параллельный воркер успел вставить тот же экземпляр,
+            # UniqueConstraint бросит IntegrityError — ловим и пропускаем,
+            # не ломая внешнюю транзакцию.
+            with transaction.atomic():
+                Task.objects.create(
+                    title=template.title,
+                    description=template.description,
+                    status=Task.Status.NEW,
+                    created_by=template.created_by,
+                    assigned_to=template.assigned_to,
+                    company=template.company,
+                    type=template.type,
+                    due_at=occ_dt,
+                    is_urgent=template.is_urgent,
+                    parent_recurring_task=template,
+                )
+        except IntegrityError:
+            logger.info(
+                "recurrence: уникальный конфликт при создании экземпляра "
+                "template=%s due_at=%s — пропускаем",
+                template.pk, occ_dt,
+            )
+            continue
         created_count += 1
         last_occurrence = occ_dt
 
