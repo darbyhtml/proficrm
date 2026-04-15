@@ -5,10 +5,27 @@
 {% comment %}
   Preview-версия списка компаний. Общие стили — _v2/v2_styles.html.
   Флаг request._preview_v2 в ui.views.company_list.company_list.
+  Phase 2: filters (status/sphere/contract/region/branch), sort, bulk transfer, remember filters.
 {% endcomment %}
 
 {% block extra_head %}
   {% include "ui/_v2/v2_styles.html" %}
+  <style>
+    .v2-sort{display:inline-flex;align-items:center;gap:4px;color:inherit;text-decoration:none;cursor:pointer}
+    .v2-sort:hover{color:var(--v2-primary)}
+    .v2-sort--active{color:var(--v2-primary);font-weight:700}
+    .v2-sort__arrow{font-size:10px;opacity:.7}
+    .v2-bulk{position:sticky;top:12px;z-index:20;margin-bottom:12px;padding:10px 14px;
+      background:#fff;border:1px solid var(--v2-border);border-radius:12px;
+      display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+      box-shadow:0 2px 8px rgba(0,0,0,.04)}
+    .v2-bulk__label{font-size:13px;font-weight:600;color:var(--v2-text-muted)}
+    .v2-bulk__count{margin-left:auto;font-size:13px;color:var(--v2-text-muted)}
+    .v2-chk{width:16px;height:16px;accent-color:var(--v2-primary);cursor:pointer}
+    .v2-tr--head{background:var(--v2-bg-soft);font-size:12px;text-transform:uppercase;
+      letter-spacing:.04em;color:var(--v2-text-muted);font-weight:600}
+    .v2-tr--head > *{padding:10px 8px!important}
+  </style>
 {% endblock %}
 
 {% block content %}
@@ -42,39 +59,126 @@
     </div>
 
     <div class="v2-card__body">
-      <form method="get" action="{% url 'company_list_v2_preview' %}"
+      <form method="get" action="{% url 'company_list_v2_preview' %}" id="v2CompanyFilters"
             style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px">
         <input type="search" name="q" value="{{ q|default:'' }}" class="v2-input"
                style="flex:1;min-width:220px" placeholder="Поиск по названию, телефону, email…" />
-        <select name="status" class="v2-select">
+
+        <select name="status" class="v2-select" onchange="this.form.submit()">
           <option value="">Все статусы</option>
           {% for s in statuses %}
             <option value="{{ s.id }}" {% if status == s.id|stringformat:'s' %}selected{% endif %}>{{ s.name }}</option>
           {% endfor %}
         </select>
-        <select name="responsible" class="v2-select">
-          <option value="">Все ответственные</option>
-          {% for u in responsibles %}
-            <option value="{{ u.id }}" {% if responsible == u.id|stringformat:'s' %}selected{% endif %}>
-              {{ u|full_name }}
-            </option>
+
+        <select name="sphere" class="v2-select" onchange="this.form.submit()">
+          <option value="">Все сферы</option>
+          {% for s in spheres %}
+            <option value="{{ s.id }}" {% if sphere == s.id|stringformat:'s' %}selected{% endif %}>{{ s.name }}</option>
           {% endfor %}
         </select>
-        <button type="submit" class="v2-btn">Применить</button>
+
+        <select name="contract_type" class="v2-select" onchange="this.form.submit()">
+          <option value="">Все договоры</option>
+          {% for ct in contract_types %}
+            <option value="{{ ct.id }}" {% if contract_type == ct.id|stringformat:'s' %}selected{% endif %}>{{ ct.name }}</option>
+          {% endfor %}
+        </select>
+
+        <select name="region" class="v2-select" onchange="this.form.submit()">
+          <option value="">Все регионы</option>
+          {% for r in regions %}
+            <option value="{{ r.id }}" {% if region == r.id|stringformat:'s' %}selected{% endif %}>{{ r.name }}</option>
+          {% endfor %}
+        </select>
+
+        <select name="branch" class="v2-select" onchange="this.form.submit()">
+          <option value="">Все подразделения</option>
+          {% for b in branches %}
+            <option value="{{ b.id }}" {% if branch == b.id|stringformat:'s' %}selected{% endif %}>{{ b.name }}</option>
+          {% endfor %}
+        </select>
+
+        <select name="responsible" class="v2-select" onchange="this.form.submit()">
+          <option value="">Все ответственные</option>
+          {% for u in responsibles %}
+            <option value="{{ u.id }}" {% if responsible == u.id|stringformat:'s' %}selected{% endif %}>{{ u|full_name }}</option>
+          {% endfor %}
+        </select>
+
+        <label class="v2-chip {% if overdue == '1' %}v2-chip--active{% endif %}" style="cursor:pointer">
+          <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %}
+                 onchange="this.form.submit()" style="margin-right:6px" />
+          Просроченные
+        </label>
+
+        {% if sort %}<input type="hidden" name="sort" value="{{ sort }}" />{% endif %}
+        {% if sort_dir %}<input type="hidden" name="dir" value="{{ sort_dir }}" />{% endif %}
+
+        <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'company_list_v2_preview' %}"
+           title="Сбросить все фильтры">Сброс</a>
       </form>
+
+      {% if is_admin and page.object_list and transfer_targets %}
+      <form method="post" action="{% url 'company_bulk_transfer' %}" id="v2CompanyBulk" class="v2-bulk">
+        {% csrf_token %}
+        <span class="v2-bulk__label">Передать выбранные</span>
+        <select name="new_responsible_id" class="v2-select" required>
+          <option value="">Кому…</option>
+          {% regroup transfer_targets by branch as bulk_branches %}
+          {% for bg in bulk_branches %}
+            <optgroup label="{{ bg.grouper.name|default:'Без подразделения' }}">
+              {% for u in bg.list %}
+                <option value="{{ u.id }}">{{ u|full_name }}</option>
+              {% endfor %}
+            </optgroup>
+          {% endfor %}
+        </select>
+        <button type="submit" class="v2-btn v2-btn--sm" id="v2BulkApply" disabled>Передать</button>
+        <span class="v2-bulk__count">Выбрано: <b id="v2BulkCount">0</b></span>
+        <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" id="v2BulkClear" disabled>Снять</button>
+      </form>
+      {% endif %}
 
       <div class="v2-table">
         <div class="v2-tr v2-tr--head"
-             style="grid-template-columns:minmax(0,1.8fr) 180px 180px 140px 100px">
-          <div>Компания</div>
-          <div>Ответственный</div>
+             style="grid-template-columns:{% if is_admin %}28px {% endif %}minmax(0,1.8fr) 180px 180px 140px 100px">
+          {% if is_admin %}<div><input type="checkbox" id="v2BulkAll" class="v2-chk" /></div>{% endif %}
+          <div>
+            <a class="v2-sort {% if sort == 'name' %}v2-sort--active{% endif %}"
+               href="?{% if qs %}{{ qs }}&{% endif %}sort=name&dir={% if sort == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+              Компания
+              {% if sort == 'name' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+            </a>
+          </div>
+          <div>
+            <a class="v2-sort {% if sort == 'responsible' %}v2-sort--active{% endif %}"
+               href="?{% if qs %}{{ qs }}&{% endif %}sort=responsible&dir={% if sort == 'responsible' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+              Ответственный
+              {% if sort == 'responsible' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+            </a>
+          </div>
           <div>Подразделение</div>
-          <div>Статус</div>
+          <div>
+            <a class="v2-sort {% if sort == 'status' %}v2-sort--active{% endif %}"
+               href="?{% if qs %}{{ qs }}&{% endif %}sort=status&dir={% if sort == 'status' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+              Статус
+              {% if sort == 'status' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+            </a>
+          </div>
           <div style="text-align:right">Задачи</div>
         </div>
+
         {% for c in page.object_list %}
-        <a class="v2-tr" href="{% url 'company_detail' c.id %}"
-           style="grid-template-columns:minmax(0,1.8fr) 180px 180px 140px 100px">
+        <div class="v2-tr" style="grid-template-columns:{% if is_admin %}28px {% endif %}minmax(0,1.8fr) 180px 180px 140px 100px;cursor:pointer"
+             onclick="if(event.target.tagName!=='INPUT'&&event.target.tagName!=='LABEL')location.href='{% url 'company_detail' c.id %}'">
+          {% if is_admin %}
+          <div onclick="event.stopPropagation()">
+            <label style="display:flex;align-items:center;justify-content:center;cursor:pointer">
+              <input type="checkbox" class="v2-chk v2-bulk-row" name="company_ids" value="{{ c.id }}" form="v2CompanyBulk" />
+            </label>
+          </div>
+          {% endif %}
           <div class="v2-td" style="min-width:0">
             <div class="v2-item__title">{{ c.name }}</div>
             {% if c.main_phone %}<div class="v2-item__meta">{{ c.main_phone }}</div>{% endif %}
@@ -85,7 +189,7 @@
             {% if c.status %}<span class="v2-count v2-count--primary">{{ c.status.name }}</span>{% else %}—{% endif %}
           </div>
           <div class="v2-td v2-td--strong" style="text-align:right">{{ c.active_tasks_count|default:0 }}</div>
-        </a>
+        </div>
         {% empty %}
         <div class="v2-card__empty">
           <svg width="48" height="48" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd" style="color:var(--v2-text-muted);margin-bottom:8px">
@@ -111,4 +215,62 @@
 
   {% include "ui/_v2/v2_toggle.html" with target_url="/companies/" target_label="обычную версию" mode="to-v1" %}
 </div>
+
+<script>
+// Bulk selection
+(function(){
+  const form = document.getElementById('v2CompanyBulk');
+  if(!form) return;
+  const all = document.getElementById('v2BulkAll');
+  const rows = document.querySelectorAll('.v2-bulk-row');
+  const count = document.getElementById('v2BulkCount');
+  const apply = document.getElementById('v2BulkApply');
+  const clear = document.getElementById('v2BulkClear');
+  function update(){
+    const n = document.querySelectorAll('.v2-bulk-row:checked').length;
+    if(count) count.textContent = n;
+    if(apply) apply.disabled = n === 0;
+    if(clear) clear.disabled = n === 0;
+    if(all) all.checked = n > 0 && n === rows.length;
+  }
+  if(all) all.addEventListener('change', function(){
+    rows.forEach(r => r.checked = all.checked);
+    update();
+  });
+  rows.forEach(r => r.addEventListener('change', update));
+  if(clear) clear.addEventListener('click', function(){
+    rows.forEach(r => r.checked = false);
+    if(all) all.checked = false;
+    update();
+  });
+  update();
+})();
+
+// Remember filters в localStorage
+(function(){
+  const KEY = 'v2_company_filters_v1';
+  const form = document.getElementById('v2CompanyFilters');
+  if(!form) return;
+  const url = new URL(window.location.href);
+  const hasParams = Array.from(url.searchParams.keys()).filter(k => k !== 'page').length > 0;
+  if(!hasParams){
+    try{
+      const saved = localStorage.getItem(KEY);
+      if(saved){
+        const params = new URLSearchParams(saved);
+        if(Array.from(params.keys()).length > 0){
+          window.location.search = '?' + params.toString();
+          return;
+        }
+      }
+    }catch(e){}
+  } else {
+    try{
+      const params = new URLSearchParams(url.search);
+      params.delete('page');
+      localStorage.setItem(KEY, params.toString());
+    }catch(e){}
+  }
+})();
+</script>
 {% endblock %}
