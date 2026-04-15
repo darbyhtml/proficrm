@@ -16,6 +16,45 @@ from .models import Conversation, Inbox, Message
 logger = logging.getLogger("messenger.integrations")
 
 
+def _is_safe_outbound_url(url: str) -> bool:
+    """
+    SSRF-защита: разрешаем только http(s) на публичные IP.
+    Резолвим хост и запрещаем loopback/private/link-local/multicast/reserved.
+    """
+    import ipaddress
+    import socket
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    host = (parsed.hostname or "").strip()
+    if not host:
+        return False
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except Exception:
+        return False
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except (ValueError, IndexError):
+            return False
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            return False
+    return True
+
+
 def _get_webhook_config(inbox: Inbox) -> Optional[Dict[str, Any]]:
     """
     Достаёт конфиг webhook'а из inbox.settings.integrations.webhook.
@@ -65,6 +104,13 @@ def _send_webhook_async(inbox: Inbox, event_type: str, payload: Dict[str, Any]) 
 
     url: str = cfg["url"]
     secret: str = cfg.get("secret", "")
+
+    if not _is_safe_outbound_url(url):
+        logger.warning(
+            "Webhook URL rejected by SSRF guard",
+            extra={"inbox_id": inbox.id, "event_type": event_type, "url": url},
+        )
+        return
 
     def _worker():
         try:

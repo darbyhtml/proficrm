@@ -13,7 +13,8 @@ _BELL_CACHE_TTL = 30  # seconds
 
 
 def _get_bell_data(user, now):
-    """Read-only bell data: notifications + task reminders. Cached per user for 30s."""
+    """Read-only bell data: notifications + task reminders + contract reminders.
+    Cached per user for 30s, чтобы ни один рендер базового шаблона не бил в БД."""
     cache_key = f"bell_data:{user.pk}"
     cached = cache.get(cache_key)
     if cached is not None:
@@ -49,6 +50,46 @@ def _get_bell_data(user, now):
         })
     reminder_count = len(overdue) + len(today)
 
+    # Contract reminders — read-only, тоже попадает в кэш.
+    try:
+        today_date = timezone.localdate(now)
+        contract_qs = (
+            Company.objects.filter(responsible=user, contract_until__isnull=False)
+            .select_related("contract_type")
+            .only("id", "name", "contract_until", "contract_type")
+        )
+        max_warning_days = 30
+        try:
+            from companies.models import ContractType
+            from django.db.models import Max
+            max_warning = ContractType.objects.aggregate(max_warning=Max("warning_days"))
+            if max_warning["max_warning"]:
+                max_warning_days = max(max_warning["max_warning"], 30)
+        except Exception:
+            pass
+        soon_until = today_date + timedelta(days=max_warning_days)
+        soon = list(
+            contract_qs.filter(contract_until__lte=soon_until).order_by("contract_until")[:10]
+        )
+        for c in soon:
+            days_left = (c.contract_until - today_date).days if c.contract_until else None
+            if days_left is not None and c.contract_type:
+                danger_days = c.contract_type.danger_days
+                prefix = "Срочно: " if days_left <= danger_days else ""
+            else:
+                prefix = "Срочно: " if (days_left is not None and days_left < 14) else ""
+            reminder_items.append(
+                {
+                    "title": f"{prefix}Договор до {c.contract_until.strftime('%d.%m.%Y')}",
+                    "subtitle": c.name,
+                    "url": f"/companies/{c.id}/",
+                    "kind": "contract",
+                }
+            )
+        reminder_count += len(soon)
+    except Exception:
+        pass
+
     result = {
         "notif_unread_count": notif_unread_count,
         "notif_items": notif_items,
@@ -77,54 +118,7 @@ def notifications_panel(request):
     notif_unread_count = bell["notif_unread_count"]
     notif_items = bell["notif_items"]
     reminder_count = bell["reminder_count"]
-    reminder_items = list(bell["reminder_items"])  # copy — contract items appended below
-
-    # Напоминания по договорам (для ответственного): только read-only показ
-    # в UI. Создание записей CompanyContractReminder + Notification вынесено
-    # в celery-beat задачу notifications.tasks.generate_contract_reminders,
-    # чтобы не писать в БД из read-пути GET-запроса.
-    try:
-        today_date = timezone.localdate(now)
-
-        contract_qs = (
-            Company.objects.filter(responsible=user, contract_until__isnull=False)
-            .select_related("contract_type")
-            .only("id", "name", "contract_until", "contract_type")
-        )
-
-        # 1) UI-напоминания: ближайшие 10 в пределах максимального warning_days
-        # Используем максимальный warning_days из всех типов договоров или 30 дней по умолчанию
-        max_warning_days = 30
-        try:
-            from companies.models import ContractType
-            from django.db.models import Max
-            max_warning = ContractType.objects.aggregate(max_warning=Max("warning_days"))
-            if max_warning["max_warning"]:
-                max_warning_days = max(max_warning["max_warning"], 30)
-        except Exception:
-            pass
-        
-        soon_until = today_date + timedelta(days=max_warning_days)
-        soon = contract_qs.filter(contract_until__lte=soon_until).order_by("contract_until")[:10]
-        for c in list(soon):
-            days_left = (c.contract_until - today_date).days if c.contract_until else None
-            if days_left is not None and c.contract_type:
-                danger_days = c.contract_type.danger_days
-                prefix = "Срочно: " if days_left <= danger_days else ""
-            else:
-                prefix = "Срочно: " if (days_left is not None and days_left < 14) else ""
-            reminder_items.append(
-                {
-                    "title": f"{prefix}Договор до {c.contract_until.strftime('%d.%m.%Y')}",
-                    "subtitle": c.name,
-                    "url": f"/companies/{c.id}/",
-                    "kind": "contract",
-                }
-            )
-        reminder_count += soon.count()
-    except Exception:
-        # не ломаем UI колокольчика из-за напоминаний
-        pass
+    reminder_items = bell["reminder_items"]
 
     return {
         "notif_unread_count": notif_unread_count,
