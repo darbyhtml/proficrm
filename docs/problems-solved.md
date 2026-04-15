@@ -1,5 +1,24 @@
 # Решённые проблемы
 
+## [2026-04-15] Аудит 2026-04-14 оказался stale: 5 «P0» уже были исправлены
+
+**Симптом:** При валидации P0 из `knowledge-base/synthesis/state-of-project.md` (аудит 2026-04-14) обнаружилось, что половина критичных находок ссылается на код, которого в текущем HEAD нет — либо поля/логика уже переписаны.
+
+**Закрыто как false alarm (5 штук):**
+- **P0-02** `company_scope_q` возвращает `Q()` — не баг, намеренное бизнес-правило (общая база клиентов для 3 подразделений ЕКБ/Тюмень/Краснодар, нужна для входящих обращений). Расширен docstring + ADR 2026-04-15.
+- **P0-03** `WidgetConsumer.Contact.session_token` — в коде используется Redis-кеш `get_widget_session()`, поле модели не трогается.
+- **P0-04** `OperatorConsumer.AgentProfile.last_seen_at` — используется `AgentProfile.Status.ONLINE/OFFLINE`, `last_seen_at` вообще не упоминается в консьюмерах.
+- **P0-05** Widget Origin hijack — `MESSENGER_WIDGET_STRICT_ORIGIN=1` в проде, `enforce_widget_origin_allowed` блокирует 403 при пустом allowlist. Nginx CORS-эхо preflight безвредно: реальный запрос всё равно уходит в Django и блокируется там.
+- **P0-06** `get_client_ip` без allowlist — делегирует в `accounts.security.get_client_ip` с PROXY_IPS проверкой.
+
+**Причина stale-аудита:** между снимком 2026-04-14 и текущим HEAD было несколько hardening-пассов. Часть находок уже была закрыта, но audit не перестроился.
+
+**Вывод:** оставшиеся P0 проверять **через чтение текущего кода**, а не слепо фиксить по списку. Audit — карта, не территория.
+
+**Ссылки:** [decisions.md](decisions.md) ADR 2026-04-15.
+
+---
+
 ## [2026-04-15] Outbound webhooks и Web Push теряли payload при рестарте gunicorn
 
 **Симптом:** Уведомления в интегрированные системы (webhook клиента) и
