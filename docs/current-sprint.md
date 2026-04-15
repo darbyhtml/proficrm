@@ -8,6 +8,41 @@ Live-chat UX Completion — реализация по спецификации `
 
 ## Сделано в этом спринте
 
+**[2026-04-15]** — Редизайн K1..K6 подготовка ✅
+
+Серия подготовительных коммитов перед редизайном 4 страниц
+(Рабочий стол / Задачи / Компании / Админка UI) в Notion-стиле.
+
+- `284366d` K1 `accounts.signals.sync_is_staff_with_role` (post_save):
+  автоматическая синхронизация `is_staff` с ролью. 9 тестов.
+- `45572f9` K2 templatetag `has_role` / `role_label` в
+  `accounts/templatetags/accounts_extras.py` — единая точка проверки
+  ролей в шаблонах. 11 тестов. Шаблоны перенесены с прямых сравнений
+  `user.role == "..."` на `|has_role:"..."`.
+- `e7e09bf` K3 роль TENDERIST (Тендерист): read-only для всего
+  кроме задач и уведомлений. Дедицированный baseline в
+  `policy/engine.py`, блокировка в `companies/permissions.py`,
+  `messenger/selectors.py`, исключение из round-robin. Миграция
+  `accounts.0013_add_tenderist_role`. 15 тестов. Переименованы
+  подписи ролей: «Директор филиала» → «Директор подразделения»,
+  «Руководитель отдела продаж» → «РОП».
+- `9c60d1b` K4 Филиал → Подразделение (UI-only): 37 файлов,
+  только verbose_name / labels / тексты в шаблонах. Python-идентификаторы
+  (Branch/branch/BRANCH_DIRECTOR), миграции, тесты, API-error-messages
+  не трогались.
+- `8b5aee4` K5 Tailwind токены: `brand.primary` (50..900),
+  `brand.accent` (50..900), `crm-neutral` (0..900), семантические
+  success/warning/danger/info, `shadow-crm-*`. Старые алиасы
+  `brand.teal/orange/dark/soft` оставлены для обратной совместимости.
+  fontSize/radius/boxShadow по умолчанию НЕ переопределены —
+  чтобы не сдвинуть существующий UI.
+- `51b7ca7` K6 dead-code cleanup: 7 неиспользуемых импортов в
+  `ui/views/{dashboard,tasks,company_list,company_detail,settings_core,settings_integrations,settings_messenger}.py`.
+  Тесты ui: 177 ok.
+
+**Дальше:** Шаг 1 Рабочий стол — preview `/_preview/dashboard-v2/`
+на новых токенах.
+
 **[2026-04-15]** — Phase 2 hotfixes: P1/P2 из bug-hunt.md ✅
 
 Вторая волна исправлений по `knowledge-base/research/bug-hunt.md`
