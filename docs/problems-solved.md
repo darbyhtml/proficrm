@@ -1,5 +1,38 @@
 # Решённые проблемы
 
+## [2026-04-15] v2 task partial — 500 Internal Server Error при открытии задачи в модалке
+
+**Симптом:** На staging после деплоя редизайна Фаза 2 клик по карточке
+задачи на дашборде или в /tasks/ → модалка показывала «Не удалось
+загрузить (500)». В логах Django — `TemplateSyntaxError: Invalid
+filter: 'full_name'` при рендере `ui/_v2/task_view_partial.html`.
+
+**Причина:** Фильтр `|full_name` живёт в templatetags-модуле
+`accounts_extras.py` (`@register.filter(name="full_name")`). Шаблоны
+`task_view_partial.html` и `task_create_partial.html` подгружали
+только `{% load ui_extras %}`, а `accounts_extras` не был загружен —
+поэтому Django не находил фильтр и падал в compile_nodelist.
+
+**Фикс** (`821f568`): добавил `{% load accounts_extras %}` в оба
+partial в той же первой строке.
+
+**Второй баг, всплывший после фикса первого** (`14d63e5`):
+`task_create_v2_partial` (GET) → `FieldError: Field Company.responsible
+cannot be both deferred and traversed using select_related`. Причина:
+`_editable_company_qs(user)` внутри делает `select_related("responsible")`,
+а сверху накладывался `.only("id","name")` без поля responsible —
+Django требует, чтобы `responsible` либо не был defer'ед, либо не
+использовался в select_related. Убрал `.only()` в `_v2_task_create_get`
+и в POST 422 branch. При limit [:500] оверхед приемлем.
+
+**Урок:** Перед merge фич с новыми шаблонами/view — прогонять
+smoke-тест через Django Client (`Client.get(url, secure=True,
+HTTP_HOST=...)`). TemplateSyntaxError падает только в рантайме, pytest/
+линтер их не ловит. Я надеялся на визуальный тест пользователя и
+пропустил обе ошибки.
+
+---
+
 ## [2026-04-15] Блок «Договоры» на дашборде пустой у seed-пользователя sdm
 
 **Симптом:** После `python manage.py seed_demo_data --user sdm --clear`
