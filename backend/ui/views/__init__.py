@@ -17,7 +17,7 @@ from ui.views.reports import (
     cold_calls_report_last_7_days,
 )  # noqa: F401
 from ui.views.company_list import (
-    company_list, company_list_ajax,
+    company_list, company_list_v2_preview, company_list_ajax,
     company_bulk_transfer_preview, company_bulk_transfer,
     company_export, company_create,
     company_autocomplete, company_duplicates,
