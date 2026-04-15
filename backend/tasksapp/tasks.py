@@ -78,88 +78,126 @@ def generate_recurring_tasks():
     """
     Генерирует экземпляры повторяющихся задач на HORIZON_DAYS дней вперёд.
     Запускается ежедневно (CELERY_BEAT_SCHEDULE).
+
+    Защита от race: редис-лок на всю задачу — если celery-beat запустит
+    два воркера одновременно (retry, двойной beat), второй просто выйдет.
     """
+    from django.core.cache import cache
+
+    LOCK_KEY = "lock:generate_recurring_tasks"
+    lock_acquired = cache.add(LOCK_KEY, "1", timeout=15 * 60)
+    if not lock_acquired:
+        logger.info("generate_recurring_tasks: уже выполняется, пропуск")
+        return
+
+    try:
+        _generate_recurring_tasks_inner()
+    finally:
+        try:
+            cache.delete(LOCK_KEY)
+        except Exception:
+            pass
+
+
+def _generate_recurring_tasks_inner():
+    from django.db import transaction
     from tasksapp.models import Task
 
     now = timezone.now()
     horizon = now + timedelta(days=HORIZON_DAYS)
 
-    # Только задачи-шаблоны (не сгенерированные экземпляры)
-    templates = Task.objects.filter(
-        recurrence_rrule__gt="",
-        parent_recurring_task__isnull=True,
-    ).select_related("created_by", "assigned_to", "company", "type")
+    template_ids = list(
+        Task.objects.filter(
+            recurrence_rrule__gt="",
+            parent_recurring_task__isnull=True,
+        ).values_list("pk", flat=True)
+    )
 
     total_created = 0
-    total_templates = templates.count()
+    total_templates = len(template_ids)
 
-    for template in templates:
-        # dtstart = оригинальная точка отсчёта правила (для корректного COUNT/UNTIL)
-        dtstart = template.due_at or now
-
-        # after = исключительная нижняя граница: что уже сгенерировано
-        if template.recurrence_next_generate_after:
-            after = template.recurrence_next_generate_after
-        else:
-            # Первый запуск: генерируем начиная с dtstart - 1s (включаем первое вхождение)
-            after = dtstart - timedelta(seconds=1)
-
-        if after >= horizon:
-            continue  # уже всё сгенерировано вперёд
-
-        occurrences = _parse_rrule_occurrences(
-            template.recurrence_rrule,
-            dtstart=dtstart,
-            after=after,
-            until=horizon,
-        )
-
-        if not occurrences:
-            continue
-
-        created_count = 0
-        last_occurrence = None
-
-        for occ_dt in occurrences:
-            # Защита от дублирования: проверяем по parent + due_at
-            already_exists = Task.objects.filter(
-                parent_recurring_task=template,
-                due_at=occ_dt,
-            ).exists()
-            if already_exists:
+    for template_id in template_ids:
+        with transaction.atomic():
+            # SELECT FOR UPDATE: блокируем шаблон, чтобы параллельный воркер
+            # (если redis-lock обойдётся) не сгенерировал тот же экземпляр.
+            try:
+                template = (
+                    Task.objects.select_for_update()
+                    .select_related("created_by", "assigned_to", "company", "type")
+                    .get(pk=template_id)
+                )
+            except Task.DoesNotExist:
                 continue
-
-            Task.objects.create(
-                title=template.title,
-                description=template.description,
-                status=Task.Status.NEW,
-                created_by=template.created_by,
-                assigned_to=template.assigned_to,
-                company=template.company,
-                type=template.type,
-                due_at=occ_dt,
-                is_urgent=template.is_urgent,
-                parent_recurring_task=template,
-                # recurrence_rrule намеренно пустой — это экземпляр, не шаблон
-            )
-            created_count += 1
-            last_occurrence = occ_dt
-
-        if last_occurrence is not None:
-            Task.objects.filter(pk=template.pk).update(
-                recurrence_next_generate_after=last_occurrence,
-            )
-
-        if created_count:
-            logger.info(
-                "recurrence: шаблон %s (%r) → %s экземпляров до %s",
-                template.pk, template.title, created_count,
-                horizon.date(),
-            )
-        total_created += created_count
+            total_created += _process_template(template, now, horizon)
 
     logger.info(
         "generate_recurring_tasks: обработано %s шаблонов, создано %s экземпляров",
         total_templates, total_created,
     )
     return {"templates": total_templates, "created": total_created}
+
+
+def _process_template(template, now, horizon) -> int:
+    """Обработка одного шаблона внутри открытой транзакции. Возвращает
+    количество созданных экземпляров."""
+    from tasksapp.models import Task
+
+    # dtstart = оригинальная точка отсчёта правила (для корректного COUNT/UNTIL)
+    dtstart = template.due_at or now
+
+    # after = исключительная нижняя граница: что уже сгенерировано
+    if template.recurrence_next_generate_after:
+        after = template.recurrence_next_generate_after
+    else:
+        after = dtstart - timedelta(seconds=1)
+
+    if after >= horizon:
+        return 0
+
+    occurrences = _parse_rrule_occurrences(
+        template.recurrence_rrule,
+        dtstart=dtstart,
+        after=after,
+        until=horizon,
+    )
+    if not occurrences:
+        return 0
+
+    created_count = 0
+    last_occurrence = None
+
+    for occ_dt in occurrences:
+        # Защита от дублирования: проверяем по parent + due_at
+        already_exists = Task.objects.filter(
+            parent_recurring_task=template,
+            due_at=occ_dt,
+        ).exists()
+        if already_exists:
+            continue
+
+        Task.objects.create(
+            title=template.title,
+            description=template.description,
+            status=Task.Status.NEW,
+            created_by=template.created_by,
+            assigned_to=template.assigned_to,
+            company=template.company,
+            type=template.type,
+            due_at=occ_dt,
+            is_urgent=template.is_urgent,
+            parent_recurring_task=template,
+        )
+        created_count += 1
+        last_occurrence = occ_dt
+
+    if last_occurrence is not None:
+        Task.objects.filter(pk=template.pk).update(
+            recurrence_next_generate_after=last_occurrence,
+        )
+
+    if created_count:
+        logger.info(
+            "recurrence: шаблон %s (%r) → %s экземпляров до %s",
+            template.pk, template.title, created_count, horizon.date(),
+        )
+    return created_count
