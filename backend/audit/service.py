@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from django.utils import timezone
 
 from audit.models import ActivityEvent
+
+logger = logging.getLogger(__name__)
 
 
 def log_event(
@@ -49,9 +52,12 @@ def log_event(
 
             Company.objects.filter(id=company_id_for_update).update(updated_at=timezone.now())
         except Exception:
-            # Ошибки при вспомогательном обновлении не должны мешать работе CRM.
-            # При необходимости сюда можно добавить отдельное логирование.
-            pass
+            # Ошибки при вспомогательном обновлении не должны мешать работе CRM,
+            # но обязаны оставлять след в логах — иначе теряем аудит молча.
+            logger.exception(
+                "log_event: failed to bump Company.updated_at for company_id=%s",
+                company_id_for_update,
+            )
 
     return event
 

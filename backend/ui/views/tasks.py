@@ -632,7 +632,12 @@ def task_create(request: HttpRequest) -> HttpResponse:
             # Логирование для отладки
             import logging
             logger = logging.getLogger(__name__)
-            logger.warning(f"Form validation failed: {form.errors}, assigned_to_raw={request.POST.get('assigned_to', '')!r}, assigned_to_id={assigned_to_id!r}")
+            # PII-safe: логируем только список полей с ошибками, без содержимого POST и form.errors (могут содержать имена/email).
+            logger.warning(
+                "Task form validation failed: fields_with_errors=%s, assigned_to_id=%r",
+                list(form.errors.keys()),
+                assigned_to_id,
+            )
             
             # Устанавливаем queryset для assigned_to с учетом выбранного значения
             # Это нужно для того, чтобы форма могла быть отрендерена с ошибками

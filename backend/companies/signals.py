@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import logging
+
 from django.db import transaction
 from django.db.models.signals import post_delete, post_save, pre_delete
 from django.dispatch import receiver
+
+logger = logging.getLogger(__name__)
 
 from .models import (
     Company,
@@ -27,7 +31,7 @@ def _delete_company_note_attachment(sender, instance: CompanyNote, **kwargs):
         if instance.attachment:
             instance.attachment.delete(save=False)
     except Exception:
-        pass
+        logger.exception("Не удалось удалить вложение CompanyNote id=%s", getattr(instance, "id", None))
 
 
 def _rebuild_index_for_company(company_id):
@@ -42,7 +46,7 @@ def _rebuild_index_for_company(company_id):
         rebuild_company_search_index(company_id)
     except Exception:
         # Индекс — вспомогательная штука: не ломаем бизнес-сохранение из-за проблем индекса
-        pass
+        logger.exception("rebuild_company_search_index failed for company_id=%s", company_id)
 
 
 def _schedule_rebuild_index_for_company(company_id):
@@ -57,6 +61,7 @@ def _schedule_rebuild_index_for_company(company_id):
         transaction.on_commit(lambda cid=company_id: _rebuild_index_for_company(cid))
     except Exception:
         # На всякий случай fallback, если нет менеджера транзакций.
+        logger.exception("transaction.on_commit недоступен, выполняем rebuild сразу (company_id=%s)", company_id)
         _rebuild_index_for_company(company_id)
 
 
@@ -102,6 +107,7 @@ def _contact_email_changed(sender, instance: ContactEmail, **kwargs):
     try:
         company_id = instance.contact.company_id
     except Exception:
+        logger.exception("Не удалось получить company_id из ContactEmail id=%s", getattr(instance, "id", None))
         company_id = None
     if company_id:
         _schedule_rebuild_index_for_company(company_id)
@@ -113,6 +119,7 @@ def _contact_phone_changed(sender, instance: ContactPhone, **kwargs):
     try:
         company_id = instance.contact.company_id
     except Exception:
+        logger.exception("Не удалось получить company_id из ContactPhone id=%s", getattr(instance, "id", None))
         company_id = None
     if company_id:
         _schedule_rebuild_index_for_company(company_id)

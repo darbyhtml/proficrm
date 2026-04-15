@@ -30,7 +30,7 @@ def mark_all_read(request: HttpRequest) -> HttpResponse:
         return redirect(_safe_redirect_url(request, request.META.get("HTTP_REFERER")))
     enforce(user=request.user, resource_type="action", resource="ui:notifications:mark_all_read", context={"path": request.path, "method": request.method})
     Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
-    cache.delete(f"bell_data:{request.user.pk}")
+    cache.delete_many([f"bell_data:{request.user.pk}", f"notif_poll:{request.user.pk}"])
     messages.success(request, "Уведомления отмечены как прочитанные.")
     return redirect(_safe_redirect_url(request, request.META.get("HTTP_REFERER")))
 
@@ -43,7 +43,7 @@ def mark_read(request: HttpRequest, notification_id: int) -> HttpResponse:
     n = get_object_or_404(Notification, id=notification_id, user=request.user)
     n.is_read = True
     n.save(update_fields=["is_read"])
-    cache.delete(f"bell_data:{request.user.pk}")
+    cache.delete_many([f"bell_data:{request.user.pk}", f"notif_poll:{request.user.pk}"])
     return redirect(_safe_redirect_url(request, n.url or request.META.get("HTTP_REFERER")))
 
 
@@ -52,8 +52,19 @@ def poll(request: HttpRequest) -> HttpResponse:
     """
     Live-обновление колокольчика: возвращает JSON со списком непрочитанных уведомлений и напоминаний.
     Безопасный polling (без WebSocket), ничего не ломает если JS отключен.
+
+    Ответ кэшируется per-user на 3 секунды — схлопывает burst-polling от нескольких вкладок
+    и параллельных setInterval'ов, не делая интерфейс ощутимо «залипающим».
     """
     enforce(user=request.user, resource_type="action", resource="ui:notifications:poll", context={"path": request.path, "method": request.method})
+
+    cache_key = f"notif_poll:{request.user.pk}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        resp = JsonResponse(cached)
+        resp["X-Cache"] = "HIT"
+        return resp
+
     ctx = notifications_panel(request)
     user = request.user
     notif_items = Notification.objects.filter(user=user, is_read=False).order_by("-created_at")[:10]
@@ -87,17 +98,19 @@ def poll(request: HttpRequest) -> HttpResponse:
             "type": active_ann.announcement_type,
         }
 
-    return JsonResponse(
-        {
-            "ok": True,
-            "bell_count": int(ctx.get("bell_count") or 0),
-            "notif_unread_count": int(ctx.get("notif_unread_count") or 0),
-            "reminder_count": int(ctx.get("reminder_count") or 0),
-            "reminder_items": ctx.get("reminder_items") or [],
-            "notif_items": notif_payload,
-            "announcement": announcement_payload,
-        }
-    )
+    payload = {
+        "ok": True,
+        "bell_count": int(ctx.get("bell_count") or 0),
+        "notif_unread_count": int(ctx.get("notif_unread_count") or 0),
+        "reminder_count": int(ctx.get("reminder_count") or 0),
+        "reminder_items": ctx.get("reminder_items") or [],
+        "notif_items": notif_payload,
+        "announcement": announcement_payload,
+    }
+    cache.set(cache_key, payload, 3)
+    resp = JsonResponse(payload)
+    resp["X-Cache"] = "MISS"
+    return resp
 
 
 @login_required
