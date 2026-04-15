@@ -16,52 +16,51 @@ class TaskTypeSelectWidget(forms.Select):
         # Кэш для TaskType (загружаем один раз)
         self._task_types_cache = None
     
+    # Ключ кэша и TTL — общие для всех инстансов виджета
+    _CACHE_KEY = "task_types_all_dict"
+    _CACHE_TTL = 300  # 5 минут
+
     def _get_task_types(self):
-        """Загружает все TaskType одним запросом и кэширует."""
-        if self._task_types_cache is None:
+        """Загружает все TaskType одним запросом и кэширует на 5 минут."""
+        if self._task_types_cache is not None:
+            return self._task_types_cache
+
+        try:
+            cached_data = cache.get(self._CACHE_KEY)
+        except Exception:
+            cached_data = None
+
+        if cached_data is None:
             try:
                 from tasksapp.models import TaskType
-                # Используем кэш Django для оптимизации (TTL 5 минут)
-                # Кэшируем словарь с данными, а не объекты модели (объекты не pickle-able)
-                cache_key = 'task_types_all_dict'
-                cached_data = None
-                try:
-                    cached_data = cache.get(cache_key)
-                except Exception:
-                    # Если кэш недоступен, просто пропускаем
-                    pass
-                
-                if cached_data is None:
-                    # Загружаем все TaskType одним запросом
-                    task_types = TaskType.objects.only('id', 'name', 'icon', 'color').all()
-                    # Сохраняем как словарь словарей (можно кэшировать)
-                    cached_data = {
-                        str(tt.id): {
-                            'id': tt.id,
-                            'name': tt.name,
-                            'icon': tt.icon or '',
-                            'color': tt.color or ''
-                        }
-                        for tt in task_types
+
+                task_types = TaskType.objects.only("id", "name", "icon", "color").all()
+                cached_data = {
+                    str(tt.id): {
+                        "id": tt.id,
+                        "name": tt.name,
+                        "icon": tt.icon or "",
+                        "color": tt.color or "",
                     }
-                    # Логируем для отладки (можно убрать позже)
+                    for tt in task_types
+                }
+                try:
+                    cache.set(self._CACHE_KEY, cached_data, self._CACHE_TTL)
+                except Exception:
+                    # Кэш-бэкенд временно недоступен — используем данные без кэша.
                     import logging
-                    logger = logging.getLogger(__name__)
-                    logger.info(f"TaskTypeSelectWidget: загружено {len(cached_data)} типов задач из БД")
-                    if cached_data:
-                        sample = list(cached_data.values())[0]
-                        logger.info(f"TaskTypeSelectWidget: пример данных - {sample}")
-                    # ВРЕМЕННО ОТКЛЮЧАЕМ КЭШ ДЛЯ ОТЛАДКИ
-                    # try:
-                    #     cache.set(cache_key, cached_data, 300)  # 5 минут
-                    # except Exception:
-                    #     # Если кэш недоступен, просто используем данные без кэширования
-                    #     pass
-                self._task_types_cache = cached_data
+                    logging.getLogger(__name__).warning(
+                        "TaskTypeSelectWidget: не удалось записать кэш %s", self._CACHE_KEY,
+                    )
             except Exception:
-                # Если что-то пошло не так, возвращаем пустой словарь
-                self._task_types_cache = {}
-        return self._task_types_cache
+                import logging
+                logging.getLogger(__name__).exception(
+                    "TaskTypeSelectWidget: не удалось загрузить TaskType"
+                )
+                cached_data = {}
+
+        self._task_types_cache = cached_data
+        return cached_data
     
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
         """Переопределяем create_option для добавления data-атрибутов."""

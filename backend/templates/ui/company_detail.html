@@ -2030,7 +2030,7 @@
         function initCallPhone() {
           const uiToast = window.uiToast || function(text, type) {
             try {
-              console.log('[toast]', text, type);
+              if (window.DEBUG) { console.log('[toast]', text, type); }
               // Простой fallback: показываем alert, если uiToast не загружена
               if (type === 'error') {
                 alert('Ошибка: ' + text);

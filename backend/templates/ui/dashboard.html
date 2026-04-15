@@ -1649,9 +1649,17 @@
         }
       }
 
-      // Запускаем polling каждые 30 секунд
-      const pollInterval = setInterval(pollDashboard, 30000);
-      window.addEventListener('beforeunload', () => clearInterval(pollInterval));
+      // Polling каждые 30 секунд + пауза, пока вкладка скрыта.
+      let pollInterval = setInterval(pollDashboard, 30000);
+      window.addEventListener('beforeunload', () => { if (pollInterval) clearInterval(pollInterval); });
+      document.addEventListener('visibilitychange', function(){
+        if (document.hidden) {
+          if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+        } else if (!pollInterval) {
+          pollDashboard();
+          pollInterval = setInterval(pollDashboard, 30000);
+        }
+      });
     })();
   </script>
 

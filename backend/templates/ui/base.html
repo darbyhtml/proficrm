@@ -1635,8 +1635,17 @@
         // Один интервал для колокольчика + объявлений: 30с.
         // Раньше было два параллельных poll (/notifications/poll/ каждые 15с
         // и ещё раз каждые 60с для announcements) — удвоенная нагрузка без причины.
+        // Останавливаем polling, пока вкладка в фоне.
         pollOnce();
-        setInterval(pollOnce, 30000);
+        var __bellPollId = setInterval(pollOnce, 30000);
+        document.addEventListener('visibilitychange', function(){
+          if (document.hidden) {
+            if (__bellPollId) { clearInterval(__bellPollId); __bellPollId = null; }
+          } else if (!__bellPollId) {
+            pollOnce();
+            __bellPollId = setInterval(pollOnce, 30000);
+          }
+        });
       })();
     </script>
     <script nonce="{{ csp_nonce }}">
@@ -2425,9 +2434,19 @@
           } catch (_e) {}
         });
 
-        // Первичный запуск + периодический polling
+        // Первичный запуск + периодический polling.
+        // Было 4000ms — слишком агрессивно, поднято до 15s.
+        // Дополнительно ставим на паузу, пока вкладка в фоне (visibilitychange).
         poll();
-        setInterval(poll, 4000);
+        var __campaignPollId = setInterval(poll, 15000);
+        document.addEventListener('visibilitychange', function(){
+          if (document.hidden) {
+            if (__campaignPollId) { clearInterval(__campaignPollId); __campaignPollId = null; }
+          } else if (!__campaignPollId) {
+            poll();
+            __campaignPollId = setInterval(poll, 15000);
+          }
+        });
       })();
     </script>
     <script nonce="{{ csp_nonce }}">
@@ -2519,8 +2538,7 @@
               const color = selectedOption.dataset.color || selectedOption.getAttribute('data-color') || '';
               const text = selectedOption.textContent || '';
               
-              // Отладка (можно убрать позже)
-              if (!icon && !color && text && text !== '----------') {
+              if (window.DEBUG && !icon && !color && text && text !== '----------') {
                 console.log('TaskType select: нет иконки/цвета для', text, 'value:', selectedOption.value, 'dataset:', selectedOption.dataset);
               }
               
