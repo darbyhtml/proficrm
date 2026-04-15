@@ -783,6 +783,25 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
     updated = qs_to_update.update(responsible=new_resp, branch=new_resp.branch, updated_at=now_ts)
     _invalidate_company_count_cache()  # Инвалидируем кэш при массовом переназначении
 
+    # FTS reindex: .update() обходит save()-сигналы, поэтому CompanySearchIndex
+    # остаётся рассинхронизированным. Переиндексируем изменённые компании
+    # пост-коммитом, чтобы не тормозить основную транзакцию.
+    try:
+        from django.db import transaction as _tx
+        from companies.search_index import rebuild_company_search_index as _reindex
+        _ids_snapshot = list(ids)
+
+        def _post_commit_reindex():
+            for _cid in _ids_snapshot:
+                try:
+                    _reindex(_cid)
+                except Exception:
+                    logger.exception("bulk_transfer: reindex failed for %s", _cid)
+
+        _tx.on_commit(_post_commit_reindex)
+    except Exception:
+        logger.exception("bulk_transfer: reindex scheduling failed")
+
     # Создаём события истории для каждой перенесённой компании
     _hist_now = now_ts
     CompanyHistoryEvent.objects.bulk_create([
