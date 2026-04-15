@@ -8,6 +8,37 @@ Live-chat UX Completion — реализация по спецификации `
 
 ## Сделано в этом спринте
 
+**[2026-04-15]** — Редизайн Фаза 2 — v2-модалка, SPA-задачи, круглый чекбокс ✅
+
+- `6616287` v2-modal/v2-toast компонент (`templates/ui/_v2/v2_modal.html`):
+  backdrop, Esc, click-outside, confirm-on-dirty, auto-wire форм через
+  fetch POST. JSON-контракт `{ok:true, toast, close}` или HTML-фрагмент
+  с ошибками (422). Toast-стек внизу справа с auto-dismiss 3 сек.
+  Глобальные API `window.V2Modal.open/openHtml/close` и `V2Toast.show`.
+  Подключён к dashboard_v2, company_list_v2, task_list_v2.
+- `6616287` dashboard_v2: убраны hover-кнопки «В работу»/«Выполнено».
+  Вместо них круглый чекбокс слева от задачи с подтверждением и
+  плавным fade-out перед reload. «Компании без активных задач»
+  перенесены выше «На неделе». `seed_demo_data` форсит
+  `responsible=user` на contract target компаниях — иначе блок
+  «Договоры» оставался пустым у sdm.
+- `73572aa` task_create_v2_partial — новый thin view + partial-шаблон.
+  GET → HTML формы, POST → JSON / 422. TaskType рендерится плашками
+  (цвет + иконка из справочника), без title и RRULE, чекбокс «⚡ Срочно».
+  Кнопка «Новая задача» получает `data-v2-modal-open`. Страницы
+  подписаны на `v2-modal:saved` → reload.
+- `82a33d5` task_view_v2_partial + task_edit_v2_partial — просмотр и
+  редактирование задачи в модалке. View-карточка с бейджами,
+  секциями полей, кнопками «Редактировать» и «✓ Выполнить». Edit-форма
+  с плашками и «Срочно». Клики по строкам задач на дашборде и в
+  /tasks/ открывают модалку вместо `/tasks/<id>/`.
+- `c20d9a6` /tasks/: цветной dot в строке задачи стал кликабельным
+  чекбоксом «выполнить» (hover ring + scale, confirm, POST done,
+  reload). Квадратный bulk-чекбокс слева остался для массовых действий.
+- dashboard_v2: компактная шапка (padding 16/20, title 18px, stats
+  20px value, 10px label). Баннер «Preview редизайна» закрывается
+  крестиком, состояние в localStorage.
+
 **[2026-04-15]** — Редизайн Фаза 2 — иконки, масштабирование UI, компактные фильтры ✅
 
 - `f76b139` settings/dashboard_v2: заменены иконки для разделов

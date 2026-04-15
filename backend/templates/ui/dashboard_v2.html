@@ -22,6 +22,20 @@
   .v2-done-check:hover{border-color:var(--v2-primary);background:var(--v2-bg-soft);color:var(--v2-primary)}
   .v2-done-check svg{width:14px;height:14px}
   .v2-done-check.is-done{background:var(--v2-primary);border-color:var(--v2-primary);color:#fff}
+  /* Компактная шапка (hero) */
+  .v2-hero{padding:16px 20px !important}
+  .v2-hero__title{font-size:18px !important;margin-bottom:2px !important}
+  .v2-hero__sub{font-size:12px !important;opacity:.9}
+  .v2-hero__stats{margin-top:12px !important;gap:8px !important}
+  .v2-hero__stat{padding:8px 12px !important}
+  .v2-hero__stat-value{font-size:20px !important;line-height:1.1 !important}
+  .v2-hero__stat-label{font-size:10px !important;letter-spacing:.04em}
+  /* Закрываемый баннер preview */
+  .v2-banner-dismissible{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .v2-banner__close{background:transparent;border:0;cursor:pointer;padding:6px;border-radius:6px;
+    color:var(--v2-text-muted);display:inline-flex;flex:0 0 auto}
+  .v2-banner__close:hover{background:rgba(0,0,0,.05);color:var(--v2-text)}
+  .v2-banner.is-dismissed{display:none !important}
   #v2DashUpdateIndicator{position:fixed;top:16px;right:16px;z-index:50;display:none;
     background:#fff;border:1px solid var(--v2-border);border-radius:10px;padding:8px 12px;
     box-shadow:0 4px 16px rgba(0,0,0,.08);font-size:13px;color:var(--v2-text)}
@@ -35,13 +49,31 @@
 <form style="display:none">{% csrf_token %}</form>
 <div class="v2 space-y-4">
 
-  <div class="v2-banner v2-anim">
-    <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM12 6a.75.75 0 01.75.75v5.25a.75.75 0 01-1.5 0V6.75A.75.75 0 0112 6zm0 10.5a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
-    <div>
-      <strong>Preview редизайна.</strong> Функционал переносится постепенно — пиши что хочешь увидеть здесь.
-      Основная версия: <a href="{% url 'dashboard' %}">/</a>.
+  <div class="v2-banner v2-banner-dismissible v2-anim" id="v2PreviewBanner">
+    <div style="display:flex;align-items:center;gap:10px;flex:1">
+      <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM12 6a.75.75 0 01.75.75v5.25a.75.75 0 01-1.5 0V6.75A.75.75 0 0112 6zm0 10.5a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+      <div>
+        <strong>Preview редизайна.</strong> Функционал переносится постепенно — пиши что хочешь увидеть здесь.
+        Основная версия: <a href="{% url 'dashboard' %}">/</a>.
+      </div>
     </div>
+    <button type="button" class="v2-banner__close" id="v2PreviewBannerClose" title="Скрыть баннер" aria-label="Скрыть">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
   </div>
+  <script>
+  (function(){
+    const KEY = 'v2-preview-banner-dismissed';
+    const banner = document.getElementById('v2PreviewBanner');
+    const btn = document.getElementById('v2PreviewBannerClose');
+    if(!banner || !btn) return;
+    if(localStorage.getItem(KEY) === '1') banner.classList.add('is-dismissed');
+    btn.addEventListener('click', function(){
+      banner.classList.add('is-dismissed');
+      try{ localStorage.setItem(KEY, '1'); }catch(_){}
+    });
+  })();
+  </script>
 
   <!-- HERO -->
   <section class="v2-hero v2-anim">
