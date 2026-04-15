@@ -4,10 +4,8 @@ import hashlib
 import hmac
 import json
 import logging
-import threading
 from typing import Any, Dict, Iterable, Optional
 
-import requests
 from django.utils import timezone
 
 from .models import Conversation, Inbox, Message
@@ -112,54 +110,46 @@ def _send_webhook_async(inbox: Inbox, event_type: str, payload: Dict[str, Any]) 
         )
         return
 
-    def _worker():
+    try:
+        body = json.dumps(payload, ensure_ascii=False, default=str)
+    except Exception:
+        logger.exception(
+            "Failed to serialize webhook payload",
+            extra={"inbox_id": inbox.id, "event_type": event_type},
+        )
+        return
+
+    headers = {
+        "Content-Type": "application/json",
+        "X-Messenger-Event": event_type,
+        "X-Messenger-Inbox-Id": str(inbox.id),
+    }
+    if secret:
         try:
-            body = json.dumps(payload, ensure_ascii=False, default=str)
+            signature = hmac.new(
+                secret.encode("utf-8"),
+                body.encode("utf-8"),
+                hashlib.sha256,
+            ).hexdigest()
+            headers["X-Messenger-Signature"] = signature
         except Exception:
             logger.exception(
-                "Failed to serialize webhook payload",
+                "Failed to compute webhook signature",
                 extra={"inbox_id": inbox.id, "event_type": event_type},
             )
-            return
 
-        headers = {
-            "Content-Type": "application/json",
-            "X-Messenger-Event": event_type,
-            "X-Messenger-Inbox-Id": str(inbox.id),
-        }
-        if secret:
-            try:
-                signature = hmac.new(
-                    secret.encode("utf-8"),
-                    body.encode("utf-8"),
-                    hashlib.sha256,
-                ).hexdigest()
-                headers["X-Messenger-Signature"] = signature
-            except Exception:
-                logger.exception(
-                    "Failed to compute webhook signature",
-                    extra={"inbox_id": inbox.id, "event_type": event_type},
-                )
+    # Переход с threading.Thread на Celery: daemon-поток умирал вместе с
+    # gunicorn при рестартах, теряя payload. Celery-таск с retry/backoff
+    # гарантирует at-least-once доставку (P1-7 bug-hunt).
+    from .tasks import send_outbound_webhook
 
-        try:
-            resp = requests.post(url, data=body.encode("utf-8"), headers=headers, timeout=2.0)
-            if resp.status_code >= 500:
-                logger.warning(
-                    "Webhook call returned 5xx",
-                    extra={
-                        "inbox_id": inbox.id,
-                        "event_type": event_type,
-                        "status_code": resp.status_code,
-                    },
-                )
-        except Exception:
-            logger.warning(
-                "Webhook call failed",
-                exc_info=True,
-                extra={"inbox_id": inbox.id, "event_type": event_type, "url": url},
-            )
-
-    threading.Thread(target=_worker, daemon=True).start()
+    send_outbound_webhook.delay(
+        url=url,
+        body=body,
+        headers=headers,
+        inbox_id=inbox.id,
+        event_type=event_type,
+    )
 
 
 def notify_conversation_created(conversation: Conversation) -> None:

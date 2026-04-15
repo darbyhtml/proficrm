@@ -7,16 +7,50 @@
 
 from __future__ import annotations
 
+import logging
+import re
 from typing import Optional
 
 from django.conf import settings
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.utils import timezone
 
 from accounts.models import User
 from .models import Conversation, Message, Contact
 from .integrations import notify_message
 from .reporting import record_first_response, record_reply_time
+
+logger = logging.getLogger(__name__)
+
+_PHONE_NORMALIZED_RE = re.compile(r"^\+?\d{7,15}$")
+
+
+def _normalize_contact_email(email: Optional[str]) -> str:
+    """Normalize email: lower/strip. Возвращает '' если пусто или невалидно."""
+    if not email:
+        return ""
+    value = email.strip().lower()
+    try:
+        validate_email(value)
+    except ValidationError:
+        logger.info("messenger.create_or_get_contact: отклонён невалидный email %r", email)
+        return ""
+    return value
+
+
+def _normalize_contact_phone(phone: Optional[str]) -> str:
+    """Normalize phone в E.164-ish. Возвращает '' если пусто или невалидно."""
+    if not phone:
+        return ""
+    raw = phone.strip()
+    digits = re.sub(r"\D", "", raw)
+    value = ("+" + digits) if raw.startswith("+") else digits
+    if not _PHONE_NORMALIZED_RE.match(value):
+        logger.info("messenger.create_or_get_contact: отклонён невалидный телефон %r", phone)
+        return ""
+    return value
 
 
 def create_or_get_contact(
@@ -40,6 +74,11 @@ def create_or_get_contact(
     Returns:
         Contact instance
     """
+    # Нормализация и валидация: невалидные значения стираются,
+    # чтобы не писать мусор в Contact и не ловить IntegrityError позже.
+    email = _normalize_contact_email(email)
+    phone = _normalize_contact_phone(phone)
+
     qs = Contact.objects.all()
     contact = None
 

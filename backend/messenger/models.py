@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import secrets
 import uuid
 
@@ -138,12 +139,44 @@ class Contact(models.Model):
     def __str__(self) -> str:
         return self.name or self.email or self.phone or str(self.id)
     
+    # Валидация формата телефона: E.164-ish — от 7 до 15 цифр, опционально '+' в начале.
+    # Пробелы/скобки/дефисы допустимы на входе — чистим в clean().
+    _PHONE_RE = re.compile(r"^\+?\d{7,15}$")
+
     def clean(self):
         """
-        Валидации по образцу Chatwoot (если нужна мультитенантность).
+        Валидации email и телефона для messenger.Contact.
+
+        Вызывается из Widget API перед save() (create_contact/update_contact).
+        Email приводится к lower-case; телефон — к компактной E.164-ish форме
+        (только цифры, опционально с ведущим '+').
         """
-        # TODO: Добавить валидации email (case-insensitive уникальность)
-        # TODO: Добавить валидации phone (формат E.164)
+        from django.core.exceptions import ValidationError
+        from django.core.validators import validate_email
+
+        errors: dict[str, list[str]] = {}
+
+        if self.email:
+            normalized_email = self.email.strip().lower()
+            try:
+                validate_email(normalized_email)
+            except ValidationError:
+                errors["email"] = ["Некорректный формат email."]
+            else:
+                self.email = normalized_email
+
+        if self.phone:
+            # Вычищаем все разделители, оставляем только цифры и опциональный '+'
+            raw = self.phone.strip()
+            cleaned = "+" + re.sub(r"\D", "", raw) if raw.startswith("+") else re.sub(r"\D", "", raw)
+            if not self._PHONE_RE.match(cleaned):
+                errors["phone"] = ["Телефон должен быть в формате E.164 (7–15 цифр, опционально с '+')."]
+            else:
+                self.phone = cleaned
+
+        if errors:
+            raise ValidationError(errors)
+
         super().clean()
 
 

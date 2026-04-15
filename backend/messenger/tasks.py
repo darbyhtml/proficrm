@@ -322,3 +322,69 @@ def check_offline_operators(stale_seconds: int = 90):
         messenger_last_seen__lt=threshold,
     ).update(messenger_online=False)
     return {"marked_offline": updated}
+
+
+# ---------------------------------------------------------------------------
+# Outbound webhooks и push-уведомления (P1-7, P1-8 bug-hunt)
+# ---------------------------------------------------------------------------
+# Раньше webhook и web-push отправлялись из `threading.Thread(daemon=True)`,
+# и при рестарте gunicorn демон-поток умирал вместе с payload'ом.
+# Теперь всё идёт через Celery с retry/backoff — доставка не теряется.
+
+
+@shared_task(
+    bind=True,
+    name="messenger.send_outbound_webhook",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+    max_retries=5,
+    acks_late=True,
+)
+def send_outbound_webhook(self, *, url: str, body: str, headers: dict, inbox_id: int, event_type: str):
+    """
+    Доставка webhook'а во внешнюю систему. Retry с экспоненциальной паузой.
+    SSRF-проверка уже сделана в `_send_webhook_async` до delay().
+    """
+    import requests
+
+    try:
+        resp = requests.post(url, data=body.encode("utf-8"), headers=headers, timeout=5.0)
+    except Exception as exc:
+        logger.warning(
+            "Webhook delivery failed, retrying",
+            extra={"inbox_id": inbox_id, "event_type": event_type, "attempt": self.request.retries + 1},
+        )
+        raise
+    if resp.status_code >= 500:
+        # 5xx — временная ошибка получателя, ретраим
+        logger.warning(
+            "Webhook returned 5xx, retrying",
+            extra={
+                "inbox_id": inbox_id,
+                "event_type": event_type,
+                "status_code": resp.status_code,
+                "attempt": self.request.retries + 1,
+            },
+        )
+        raise RuntimeError(f"webhook 5xx: {resp.status_code}")
+    # 4xx не ретраим — это проблема конфигурации получателя
+    return {"status": resp.status_code}
+
+
+@shared_task(
+    bind=True,
+    name="messenger.send_push_notification",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    max_retries=3,
+    acks_late=True,
+)
+def send_push_notification(self, *, subscription_id: int, payload: dict):
+    """
+    Отправка Web Push одному subscriber'у. Ошибки доставки → retry.
+    """
+    from .push import _deliver_push_to_subscription
+    return _deliver_push_to_subscription(subscription_id=subscription_id, payload=payload)
