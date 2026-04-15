@@ -8,6 +8,25 @@ Live-chat UX Completion — реализация по спецификации `
 
 ## Сделано в этом спринте
 
+**[2026-04-15]** — Редизайн Фаза 1 (визуальная полировка v2) ✅
+
+- `2a57b5a` Фаза 1A/1B: фундамент v2 — `templates/ui/_v2/v2_styles.html`
+  (дизайн-токены как CSS-переменные, классы v2-card/grid/table/chip/btn/
+  banner/hero/toggle/anim), `v2_toggle.html` (плавающий ADMIN-only
+  переключатель). Dashboard v2 перерисован как эталон: Heroicons Solid с
+  `fill-rule:evenodd`, hero + 4 stat, 12-кол grid на всю ширину `main`,
+  fade-анимации. Toggle «к новой версии» добавлен на v1-dashboard.
+- `46e1a0c` Фаза 1C/1D/1E: tasks/companies/settings v2 переведены на
+  общие стили. Везде Heroicons Solid, grid на всю ширину 1536px, убран
+  внутренний `max-width`, staggered fade-анимации. Toggle «к новой
+  версии» добавлен на все v1-страницы (task_list, company_list,
+  settings/dashboard).
+- Инфра-нюанс: staging деплоится через
+  `docker compose -f docker-compose.staging.yml up -d --build web`
+  (базовый `docker-compose.yml` конфликтует с прод-контейнерами по порту
+  8001 на том же VPS).
+- Тесты: 190 ui OK на обоих коммитах.
+
 **[2026-04-15]** — Редизайн K1..K6 подготовка ✅
 
 Серия подготовительных коммитов перед редизайном 4 страниц
