@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "ru.groupprofi.crmprofi.dialer"
-    compileSdk = 34
+    compileSdk = 35
 
     buildFeatures {
         buildConfig = true
@@ -17,7 +17,7 @@ android {
         applicationId = "ru.groupprofi.crmprofi.dialer"
         // Firebase Messaging 25.x требует minSdk >= 23
         minSdk = 23
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 5
         versionName = "0.5"
         // Production backend URL

@@ -38,9 +38,17 @@ Live-chat UX Completion — реализация по спецификации `
 - `e5784ff` Race-protection `generate_recurring_tasks`: redis-lock
   (TTL 15 мин) + `SELECT FOR UPDATE` на каждый шаблон в atomic.
 
+**[2026-04-15]** — Staging hardening (TLS/cookies/policy) ✅
+- PolicyConfig staging: `observe_only → enforce` через
+  `manage.py set_policy_mode --mode enforce`, login=200, health=200
+- Host nginx (`/etc/nginx/sites-enabled/crm-staging`):
+  добавлен `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+- `/opt/proficrm-staging/.env.staging`:
+  `DJANGO_SECURE_SSL_REDIRECT=1`, `SESSION_COOKIE_SECURE=1`,
+  `CSRF_COOKIE_SECURE=1`, `SECURE_HSTS_SECONDS=31536000`;
+  web recreated, Set-Cookie с флагом `Secure` подтверждён
+
 Осталось из P0 (требует ручного включения / риск для прод):
-- P0-18 policy `observe_only → enforce` — включить через
-  `manage.py set_policy_mode --mode enforce` после дымового теста
 - P0-22 daphne service в prod docker-compose (WebSocket работает
   только на staging)
 - P0-23 Android compileSdk=34 → 35 (Google Play требование с 08.2025)
