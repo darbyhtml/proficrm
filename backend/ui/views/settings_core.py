@@ -42,9 +42,24 @@ def settings_dashboard(request: HttpRequest) -> HttpResponse:
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
-    return render(request, "ui/settings/dashboard.html", {
+    _template_name = (
+        "ui/settings/dashboard_v2.html"
+        if getattr(request, "_preview_v2", False)
+        else "ui/settings/dashboard.html"
+    )
+    return render(request, _template_name, {
         "MESSENGER_ENABLED": getattr(settings, "MESSENGER_ENABLED", False),
     })
+
+
+@login_required
+def settings_dashboard_v2_preview(request: HttpRequest) -> HttpResponse:
+    """Preview редизайна админки (Notion-стиль). Только ADMIN."""
+    if not require_admin(request.user):
+        from django.core.exceptions import PermissionDenied as _PD
+        raise _PD("Preview доступен только администраторам")
+    request._preview_v2 = True  # type: ignore[attr-defined]
+    return settings_dashboard(request)
 
 
 @login_required

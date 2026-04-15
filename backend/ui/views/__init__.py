@@ -56,7 +56,7 @@ from ui.views.tasks import (
     _create_note_from_task,  # accessed by tasksapp/management/commands/cleanup_old_tasks.py
 )  # noqa: F401
 from ui.views.settings_core import (
-    settings_dashboard, settings_announcements,
+    settings_dashboard, settings_dashboard_v2_preview, settings_announcements,
     settings_access, settings_access_role,
     settings_branches, settings_branch_create, settings_branch_edit,
     settings_users, settings_user_create, settings_user_edit,
