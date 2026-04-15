@@ -100,12 +100,18 @@ class Command(BaseCommand):
             )
             created += 1
 
-        # Договоры до конца месяца — для 5 случайных компаний
+        # Договоры до конца месяца — для 5 случайных компаний.
+        # Важно: форсим responsible=user, иначе блок «Договоры» на дашборде
+        # (который фильтрует по responsible=user) останется пустым.
         contract_targets = random.sample(companies, k=min(5, len(companies)))
         today = local_now.date()
         for idx, c in enumerate(contract_targets):
             c.contract_until = today + timedelta(days=7 + idx * 5)
-            c.save(update_fields=["contract_until"])
+            if c.responsible_id != user.id:
+                c.responsible = user
+                c.save(update_fields=["contract_until", "responsible"])
+            else:
+                c.save(update_fields=["contract_until"])
 
         self.stdout.write(self.style.SUCCESS(
             f"Создано задач: {created}. Обновлено договоров: {len(contract_targets)}. Пользователь: {user.username}"

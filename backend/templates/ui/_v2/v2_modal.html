@@ -1,0 +1,245 @@
+{% comment %}
+  v2-modal + v2-toast — лёгкий SPA-слой без внешних библиотек.
+  API:
+    window.V2Modal.open({ url, title, onSaved, onClose })  — загружает partial HTML и показывает в модалке
+    window.V2Modal.openHtml({ html, title, onClose })      — показывает готовый HTML
+    window.V2Modal.close()                                  — закрывает текущую модалку (с проверкой dirty)
+    window.V2Toast.show(msg, {type:'ok'|'err'|'info', timeout:3000})
+  События на window:
+    'v2-modal:saved' (detail = {url, response}) — dispatch из partial после успешного сохранения
+  Поведение:
+    - Esc / клик по backdrop → close (с confirm, если форма dirty)
+    - Форма внутри модалки перехватывается: submit → fetch POST, обрабатывает JSON {ok:true, toast, close:true}
+      или partial HTML (перерисовывает контент модалки — валидационные ошибки).
+{% endcomment %}
+<style>
+  .v2-modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);
+    display:none;align-items:flex-start;justify-content:center;z-index:1000;
+    padding:48px 16px 16px;overflow-y:auto;backdrop-filter:blur(2px)}
+  .v2-modal-backdrop.is-open{display:flex;animation:v2-fade-in .15s ease}
+  @keyframes v2-fade-in{from{opacity:0}to{opacity:1}}
+  @keyframes v2-slide-up{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}
+  .v2-modal{background:#fff;border-radius:14px;border:1px solid var(--v2-border);
+    box-shadow:0 20px 60px rgba(15,23,42,.25);width:min(640px,100%);
+    max-height:calc(100vh - 96px);display:flex;flex-direction:column;
+    animation:v2-slide-up .18s ease}
+  .v2-modal--wide{width:min(860px,100%)}
+  .v2-modal__head{display:flex;align-items:center;justify-content:space-between;
+    padding:14px 20px;border-bottom:1px solid var(--v2-border)}
+  .v2-modal__title{font-size:16px;font-weight:600;color:var(--v2-text);margin:0}
+  .v2-modal__close{background:transparent;border:0;cursor:pointer;padding:6px;
+    border-radius:8px;color:var(--v2-text-muted);display:inline-flex}
+  .v2-modal__close:hover{background:var(--v2-bg-soft);color:var(--v2-text)}
+  .v2-modal__body{padding:18px 20px;overflow-y:auto;flex:1}
+  .v2-modal__body.is-loading{min-height:120px;display:flex;align-items:center;justify-content:center;color:var(--v2-text-muted)}
+
+  /* Toast */
+  .v2-toast-stack{position:fixed;right:20px;bottom:20px;z-index:1100;
+    display:flex;flex-direction:column-reverse;gap:10px;pointer-events:none;max-width:380px}
+  .v2-toast{background:#fff;border:1px solid var(--v2-border);border-left:4px solid var(--v2-primary);
+    border-radius:10px;box-shadow:0 8px 24px rgba(15,23,42,.12);
+    padding:12px 14px;font-size:13px;color:var(--v2-text);
+    display:flex;align-items:flex-start;gap:10px;pointer-events:auto;
+    animation:v2-toast-in .2s ease;min-width:220px}
+  .v2-toast--ok{border-left-color:var(--v2-primary)}
+  .v2-toast--err{border-left-color:var(--v2-danger,#dc2626)}
+  .v2-toast--info{border-left-color:var(--v2-accent,#fdad3a)}
+  .v2-toast__msg{flex:1;line-height:1.4}
+  .v2-toast__close{background:transparent;border:0;cursor:pointer;color:var(--v2-text-muted);
+    padding:0;font-size:16px;line-height:1}
+  .v2-toast__close:hover{color:var(--v2-text)}
+  @keyframes v2-toast-in{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
+  .v2-toast.is-leaving{animation:v2-toast-out .2s ease forwards}
+  @keyframes v2-toast-out{to{transform:translateX(20px);opacity:0}}
+</style>
+
+<div id="v2ModalBackdrop" class="v2-modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="v2-modal" id="v2ModalDialog">
+    <div class="v2-modal__head">
+      <h2 class="v2-modal__title" id="v2ModalTitle">—</h2>
+      <button type="button" class="v2-modal__close" id="v2ModalClose" aria-label="Закрыть">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="v2-modal__body is-loading" id="v2ModalBody">Загрузка…</div>
+  </div>
+</div>
+
+<div class="v2-toast-stack" id="v2ToastStack" aria-live="polite" aria-atomic="true"></div>
+
+<script>
+(function(){
+  const backdrop = document.getElementById('v2ModalBackdrop');
+  const dialog   = document.getElementById('v2ModalDialog');
+  const titleEl  = document.getElementById('v2ModalTitle');
+  const bodyEl   = document.getElementById('v2ModalBody');
+  const closeBtn = document.getElementById('v2ModalClose');
+  const toastStack = document.getElementById('v2ToastStack');
+
+  let state = { open:false, onClose:null, onSaved:null, dirty:false };
+
+  function getCsrf(){
+    const el = document.querySelector('input[name=csrfmiddlewaretoken]');
+    return el ? el.value : '';
+  }
+
+  function setDirty(v){ state.dirty = !!v; }
+
+  function watchDirty(){
+    bodyEl.querySelectorAll('input,textarea,select').forEach(function(el){
+      el.addEventListener('input', () => setDirty(true), { once:false });
+      el.addEventListener('change', () => setDirty(true), { once:false });
+    });
+  }
+
+  function wireForms(){
+    bodyEl.querySelectorAll('form[data-v2-modal-form]').forEach(function(form){
+      form.addEventListener('submit', async function(ev){
+        ev.preventDefault();
+        const submitBtn = form.querySelector('[type=submit]');
+        if(submitBtn) submitBtn.disabled = true;
+        try{
+          const fd = new FormData(form);
+          if(!fd.has('csrfmiddlewaretoken')) fd.append('csrfmiddlewaretoken', getCsrf());
+          const res = await fetch(form.action || window.location.href, {
+            method:'POST', body:fd, credentials:'same-origin',
+            headers:{'X-Requested-With':'XMLHttpRequest','Accept':'text/html,application/json'}
+          });
+          const ct = (res.headers.get('content-type') || '').toLowerCase();
+          if(ct.indexOf('application/json') !== -1){
+            const data = await res.json().catch(()=>({}));
+            if(res.ok && data.ok){
+              setDirty(false);
+              V2Toast.show(data.toast || 'Сохранено', {type:'ok'});
+              window.dispatchEvent(new CustomEvent('v2-modal:saved', { detail:{form:form, data:data} }));
+              if(state.onSaved) { try { state.onSaved(data); } catch(_){} }
+              if(data.close !== false) closeModal(true);
+            } else {
+              V2Toast.show((data && data.error) || 'Ошибка сохранения', {type:'err'});
+              if(submitBtn) submitBtn.disabled = false;
+            }
+          } else {
+            const html = await res.text();
+            // Partial HTML — скорее всего форма с ошибками валидации
+            bodyEl.innerHTML = html;
+            bodyEl.classList.remove('is-loading');
+            watchDirty();
+            wireForms();
+            if(!res.ok){
+              V2Toast.show('Проверьте поля формы', {type:'err'});
+            }
+          }
+        }catch(err){
+          V2Toast.show('Сеть недоступна', {type:'err'});
+          if(submitBtn) submitBtn.disabled = false;
+        }
+      });
+    });
+  }
+
+  async function openFromUrl(opts){
+    const url = opts.url;
+    state.onClose = opts.onClose || null;
+    state.onSaved = opts.onSaved || null;
+    titleEl.textContent = opts.title || '—';
+    bodyEl.classList.add('is-loading');
+    bodyEl.innerHTML = 'Загрузка…';
+    backdrop.classList.add('is-open');
+    backdrop.setAttribute('aria-hidden','false');
+    state.open = true;
+    setDirty(false);
+    try{
+      const sep = url.indexOf('?') === -1 ? '?' : '&';
+      const res = await fetch(url + sep + 'partial=1', {
+        credentials:'same-origin',
+        headers:{'X-Requested-With':'XMLHttpRequest','Accept':'text/html'}
+      });
+      if(!res.ok){
+        bodyEl.classList.remove('is-loading');
+        bodyEl.innerHTML = '<div style="color:var(--v2-danger,#dc2626)">Не удалось загрузить (' + res.status + ')</div>';
+        return;
+      }
+      const html = await res.text();
+      bodyEl.innerHTML = html;
+      bodyEl.classList.remove('is-loading');
+      // Попытка забрать заголовок из partial, если он есть
+      const hdr = bodyEl.querySelector('[data-v2-modal-title]');
+      if(hdr) { titleEl.textContent = hdr.textContent.trim(); hdr.style.display='none'; }
+      watchDirty();
+      wireForms();
+    }catch(_){
+      bodyEl.classList.remove('is-loading');
+      bodyEl.innerHTML = '<div style="color:var(--v2-danger,#dc2626)">Ошибка загрузки</div>';
+    }
+  }
+
+  function openHtml(opts){
+    state.onClose = opts.onClose || null;
+    state.onSaved = opts.onSaved || null;
+    titleEl.textContent = opts.title || '—';
+    bodyEl.innerHTML = opts.html || '';
+    bodyEl.classList.remove('is-loading');
+    backdrop.classList.add('is-open');
+    backdrop.setAttribute('aria-hidden','false');
+    state.open = true;
+    setDirty(false);
+    watchDirty();
+    wireForms();
+  }
+
+  function closeModal(force){
+    if(!state.open) return;
+    if(!force && state.dirty){
+      if(!confirm('Несохранённые изменения будут потеряны. Закрыть?')) return;
+    }
+    backdrop.classList.remove('is-open');
+    backdrop.setAttribute('aria-hidden','true');
+    state.open = false;
+    setDirty(false);
+    bodyEl.innerHTML = '';
+    if(state.onClose) { try { state.onClose(); } catch(_){} }
+    state.onClose = null;
+    state.onSaved = null;
+  }
+
+  closeBtn.addEventListener('click', () => closeModal(false));
+  backdrop.addEventListener('click', function(ev){ if(ev.target === backdrop) closeModal(false); });
+  document.addEventListener('keydown', function(ev){
+    if(ev.key === 'Escape' && state.open) closeModal(false);
+  });
+
+  window.V2Modal = { open: openFromUrl, openHtml: openHtml, close: closeModal };
+
+  // Toast
+  function showToast(msg, opts){
+    opts = opts || {};
+    const type = opts.type || 'ok';
+    const timeout = opts.timeout === 0 ? 0 : (opts.timeout || 3000);
+    const el = document.createElement('div');
+    el.className = 'v2-toast v2-toast--' + type;
+    el.innerHTML = '<div class="v2-toast__msg"></div><button type="button" class="v2-toast__close" aria-label="Закрыть">×</button>';
+    el.querySelector('.v2-toast__msg').textContent = msg;
+    toastStack.appendChild(el);
+    function dismiss(){
+      if(!el.parentNode) return;
+      el.classList.add('is-leaving');
+      setTimeout(() => { if(el.parentNode) el.parentNode.removeChild(el); }, 200);
+    }
+    el.querySelector('.v2-toast__close').addEventListener('click', dismiss);
+    if(timeout > 0) setTimeout(dismiss, timeout);
+  }
+  window.V2Toast = { show: showToast };
+
+  // Глобальный делегат: клики по [data-v2-modal-open] открывают модалку вместо навигации
+  document.addEventListener('click', function(ev){
+    const trigger = ev.target.closest('[data-v2-modal-open]');
+    if(!trigger) return;
+    // Игнорим клики по вложенным кнопкам (напр. круглый чекбокс)
+    if(ev.target.closest('.v2-done-check')) return;
+    const url = trigger.getAttribute('data-v2-modal-open') || trigger.getAttribute('href');
+    if(!url) return;
+    ev.preventDefault();
+    openFromUrl({ url: url, title: trigger.getAttribute('data-v2-modal-title') || '—' });
+  });
+})();
+</script>
