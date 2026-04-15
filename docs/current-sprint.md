@@ -8,6 +8,27 @@ Live-chat UX Completion — реализация по спецификации `
 
 ## Сделано в этом спринте
 
+**[2026-04-15]** — Редизайн Фаза 2 Tasks (функциональный паритет с v1) ✅
+
+- `c7723cc` dashboard v2: блок «Запросы на удаление» (РОП/директор),
+  индикатор `⚡` is_urgent, футер stale_companies.
+- Добавлен templatetag `accounts.templatetags.accounts_extras.full_name`
+  («Фамилия Имя» → fallback first/last/username) + 5 unit-тестов.
+  Применён в v2 шаблонах там, где выводится ответственный/исполнитель —
+  чтобы не путать тёзок в команде.
+- `9fec3ad` task_list_v2: реальные фильтры — status select, assignee
+  select с `{% regroup %}` по branch, чекбокс-чипы mine/today/overdue/
+  show_done (auto-submit), кнопка «Сброс».
+- `dad33c3` task_list_v2: sort (сортируемые заголовки title/company/
+  due_at/assignee со стрелками ▲▼), date range (date_from/date_to
+  auto-submit), bulk reassign panel (sticky sticky, чекбоксы строк,
+  групповой select по branch, счётчик выбранных, инжекция фильтров
+  в POST), localStorage remember filters (`v2_task_filters_v1`).
+- Все 190 ui + 269 ui+accounts тестов OK. Staging задеплоен.
+
+**Следующее:** Фаза 2 Companies (filters sphere/contract/region/branch,
+sort headers, bulk transfer), затем Фаза 2 Settings.
+
 **[2026-04-15]** — Редизайн Фаза 1 (визуальная полировка v2) ✅
 
 - `2a57b5a` Фаза 1A/1B: фундамент v2 — `templates/ui/_v2/v2_styles.html`
