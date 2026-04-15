@@ -173,14 +173,15 @@ class UiUserPreference(models.Model):
         verbose_name="Пользователь",
     )
     font_scale = models.DecimalField(
-        "Масштаб шрифта",
+        "Масштаб интерфейса",
         max_digits=4,
-        decimal_places=2,
-        default=Decimal("1.00"),
+        decimal_places=3,
+        default=Decimal("1.000"),
         validators=[
-            # Держим диапазон аккуратным, чтобы не "ехала" верстка на сетках/таблицах.
-            MinValueValidator(Decimal("0.90")),
-            MaxValueValidator(Decimal("1.15")),
+            # Расширенный диапазон для v2-пресетов: 87.5% / 100% / 112.5% / 125%.
+            # В v2 применяется через CSS zoom и масштабирует весь интерфейс пропорционально.
+            MinValueValidator(Decimal("0.850")),
+            MaxValueValidator(Decimal("1.300")),
         ],
     )
     company_detail_view_mode = models.CharField(

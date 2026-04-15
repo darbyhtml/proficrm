@@ -47,6 +47,11 @@
     font-size: 15px;
     line-height: 1.5;
     color: var(--v2-text);
+    /* Пропорциональное масштабирование всего v2-интерфейса (вариант Б).
+       Все v2-стили в px, rem/em не используются — поэтому zoom работает
+       без компаундинга с html { font-size: calc(100% * var(--ui-font-scale)) }
+       (которое влияет только на старые v1-страницы, где используется rem). */
+    zoom: var(--ui-font-scale, 1);
   }
   .v2 * { box-sizing: border-box; }
 
