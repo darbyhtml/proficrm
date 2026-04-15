@@ -1,119 +1,322 @@
 {% load ui_extras %}{% load accounts_extras %}
 {% comment %}
-  v2 partial: просмотр задачи в модалке.
-  Контекст: view_task, overdue_days, local_now, can_edit, can_manage_status.
+  v2 partial: просмотр задачи. Живёт внутри V2Modal shell.
+  Контекст: view_task (с can_edit_task/can_manage_status), view_task_overdue_days,
+            local_now, task_comments, task_events.
+  Визуально повторяет ui/task_view_modal.html (v1), статус-кнопки идут через fetch,
+  после успеха — V2Toast + событие `v2-modal:saved`.
 {% endcomment %}
 <span data-v2-modal-title>{% if view_task.is_urgent %}⚡ {% endif %}{{ view_task.title|default:"(без названия)" }}</span>
 
-<style>
-  .v2tv-meta{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--v2-text-muted);
-    margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--v2-border)}
-  .v2tv-meta strong{color:var(--v2-text);font-weight:600}
-  .v2tv-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;
-    font-size:11px;font-weight:600;background:var(--v2-bg-muted);color:var(--v2-text-soft)}
-  .v2tv-badge--urgent{background:rgba(220,38,38,.1);color:var(--v2-danger,#dc2626)}
-  .v2tv-badge--overdue{background:rgba(220,38,38,.1);color:var(--v2-danger,#dc2626)}
-  .v2tv-badge--done{background:rgba(1,148,142,.12);color:var(--v2-primary)}
-  .v2tv-section{margin-bottom:14px}
-  .v2tv-section__label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;
-    color:var(--v2-text-muted);font-weight:600;margin-bottom:4px}
-  .v2tv-section__body{font-size:13px;color:var(--v2-text);line-height:1.5;white-space:pre-wrap}
-  .v2tv-actions{display:flex;gap:8px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--v2-border);margin-top:12px}
-  .v2tv-actions button{padding:8px 14px;font-size:13px;border-radius:8px;cursor:pointer;
-    border:1px solid var(--v2-border);background:#fff;font-weight:500;color:var(--v2-text)}
-  .v2tv-actions button.is-primary{background:var(--v2-primary);color:#fff;border-color:var(--v2-primary)}
-  .v2tv-actions button.is-primary:hover{background:var(--v2-primary-dark,#017e79)}
-  .v2tv-actions button.is-danger{background:#fff;color:var(--v2-danger,#dc2626);border-color:var(--v2-danger,#dc2626)}
-  .v2tv-actions button.is-danger:hover{background:rgba(220,38,38,.08)}
-</style>
-
-<div class="v2tv-meta">
-  {% if view_task.is_urgent %}<span class="v2tv-badge v2tv-badge--urgent">⚡ Срочно</span>{% endif %}
-  {% if view_task.status == 'done' %}<span class="v2tv-badge v2tv-badge--done">✓ Выполнено</span>
-  {% elif overdue_days %}<span class="v2tv-badge v2tv-badge--overdue">Просрочено на {{ overdue_days }} дн.</span>
-  {% else %}<span class="v2tv-badge">{{ view_task.get_status_display }}</span>{% endif %}
-  {% if view_task.type %}<span class="v2tv-badge">{{ view_task.type.name }}</span>{% endif %}
+<div class="flex items-start justify-between gap-3 mb-4">
+  <div class="flex-1">
+    <div class="flex items-center justify-between gap-2 mb-2">
+      <div class="flex items-center gap-2">
+        {% if view_task.type %}
+          {% task_type_badge view_task.type %}
+        {% endif %}
+        {% if view_task.can_edit_task %}
+          <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem"
+                  onclick="V2Modal.open({url:'/tasks/v2/{{ view_task.id }}/edit/partial/',title:'Редактирование задачи'})">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Редактировать
+          </button>
+        {% endif %}
+      </div>
+      <span class="badge {% if view_task.status == 'new' %}badge-new{% elif view_task.status == 'in_progress' %}badge-progress{% elif view_task.status == 'done' %}badge-done{% elif view_task.status == 'cancelled' %}badge-cancel{% endif %}">{{ view_task.get_status_display }}</span>
+    </div>
+    <h2 class="text-xl font-semibold text-brand-dark">{{ view_task.title }}</h2>
+    {% if view_task.description %}
+      <div class="text-sm text-brand-dark/70 mt-2 whitespace-pre-wrap">{{ view_task.description }}</div>
+    {% endif %}
+  </div>
 </div>
 
-{% if view_task.description %}
-<div class="v2tv-section">
-  <div class="v2tv-section__label">Описание</div>
-  <div class="v2tv-section__body">{{ view_task.description }}</div>
+<div class="space-y-3 pt-3 border-t">
+  {% if view_task.company %}
+    <div class="flex items-start gap-3">
+      <svg class="w-5 h-5 text-brand-dark/60 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+      </svg>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs text-brand-dark/60 mb-0.5">Компания</div>
+        <a href="/companies/{{ view_task.company.id }}/" class="link font-medium">{{ view_task.company.name }}</a>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="flex items-start gap-3">
+    <svg class="w-5 h-5 text-brand-dark/60 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+    </svg>
+    <div class="flex-1 min-w-0">
+      <div class="text-xs text-brand-dark/60 mb-0.5">Ответственный</div>
+      <div class="font-medium">{% if view_task.assigned_to %}{{ view_task.assigned_to|full_name }}{% if view_task.assigned_to.branch %} · {{ view_task.assigned_to.branch.name }}{% endif %}{% else %}Не назначен{% endif %}</div>
+    </div>
+  </div>
+
+  {% if view_task.is_urgent %}
+    <div class="flex items-start gap-3">
+      <svg class="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
+      <div class="flex-1 min-w-0">
+        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700 border border-red-200">СРОЧНО</span>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if view_task.recurrence_rrule %}
+    <div class="flex items-start gap-3">
+      <svg class="w-5 h-5 text-brand-dark/60 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs text-brand-dark/60 mb-0.5">Повторение (в разработке)</div>
+        <div class="text-xs text-brand-dark/80 font-mono">{{ view_task.recurrence_rrule }}</div>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if view_task.created_at %}
+    <div class="flex items-start gap-3">
+      <svg class="w-5 h-5 text-brand-dark/60 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs text-brand-dark/60 mb-0.5">Поставлена</div>
+        <div class="font-medium">{{ view_task.created_at|date:"d.m.Y H:i" }}</div>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if view_task.due_at %}
+    <div class="flex items-start gap-3">
+      <svg class="w-5 h-5 text-brand-dark/60 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+      </svg>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs text-brand-dark/60 mb-0.5">Дедлайн</div>
+        <div class="font-medium {% if view_task.due_at < local_now %}text-red-700{% endif %}">{{ view_task.due_at|date:"d.m.Y H:i" }}</div>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if view_task.completed_at %}
+    <div class="flex items-start gap-3">
+      <svg class="w-5 h-5 text-brand-dark/60 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs text-brand-dark/60 mb-0.5">Выполнена</div>
+        <div class="font-medium text-green-700">{{ view_task.completed_at|date:"d.m.Y H:i" }}</div>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if view_task_overdue_days and view_task_overdue_days > 0 %}
+    <div class="flex items-start gap-3">
+      <svg class="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs text-red-600 mb-0.5">Просрочка</div>
+        <div class="font-medium text-red-700">Выполнена на {{ view_task_overdue_days }} {{ view_task_overdue_days|pluralize:"день,дня,дней" }} позже дедлайна</div>
+      </div>
+    </div>
+  {% endif %}
 </div>
+
+{% if view_task.can_manage_status and view_task.status != 'done' and view_task.status != 'cancelled' %}
+  <div class="flex flex-wrap gap-2 pt-3 border-t mt-3" data-v2-task-status-bar data-task-id="{{ view_task.id }}">
+    {% if view_task.status != 'in_progress' %}
+      <button type="button" data-v2-task-status="in_progress" class="btn btn-outline flex items-center gap-1.5">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM8 6v4M16 6v4M8 14h8"/>
+        </svg>
+        В работу
+      </button>
+    {% endif %}
+    <button type="button" data-v2-task-status="done" class="btn btn-primary flex items-center gap-1.5">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+      Выполнено
+    </button>
+    <button type="button" data-v2-task-status="cancelled" class="btn btn-outline flex items-center gap-1.5" style="border-color:rgba(156,163,175,.6);color:#6b7280;" title="Отменить задачу — переводит в статус «Отменена»">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+      </svg>
+      Отменить
+    </button>
+  </div>
 {% endif %}
 
-<div class="v2tv-section">
-  <div class="v2tv-section__label">Компания</div>
-  <div class="v2tv-section__body">
-    {% if view_task.company %}
-      <a href="{% url 'company_detail' view_task.company.id %}" style="color:var(--v2-primary);text-decoration:none">{{ view_task.company.name }}</a>
-    {% else %}<span style="color:var(--v2-text-muted)">—</span>{% endif %}
+{% if task_events %}
+  <div class="mt-4 pt-4 border-t">
+    <div class="text-xs font-semibold text-brand-dark/50 uppercase tracking-wide mb-2">История</div>
+    <div class="space-y-1.5">
+      {% for ev in task_events %}
+        <div class="flex items-start gap-2 text-xs text-brand-dark/70">
+          <span class="mt-0.5 flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center
+            {% if ev.kind == 'created' %}bg-green-100 text-green-700
+            {% elif ev.kind == 'status_changed' %}bg-blue-100 text-blue-700
+            {% elif ev.kind == 'deadline_changed' %}bg-amber-100 text-amber-700
+            {% elif ev.kind == 'assigned' %}bg-purple-100 text-purple-700
+            {% else %}bg-gray-100 text-gray-600{% endif %}">
+            {% if ev.kind == 'created' %}
+              <svg width="8" height="8" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2z"/></svg>
+            {% elif ev.kind == 'status_changed' %}
+              <svg width="8" height="8" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            {% elif ev.kind == 'deadline_changed' %}
+              <svg width="8" height="8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/></svg>
+            {% else %}
+              <svg width="8" height="8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            {% endif %}
+          </span>
+          <div class="flex-1 min-w-0">
+            <span class="font-medium text-brand-dark/80">{{ ev.actor|default:"Система" }}</span>
+            <span class="mx-1 text-brand-dark/40">·</span>
+            <span>{{ ev.get_kind_display }}</span>
+            {% if ev.old_value and ev.new_value %}
+              <span class="mx-1 text-brand-dark/30">:</span>
+              <span class="line-through text-brand-dark/40">{{ ev.old_value }}</span>
+              <span class="mx-1 text-brand-dark/30">→</span>
+              <span class="font-medium text-brand-dark/80">{{ ev.new_value }}</span>
+            {% elif ev.new_value %}
+              <span class="mx-1 text-brand-dark/30">:</span>
+              <span class="font-medium text-brand-dark/80">{{ ev.new_value }}</span>
+            {% endif %}
+          </div>
+          <span class="flex-shrink-0 text-brand-dark/40 whitespace-nowrap">{{ ev.created_at|date:"d.m H:i" }}</span>
+        </div>
+      {% endfor %}
+    </div>
   </div>
-</div>
+{% endif %}
 
-<div class="v2tv-section">
-  <div class="v2tv-section__label">Исполнитель</div>
-  <div class="v2tv-section__body">
-    {% if view_task.assigned_to %}{{ view_task.assigned_to|full_name }}{% if view_task.assigned_to.branch %} · {{ view_task.assigned_to.branch.name }}{% endif %}
-    {% else %}<span style="color:var(--v2-text-muted)">—</span>{% endif %}
+<div class="mt-4 pt-4 border-t">
+  <div class="text-xs font-semibold text-brand-dark/50 uppercase tracking-wide mb-2">
+    Комментарии
+    {% if task_comments %}<span class="font-normal normal-case text-brand-dark/40 ml-1">({{ task_comments|length }})</span>{% endif %}
   </div>
-</div>
 
-<div class="v2tv-section">
-  <div class="v2tv-section__label">Дедлайн</div>
-  <div class="v2tv-section__body">
-    {% if view_task.due_at %}{{ view_task.due_at|date:"d.m.Y, H:i" }}{% else %}<span style="color:var(--v2-text-muted)">—</span>{% endif %}
+  <div class="space-y-2 mb-3" id="taskCommentList-{{ view_task.id }}">
+    {% for c in task_comments %}
+      <div class="rounded-lg bg-brand-soft/20 px-3 py-2">
+        <div class="flex items-center justify-between gap-2 mb-1">
+          <span class="text-xs font-medium text-brand-dark/80">{{ c.author|default:"Удалённый пользователь" }}</span>
+          <span class="text-xs text-brand-dark/40 whitespace-nowrap">{{ c.created_at|date:"d.m.Y H:i" }}</span>
+        </div>
+        <div class="text-sm text-brand-dark/80 whitespace-pre-wrap">{{ c.text }}</div>
+      </div>
+    {% empty %}
+      <div class="text-xs text-brand-dark/40 italic" id="taskCommentEmpty-{{ view_task.id }}">Комментариев пока нет.</div>
+    {% endfor %}
   </div>
-</div>
 
-<div class="v2tv-actions">
-  {% if can_edit %}
-    <button type="button" class="is-primary" data-v2-task-edit="{{ view_task.id }}">Редактировать</button>
-  {% endif %}
-  {% if can_manage_status and view_task.status != 'done' %}
-    <button type="button" data-v2-task-done="{{ view_task.id }}">✓ Выполнить</button>
-  {% endif %}
-  <button type="button" onclick="V2Modal.close()">Закрыть</button>
+  <form data-v2-task-comment-form data-task-id="{{ view_task.id }}" class="flex gap-2 items-end">
+    {% csrf_token %}
+    <textarea name="text" placeholder="Написать комментарий…"
+              class="input flex-1 text-sm resize-none" rows="2" maxlength="2000"
+              style="min-height:2.5rem;line-height:1.4;"></textarea>
+    <button type="submit" class="btn btn-primary flex-shrink-0 flex items-center gap-1.5" style="padding:.5rem .875rem;align-self:flex-end;">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+        <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+      Отправить
+    </button>
+  </form>
 </div>
 
 <script>
 (function(){
-  const csrf = (document.querySelector('input[name=csrfmiddlewaretoken]') || {}).value || '';
+  const root = document.currentScript.parentElement;
+  const csrf = (root.querySelector('input[name=csrfmiddlewaretoken]') || {}).value || '';
 
-  document.querySelectorAll('[data-v2-task-edit]').forEach(function(btn){
-    btn.addEventListener('click', function(){
-      const id = btn.getAttribute('data-v2-task-edit');
-      // Подмена контента той же модалки на форму редактирования
-      V2Modal.open({ url: '/tasks/v2/' + id + '/edit/partial/', title: 'Редактирование задачи' });
-    });
-  });
-
-  document.querySelectorAll('[data-v2-task-done]').forEach(function(btn){
+  // Смена статуса через fetch → V2Toast → v2-modal:saved
+  root.querySelectorAll('[data-v2-task-status]').forEach(function(btn){
     btn.addEventListener('click', async function(){
-      const id = btn.getAttribute('data-v2-task-done');
-      if(!confirm('Отметить задачу выполненной?')) return;
+      const bar = btn.closest('[data-v2-task-status-bar]');
+      const taskId = bar && bar.getAttribute('data-task-id');
+      const status = btn.getAttribute('data-v2-task-status');
+      if(!taskId) return;
+      if(status === 'cancelled' && !confirm('Отменить задачу?')) return;
+      if(status === 'done' && !confirm('Отметить задачу выполненной?')) return;
       btn.disabled = true;
       try{
         const fd = new FormData();
         fd.append('csrfmiddlewaretoken', csrf);
-        fd.append('status', 'done');
-        const res = await fetch('/tasks/' + id + '/status/', {
+        fd.append('status', status);
+        const res = await fetch('/tasks/' + taskId + '/status/', {
           method:'POST', body:fd, credentials:'same-origin',
           headers:{'X-Requested-With':'XMLHttpRequest'}
         });
         if(res.ok){
-          V2Toast.show('Задача выполнена', {type:'ok'});
-          window.dispatchEvent(new CustomEvent('v2-modal:saved', { detail:{action:'done',id:id} }));
-          V2Modal.close(true);
+          const label = status==='done' ? 'Задача выполнена' : status==='cancelled' ? 'Задача отменена' : 'Взято в работу';
+          if(window.V2Toast) V2Toast.show(label, {type:'ok'});
+          window.dispatchEvent(new CustomEvent('v2-modal:saved', { detail:{action:'status',id:taskId,status:status} }));
+          if(window.V2Modal) V2Modal.close(true);
         } else {
           btn.disabled = false;
-          V2Toast.show('Не удалось', {type:'err'});
+          if(window.V2Toast) V2Toast.show('Не удалось', {type:'err'});
         }
       }catch(_){
         btn.disabled = false;
-        V2Toast.show('Сеть недоступна', {type:'err'});
+        if(window.V2Toast) V2Toast.show('Сеть недоступна', {type:'err'});
       }
     });
   });
+
+  // Комментарии
+  const commentForm = root.querySelector('[data-v2-task-comment-form]');
+  if(commentForm){
+    commentForm.addEventListener('submit', function(e){
+      e.preventDefault();
+      const taskId = commentForm.getAttribute('data-task-id');
+      const textarea = commentForm.querySelector('textarea[name="text"]');
+      const text = (textarea && textarea.value.trim()) || '';
+      if(!text) return;
+      const submitBtn = commentForm.querySelector('button[type="submit"]');
+      if(submitBtn) submitBtn.disabled = true;
+      fetch('/tasks/' + taskId + '/comment/', {
+        method:'POST',
+        headers:{
+          'X-Requested-With':'XMLHttpRequest',
+          'X-CSRFToken': csrf,
+          'Content-Type':'application/x-www-form-urlencoded',
+        },
+        body:'text=' + encodeURIComponent(text) + '&csrfmiddlewaretoken=' + encodeURIComponent(csrf),
+      })
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if(submitBtn) submitBtn.disabled = false;
+        if(!data.ok){ if(window.V2Toast) V2Toast.show(data.error || 'Ошибка', {type:'err'}); return; }
+        const list = document.getElementById('taskCommentList-' + taskId);
+        if(list){
+          const empty = document.getElementById('taskCommentEmpty-' + taskId);
+          if(empty) empty.remove();
+          const c = data.comment;
+          const div = document.createElement('div');
+          div.className = 'rounded-lg bg-brand-soft/20 px-3 py-2';
+          const safeText = c.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          div.innerHTML = '<div class="flex items-center justify-between gap-2 mb-1">'
+            + '<span class="text-xs font-medium text-brand-dark/80">' + c.author + '</span>'
+            + '<span class="text-xs text-brand-dark/40 whitespace-nowrap">' + c.created_at + '</span>'
+            + '</div><div class="text-sm text-brand-dark/80 whitespace-pre-wrap">' + safeText + '</div>';
+          list.appendChild(div);
+          div.scrollIntoView({behavior:'smooth', block:'nearest'});
+        }
+        if(textarea) textarea.value = '';
+      })
+      .catch(function(){
+        if(submitBtn) submitBtn.disabled = false;
+        if(window.V2Toast) V2Toast.show('Сеть недоступна', {type:'err'});
+      });
+    });
+  }
 })();
 </script>

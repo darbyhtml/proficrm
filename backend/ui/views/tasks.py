@@ -2220,19 +2220,22 @@ def task_view_v2_partial(request: HttpRequest, task_id) -> HttpResponse:
     now = timezone.now()
     local_now = timezone.localtime(now)
 
-    overdue_days = None
+    view_task_overdue_days = None
     if task.due_at and task.completed_at and task.completed_at > task.due_at:
-        overdue_days = (task.completed_at - task.due_at).days
+        view_task_overdue_days = (task.completed_at - task.due_at).days
 
-    can_edit = _can_edit_task_ui(user, task)
-    can_manage_status = _can_manage_task_status_ui(user, task)
+    task.can_edit_task = _can_edit_task_ui(user, task)
+    task.can_manage_status = _can_manage_task_status_ui(user, task)
+
+    comments = list(task.comments.select_related("author").all())
+    events = list(task.events.select_related("actor").all())
 
     return render(request, "ui/_v2/task_view_partial.html", {
         "view_task": task,
-        "overdue_days": overdue_days,
+        "view_task_overdue_days": view_task_overdue_days,
         "local_now": local_now,
-        "can_edit": can_edit,
-        "can_manage_status": can_manage_status,
+        "task_comments": comments,
+        "task_events": events,
     })
 
 
