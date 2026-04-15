@@ -162,12 +162,16 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
         created_at__lt=day_end
     ).count()
     
+    # Считаем количество до итерации, чтобы ниже пройти qs через .iterator()
+    # без повторного SQL-запроса на каждой итерации.
+    qs_count = qs.count()
+
     items = []
     lines = [
         f"Отчёт: ежедневная статистика за {day_label}",
         "",
         "Холодные звонки:",
-        f"  Всего: {qs.count() + manual_companies.count() + manual_contacts.count() + manual_company_phones.count() + manual_contact_phones.count()}",
+        f"  Всего: {qs_count + manual_companies.count() + manual_contacts.count() + manual_company_phones.count() + manual_contact_phones.count()}",
         "",
         "Общая статистика:",
         f"  Общее количество звонков (входящие), шт: {incoming_calls_count}",
@@ -182,9 +186,10 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
     # скрываем повторы в отчёте.
     dedupe_window_s = 60
     last_seen = {}  # (phone, company_id, contact_id) -> created_at
-    
-    # Звонки с подтверждённой отметкой
-    for call in qs:
+
+    # Звонки с подтверждённой отметкой — стримим из БД chunk'ами,
+    # чтобы не грузить весь queryset в память при больших отчётах.
+    for call in qs.iterator(chunk_size=500):
         key = (call.phone_raw or "", str(call.company_id or ""), str(call.contact_id or ""))
         prev = last_seen.get(key)
         if prev and (call.created_at - prev).total_seconds() < dedupe_window_s:
@@ -372,8 +377,11 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
         created_at__lt=month_end_aware
     ).count()
 
+    # Сохраняем count до итерации — в цикле ниже qs проходится через .iterator().
+    qs_count = qs.count()
+
     items = []
-    total_cold = qs.count() + manual_companies.count() + manual_contacts.count() + manual_company_phones.count() + manual_contact_phones.count()
+    total_cold = qs_count + manual_companies.count() + manual_contacts.count() + manual_company_phones.count() + manual_contact_phones.count()
     lines = [
         f"Отчёт: месячная статистика за {_month_label(selected)}",
         "",
@@ -392,8 +400,8 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
     dedupe_window_s = 60
     last_seen = {}  # (phone, company_id, contact_id) -> created_at
     
-    # Звонки с подтверждённой отметкой
-    for call in qs:
+    # Звонки с подтверждённой отметкой — стримим chunk'ами.
+    for call in qs.iterator(chunk_size=500):
         key = (call.phone_raw or "", str(call.company_id or ""), str(call.contact_id or ""))
         prev = last_seen.get(key)
         if prev and (call.created_at - prev).total_seconds() < dedupe_window_s:
