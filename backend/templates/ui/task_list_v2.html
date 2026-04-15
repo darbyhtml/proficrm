@@ -28,16 +28,7 @@
     <div class="v2-card__head" style="gap:12px;flex-wrap:wrap">
       <h1 class="v2-h1" style="margin:0">Задачи</h1>
       <span class="v2-count v2-count--primary">{{ tasks_count|default:0 }}</span>
-
-      <form method="get" action="{% url 'task_list_v2_preview' %}" style="flex:1;min-width:220px;display:flex;gap:8px">
-        <input type="search" name="q" value="{{ search_q|default:'' }}"
-               placeholder="Поиск по названию, описанию, компании…" class="v2-input" />
-        {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
-        {% if mine %}<input type="hidden" name="mine" value="1">{% endif %}
-        {% if overdue %}<input type="hidden" name="overdue" value="1">{% endif %}
-        {% if today %}<input type="hidden" name="today" value="1">{% endif %}
-      </form>
-
+      <div style="flex:1"></div>
       <a href="{% url 'task_create' %}" class="v2-btn">
         <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd">
           <path d="M12 3.75a.75.75 0 01.75.75v6.75h6.75a.75.75 0 010 1.5h-6.75v6.75a.75.75 0 01-1.5 0v-6.75H4.5a.75.75 0 010-1.5h6.75V4.5a.75.75 0 01.75-.75z"/>
@@ -47,20 +38,59 @@
     </div>
 
     <div class="v2-card__body" style="padding-top:0">
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
-        <a class="v2-chip {% if not status and not overdue and not today and not show_done %}v2-chip--active{% endif %}"
-           href="{% url 'task_list_v2_preview' %}">Все активные</a>
-        <a class="v2-chip {% if today %}v2-chip--active{% endif %}"
-           href="{% url 'task_list_v2_preview' %}?today=1">На сегодня</a>
-        <a class="v2-chip {% if overdue %}v2-chip--active{% endif %}"
-           href="{% url 'task_list_v2_preview' %}?overdue=1">Просрочено</a>
-        <a class="v2-chip {% if status == 'new' %}v2-chip--active{% endif %}"
-           href="{% url 'task_list_v2_preview' %}?status=new">Новые</a>
-        <a class="v2-chip {% if status == 'in_progress' %}v2-chip--active{% endif %}"
-           href="{% url 'task_list_v2_preview' %}?status=in_progress">В работе</a>
-        <a class="v2-chip {% if show_done %}v2-chip--active{% endif %}"
-           href="{% url 'task_list_v2_preview' %}?show_done=1">Показать завершённые</a>
-      </div>
+      <form method="get" action="{% url 'task_list_v2_preview' %}" id="v2TaskFilters"
+            style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px">
+        <input type="search" name="q" value="{{ search_q|default:'' }}"
+               placeholder="Поиск по названию, описанию, компании…" class="v2-input"
+               style="flex:1;min-width:220px" />
+
+        <select name="status" class="v2-select" onchange="this.form.submit()">
+          <option value="">Любой статус</option>
+          <option value="new" {% if status == 'new' %}selected{% endif %}>Новая</option>
+          <option value="in_progress" {% if status == 'in_progress' %}selected{% endif %}>В работе</option>
+          <option value="done" {% if status == 'done' %}selected{% endif %}>Выполнена</option>
+          <option value="cancelled" {% if status == 'cancelled' %}selected{% endif %}>Отменена</option>
+        </select>
+
+        {% if filter_assignees %}
+        <select name="assigned_to" class="v2-select" onchange="this.form.submit()"
+                {% if mine == '1' %}disabled{% endif %}>
+          <option value="">Любой исполнитель</option>
+          {% regroup filter_assignees by branch as assignee_branches %}
+          {% for bg in assignee_branches %}
+            <optgroup label="{{ bg.grouper.name|default:'Без подразделения' }}">
+              {% for u in bg.list %}
+                <option value="{{ u.id }}" {% if assigned_to|default:'' == u.id|stringformat:'s' %}selected{% endif %}>{{ u|full_name }}</option>
+              {% endfor %}
+            </optgroup>
+          {% endfor %}
+        </select>
+        {% endif %}
+
+        <label class="v2-chip {% if mine == '1' %}v2-chip--active{% endif %}" style="cursor:pointer">
+          <input type="checkbox" name="mine" value="1" {% if mine == '1' %}checked{% endif %}
+                 onchange="this.form.submit()" style="margin-right:6px" />
+          Мои
+        </label>
+        <label class="v2-chip {% if today == '1' %}v2-chip--active{% endif %}" style="cursor:pointer">
+          <input type="checkbox" name="today" value="1" {% if today == '1' %}checked{% endif %}
+                 onchange="this.form.submit()" style="margin-right:6px" />
+          Сегодня
+        </label>
+        <label class="v2-chip {% if overdue == '1' %}v2-chip--active{% endif %}" style="cursor:pointer">
+          <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %}
+                 onchange="this.form.submit()" style="margin-right:6px" />
+          Просрочено
+        </label>
+        <label class="v2-chip {% if show_done == '1' %}v2-chip--active{% endif %}" style="cursor:pointer">
+          <input type="checkbox" name="show_done" value="1" {% if show_done == '1' %}checked{% endif %}
+                 onchange="this.form.submit()" style="margin-right:6px" />
+          Выполненные
+        </label>
+
+        <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list_v2_preview' %}"
+           title="Сбросить все фильтры">Сброс</a>
+      </form>
 
       <div class="v2-table">
         {% for t in page.object_list %}
