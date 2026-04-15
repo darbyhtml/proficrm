@@ -2,240 +2,115 @@
 {% load ui_extras %}
 {% block title %}Задачи (v2) — CRM ПРОФИ{% endblock %}
 
-{#
-  Preview-версия редизайна списка задач. Notion-стиль на токенах
-  brand.primary / brand.accent / crm-neutral / shadow-crm-*. Heroicons Solid.
-  Использует тот же контекст что основная страница (task_list); переключается
-  через `request._preview_v2` в `ui.views.tasks.task_list`.
-#}
+{% comment %}
+  Preview-версия списка задач. Использует общие стили _v2/v2_styles.html.
+  Контекст — тот же что у ui.views.tasks.task_list (через флаг request._preview_v2).
+{% endcomment %}
 
 {% block extra_head %}
-<style>
-  .v2-page {
-    max-width: 1400px; margin: 0 auto; padding: 24px;
-  }
-  .v2-toolbar {
-    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-    padding: 14px 18px; background: #ffffff;
-    border: 1px solid #E7E7E3; border-radius: 12px;
-    box-shadow: 0 1px 2px rgba(15,21,20,0.04);
-  }
-  .v2-toolbar__title {
-    font-size: 20px; font-weight: 600; color: #1A1A16;
-    letter-spacing: -0.01em; margin-right: 8px;
-  }
-  .v2-toolbar__count {
-    display: inline-flex; align-items: center;
-    padding: 2px 10px; height: 22px; border-radius: 999px;
-    background: #E6F4F3; color: #01635F;
-    font-size: 12px; font-weight: 600;
-  }
-  .v2-toolbar__search {
-    flex: 1; min-width: 220px;
-    height: 36px; padding: 0 12px;
-    border: 1px solid #D1D1CB; border-radius: 8px;
-    font-size: 14px; color: #1A1A16; background: #FAFAF9;
-    outline: none; transition: border-color .15s ease, background .15s ease;
-  }
-  .v2-toolbar__search:focus { border-color: #01948E; background: #ffffff; }
-  .v2-btn {
-    display: inline-flex; align-items: center; gap: 6px;
-    height: 36px; padding: 0 14px;
-    background: #01948E; color: #ffffff;
-    border-radius: 8px; border: none;
-    font-size: 14px; font-weight: 500; text-decoration: none;
-    transition: background .15s ease;
-  }
-  .v2-btn:hover { background: #017E79; }
-  .v2-btn--ghost { background: #F4F4F2; color: #3F3F38; }
-  .v2-btn--ghost:hover { background: #E7E7E3; }
-
-  .v2-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-  .v2-chip {
-    display: inline-flex; align-items: center; gap: 6px;
-    height: 30px; padding: 0 12px;
-    border-radius: 999px; border: 1px solid #E7E7E3;
-    background: #ffffff; color: #3F3F38;
-    font-size: 13px; font-weight: 500; text-decoration: none;
-    transition: all .15s ease;
-  }
-  .v2-chip:hover { border-color: #01948E; color: #01948E; }
-  .v2-chip--active {
-    background: #01948E; border-color: #01948E; color: #ffffff;
-  }
-  .v2-chip--active:hover { color: #ffffff; background: #017E79; }
-
-  .v2-list {
-    margin-top: 16px;
-    background: #ffffff;
-    border: 1px solid #E7E7E3; border-radius: 12px;
-    box-shadow: 0 1px 2px rgba(15,21,20,0.04);
-    overflow: hidden;
-  }
-  .v2-row {
-    display: grid;
-    grid-template-columns: 28px 1fr 220px 140px 120px;
-    gap: 14px; align-items: center;
-    padding: 14px 18px;
-    border-bottom: 1px solid #F4F4F2;
-    text-decoration: none; color: inherit;
-    transition: background .12s ease;
-  }
-  .v2-row:hover { background: #FAFAF9; }
-  .v2-row:last-child { border-bottom: none; }
-  .v2-row__status {
-    width: 14px; height: 14px; border-radius: 999px;
-    background: #D1D1CB; flex-shrink: 0;
-  }
-  .v2-row__status--new { background: #01948E; }
-  .v2-row__status--in-progress { background: #FDAD3A; }
-  .v2-row__status--overdue { background: #C62828; }
-  .v2-row__status--done { background: #9B9B94; }
-  .v2-row__title {
-    font-size: 14px; font-weight: 500; color: #1A1A16;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .v2-row__sub {
-    font-size: 12px; color: #6E6E65; margin-top: 2px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .v2-row__meta {
-    font-size: 13px; color: #3F3F38;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .v2-row__due {
-    font-size: 13px; color: #3F3F38;
-  }
-  .v2-row__due--overdue { color: #C62828; font-weight: 600; }
-  .v2-row__assignee {
-    font-size: 12px; color: #6E6E65;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .v2-empty {
-    padding: 64px 24px; text-align: center; color: #6E6E65;
-  }
-  .v2-empty__icon { width: 48px; height: 48px; margin: 0 auto 12px; color: #D1D1CB; }
-
-  .v2-banner {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 16px; margin-bottom: 16px;
-    background: #FEF5E6; border: 1px solid #FDD280; border-radius: 10px;
-    font-size: 13px; color: #503509;
-  }
-  .v2-banner svg { width: 18px; height: 18px; color: #E09420; flex-shrink: 0; }
-
-  .v2-pagination {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 18px;
-    background: #FAFAF9; border-top: 1px solid #F4F4F2;
-    font-size: 13px; color: #6E6E65;
-  }
-  .v2-pagination a {
-    color: #01948E; text-decoration: none; font-weight: 500;
-    padding: 4px 10px; border-radius: 6px;
-  }
-  .v2-pagination a:hover { background: #E6F4F3; }
-
-  @media (max-width: 960px) {
-    .v2-row { grid-template-columns: 20px 1fr; }
-    .v2-row__meta, .v2-row__due, .v2-row__assignee { display: none; }
-  }
-</style>
+  {% include "ui/_v2/v2_styles.html" %}
 {% endblock %}
 
 {% block content %}
-<div class="v2-page">
+<div class="v2">
 
-  <div class="v2-banner">
-    <svg fill="currentColor" viewBox="0 0 24 24"><path d="M12 9v3.75m0 3.75h.008m-.008 0h.008M12 3.75l-9.75 16.5h19.5L12 3.75z"/></svg>
+  <div class="v2-banner v2-anim">
+    <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd">
+      <path d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.155 2-.288 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z"/>
+    </svg>
     <div>
-      <strong>Preview редизайна.</strong> Основная версия списка задач —
-      <a href="{% url 'task_list' %}" class="underline">/tasks/</a>.
+      <strong>Preview редизайна.</strong> Основная версия —
+      <a href="{% url 'task_list' %}" style="color:var(--v2-primary);text-decoration:underline">/tasks/</a>.
     </div>
   </div>
 
-  <div class="v2-toolbar">
-    <div class="v2-toolbar__title">Задачи</div>
-    <div class="v2-toolbar__count">{{ tasks_count|default:0 }}</div>
+  <div class="v2-card v2-anim" style="animation-delay:.05s">
+    <div class="v2-card__head" style="gap:12px;flex-wrap:wrap">
+      <h1 class="v2-h1" style="margin:0">Задачи</h1>
+      <span class="v2-count v2-count--primary">{{ tasks_count|default:0 }}</span>
 
-    <form method="get" action="{% url 'task_list_v2_preview' %}" class="flex-1 flex gap-2 min-w-[200px]">
-      <input type="search" name="q" value="{{ search_q|default:'' }}"
-             placeholder="Поиск по названию, описанию, компании…"
-             class="v2-toolbar__search" />
-      {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
-      {% if mine %}<input type="hidden" name="mine" value="1">{% endif %}
-      {% if overdue %}<input type="hidden" name="overdue" value="1">{% endif %}
-      {% if today %}<input type="hidden" name="today" value="1">{% endif %}
-    </form>
+      <form method="get" action="{% url 'task_list_v2_preview' %}" style="flex:1;min-width:220px;display:flex;gap:8px">
+        <input type="search" name="q" value="{{ search_q|default:'' }}"
+               placeholder="Поиск по названию, описанию, компании…" class="v2-input" />
+        {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+        {% if mine %}<input type="hidden" name="mine" value="1">{% endif %}
+        {% if overdue %}<input type="hidden" name="overdue" value="1">{% endif %}
+        {% if today %}<input type="hidden" name="today" value="1">{% endif %}
+      </form>
 
-    <a href="{% url 'task_create' %}" class="v2-btn">
-      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.25a.75.75 0 01.75.75v7.5h7.5a.75.75 0 010 1.5h-7.5v7.5a.75.75 0 01-1.5 0v-7.5h-7.5a.75.75 0 010-1.5h7.5V3a.75.75 0 01.75-.75z"/></svg>
-      Новая задача
-    </a>
-  </div>
-
-  <div class="v2-chips">
-    <a class="v2-chip {% if not status and not overdue and not today and not show_done %}v2-chip--active{% endif %}"
-       href="{% url 'task_list_v2_preview' %}">Все активные</a>
-    <a class="v2-chip {% if today %}v2-chip--active{% endif %}"
-       href="{% url 'task_list_v2_preview' %}?today=1">На сегодня</a>
-    <a class="v2-chip {% if overdue %}v2-chip--active{% endif %}"
-       href="{% url 'task_list_v2_preview' %}?overdue=1">Просрочено</a>
-    <a class="v2-chip {% if status == 'new' %}v2-chip--active{% endif %}"
-       href="{% url 'task_list_v2_preview' %}?status=new">Новые</a>
-    <a class="v2-chip {% if status == 'in_progress' %}v2-chip--active{% endif %}"
-       href="{% url 'task_list_v2_preview' %}?status=in_progress">В работе</a>
-    <a class="v2-chip {% if show_done %}v2-chip--active{% endif %}"
-       href="{% url 'task_list_v2_preview' %}?show_done=1">Показать завершённые</a>
-  </div>
-
-  <div class="v2-list">
-    {% for t in page.object_list %}
-    <a class="v2-row" href="{% url 'task_view' t.id %}">
-      <span class="v2-row__status
-        {% if t.status == 'new' %}v2-row__status--new
-        {% elif t.status == 'in_progress' %}v2-row__status--in-progress
-        {% elif t.status == 'done' %}v2-row__status--done
-        {% endif %}"></span>
-      <div class="min-w-0">
-        <div class="v2-row__title">{{ t.title|default:"(без названия)" }}</div>
-        {% if t.description %}
-        <div class="v2-row__sub">{{ t.description|truncatechars:120 }}</div>
-        {% endif %}
-      </div>
-      <div class="v2-row__meta">
-        {% if t.company %}{{ t.company.name }}{% else %}—{% endif %}
-      </div>
-      <div class="v2-row__due {% if t.due_at and t.due_at < now %}v2-row__due--overdue{% endif %}">
-        {% if t.due_at %}{{ t.due_at|date:"d.m.Y H:i" }}{% else %}без срока{% endif %}
-      </div>
-      <div class="v2-row__assignee">
-        {% if t.assigned_to %}
-          {{ t.assigned_to.first_name|default:t.assigned_to.username }}
-        {% endif %}
-      </div>
-    </a>
-    {% empty %}
-    <div class="v2-empty">
-      <svg class="v2-empty__icon" fill="currentColor" viewBox="0 0 24 24"><path d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zM12 3c-1.5 2.5-4 3.5-4 6.5a4 4 0 008 0c0-3-2.5-4-4-6.5z"/></svg>
-      Задач не найдено
+      <a href="{% url 'task_create' %}" class="v2-btn">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd">
+          <path d="M12 3.75a.75.75 0 01.75.75v6.75h6.75a.75.75 0 010 1.5h-6.75v6.75a.75.75 0 01-1.5 0v-6.75H4.5a.75.75 0 010-1.5h6.75V4.5a.75.75 0 01.75-.75z"/>
+        </svg>
+        Новая задача
+      </a>
     </div>
-    {% endfor %}
 
-    {% if page.paginator.num_pages > 1 %}
-    <div class="v2-pagination">
-      <div>Стр. {{ page.number }} из {{ page.paginator.num_pages }} · всего {{ tasks_count }}</div>
-      <div class="flex gap-2">
-        {% if page.has_previous %}
-        <a href="?page={{ page.previous_page_number }}">← назад</a>
-        {% endif %}
-        {% if page.has_next %}
-        <a href="?page={{ page.next_page_number }}">вперёд →</a>
-        {% endif %}
+    <div class="v2-card__body" style="padding-top:0">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+        <a class="v2-chip {% if not status and not overdue and not today and not show_done %}v2-chip--active{% endif %}"
+           href="{% url 'task_list_v2_preview' %}">Все активные</a>
+        <a class="v2-chip {% if today %}v2-chip--active{% endif %}"
+           href="{% url 'task_list_v2_preview' %}?today=1">На сегодня</a>
+        <a class="v2-chip {% if overdue %}v2-chip--active{% endif %}"
+           href="{% url 'task_list_v2_preview' %}?overdue=1">Просрочено</a>
+        <a class="v2-chip {% if status == 'new' %}v2-chip--active{% endif %}"
+           href="{% url 'task_list_v2_preview' %}?status=new">Новые</a>
+        <a class="v2-chip {% if status == 'in_progress' %}v2-chip--active{% endif %}"
+           href="{% url 'task_list_v2_preview' %}?status=in_progress">В работе</a>
+        <a class="v2-chip {% if show_done %}v2-chip--active{% endif %}"
+           href="{% url 'task_list_v2_preview' %}?show_done=1">Показать завершённые</a>
       </div>
+
+      <div class="v2-table">
+        {% for t in page.object_list %}
+        <a class="v2-tr" href="{% url 'task_view' t.id %}"
+           style="grid-template-columns:16px minmax(0,1.6fr) minmax(0,1fr) 160px 140px">
+          <span class="v2-item__dot
+            {% if t.status == 'new' %}v2-item__dot--primary
+            {% elif t.status == 'in_progress' %}v2-item__dot--accent
+            {% elif t.status == 'done' %}v2-item__dot--success
+            {% endif %}
+            {% if t.due_at and t.due_at < now and t.status != 'done' %}v2-item__dot--danger{% endif %}"></span>
+          <div class="v2-td" style="min-width:0">
+            <div class="v2-item__title">{{ t.title|default:"(без названия)" }}</div>
+            {% if t.description %}
+              <div class="v2-item__meta">{{ t.description|truncatechars:140 }}</div>
+            {% endif %}
+          </div>
+          <div class="v2-td v2-item__meta">
+            {% if t.company %}{{ t.company.name }}{% else %}—{% endif %}
+          </div>
+          <div class="v2-td" style="font-size:13px;color:{% if t.due_at and t.due_at < now and t.status != 'done' %}var(--v2-danger){% else %}var(--v2-text){% endif %};font-weight:{% if t.due_at and t.due_at < now and t.status != 'done' %}600{% else %}500{% endif %}">
+            {% if t.due_at %}{{ t.due_at|date:"d.m.Y H:i" }}{% else %}<span class="v2-item__meta">без срока</span>{% endif %}
+          </div>
+          <div class="v2-td v2-item__meta" style="text-align:right">
+            {% if t.assigned_to %}{{ t.assigned_to.first_name|default:t.assigned_to.username }}{% endif %}
+          </div>
+        </a>
+        {% empty %}
+        <div class="v2-card__empty">
+          <svg width="48" height="48" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd" style="color:var(--v2-text-muted);margin-bottom:8px">
+            <path d="M11.25 4.533A9.707 9.707 0 006 3a9.735 9.735 0 00-3.25.555.75.75 0 00-.5.707v14.25a.75.75 0 001 .707A8.237 8.237 0 016 18.75c1.995 0 3.823.707 5.25 1.886V4.533zM12.75 20.636A8.214 8.214 0 0118 18.75c.966 0 1.89.166 2.75.47a.75.75 0 001-.708V4.262a.75.75 0 00-.5-.707A9.735 9.735 0 0018 3a9.707 9.707 0 00-5.25 1.533v16.103z"/>
+          </svg>
+          <div style="font-size:15px;color:var(--v2-text)">Задач не найдено</div>
+          <div class="v2-item__meta" style="margin-top:4px">Попробуй сменить фильтры или поисковый запрос</div>
+        </div>
+        {% endfor %}
+      </div>
+
+      {% if page.paginator.num_pages > 1 %}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:12px;border-top:1px solid var(--v2-border);font-size:13px;color:var(--v2-text-muted)">
+        <div>Стр. {{ page.number }} из {{ page.paginator.num_pages }} · всего {{ tasks_count }}</div>
+        <div style="display:flex;gap:8px">
+          {% if page.has_previous %}<a class="v2-btn v2-btn--ghost v2-btn--sm" href="?page={{ page.previous_page_number }}">← назад</a>{% endif %}
+          {% if page.has_next %}<a class="v2-btn v2-btn--ghost v2-btn--sm" href="?page={{ page.next_page_number }}">вперёд →</a>{% endif %}
+        </div>
+      </div>
+      {% endif %}
     </div>
-    {% endif %}
   </div>
 
+  {% include "ui/_v2/v2_toggle.html" with target_url="/tasks/" target_label="обычную версию" mode="to-v1" %}
 </div>
 {% endblock %}

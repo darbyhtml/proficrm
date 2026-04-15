@@ -2,201 +2,113 @@
 {% load ui_extras %}
 {% block title %}Компании (v2) — CRM ПРОФИ{% endblock %}
 
-{#
-  Preview-версия редизайна списка компаний. Notion-стиль. Переключается
-  через `request._preview_v2` в `ui.views.company_list.company_list`.
-#}
+{% comment %}
+  Preview-версия списка компаний. Общие стили — _v2/v2_styles.html.
+  Флаг request._preview_v2 в ui.views.company_list.company_list.
+{% endcomment %}
 
 {% block extra_head %}
-<style>
-  .v2-page { max-width: 1400px; margin: 0 auto; padding: 24px; }
-
-  .v2-banner {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 16px; margin-bottom: 16px;
-    background: #FEF5E6; border: 1px solid #FDD280; border-radius: 10px;
-    font-size: 13px; color: #503509;
-  }
-  .v2-banner svg { width: 18px; height: 18px; color: #E09420; flex-shrink: 0; }
-
-  .v2-header {
-    display: flex; align-items: flex-end; justify-content: space-between;
-    gap: 16px; flex-wrap: wrap; margin-bottom: 16px;
-  }
-  .v2-header__title {
-    font-size: 24px; font-weight: 600; color: #1A1A16;
-    letter-spacing: -0.02em;
-  }
-  .v2-header__sub {
-    margin-top: 2px; font-size: 13px; color: #6E6E65;
-  }
-  .v2-btn {
-    display: inline-flex; align-items: center; gap: 6px;
-    height: 38px; padding: 0 16px;
-    background: #01948E; color: #ffffff;
-    border-radius: 8px; border: none;
-    font-size: 14px; font-weight: 500; text-decoration: none;
-    transition: background .15s ease;
-  }
-  .v2-btn:hover { background: #017E79; }
-
-  .v2-filters {
-    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-    padding: 14px 18px;
-    background: #ffffff;
-    border: 1px solid #E7E7E3; border-radius: 12px;
-    box-shadow: 0 1px 2px rgba(15,21,20,0.04);
-  }
-  .v2-filters input[type="search"],
-  .v2-filters select {
-    height: 36px; padding: 0 12px;
-    border: 1px solid #D1D1CB; border-radius: 8px;
-    font-size: 14px; color: #1A1A16; background: #FAFAF9;
-    outline: none;
-  }
-  .v2-filters input[type="search"]:focus,
-  .v2-filters select:focus { border-color: #01948E; background: #ffffff; }
-  .v2-filters input[type="search"] { flex: 1; min-width: 220px; }
-
-  .v2-table-wrap {
-    margin-top: 16px;
-    background: #ffffff;
-    border: 1px solid #E7E7E3; border-radius: 12px;
-    box-shadow: 0 1px 2px rgba(15,21,20,0.04);
-    overflow: hidden;
-  }
-  .v2-row {
-    display: grid;
-    grid-template-columns: 1fr 180px 180px 140px 100px;
-    gap: 14px; align-items: center;
-    padding: 14px 18px;
-    border-bottom: 1px solid #F4F4F2;
-    text-decoration: none; color: inherit;
-    transition: background .12s ease;
-  }
-  .v2-row:hover { background: #FAFAF9; }
-  .v2-row:last-child { border-bottom: none; }
-  .v2-row--head {
-    background: #FAFAF9;
-    font-size: 11px; font-weight: 600;
-    color: #6E6E65; text-transform: uppercase; letter-spacing: 0.06em;
-  }
-  .v2-row--head:hover { background: #FAFAF9; }
-  .v2-cell__name {
-    font-size: 14px; font-weight: 500; color: #1A1A16;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .v2-cell__sub {
-    margin-top: 2px; font-size: 12px; color: #6E6E65;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .v2-cell { font-size: 13px; color: #3F3F38;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .v2-badge {
-    display: inline-flex; align-items: center;
-    padding: 2px 10px; height: 22px; border-radius: 999px;
-    background: #E6F4F3; color: #01635F;
-    font-size: 12px; font-weight: 500;
-  }
-  .v2-empty {
-    padding: 64px 24px; text-align: center; color: #6E6E65;
-  }
-  .v2-pagination {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 18px;
-    background: #FAFAF9; border-top: 1px solid #F4F4F2;
-    font-size: 13px; color: #6E6E65;
-  }
-  .v2-pagination a {
-    color: #01948E; text-decoration: none; font-weight: 500;
-    padding: 4px 10px; border-radius: 6px;
-  }
-  .v2-pagination a:hover { background: #E6F4F3; }
-  @media (max-width: 960px) {
-    .v2-row { grid-template-columns: 1fr 120px; }
-    .v2-row > :nth-child(n+3) { display: none; }
-  }
-</style>
+  {% include "ui/_v2/v2_styles.html" %}
 {% endblock %}
 
 {% block content %}
-<div class="v2-page">
+<div class="v2">
 
-  <div class="v2-banner">
-    <svg fill="currentColor" viewBox="0 0 24 24"><path d="M12 9v3.75m0 3.75h.008m-.008 0h.008M12 3.75l-9.75 16.5h19.5L12 3.75z"/></svg>
-    <div><strong>Preview редизайна.</strong> Основная версия —
-      <a href="{% url 'company_list' %}" class="underline">/companies/</a>.</div>
-  </div>
-
-  <div class="v2-header">
+  <div class="v2-banner v2-anim">
+    <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd">
+      <path d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.155 2-.288 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z"/>
+    </svg>
     <div>
-      <div class="v2-header__title">Компании</div>
-      <div class="v2-header__sub">
-        Всего: {{ companies_total|default:0 }}{% if filter_active %} · По фильтру: {{ companies_filtered|default:0 }}{% endif %}
-      </div>
+      <strong>Preview редизайна.</strong> Основная версия —
+      <a href="{% url 'company_list' %}" style="color:var(--v2-primary);text-decoration:underline">/companies/</a>.
     </div>
-    <a href="{% url 'company_create' %}" class="v2-btn">
-      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.25a.75.75 0 01.75.75v7.5h7.5a.75.75 0 010 1.5h-7.5v7.5a.75.75 0 01-1.5 0v-7.5h-7.5a.75.75 0 010-1.5h7.5V3a.75.75 0 01.75-.75z"/></svg>
-      Новая компания
-    </a>
   </div>
 
-  <form method="get" action="{% url 'company_list_v2_preview' %}" class="v2-filters">
-    <input type="search" name="q" value="{{ q|default:'' }}" placeholder="Поиск по названию, телефону, email…" />
-    <select name="status">
-      <option value="">Все статусы</option>
-      {% for s in statuses %}
-        <option value="{{ s.id }}" {% if status == s.id|stringformat:'s' %}selected{% endif %}>{{ s.name }}</option>
-      {% endfor %}
-    </select>
-    <select name="responsible">
-      <option value="">Все ответственные</option>
-      {% for u in responsibles %}
-        <option value="{{ u.id }}" {% if responsible == u.id|stringformat:'s' %}selected{% endif %}>
-          {{ u.first_name|default:u.username }}
-        </option>
-      {% endfor %}
-    </select>
-    <button type="submit" class="v2-btn">Применить</button>
-  </form>
-
-  <div class="v2-table-wrap">
-    <div class="v2-row v2-row--head">
-      <div>Компания</div>
-      <div>Ответственный</div>
-      <div>Подразделение</div>
-      <div>Статус</div>
-      <div>Задачи</div>
+  <div class="v2-card v2-anim" style="animation-delay:.05s">
+    <div class="v2-card__head" style="gap:12px;flex-wrap:wrap;align-items:flex-end">
+      <div style="min-width:0;flex:1">
+        <h1 class="v2-h1" style="margin:0">Компании</h1>
+        <div class="v2-item__meta" style="margin-top:4px">
+          Всего: <strong style="color:var(--v2-text)">{{ companies_total|default:0 }}</strong>
+          {% if filter_active %} · по фильтру: <strong style="color:var(--v2-text)">{{ companies_filtered|default:0 }}</strong>{% endif %}
+        </div>
+      </div>
+      <a href="{% url 'company_create' %}" class="v2-btn">
+        <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd">
+          <path d="M12 3.75a.75.75 0 01.75.75v6.75h6.75a.75.75 0 010 1.5h-6.75v6.75a.75.75 0 01-1.5 0v-6.75H4.5a.75.75 0 010-1.5h6.75V4.5a.75.75 0 01.75-.75z"/>
+        </svg>
+        Новая компания
+      </a>
     </div>
-    {% for c in page.object_list %}
-    <a class="v2-row" href="{% url 'company_detail' c.id %}">
-      <div class="min-w-0">
-        <div class="v2-cell__name">{{ c.name }}</div>
-        {% if c.main_phone %}
-        <div class="v2-cell__sub">{{ c.main_phone }}</div>
-        {% endif %}
-      </div>
-      <div class="v2-cell">{% if c.responsible %}{{ c.responsible.first_name|default:c.responsible.username }}{% else %}—{% endif %}</div>
-      <div class="v2-cell">{% if c.branch %}{{ c.branch.name }}{% else %}—{% endif %}</div>
-      <div class="v2-cell">
-        {% if c.status %}<span class="v2-badge">{{ c.status.name }}</span>{% else %}—{% endif %}
-      </div>
-      <div class="v2-cell">{{ c.active_tasks_count|default:0 }}</div>
-    </a>
-    {% empty %}
-    <div class="v2-empty">Компаний не найдено</div>
-    {% endfor %}
 
-    {% if page.paginator.num_pages > 1 %}
-    <div class="v2-pagination">
-      <div>Стр. {{ page.number }} из {{ page.paginator.num_pages }}</div>
-      <div class="flex gap-2">
-        {% if page.has_previous %}<a href="?page={{ page.previous_page_number }}{% if qs %}&{{ qs }}{% endif %}">← назад</a>{% endif %}
-        {% if page.has_next %}<a href="?page={{ page.next_page_number }}{% if qs %}&{{ qs }}{% endif %}">вперёд →</a>{% endif %}
+    <div class="v2-card__body">
+      <form method="get" action="{% url 'company_list_v2_preview' %}"
+            style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px">
+        <input type="search" name="q" value="{{ q|default:'' }}" class="v2-input"
+               style="flex:1;min-width:220px" placeholder="Поиск по названию, телефону, email…" />
+        <select name="status" class="v2-select">
+          <option value="">Все статусы</option>
+          {% for s in statuses %}
+            <option value="{{ s.id }}" {% if status == s.id|stringformat:'s' %}selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+        <select name="responsible" class="v2-select">
+          <option value="">Все ответственные</option>
+          {% for u in responsibles %}
+            <option value="{{ u.id }}" {% if responsible == u.id|stringformat:'s' %}selected{% endif %}>
+              {{ u.first_name|default:u.username }}
+            </option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="v2-btn">Применить</button>
+      </form>
+
+      <div class="v2-table">
+        <div class="v2-tr v2-tr--head"
+             style="grid-template-columns:minmax(0,1.8fr) 180px 180px 140px 100px">
+          <div>Компания</div>
+          <div>Ответственный</div>
+          <div>Подразделение</div>
+          <div>Статус</div>
+          <div style="text-align:right">Задачи</div>
+        </div>
+        {% for c in page.object_list %}
+        <a class="v2-tr" href="{% url 'company_detail' c.id %}"
+           style="grid-template-columns:minmax(0,1.8fr) 180px 180px 140px 100px">
+          <div class="v2-td" style="min-width:0">
+            <div class="v2-item__title">{{ c.name }}</div>
+            {% if c.main_phone %}<div class="v2-item__meta">{{ c.main_phone }}</div>{% endif %}
+          </div>
+          <div class="v2-td">{% if c.responsible %}{{ c.responsible.first_name|default:c.responsible.username }}{% else %}—{% endif %}</div>
+          <div class="v2-td">{% if c.branch %}{{ c.branch.name }}{% else %}—{% endif %}</div>
+          <div class="v2-td">
+            {% if c.status %}<span class="v2-count v2-count--primary">{{ c.status.name }}</span>{% else %}—{% endif %}
+          </div>
+          <div class="v2-td v2-td--strong" style="text-align:right">{{ c.active_tasks_count|default:0 }}</div>
+        </a>
+        {% empty %}
+        <div class="v2-card__empty">
+          <svg width="48" height="48" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd" style="color:var(--v2-text-muted);margin-bottom:8px">
+            <path d="M3 2.25a.75.75 0 000 1.5h.75v16.5H3a.75.75 0 000 1.5h18a.75.75 0 000-1.5h-.75V3.75H21a.75.75 0 000-1.5H3zM6.75 19.5v-2.25a.75.75 0 01.75-.75h3a.75.75 0 01.75.75v2.25h-4.5zm8.25-2.25a.75.75 0 00-.75-.75h-1.5a.75.75 0 00-.75.75V19.5H15v-2.25zM9 6.75A.75.75 0 019.75 6h.75a.75.75 0 010 1.5h-.75A.75.75 0 019 6.75zM9.75 9a.75.75 0 000 1.5h.75a.75.75 0 000-1.5h-.75zM9 12.75a.75.75 0 01.75-.75h.75a.75.75 0 010 1.5h-.75a.75.75 0 01-.75-.75zM13.5 6a.75.75 0 000 1.5h.75a.75.75 0 000-1.5h-.75zm-.75 3.75A.75.75 0 0113.5 9h.75a.75.75 0 010 1.5h-.75a.75.75 0 01-.75-.75zM13.5 12a.75.75 0 000 1.5h.75a.75.75 0 000-1.5h-.75z"/>
+          </svg>
+          <div style="font-size:15px;color:var(--v2-text)">Компаний не найдено</div>
+          <div class="v2-item__meta" style="margin-top:4px">Попробуй сменить фильтры</div>
+        </div>
+        {% endfor %}
       </div>
+
+      {% if page.paginator.num_pages > 1 %}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:12px;border-top:1px solid var(--v2-border);font-size:13px;color:var(--v2-text-muted)">
+        <div>Стр. {{ page.number }} из {{ page.paginator.num_pages }}</div>
+        <div style="display:flex;gap:8px">
+          {% if page.has_previous %}<a class="v2-btn v2-btn--ghost v2-btn--sm" href="?page={{ page.previous_page_number }}{% if qs %}&{{ qs }}{% endif %}">← назад</a>{% endif %}
+          {% if page.has_next %}<a class="v2-btn v2-btn--ghost v2-btn--sm" href="?page={{ page.next_page_number }}{% if qs %}&{{ qs }}{% endif %}">вперёд →</a>{% endif %}
+        </div>
+      </div>
+      {% endif %}
     </div>
-    {% endif %}
   </div>
 
+  {% include "ui/_v2/v2_toggle.html" with target_url="/companies/" target_label="обычную версию" mode="to-v1" %}
 </div>
 {% endblock %}
