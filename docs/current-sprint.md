@@ -8,6 +8,43 @@ Live-chat UX Completion — реализация по спецификации `
 
 ## Сделано в этом спринте
 
+**[2026-04-15]** — Phase 0/1 hotfixes после аудита 2026-04-14 ✅
+
+Серия hardening-коммитов по результатам полного аудита
+(`knowledge-base/synthesis/state-of-project.md`, 203 находки).
+
+- `d48f741` Phase 0 P0: дубль `SecureLoginView.post` удалён;
+  widget Origin hijack + fail-closed allowlist +
+  `MESSENGER_WIDGET_STRICT_ORIGIN`; `get_client_ip` делегирует в secure
+  версию с PROXY_IPS; WS consumers — убраны несуществующие поля
+  (`AgentProfile.last_seen_at`, `Contact.session_token`), виджет-сессии
+  идут через Redis-кеш; notifications DB-writes в GET-поллинге вынесены
+  в celery-beat `generate_contract_reminders` (ежедневно 06:30 MSK);
+  удалён `backend/mailer/tasks.py` (721 строка shadowed пакетом);
+  Android TokenManager — plaintext JWT fallback убран, fallback-режим
+  хранит токены только в памяти.
+- `4378f3e` Phase 1 P1: RRULE DoS — `MAX_OCCURRENCES=1000`,
+  `MAX_ITERATIONS=100_000` + строгая валидация (`COUNT≤1000`,
+  `INTERVAL 1..366`); `MultiFernet` с ротацией через
+  `MAILER_FERNET_KEYS_OLD`; prod Gunicorn → gthread 4×8.
+- `72a58bc` P0 cleanup: удалён `ui/views_LEGACY_DEAD_CODE.py`
+  (12571 строка), `html_to_text` regex исправлен (был сломан `\\`-экранами);
+  удалён дубль `MAILER_MAX_CAMPAIGN_RECIPIENTS`; убрано дублирование
+  poll `/notifications/poll/` (было 15с+60с, стало одно 30с);
+  `LogoutAllView` реально блеклистит все outstanding refresh-токены
+  через simplejwt.
+- `5874749` Phonebridge rate-limit: DRF ScopedRateThrottle на
+  `pull` (120/min), `heartbeat` (30/min), `telemetry` (20/min).
+- `e5784ff` Race-protection `generate_recurring_tasks`: redis-lock
+  (TTL 15 мин) + `SELECT FOR UPDATE` на каждый шаблон в atomic.
+
+Осталось из P0 (требует ручного включения / риск для прод):
+- P0-18 policy `observe_only → enforce` — включить через
+  `manage.py set_policy_mode --mode enforce` после дымового теста
+- P0-22 daphne service в prod docker-compose (WebSocket работает
+  только на staging)
+- P0-23 Android compileSdk=34 → 35 (Google Play требование с 08.2025)
+
 **[2026-04-13]** — Live-chat Client Context Panel (Plan 4) ✅
 - 5 задач выполнено, коммиты `3696406..00fc2a6` (+ docs commit)
 - Модель: `Conversation.company` FK (nullable, on_delete=SET_NULL, db_index) → миграция `messenger.0023_conversation_company`
