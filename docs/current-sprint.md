@@ -29,6 +29,22 @@ Live-chat UX Completion — реализация по спецификации `
 **Следующее:** Фаза 2 Companies (filters sphere/contract/region/branch,
 sort headers, bulk transfer), затем Фаза 2 Settings.
 
+**[2026-04-15]** — Редизайн Фаза 2 Companies + Settings ✅
+
+- `a3aac5d` company_list_v2: полный набор фильтров (status/sphere/
+  contract_type/region/branch/responsible + overdue chip + Сброс),
+  сортируемые заголовки name/responsible/status, bulk transfer
+  panel (sticky, чекбоксы строк, select по branch), localStorage
+  `v2_company_filters_v1`. Все имена через `|full_name`.
+- `e0a8584` settings_v2: счётчики пользователей/подразделений,
+  расширенная сводка справочников, security hint «Fernet + rate
+  limiting», AmoCRM hint. В views/settings_core.py добавлены
+  v2_count_* в контекст только для _preview_v2.
+- Все тесты зелёные.
+
+**Фаза 2 завершена для Dashboard/Tasks/Companies/Settings.**
+**Следующее:** navbar/base.html редизайн (отложено на финал).
+
 **[2026-04-15]** — Редизайн Фаза 1 (визуальная полировка v2) ✅
 
 - `2a57b5a` Фаза 1A/1B: фундамент v2 — `templates/ui/_v2/v2_styles.html`
