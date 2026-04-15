@@ -120,3 +120,6 @@ widget-opened.png
 
 # Local knowledge base (не коммитить)
 knowledge-base/
+
+# graphify knowledge graph (local tool, not committed)
+graphify-out/
