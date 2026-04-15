@@ -132,12 +132,9 @@ def view_as_reset(request: HttpRequest) -> HttpResponse:
     return redirect(_safe_redirect_url(request, request.META.get("HTTP_REFERER")))
 
 
-@login_required
-@policy_required(resource_type="page", resource="ui:dashboard")
-def dashboard(request: HttpRequest) -> HttpResponse:
-    """
-    Dashboard (Рабочий стол) с оптимизированными запросами и кэшированием.
-    Доступ проверяется по request.user (policy_required); отображаемые данные — по эффективному пользователю (режим просмотра).
+def _build_dashboard_context(request: HttpRequest) -> dict:
+    """Собирает весь context рабочего стола. Используется и обычным dashboard,
+    и preview-версией (dashboard_v2_preview). Права уже проверены декоратором выше.
     """
     from django.core.cache import cache
 
@@ -369,7 +366,29 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         "deletion_requests_count": deletion_requests_count,
     }
 
+    return context
+
+
+@login_required
+@policy_required(resource_type="page", resource="ui:dashboard")
+def dashboard(request: HttpRequest) -> HttpResponse:
+    """Рабочий стол (текущая версия)."""
+    context = _build_dashboard_context(request)
     return render(request, "ui/dashboard.html", context)
+
+
+@login_required
+@policy_required(resource_type="page", resource="ui:dashboard")
+def dashboard_v2_preview(request: HttpRequest) -> HttpResponse:
+    """Preview редизайна рабочего стола (Notion-стиль, brand.primary/brand.accent).
+    Доступно только ADMIN — страница под /_preview/, не заменяет основную.
+    """
+    if not (request.user.is_superuser or getattr(request.user, "role", None) == User.Role.ADMIN):
+        from django.core.exceptions import PermissionDenied as _PD
+        raise _PD("Preview доступен только администраторам")
+    context = _build_dashboard_context(request)
+    context["preview_v2"] = True
+    return render(request, "ui/dashboard_v2.html", context)
 
 
 @login_required
