@@ -2182,3 +2182,113 @@ def task_create_v2_partial(request: HttpRequest) -> HttpResponse:
     })
 
 
+def _v2_load_task_for_user(user: User, task_id) -> Task:
+    """Загружает задачу с проверкой прав на просмотр (ровно как task_view, но короче)."""
+    task = get_object_or_404(
+        Task.objects.select_related("company", "assigned_to", "created_by", "type"),
+        id=task_id,
+    )
+    can_view = False
+    if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+        can_view = True
+    elif user.role == User.Role.MANAGER:
+        can_view = bool(
+            (task.assigned_to_id and task.assigned_to_id == user.id)
+            or (task.created_by_id and task.created_by_id == user.id)
+            or (task.company_id and getattr(task.company, "responsible_id", None) == user.id)
+        )
+    elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+        can_view = (
+            task.created_by_id == user.id
+            or task.assigned_to_id == user.id
+            or (task.company_id and getattr(task.company, "branch_id", None) == user.branch_id)
+            or (task.assigned_to_id and getattr(task.assigned_to, "branch_id", None) == user.branch_id)
+        )
+    if not can_view and task.company_id and getattr(task.company, "responsible_id", None) == user.id:
+        can_view = True
+    if not can_view:
+        raise PermissionDenied()
+    return task
+
+
+@login_required
+def task_view_v2_partial(request: HttpRequest, task_id) -> HttpResponse:
+    """v2 partial endpoint: просмотр задачи в модалке (только GET)."""
+    user: User = request.user
+    task = _v2_load_task_for_user(user, task_id)
+
+    now = timezone.now()
+    local_now = timezone.localtime(now)
+
+    overdue_days = None
+    if task.due_at and task.completed_at and task.completed_at > task.due_at:
+        overdue_days = (task.completed_at - task.due_at).days
+
+    can_edit = _can_edit_task_ui(user, task)
+    can_manage_status = _can_manage_task_status_ui(user, task)
+
+    return render(request, "ui/_v2/task_view_partial.html", {
+        "view_task": task,
+        "overdue_days": overdue_days,
+        "local_now": local_now,
+        "can_edit": can_edit,
+        "can_manage_status": can_manage_status,
+    })
+
+
+@login_required
+@policy_required(resource_type="action", resource="ui:tasks:update")
+def task_edit_v2_partial(request: HttpRequest, task_id) -> HttpResponse:
+    """
+    v2 partial endpoint для редактирования задачи в модалке.
+    GET → форма (partial HTML).
+    POST → JSON {ok:true, toast} или 422 с HTML ошибок валидации.
+    """
+    user: User = request.user
+    task = _v2_load_task_for_user(user, task_id)
+
+    if not _can_edit_task_ui(user, task):
+        raise PermissionDenied()
+
+    if request.method == "GET":
+        form = TaskEditForm(instance=task)
+        task_types = list(TaskType.objects.only("id", "name", "icon", "color").all())
+        return render(request, "ui/_v2/task_edit_partial.html", {
+            "form": form,
+            "task": task,
+            "task_types": task_types,
+        })
+
+    # POST
+    form = TaskEditForm(request.POST, instance=task)
+    if not form.is_valid():
+        task_types = list(TaskType.objects.only("id", "name", "icon", "color").all())
+        html = render(request, "ui/_v2/task_edit_partial.html", {
+            "form": form,
+            "task": task,
+            "task_types": task_types,
+        }).content.decode("utf-8")
+        return HttpResponse(html, status=422)
+
+    updated: Task = form.save(commit=False)
+    # Заголовок берём из типа (как в v1)
+    if updated.type:
+        updated.title = updated.type.name
+    updated.save()
+
+    try:
+        log_event(
+            actor=user, verb="task.update", resource_type="task", resource_id=str(updated.id),
+            target_user=updated.assigned_to, company=updated.company, payload={"title": updated.title},
+        )
+    except Exception:
+        logger.exception("task_edit_v2_partial: log_event failed")
+
+    return JsonResponse({
+        "ok": True,
+        "toast": "Задача обновлена",
+        "id": str(updated.id),
+        "close": True,
+    })
+
+

@@ -1,0 +1,119 @@
+{% load ui_extras %}
+{% comment %}
+  v2 partial: просмотр задачи в модалке.
+  Контекст: view_task, overdue_days, local_now, can_edit, can_manage_status.
+{% endcomment %}
+<span data-v2-modal-title>{% if view_task.is_urgent %}⚡ {% endif %}{{ view_task.title|default:"(без названия)" }}</span>
+
+<style>
+  .v2tv-meta{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--v2-text-muted);
+    margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--v2-border)}
+  .v2tv-meta strong{color:var(--v2-text);font-weight:600}
+  .v2tv-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;
+    font-size:11px;font-weight:600;background:var(--v2-bg-muted);color:var(--v2-text-soft)}
+  .v2tv-badge--urgent{background:rgba(220,38,38,.1);color:var(--v2-danger,#dc2626)}
+  .v2tv-badge--overdue{background:rgba(220,38,38,.1);color:var(--v2-danger,#dc2626)}
+  .v2tv-badge--done{background:rgba(1,148,142,.12);color:var(--v2-primary)}
+  .v2tv-section{margin-bottom:14px}
+  .v2tv-section__label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--v2-text-muted);font-weight:600;margin-bottom:4px}
+  .v2tv-section__body{font-size:13px;color:var(--v2-text);line-height:1.5;white-space:pre-wrap}
+  .v2tv-actions{display:flex;gap:8px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--v2-border);margin-top:12px}
+  .v2tv-actions button{padding:8px 14px;font-size:13px;border-radius:8px;cursor:pointer;
+    border:1px solid var(--v2-border);background:#fff;font-weight:500;color:var(--v2-text)}
+  .v2tv-actions button.is-primary{background:var(--v2-primary);color:#fff;border-color:var(--v2-primary)}
+  .v2tv-actions button.is-primary:hover{background:var(--v2-primary-dark,#017e79)}
+  .v2tv-actions button.is-danger{background:#fff;color:var(--v2-danger,#dc2626);border-color:var(--v2-danger,#dc2626)}
+  .v2tv-actions button.is-danger:hover{background:rgba(220,38,38,.08)}
+</style>
+
+<div class="v2tv-meta">
+  {% if view_task.is_urgent %}<span class="v2tv-badge v2tv-badge--urgent">⚡ Срочно</span>{% endif %}
+  {% if view_task.status == 'done' %}<span class="v2tv-badge v2tv-badge--done">✓ Выполнено</span>
+  {% elif overdue_days %}<span class="v2tv-badge v2tv-badge--overdue">Просрочено на {{ overdue_days }} дн.</span>
+  {% else %}<span class="v2tv-badge">{{ view_task.get_status_display }}</span>{% endif %}
+  {% if view_task.type %}<span class="v2tv-badge">{{ view_task.type.name }}</span>{% endif %}
+</div>
+
+{% if view_task.description %}
+<div class="v2tv-section">
+  <div class="v2tv-section__label">Описание</div>
+  <div class="v2tv-section__body">{{ view_task.description }}</div>
+</div>
+{% endif %}
+
+<div class="v2tv-section">
+  <div class="v2tv-section__label">Компания</div>
+  <div class="v2tv-section__body">
+    {% if view_task.company %}
+      <a href="{% url 'company_detail' view_task.company.id %}" style="color:var(--v2-primary);text-decoration:none">{{ view_task.company.name }}</a>
+    {% else %}<span style="color:var(--v2-text-muted)">—</span>{% endif %}
+  </div>
+</div>
+
+<div class="v2tv-section">
+  <div class="v2tv-section__label">Исполнитель</div>
+  <div class="v2tv-section__body">
+    {% if view_task.assigned_to %}{{ view_task.assigned_to|full_name }}{% if view_task.assigned_to.branch %} · {{ view_task.assigned_to.branch.name }}{% endif %}
+    {% else %}<span style="color:var(--v2-text-muted)">—</span>{% endif %}
+  </div>
+</div>
+
+<div class="v2tv-section">
+  <div class="v2tv-section__label">Дедлайн</div>
+  <div class="v2tv-section__body">
+    {% if view_task.due_at %}{{ view_task.due_at|date:"d.m.Y, H:i" }}{% else %}<span style="color:var(--v2-text-muted)">—</span>{% endif %}
+  </div>
+</div>
+
+<div class="v2tv-actions">
+  {% if can_edit %}
+    <button type="button" class="is-primary" data-v2-task-edit="{{ view_task.id }}">Редактировать</button>
+  {% endif %}
+  {% if can_manage_status and view_task.status != 'done' %}
+    <button type="button" data-v2-task-done="{{ view_task.id }}">✓ Выполнить</button>
+  {% endif %}
+  <button type="button" onclick="V2Modal.close()">Закрыть</button>
+</div>
+
+<script>
+(function(){
+  const csrf = (document.querySelector('input[name=csrfmiddlewaretoken]') || {}).value || '';
+
+  document.querySelectorAll('[data-v2-task-edit]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      const id = btn.getAttribute('data-v2-task-edit');
+      // Подмена контента той же модалки на форму редактирования
+      V2Modal.open({ url: '/tasks/v2/' + id + '/edit/partial/', title: 'Редактирование задачи' });
+    });
+  });
+
+  document.querySelectorAll('[data-v2-task-done]').forEach(function(btn){
+    btn.addEventListener('click', async function(){
+      const id = btn.getAttribute('data-v2-task-done');
+      if(!confirm('Отметить задачу выполненной?')) return;
+      btn.disabled = true;
+      try{
+        const fd = new FormData();
+        fd.append('csrfmiddlewaretoken', csrf);
+        fd.append('status', 'done');
+        const res = await fetch('/tasks/' + id + '/status/', {
+          method:'POST', body:fd, credentials:'same-origin',
+          headers:{'X-Requested-With':'XMLHttpRequest'}
+        });
+        if(res.ok){
+          V2Toast.show('Задача выполнена', {type:'ok'});
+          window.dispatchEvent(new CustomEvent('v2-modal:saved', { detail:{action:'done',id:id} }));
+          V2Modal.close(true);
+        } else {
+          btn.disabled = false;
+          V2Toast.show('Не удалось', {type:'err'});
+        }
+      }catch(_){
+        btn.disabled = false;
+        V2Toast.show('Сеть недоступна', {type:'err'});
+      }
+    });
+  });
+})();
+</script>

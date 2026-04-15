@@ -453,11 +453,17 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
     }
   });
 
-  // Круглый чекбокс «Отметить выполненной» — вставляем в каждую карточку задачи
+  // Клик по строке задачи → открыть v2-модалку с просмотром (вместо перехода на /tasks/<id>/)
   document.querySelectorAll('a.v2-item[href*="/tasks/"]').forEach(function(a){
     const m = a.getAttribute('href').match(/\/tasks\/([0-9a-f-]{36})\//i);
     if(!m) return;
     const taskId = m[1];
+    a.addEventListener('click', function(ev){
+      // Если клик пришёл по круглому чекбоксу — игнорируем (у него свой обработчик)
+      if(ev.target.closest('.v2-done-check')) return;
+      ev.preventDefault();
+      V2Modal.open({ url: '/tasks/v2/' + taskId + '/partial/', title: 'Задача' });
+    });
     if(a.querySelector('.v2-done-check')) return;
     const btn = document.createElement('button');
     btn.type = 'button';

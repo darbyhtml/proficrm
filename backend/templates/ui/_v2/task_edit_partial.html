@@ -1,0 +1,111 @@
+{% load ui_extras %}
+{% comment %}
+  v2 partial: редактирование задачи.
+  Контекст: form (TaskEditForm), task, task_types.
+  Поля: description, type (плашки), due_at, is_urgent.
+{% endcomment %}
+<span data-v2-modal-title>Редактирование задачи</span>
+
+<style>
+  .v2f-row{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+  .v2f-row label{font-size:12px;font-weight:600;color:var(--v2-text-soft)}
+  .v2f-row .v2f-hint{font-size:11px;color:var(--v2-text-muted);margin-top:2px}
+  .v2f-row input[type="text"],.v2f-row input[type="datetime-local"],.v2f-row textarea,.v2f-row select{
+    width:100%;padding:8px 10px;font-size:13px;border:1px solid var(--v2-border);
+    border-radius:8px;background:#fff;color:var(--v2-text);outline:0;transition:border-color .15s}
+  .v2f-row input:focus,.v2f-row textarea:focus,.v2f-row select:focus{border-color:var(--v2-primary)}
+  .v2f-row textarea{resize:vertical;min-height:72px;font-family:inherit}
+  .v2f-errors{color:var(--v2-danger,#dc2626);font-size:12px;margin-top:2px}
+  .v2-tt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+  .v2-tt-card{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1.5px solid var(--v2-border);
+    border-radius:10px;background:#fff;cursor:pointer;font-size:13px;color:var(--v2-text);
+    transition:all .15s;user-select:none}
+  .v2-tt-card:hover{border-color:var(--v2-primary);background:var(--v2-bg-soft)}
+  .v2-tt-card.is-selected{border-color:var(--v2-primary);background:var(--v2-primary-50,#e6f4f3);
+    box-shadow:0 0 0 3px rgba(1,148,142,.12)}
+  .v2-tt-card__dot{width:18px;height:18px;border-radius:50%;flex:0 0 auto;
+    display:inline-flex;align-items:center;justify-content:center;background:var(--v2-bg-muted);
+    color:var(--v2-text-muted);font-size:11px}
+  .v2-tt-card__name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .v2f-urgent{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--v2-bg-soft);
+    border:1px solid var(--v2-border);border-radius:10px;cursor:pointer}
+  .v2f-urgent input{width:18px;height:18px;accent-color:var(--v2-danger,#dc2626);cursor:pointer}
+  .v2f-urgent__label{font-size:13px;font-weight:600;color:var(--v2-text)}
+  .v2f-urgent__hint{font-size:11px;color:var(--v2-text-muted);margin-top:2px}
+  .v2f-foot{display:flex;justify-content:space-between;gap:8px;padding-top:12px;
+    border-top:1px solid var(--v2-border);margin-top:8px}
+  .v2f-foot .v2f-actions{display:flex;gap:8px}
+  .v2f-foot button{padding:8px 16px;font-size:13px;border-radius:8px;cursor:pointer;
+    border:1px solid var(--v2-border);background:#fff;font-weight:500}
+  .v2f-foot button[type="submit"]{background:var(--v2-primary);color:#fff;border-color:var(--v2-primary)}
+  .v2f-foot button[type="submit"]:hover{background:var(--v2-primary-dark,#017e79)}
+</style>
+
+<form data-v2-modal-form method="post" action="{% url 'ui_v2_task_edit_partial' task_id=task.id %}">
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}<div class="v2f-errors">{{ form.non_field_errors }}</div>{% endif %}
+
+  <div class="v2f-row">
+    <label>Тип задачи <span style="color:var(--v2-danger,#dc2626)">*</span></label>
+    <div class="v2-tt-grid" id="v2TtGridEdit">
+      {% for tt in task_types %}
+        <label class="v2-tt-card" data-tt-id="{{ tt.id }}">
+          <span class="v2-tt-card__dot" style="{% if tt.color %}background:{{ tt.color }};color:#fff{% endif %}">
+            {% if tt.icon %}{{ tt.icon|slice:":1" }}{% else %}•{% endif %}
+          </span>
+          <span class="v2-tt-card__name">{{ tt.name }}</span>
+          <input type="radio" name="type" value="{{ tt.id }}" style="display:none"
+                 {% if form.type.value|stringformat:"s" == tt.id|stringformat:"s" %}checked{% endif %} />
+        </label>
+      {% endfor %}
+    </div>
+    {% if form.type.errors %}<div class="v2f-errors">{{ form.type.errors|join:" " }}</div>{% endif %}
+  </div>
+
+  <div class="v2f-row">
+    <label for="v2f_desc_e">Описание</label>
+    <textarea id="v2f_desc_e" name="description" rows="3">{{ form.description.value|default:"" }}</textarea>
+    {% if form.description.errors %}<div class="v2f-errors">{{ form.description.errors|join:" " }}</div>{% endif %}
+  </div>
+
+  <div class="v2f-row">
+    <label for="v2f_due_e">Дедлайн <span style="color:var(--v2-danger,#dc2626)">*</span></label>
+    <input type="datetime-local" id="v2f_due_e" name="due_at" required
+           value="{{ form.due_at.value|default:'' }}" />
+    {% if form.due_at.errors %}<div class="v2f-errors">{{ form.due_at.errors|join:" " }}</div>{% endif %}
+  </div>
+
+  <div class="v2f-row">
+    <label class="v2f-urgent">
+      <input type="checkbox" name="is_urgent" value="on" {% if form.is_urgent.value %}checked{% endif %} />
+      <div>
+        <div class="v2f-urgent__label">⚡ Срочная задача</div>
+        <div class="v2f-urgent__hint">Исполнитель получит уведомление с приоритетом</div>
+      </div>
+    </label>
+  </div>
+
+  <div class="v2f-foot">
+    <button type="button" onclick="V2Modal.open({url:'/tasks/v2/{{ task.id }}/partial/', title:'Задача'})">← Назад</button>
+    <div class="v2f-actions">
+      <button type="button" onclick="V2Modal.close()">Отмена</button>
+      <button type="submit">Сохранить</button>
+    </div>
+  </div>
+</form>
+
+<script>
+(function(){
+  const grid = document.getElementById('v2TtGridEdit');
+  if(!grid) return;
+  function refresh(){
+    grid.querySelectorAll('.v2-tt-card').forEach(function(card){
+      const input = card.querySelector('input[type=radio]');
+      card.classList.toggle('is-selected', !!(input && input.checked));
+    });
+  }
+  grid.addEventListener('change', refresh);
+  refresh();
+})();
+</script>
