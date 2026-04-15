@@ -1,60 +1,83 @@
 # Документация проекта CRM
 
-Единая точка входа по всей документации (backend, deploy, поиск, UI, Android).
+Единая точка входа по всей документации. Обновляется вручную при добавлении/удалении файлов.
+
+---
+
+## Основное (читается Claude Code при старте)
+
+- **[../CLAUDE.md](../CLAUDE.md)** — главный файл с правилами проекта, стеком, конвенциями.
+- **[current-sprint.md](current-sprint.md)** — что сейчас в работе, стоп-точки, история спринтов.
+- **[architecture.md](architecture.md)** — полная архитектура (стек, модули, БД, паттерны, Celery, Docker).
+- **[decisions.md](decisions.md)** — лог архитектурных решений (ADR).
+- **[problems-solved.md](problems-solved.md)** — решённые нетривиальные проблемы с причинами и файлами.
+- **[roadmap.md](roadmap.md)** — планы, приоритеты, идеи.
+
+---
+
+## Obsidian wiki
+
+**[wiki/](wiki/)** — 21 файл, 5 разделов (Архитектура / Модули / Инфраструктура / Статус / Журнал). Открывать через Obsidian, vault в корне проекта (`.obsidian/` в `.gitignore`).
 
 ---
 
 ## Деплой и окружения
 
-- **[DEPLOY_INSTRUCTIONS.md](deploy/DEPLOY_INSTRUCTIONS.md)** — инструкция по применению изменений на сервере (прод и стагинг).
-- **[DEPLOY_WORKFLOW.md](deploy/DEPLOY_WORKFLOW.md)** — порядок работы: две папки, Staging → Production.
-- **[DEPLOY_SEARCH.md](deploy/DEPLOY_SEARCH.md)** — деплой и настройка поиска.
-
----
-
-## UI и вёрстка
-
-- **[ICONS.md](ui/ICONS.md)** — какие наборы иконок используем (Heroicons Outline), где применены, как подбирать новые.
-- **[Z_INDEX.md](ui/Z_INDEX.md)** — шкала z-index для модалок, панелей, хедера.
+- **[deploy/DEPLOY_INSTRUCTIONS.md](deploy/DEPLOY_INSTRUCTIONS.md)** — применение изменений на серверах.
+- **[deploy/DEPLOY_WORKFLOW.md](deploy/DEPLOY_WORKFLOW.md)** — порядок работы staging → production.
+- **[deploy/DEPLOY_SEARCH.md](deploy/DEPLOY_SEARCH.md)** — деплой поиска.
+- **[deploy/PROD_FILES_PATHS.md](deploy/PROD_FILES_PATHS.md)** — пути файлов на проде.
 
 ---
 
 ## Поиск компаний
 
-- **[INTELLIGENT_SEARCH_SPEC.md](search/INTELLIGENT_SEARCH_SPEC.md)** — требования к интеллектуальному поиску и сравнение внешних движков (Meilisearch, Typesense, Elasticsearch). Сейчас используется PostgreSQL.
-- **[SEARCH_ENGINE_ROADMAP.md](search/SEARCH_ENGINE_ROADMAP.md)** — исторический план внедрения внешнего движка. Актуальный backend — PostgreSQL FTS.
-- **[SEARCH_BEST_PRACTICES.md](search/SEARCH_BEST_PRACTICES.md)** — привязка практик к текущей реализации (PostgreSQL FTS + pg_trgm, EXACT-first, команды обслуживания индекса).
+- **[search/INTELLIGENT_SEARCH_SPEC.md](search/INTELLIGENT_SEARCH_SPEC.md)** — спецификация поиска (текущий backend — PostgreSQL FTS + pg_trgm).
+- **[search/SEARCH_BEST_PRACTICES.md](search/SEARCH_BEST_PRACTICES.md)** — практики и команды обслуживания индекса.
 
 ---
 
-## Backend и аудит
+## UI и вёрстка
 
-- **[INN_AUDIT.md](backend/INN_AUDIT.md)** — аудит ИНН, нормализация, exact-поиск.
+- **[ui/ICONS.md](ui/ICONS.md)** — Heroicons Outline, правила подбора.
+- **[ui/Z_INDEX.md](ui/Z_INDEX.md)** — шкала z-index.
 
 ---
 
 ## Чеклисты и тестирование
 
-- **[TESTING_CHECKLIST.md](checklists/TESTING_CHECKLIST.md)** — чеклист тестирования с ожидаемыми логами.
-- **Тесты в Docker:** из корня проекта. Контейнер уже запущен: `docker compose exec web python manage.py test` (или `... test ui.tests.test_view_as`). Контейнер не запущен: `./scripts/run_tests_docker.sh [модуль]` или на Windows `scripts\run_tests_docker.bat [модуль]`.
+- **[checklists/TESTING_CHECKLIST.md](checklists/TESTING_CHECKLIST.md)** — чеклист тестирования.
+- **[PMI_livechat.md](PMI_livechat.md)** — отчёт комплексного тестирования live-chat (67 тестов, 96% pass).
+- **Тесты в Docker:** `docker compose exec web python manage.py test` или `scripts/run_tests_docker.sh [модуль]`.
 
 ---
 
-## Сводки и отчёты
+## Live-chat: планы и спецификации
 
-- **[FIXES_SUMMARY.md](summaries/FIXES_SUMMARY.md)** — резюме изменений (rate limiting, telemetry, call log).
-- **[MODERN_FEATURES.md](summaries/MODERN_FEATURES.md)** — современные возможности.
-- **[PERFORMANCE_FIXES_SUMMARY.md](summaries/PERFORMANCE_FIXES_SUMMARY.md)** — сводка по производительности.
-- **[PERFORMANCE_PATCH_VERIFICATION.md](summaries/PERFORMANCE_PATCH_VERIFICATION.md)** — проверка патчей производительности.
+- **[superpowers/specs/](superpowers/specs/)** — design-спецификации (live-chat UX Completion).
+- **[superpowers/plans/](superpowers/plans/)** — планы реализации (Plan 1-4 live-chat, закрыты 2026-04-13).
 
 ---
 
-## Прочее
+## Расследования
 
-- **[PR_DESCRIPTION.md](PR_DESCRIPTION.md)** — шаблон/описание для pull request.
+- **[investigations/](investigations/)** — детальные отчёты по расследованию багов (формат `INV-YYYY-MM-DD-NNN-title.md`).
 
 ---
 
-## Документация по подпроектам
+## Сводки
 
-- **Android (CRMProfiDialer):** [android/CRMProfiDialer/docs/README.md](../android/CRMProfiDialer/docs/README.md) — changelogs, гайды, планы, torture-тесты.
+- **[summaries/FIXES_SUMMARY.md](summaries/FIXES_SUMMARY.md)** — резюме изменений (rate limiting, telemetry, call log).
+- **[summaries/MODERN_FEATURES.md](summaries/MODERN_FEATURES.md)** — современные возможности карточки компании.
+
+---
+
+## Подпроекты
+
+- **Android (CRMProfiDialer):** [../android/CRMProfiDialer/docs/README.md](../android/CRMProfiDialer/docs/README.md).
+
+---
+
+## Локальная база знаний (НЕ в git)
+
+`knowledge-base/` в корне проекта — аудиты, бенчмарки, справочники, не попадают в репозиторий (в `.gitignore`). Структура: `raw/`, `research/`, `bench/`, `synthesis/`, `ref/`. Главный документ — `knowledge-base/synthesis/state-of-project.md`.

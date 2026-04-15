@@ -31,6 +31,7 @@ staticfiles/
 # IDE / OS
 .vscode/
 .idea/
+.obsidian/
 Thumbs.db
 Desktop.ini
 
@@ -105,3 +106,17 @@ node_modules/
 
 # External reference repos (не часть проекта)
 chatwoot-reference/
+
+# Playwright MCP артефакты (содержат staging-токены в логах)
+.playwright-mcp/
+
+# Скриншоты тестирования (содержат PII staging-среды)
+test-screenshots/
+
+# Скриншоты UI в корне (артефакты Playwright/тестирования)
+messenger-*.png
+settings-dashboard.png
+widget-opened.png
+
+# Local knowledge base (не коммитить)
+knowledge-base/

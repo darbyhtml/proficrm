@@ -31,7 +31,7 @@ tags: [статус, staging]
 
 ### Мессенджер Live-Chat
 - Виджет работает на `vm-f841f9cb.na4u.ru/chat-test.html`
-- Inbox #8 (token: `AMseFuK1...`, branch_id=1)
+- Inbox #8 (token: `tSPk_z4Z...`, branch_id=1) — ротирован 2026-04-07 после утечки в .playwright-mcp/
 - SSE стримы работают (gthread fix от 2026-04-06)
 - CORS разделён: nginx preflight + Django response
 - Widget CSS автозагрузка работает
