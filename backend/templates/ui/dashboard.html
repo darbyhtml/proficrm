@@ -1,5 +1,5 @@
 {% extends "ui/base.html" %}
-{% load ui_extras %}
+{% load ui_extras accounts_extras %}
 {% block title %}Рабочий стол — CRM ПРОФИ{% endblock %}
 
 {% block extra_head %}
@@ -422,7 +422,7 @@
       </section>
 
       {# 3 строка: Задачи на неделю — на всю ширину для обычных пользователей, на половинку для РОП/директора (если есть запросы на удаление) #}
-      {% if request.user.role == 'sales_head' or request.user.role == 'branch_director' %}
+      {% if request.user|has_role:"sales_head,branch_director" %}
         {% if deletion_requests_count > 0 %}
           <section class="card card-pad dashboard-card">
         {% else %}

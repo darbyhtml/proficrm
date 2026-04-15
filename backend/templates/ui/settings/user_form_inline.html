@@ -1,3 +1,4 @@
+{% load accounts_extras %}
 <form method="post" id="user-edit-form-inline" class="space-y-4">
   {% csrf_token %}
   
@@ -60,7 +61,7 @@
     {% endif %}
   </div>
 
-  {% if u.role == 'admin' %}
+  {% if u|has_role:"admin" %}
     <div class="space-y-2">
       <div>
         <label class="block text-xs font-medium text-brand-dark/70 uppercase mb-1">Новый пароль (только для администраторов)</label>

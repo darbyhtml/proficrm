@@ -1,5 +1,5 @@
 {% extends "ui/base.html" %}
-{% load static ui_extras messenger_extras %}
+{% load static ui_extras messenger_extras accounts_extras %}
 {% block title %}Мессенджер — CRM ПРОФИ{% endblock %}
 
 {% block content %}
@@ -670,7 +670,7 @@
               {% endif %}
             </div>
           </div>
-          {% if user.is_superuser or user.role == 'admin' %}
+          {% if user|has_role:"admin" %}
             <button type="button"
                     class="conversation-delete-btn"
                     data-delete-conversation-id="{{ conversation.id }}"
@@ -848,7 +848,7 @@
   window.MESSENGER_CONTEXT = {
     currentUserId: {{ current_user_id|default:'null' }},
     selectedConversationId: {% if selected_conversation %}{{ selected_conversation.id }}{% else %}null{% endif %},
-    isAdmin: {% if user.is_superuser or user.role == 'admin' %}true{% else %}false{% endif %},
+    isAdmin: {% if user|has_role:"admin" %}true{% else %}false{% endif %},
     assignees: [
       {% for a in assignees %}
         { id: {{ a.id }}, name: "{{ a.get_full_name|default:a.username|escapejs }}" }{% if not forloop.last %},{% endif %}
