@@ -50,12 +50,23 @@
           {% if filter_active %} · по фильтру: <strong style="color:var(--v2-text)">{{ companies_filtered|default:0 }}</strong>{% endif %}
         </div>
       </div>
-      <a href="{% url 'company_create' %}" class="v2-btn">
-        <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd">
-          <path d="M12 3.75a.75.75 0 01.75.75v6.75h6.75a.75.75 0 010 1.5h-6.75v6.75a.75.75 0 01-1.5 0v-6.75H4.5a.75.75 0 010-1.5h6.75V4.5a.75.75 0 01.75-.75z"/>
-        </svg>
-        Новая компания
-      </a>
+      <div style="display:flex;gap:8px;align-items:center">
+        {% if is_admin %}
+        <a href="/companies/export/?q={{ q|urlencode }}&responsible={{ responsible|urlencode }}&status={{ status|urlencode }}&branch={{ branch|urlencode }}&sphere={{ sphere|urlencode }}&contract_type={{ contract_type|urlencode }}{% for r_id in selected_regions %}&region={{ r_id }}{% endfor %}&overdue={{ overdue|urlencode }}&task_filter={{ task_filter|urlencode }}&sort={{ sort }}&dir={{ sort_dir }}"
+           class="v2-btn v2-btn--ghost" title="Экспорт результатов фильтра в CSV">
+          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd">
+            <path d="M12 2.25a.75.75 0 01.75.75v11.69l3.22-3.22a.75.75 0 111.06 1.06l-4.5 4.5a.75.75 0 01-1.06 0l-4.5-4.5a.75.75 0 111.06-1.06l3.22 3.22V3a.75.75 0 01.75-.75zm-9 13.5a.75.75 0 01.75.75v2.25a1.5 1.5 0 001.5 1.5h13.5a1.5 1.5 0 001.5-1.5V16.5a.75.75 0 011.5 0v2.25a3 3 0 01-3 3H5.25a3 3 0 01-3-3V16.5a.75.75 0 01.75-.75z"/>
+          </svg>
+          Экспорт CSV
+        </a>
+        {% endif %}
+        <a href="{% url 'company_create' %}" class="v2-btn">
+          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd">
+            <path d="M12 3.75a.75.75 0 01.75.75v6.75h6.75a.75.75 0 010 1.5h-6.75v6.75a.75.75 0 01-1.5 0v-6.75H4.5a.75.75 0 010-1.5h6.75V4.5a.75.75 0 01.75-.75z"/>
+          </svg>
+          Новая компания
+        </a>
+      </div>
     </div>
 
     <div class="v2-card__body">
@@ -101,16 +112,39 @@
 
         <select name="responsible" class="v2-select" onchange="this.form.submit()">
           <option value="">Все ответственные</option>
+          {% if has_companies_without_responsible %}
+            <option value="none" {% if responsible == 'none' %}selected{% endif %}>— Без ответственного —</option>
+          {% endif %}
           {% for u in responsibles %}
             <option value="{{ u.id }}" {% if responsible == u.id|stringformat:'s' %}selected{% endif %}>{{ u|full_name }}</option>
           {% endfor %}
         </select>
 
-        <label class="v2-chip {% if overdue == '1' %}v2-chip--active{% endif %}" style="cursor:pointer">
-          <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %}
+        <select name="task_filter" class="v2-select" onchange="this.form.submit()"
+                title="Фильтр по задачам компании">
+          <option value="">Любые задачи</option>
+          <option value="no_tasks" {% if task_filter == 'no_tasks' %}selected{% endif %}>Нет задач</option>
+          <option value="today" {% if task_filter == 'today' %}selected{% endif %}>На сегодня</option>
+          <option value="tomorrow" {% if task_filter == 'tomorrow' %}selected{% endif %}>На завтра</option>
+          <option value="week" {% if task_filter == 'week' %}selected{% endif %}>На этой неделе</option>
+          <option value="month" {% if task_filter == 'month' %}selected{% endif %}>В этом месяце</option>
+          <option value="quarter" {% if task_filter == 'quarter' %}selected{% endif %}>В этом квартале</option>
+        </select>
+
+        <label class="v2-chip {% if overdue == '1' and task_filter != 'no_tasks' %}v2-chip--active{% endif %}" style="cursor:pointer">
+          <input type="checkbox" name="overdue" value="1"
+                 {% if overdue == '1' and task_filter != 'no_tasks' %}checked{% endif %}
+                 {% if task_filter == 'no_tasks' %}disabled{% endif %}
                  onchange="this.form.submit()" style="margin-right:6px" />
           Просроченные
         </label>
+
+        <select name="per_page" class="v2-select" onchange="this.form.submit()" title="Строк на странице">
+          <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+          <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+          <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+          <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
+        </select>
 
         {% if sort %}<input type="hidden" name="sort" value="{{ sort }}" />{% endif %}
         {% if sort_dir %}<input type="hidden" name="dir" value="{{ sort_dir }}" />{% endif %}
@@ -122,7 +156,18 @@
       {% if is_admin and page.object_list and transfer_targets %}
       <form method="post" action="{% url 'company_bulk_transfer' %}" id="v2CompanyBulk" class="v2-bulk">
         {% csrf_token %}
-        <span class="v2-bulk__label">Передать выбранные</span>
+        <input type="hidden" name="apply_mode" id="v2BulkApplyMode" value="selected" />
+        {# Сохраняем активные фильтры — нужно для режима "по фильтру" #}
+        <input type="hidden" name="q" value="{{ q|default:'' }}" />
+        <input type="hidden" name="status" value="{{ status|default:'' }}" />
+        <input type="hidden" name="sphere" value="{{ sphere|default:'' }}" />
+        <input type="hidden" name="contract_type" value="{{ contract_type|default:'' }}" />
+        <input type="hidden" name="region" value="{{ region|default:'' }}" />
+        <input type="hidden" name="branch" value="{{ branch|default:'' }}" />
+        <input type="hidden" name="responsible" value="{{ responsible|default:'' }}" />
+        <input type="hidden" name="overdue" value="{{ overdue|default:'' }}" />
+        <input type="hidden" name="task_filter" value="{{ task_filter|default:'' }}" />
+        <span class="v2-bulk__label">Передать</span>
         <select name="new_responsible_id" class="v2-select" required>
           <option value="">Кому…</option>
           {% regroup transfer_targets by branch as bulk_branches %}
@@ -134,15 +179,37 @@
             </optgroup>
           {% endfor %}
         </select>
-        <button type="submit" class="v2-btn v2-btn--sm" id="v2BulkApply" disabled>Передать</button>
+        <button type="button" class="v2-btn v2-btn--sm" id="v2BulkApply" disabled>Передать выбранные</button>
+        {% if companies_filtered %}
+        <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" id="v2BulkApplyFiltered"
+                title="Передать все компании по текущему фильтру (макс 5000)">
+          Передать все по фильтру ({{ companies_filtered }})
+        </button>
+        {% endif %}
         <span class="v2-bulk__count">Выбрано: <b id="v2BulkCount">0</b></span>
         <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" id="v2BulkClear" disabled>Снять</button>
       </form>
+
+      <div id="v2BulkModal" style="display:none;position:fixed;inset:0;background:rgba(17,24,39,.55);z-index:100;align-items:center;justify-content:center;padding:20px">
+        <div style="background:#fff;border-radius:16px;max-width:720px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+          <div style="padding:16px 20px;border-bottom:1px solid var(--v2-border);display:flex;align-items:center;justify-content:space-between">
+            <strong style="font-size:16px">Подтверждение массового переназначения</strong>
+            <button type="button" id="v2BulkModalClose" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--v2-text-muted);line-height:1">&times;</button>
+          </div>
+          <div id="v2BulkModalBody" style="padding:16px 20px;overflow-y:auto;flex:1;font-size:13px">
+            <div style="text-align:center;color:var(--v2-text-muted);padding:24px 0">Загрузка превью…</div>
+          </div>
+          <div style="padding:14px 20px;border-top:1px solid var(--v2-border);display:flex;gap:10px;justify-content:flex-end">
+            <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" id="v2BulkModalCancel">Отмена</button>
+            <button type="button" class="v2-btn v2-btn--sm" id="v2BulkModalConfirm" disabled>Подтвердить</button>
+          </div>
+        </div>
+      </div>
       {% endif %}
 
       <div class="v2-table">
         <div class="v2-tr v2-tr--head"
-             style="grid-template-columns:{% if is_admin %}28px {% endif %}minmax(0,1.8fr) 180px 180px 140px 100px">
+             style="grid-template-columns:{% if is_admin %}28px {% endif %}minmax(0,1.8fr) 160px 140px 120px 140px 90px">
           {% if is_admin %}<div><input type="checkbox" id="v2BulkAll" class="v2-chk" /></div>{% endif %}
           <div>
             <a class="v2-sort {% if sort == 'name' %}v2-sort--active{% endif %}"
@@ -166,28 +233,38 @@
               {% if sort == 'status' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
             </a>
           </div>
+          <div>
+            <a class="v2-sort {% if sort == 'updated_at' %}v2-sort--active{% endif %}"
+               href="?{% if qs %}{{ qs }}&{% endif %}sort=updated_at&dir={% if sort == 'updated_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+              Обновлено
+              {% if sort == 'updated_at' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+            </a>
+          </div>
           <div style="text-align:right">Задачи</div>
         </div>
 
         {% for c in page.object_list %}
-        <div class="v2-tr" style="grid-template-columns:{% if is_admin %}28px {% endif %}minmax(0,1.8fr) 180px 180px 140px 100px;cursor:pointer"
+        <div class="v2-tr" style="grid-template-columns:{% if is_admin %}28px {% endif %}minmax(0,1.8fr) 160px 140px 120px 140px 90px;cursor:pointer"
              onclick="if(event.target.tagName!=='INPUT'&&event.target.tagName!=='LABEL')location.href='{% url 'company_detail' c.id %}'">
           {% if is_admin %}
           <div onclick="event.stopPropagation()">
             <label style="display:flex;align-items:center;justify-content:center;cursor:pointer">
-              <input type="checkbox" class="v2-chk v2-bulk-row" name="company_ids" value="{{ c.id }}" form="v2CompanyBulk" />
+              <input type="checkbox" class="v2-chk v2-bulk-row" name="company_ids" value="{{ c.id }}" form="v2CompanyBulk"
+                     data-can-transfer="{% if c.can_transfer %}1{% else %}0{% endif %}"
+                     {% if not c.can_transfer %}disabled title="Нет прав на передачу этой компании"{% endif %} />
             </label>
           </div>
           {% endif %}
           <div class="v2-td" style="min-width:0">
             <div class="v2-item__title">{{ c.name }}</div>
-            {% if c.main_phone %}<div class="v2-item__meta">{{ c.main_phone }}</div>{% endif %}
+            {% if c.address %}<div class="v2-item__meta">{{ c.address|truncatechars:60 }}</div>{% endif %}
           </div>
           <div class="v2-td">{% if c.responsible %}{{ c.responsible|full_name }}{% else %}—{% endif %}</div>
           <div class="v2-td">{% if c.branch %}{{ c.branch.name }}{% else %}—{% endif %}</div>
           <div class="v2-td">
             {% if c.status %}<span class="v2-count v2-count--primary">{{ c.status.name }}</span>{% else %}—{% endif %}
           </div>
+          <div class="v2-td v2-item__meta">{{ c.updated_at|date:"d.m.Y H:i" }}</div>
           <div class="v2-td v2-td--strong" style="text-align:right">{{ c.active_tasks_count|default:0 }}</div>
         </div>
         {% empty %}
@@ -217,24 +294,35 @@
 </div>
 
 <script>
-// Bulk selection
+// Bulk selection + preview modal
 (function(){
   const form = document.getElementById('v2CompanyBulk');
   if(!form) return;
   const all = document.getElementById('v2BulkAll');
   const rows = document.querySelectorAll('.v2-bulk-row');
+  const activeRows = Array.from(rows).filter(r => !r.disabled);
   const count = document.getElementById('v2BulkCount');
   const apply = document.getElementById('v2BulkApply');
+  const applyFiltered = document.getElementById('v2BulkApplyFiltered');
   const clear = document.getElementById('v2BulkClear');
+  const newResp = form.querySelector('select[name="new_responsible_id"]');
+  const modeInput = document.getElementById('v2BulkApplyMode');
+  // Modal refs
+  const modal = document.getElementById('v2BulkModal');
+  const modalBody = document.getElementById('v2BulkModalBody');
+  const modalClose = document.getElementById('v2BulkModalClose');
+  const modalCancel = document.getElementById('v2BulkModalCancel');
+  const modalConfirm = document.getElementById('v2BulkModalConfirm');
+
   function update(){
     const n = document.querySelectorAll('.v2-bulk-row:checked').length;
     if(count) count.textContent = n;
     if(apply) apply.disabled = n === 0;
     if(clear) clear.disabled = n === 0;
-    if(all) all.checked = n > 0 && n === rows.length;
+    if(all) all.checked = n > 0 && n === activeRows.length;
   }
   if(all) all.addEventListener('change', function(){
-    rows.forEach(r => r.checked = all.checked);
+    activeRows.forEach(r => r.checked = all.checked);
     update();
   });
   rows.forEach(r => r.addEventListener('change', update));
@@ -244,6 +332,100 @@
     update();
   });
   update();
+
+  function showModal(){ if(modal){ modal.style.display = 'flex'; } }
+  function hideModal(){ if(modal){ modal.style.display = 'none'; } if(modalConfirm) modalConfirm.disabled = true; }
+  if(modalClose) modalClose.addEventListener('click', hideModal);
+  if(modalCancel) modalCancel.addEventListener('click', hideModal);
+  if(modal) modal.addEventListener('click', function(e){ if(e.target === modal) hideModal(); });
+
+  function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  function renderPreview(data){
+    if(!modalBody) return;
+    if(data.error){
+      modalBody.innerHTML = '<div style="color:#b91c1c;padding:8px;background:#fef2f2;border-radius:8px">'+escapeHtml(data.error)+'</div>';
+      if(modalConfirm) modalConfirm.disabled = true;
+      return;
+    }
+    const allowedCount = data.allowed_count || 0;
+    const forbiddenCount = data.forbidden_count || 0;
+    const totalCount = data.total_count || 0;
+    const target = data.new_responsible || {};
+    const companies = data.companies || [];
+    const forbidden = data.forbidden || [];
+    const oldResps = data.old_responsibles || [];
+    let html = '';
+    html += '<div style="margin-bottom:10px;padding:10px;background:var(--v2-bg-soft);border-radius:8px">';
+    html += '<div style="font-weight:600;margin-bottom:4px">Будет переназначено: <span style="color:#059669">'+allowedCount+'</span>';
+    if(forbiddenCount) html += ' <span style="color:#b91c1c">(пропущено: '+forbiddenCount+')</span>';
+    html += '</div>';
+    html += '<div style="font-size:12px;color:var(--v2-text-muted)">Новый ответственный: <b>'+escapeHtml(target.name||'—')+'</b>'
+         + (target.role ? ' ('+escapeHtml(target.role)+')' : '')
+         + (target.branch && target.branch !== '—' ? ' · '+escapeHtml(target.branch) : '') + '</div>';
+    if(oldResps.length){
+      html += '<div style="font-size:12px;color:var(--v2-text-muted);margin-top:4px">Текущие: '
+           + oldResps.map(r => escapeHtml(r.name)+' ('+r.count+')').join(', ') + '</div>';
+    }
+    html += '</div>';
+    if(forbiddenCount && forbidden.length){
+      html += '<details style="margin-bottom:8px;padding:8px;background:#fef2f2;border-radius:8px"><summary style="cursor:pointer;font-weight:600;color:#b91c1c">Пропущено ('+forbiddenCount+')</summary>'
+           + '<ul style="margin:6px 0 0 18px;padding:0;max-height:160px;overflow-y:auto;font-size:12px">'
+           + forbidden.map(f => '<li>'+escapeHtml(f.name)+' — '+escapeHtml(f.reason||'нет прав')+'</li>').join('')
+           + (forbiddenCount > forbidden.length ? '<li style="color:#b91c1c">… и ещё '+(forbiddenCount-forbidden.length)+'</li>' : '')
+           + '</ul></details>';
+    }
+    if(companies.length){
+      html += '<details open style="margin-bottom:4px"><summary style="cursor:pointer;font-weight:600;margin-bottom:6px">Компании (первые '+companies.length
+           + (totalCount > companies.length ? ' из '+totalCount : '')+')</summary>'
+           + '<div style="max-height:260px;overflow-y:auto;border:1px solid var(--v2-border);border-radius:6px">'
+           + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+           + '<thead style="background:var(--v2-bg-soft);position:sticky;top:0"><tr>'
+           + '<th style="text-align:left;padding:6px 8px">Компания</th>'
+           + '<th style="text-align:left;padding:6px 8px">ИНН</th>'
+           + '<th style="text-align:left;padding:6px 8px">Текущий</th>'
+           + '</tr></thead><tbody>'
+           + companies.map(c => '<tr style="border-top:1px solid var(--v2-border)"><td style="padding:6px 8px">'+escapeHtml(c.name)
+                + '</td><td style="padding:6px 8px;color:var(--v2-text-muted)">'+escapeHtml(c.inn||'—')
+                + '</td><td style="padding:6px 8px;color:var(--v2-text-muted)">'+escapeHtml(c.old_responsible||'—')+'</td></tr>').join('')
+           + '</tbody></table></div></details>';
+    }
+    modalBody.innerHTML = html;
+    if(modalConfirm) modalConfirm.disabled = allowedCount === 0;
+  }
+
+  function fetchPreview(mode){
+    if(!modalBody) return;
+    modalBody.innerHTML = '<div style="text-align:center;color:var(--v2-text-muted);padding:24px 0">Загрузка превью…</div>';
+    if(modalConfirm) modalConfirm.disabled = true;
+    const fd = new FormData();
+    const csrf = form.querySelector('input[name="csrfmiddlewaretoken"]');
+    if(csrf) fd.append('csrfmiddlewaretoken', csrf.value);
+    fd.append('apply_mode', mode);
+    fd.append('responsible_id', newResp.value);
+    if(mode === 'selected'){
+      document.querySelectorAll('.v2-bulk-row:checked').forEach(r => fd.append('company_ids', r.value));
+    } else {
+      ['q','status','sphere','contract_type','region','branch','responsible','overdue','task_filter'].forEach(k => {
+        const el = form.querySelector('input[name="'+k+'"]');
+        if(el) fd.append(k, el.value);
+      });
+    }
+    fetch('/companies/bulk-transfer/preview/', {method:'POST', body: fd, credentials:'same-origin'})
+      .then(r => r.json())
+      .then(renderPreview)
+      .catch(e => renderPreview({error: String(e)}));
+  }
+
+  function openFor(mode){
+    if(!newResp.value){ alert('Выбери нового ответственного'); return; }
+    modeInput.value = mode;
+    showModal();
+    fetchPreview(mode);
+  }
+  if(apply) apply.addEventListener('click', function(){ openFor('selected'); });
+  if(applyFiltered) applyFiltered.addEventListener('click', function(){ openFor('filtered'); });
+  if(modalConfirm) modalConfirm.addEventListener('click', function(){ form.submit(); });
 })();
 
 // Remember filters в localStorage
