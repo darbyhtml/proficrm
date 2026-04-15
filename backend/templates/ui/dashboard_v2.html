@@ -46,6 +46,49 @@
     </div>
   </section>
 
+  {% if deletion_requests_count > 0 %}
+  <!-- Запросы на удаление (только для РОП / Директора подразделения) -->
+  <section class="v2-card v2-anim" style="animation-delay:.04s;border-color:var(--v2-warn)">
+    <div class="v2-card__head">
+      <div class="v2-card__title">
+        <svg class="v2-ic" style="color:var(--v2-warn)" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd">
+          <path d="M16.5 4.478v.227a48.816 48.816 0 013.878.512.75.75 0 11-.256 1.478l-.209-.035-1.005 13.07a3 3 0 01-2.991 2.77H8.084a3 3 0 01-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 01-.256-1.478A48.567 48.567 0 017.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 013.369 0c1.603.051 2.815 1.387 2.815 2.951zm-6.136-1.452a51.196 51.196 0 013.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 00-6 0v-.113c0-.794.609-1.428 1.364-1.452zm-.355 5.945a.75.75 0 10-1.5.058l.347 9a.75.75 0 101.499-.058l-.346-9zm5.48.058a.75.75 0 10-1.498-.058l-.347 9a.75.75 0 001.5.058l.345-9z"/>
+        </svg>
+        Запросы на удаление
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="v2-count v2-count--warn">{{ deletion_requests_count }}</span>
+        {% if deletion_requests_count > 3 %}
+          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="/companies/?deletion_requests=1">Показать все</a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="v2-card__body">
+      {% for req in deletion_requests %}
+      <div class="v2-item" style="align-items:flex-start">
+        <span class="v2-item__dot v2-item__dot--warn" style="margin-top:6px"></span>
+        <div class="flex-1 min-w-0">
+          <div class="v2-item__title">
+            {% if req.company %}<a href="{% url 'company_detail' req.company.id %}" style="color:inherit">{{ req.company.name }}</a>
+            {% else %}{{ req.company_name_snapshot }}{% endif %}
+          </div>
+          <div class="v2-item__meta">
+            {% if req.requested_by %}<span>Запросил: {{ req.requested_by|full_name }}</span>{% endif %}
+            <span>·</span><span>{{ req.created_at|date:"d.m.Y H:i" }}</span>
+          </div>
+          {% if req.note %}
+            <div class="v2-item__meta" style="margin-top:4px;color:var(--v2-text-soft)">{{ req.note|truncatewords:20 }}</div>
+          {% endif %}
+        </div>
+        {% if req.company %}
+          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'company_detail' req.company.id %}">Открыть</a>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
   <!-- КАРТОЧКИ -->
   <div class="v2-grid">
 
@@ -64,7 +107,9 @@
           <a class="v2-item" href="{% url 'task_view' t.id %}">
             <span class="v2-item__dot v2-item__dot--primary"></span>
             <div class="flex-1 min-w-0">
-              <div class="v2-item__title">{{ t.title|default:"(без названия)" }}</div>
+              <div class="v2-item__title">
+                {% if t.is_urgent %}<span title="Срочная" style="color:var(--v2-danger);margin-right:4px">⚡</span>{% endif %}{{ t.title|default:"(без названия)" }}
+              </div>
               <div class="v2-item__meta">
                 {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
                 {% if t.due_at %}<span>·</span><span>до {{ t.due_at|date:"d.m H:i" }}</span>{% endif %}
@@ -101,7 +146,9 @@
           <a class="v2-item" href="{% url 'task_view' t.id %}">
             <span class="v2-item__dot v2-item__dot--danger"></span>
             <div class="flex-1 min-w-0">
-              <div class="v2-item__title">{{ t.title|default:"(без названия)" }}</div>
+              <div class="v2-item__title">
+                {% if t.is_urgent %}<span title="Срочная" style="color:var(--v2-danger);margin-right:4px">⚡</span>{% endif %}{{ t.title|default:"(без названия)" }}
+              </div>
               <div class="v2-item__meta">
                 {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
                 {% if t.due_at %}<span>·</span><span>{{ t.due_at|date:"d.m H:i" }}</span>{% endif %}
@@ -138,7 +185,9 @@
           <a class="v2-item" href="{% url 'task_view' t.id %}">
             <span class="v2-item__dot v2-item__dot--accent"></span>
             <div class="flex-1 min-w-0">
-              <div class="v2-item__title">{{ t.title|default:"(без названия)" }}</div>
+              <div class="v2-item__title">
+                {% if t.is_urgent %}<span title="Срочная" style="color:var(--v2-danger);margin-right:4px">⚡</span>{% endif %}{{ t.title|default:"(без названия)" }}
+              </div>
               <div class="v2-item__meta">
                 {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
                 {% if t.due_at %}<span>·</span><span>{{ t.due_at|date:"H:i" }}</span>{% endif %}
@@ -176,7 +225,9 @@
           <a class="v2-item" href="{% url 'task_view' t.id %}">
             <span class="v2-item__dot"></span>
             <div class="flex-1 min-w-0">
-              <div class="v2-item__title">{{ t.title|default:"(без названия)" }}</div>
+              <div class="v2-item__title">
+                {% if t.is_urgent %}<span title="Срочная" style="color:var(--v2-danger);margin-right:4px">⚡</span>{% endif %}{{ t.title|default:"(без названия)" }}
+              </div>
               <div class="v2-item__meta">
                 {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
                 {% if t.due_at %}<span>·</span><span>{{ t.due_at|date:"D, d.m H:i" }}</span>{% endif %}
@@ -254,6 +305,14 @@
           <div class="v2-card__empty">У всех компаний есть активные задачи</div>
           {% endfor %}
         </div>
+        {% if stale_companies_count > 5 %}
+        <div class="v2-card__foot">
+          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'company_list' %}?no_active_tasks=1">
+            Все без задач ({{ stale_companies_count }})
+            <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M16.28 11.47a.75.75 0 010 1.06l-7.5 7.5a.75.75 0 01-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 011.06-1.06l7.5 7.5z"/></svg>
+          </a>
+        </div>
+        {% endif %}
       </div>
     </div>
 
