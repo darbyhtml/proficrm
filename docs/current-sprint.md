@@ -8,6 +8,52 @@ Live-chat UX Completion — реализация по спецификации `
 
 ## Сделано в этом спринте
 
+**[2026-04-15]** — Phase 2 hotfixes: P1/P2 из bug-hunt.md ✅
+
+Вторая волна исправлений по `knowledge-base/research/bug-hunt.md`
+после первой hardening-серии. Все коммиты деплоены на staging
+(`crm-staging.groupprofi.ru`), web healthy, migration 0013 применена.
+
+- `ecefbe0` Observability: пять `except Exception: pass` в
+  `companies/signals.py` (P2-7) и один в `audit/service.py:log_event`
+  (P2-8) заменены на `logger.exception(...)`; `/notifications/poll/`
+  кэшируется per-user на 3с через Redis — схлопывает burst-polling
+  от нескольких вкладок (P1-6); в `ui/views/tasks.py` form.errors
+  больше не пишется в лог (PII-утечка, P2-12).
+- `e118a36` Messenger routing: `send_outbound_webhook` и
+  `send_push_notification` — новые Celery-таски с
+  `autoretry_for=(Exception,)`, `retry_backoff`, `max_retries=5/3`,
+  `acks_late=True`. `messenger/integrations.py` и `messenger/push.py`
+  заменили `threading.Thread(daemon=True)` на `.delay()` — payload
+  больше не теряется при рестарте gunicorn (P1-7, P1-8).
+  `messenger.Contact.clean()` валидирует email (lowercase) и телефон
+  (E.164-ish, 7-15 цифр), Widget API нормализует вход через
+  `_normalize_contact_email/_phone` — невалидные значения отбрасываются
+  в лог, не пишутся в БД (P1-11).
+- `880d445` Recurring tasks race (P1-2):
+  `UniqueConstraint(parent_recurring_task, due_at)` с условием
+  `parent_recurring_task IS NOT NULL` — partial unique index,
+  не мешает ручному созданию задач; миграция
+  `tasksapp.0013_task_uniq_recurrence_occurrence`. `_process_template`
+  оборачивает `Task.objects.create` в savepoint (`transaction.atomic`)
+  и ловит `IntegrityError` — второй воркер, если обойдёт redis-lock
+  и `select_for_update`, получит конфликт БД и тихо пропустит.
+- `0c30357` UI perf:
+  `TaskTypeSelectWidget` — вернули `cache.set(..., 300)` (5 мин),
+  инвалидация в `post_save`/`post_delete` на `TaskType` (P2-6);
+  `templates/ui/base.html` — campaign poll 4s → 15s,
+  `pollOnce`/`poll` ставятся на паузу на `visibilitychange`,
+  `pollDashboard` аналогично (P2-2, P2-3); `console.log` в
+  `base.html` и `company_detail.html` обёрнут в `if (window.DEBUG)` (P2-11).
+- `c1febf1` Reports perf (P2-9): `qs.count()` кэшируется в
+  переменную, сам проход — через `.iterator(chunk_size=500)` —
+  Django стримит CallRequest порциями, не грузит весь queryset в RAM.
+
+**Итого из bug-hunt.md за сессию:** P1-1, P1-2, P1-3, P1-4, P1-5,
+P1-6, P1-7, P1-8, P1-9, P1-10, P1-11, P2-1, P2-6, P2-7, P2-8,
+P2-9, P2-11, P2-12. Из P1 осталось — ничего (все actionable закрыты).
+Из P2: P2-10 (Session scan в settings_core) — не блокирующее.
+
 **[2026-04-15]** — Phase 0/1 hotfixes после аудита 2026-04-14 ✅
 
 Серия hardening-коммитов по результатам полного аудита
