@@ -397,6 +397,14 @@ REST_FRAMEWORK = {
     # Защита от утечки информации через ошибки API
     "EXCEPTION_HANDLER": "crm.exceptions.custom_exception_handler",
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # Throttling для phonebridge hot endpoints. ScopedRateThrottle
+    # смотрит на throttle_scope во view и применяет соответствующий rate.
+    "DEFAULT_THROTTLE_CLASSES": [],
+    "DEFAULT_THROTTLE_RATES": {
+        "phone_pull": os.getenv("PHONE_PULL_RATE", "120/min"),
+        "phone_heartbeat": os.getenv("PHONE_HEARTBEAT_RATE", "30/min"),
+        "phone_telemetry": os.getenv("PHONE_TELEMETRY_RATE", "20/min"),
+    },
 }
 
 SPECTACULAR_SETTINGS = {

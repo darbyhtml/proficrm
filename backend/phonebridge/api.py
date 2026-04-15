@@ -6,6 +6,7 @@ from django.db import transaction
 from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -159,6 +160,8 @@ class DeviceHeartbeatView(APIView):
 
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "phone_heartbeat"
 
     def post(self, request):
         import logging
@@ -276,6 +279,8 @@ class PullCallView(APIView):
 
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "phone_pull"
 
     def get(self, request):
         import logging
@@ -542,6 +547,8 @@ class PhoneTelemetryView(APIView):
     """
 
     authentication_classes = [JWTAuthentication]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "phone_telemetry"
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
