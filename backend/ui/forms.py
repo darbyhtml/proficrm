@@ -247,7 +247,7 @@ class CompanyQuickEditForm(forms.ModelForm):
 
 class CompanyEditForm(forms.ModelForm):
     """
-    Полное редактирование данных компании (без смены ответственного/филиала).
+    Полное редактирование данных компании (без смены ответственного/подразделения).
     Статус/сферы здесь тоже доступны, чтобы редактирование было "в одном месте".
     """
     head_company = FlexibleCompanyChoiceField(queryset=Company.objects.none(), required=False)
@@ -662,8 +662,8 @@ class TaskForm(forms.ModelForm):
     apply_to_org_branches = forms.BooleanField(
         required=False,
         initial=False,
-        label="Применить ко всем филиалам организации",
-        help_text="Если у компании есть филиалы клиента (или она сама филиал) — задача будет создана на все карточки этой организации.",
+        label="Применить ко всем подразделениям организации",
+        help_text="Если у компании есть подразделения клиента (или она сама подразделение) — задача будет создана на все карточки этой организации.",
     )
 
     class Meta:
@@ -1062,7 +1062,7 @@ class AmoMigrateFilterForm(forms.Form):
         label="Назначить в нашей CRM пользователю",
         required=False,
         widget=forms.Select(attrs={"class": "select w-full"}),
-        help_text="Если указать, все перенесённые компании будут назначены этому пользователю (филиал — по пользователю). Иначе — по совпадению ФИО с amo.",
+        help_text="Если указать, все перенесённые компании будут назначены этому пользователю (подразделение — по пользователю). Иначе — по совпадению ФИО с amo.",
     )
     migrate_all_companies = forms.BooleanField(label="Мигрировать все компании ответственного (без фильтра по полю)", required=False, initial=False)
     custom_field_id = forms.IntegerField(label="Кастомное поле (id)", required=False)

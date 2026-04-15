@@ -1,5 +1,5 @@
 """
-Справочник регионов, закреплённых за филиалами.
+Справочник регионов, закреплённых за подразделениями.
 
 Источник: «Положение о распределении входящих запросов на оказание
 образовательных услуг, поступающих от клиентов с территорий РФ»
@@ -12,13 +12,13 @@ from accounts.models import Branch
 
 
 class BranchRegion(models.Model):
-    """Регион, закреплённый за филиалом."""
+    """Регион, закреплённый за подразделением."""
 
     branch = models.ForeignKey(
         Branch,
         on_delete=models.CASCADE,
         related_name="regions",
-        verbose_name="Филиал",
+        verbose_name="Подразделение",
     )
     region_name = models.CharField(
         "Регион",
@@ -30,14 +30,14 @@ class BranchRegion(models.Model):
         default=False,
         help_text=(
             "Москва/МО, СПб/ЛО, Новгородская, Псковская — "
-            "обслуживаются равномерно всеми филиалами"
+            "обслуживаются равномерно всеми подразделениями"
         ),
     )
     ordering = models.PositiveSmallIntegerField("Порядок", default=0)
 
     class Meta:
-        verbose_name = "Регион филиала"
-        verbose_name_plural = "Регионы филиалов"
+        verbose_name = "Регион подразделения"
+        verbose_name_plural = "Регионы подразделений"
         unique_together = [("branch", "region_name")]
         indexes = [
             models.Index(fields=["region_name", "branch"]),

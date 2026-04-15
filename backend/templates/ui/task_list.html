@@ -125,7 +125,7 @@
             <option value="">Любой исполнитель</option>
           {% regroup filter_assignees by branch as branches_list %}
           {% for branch_group in branches_list %}
-            <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+            <optgroup label="Подразделение: {{ branch_group.grouper.name|default:"Без подразделения" }}">
               {% for u in branch_group.list %}
                 <option value="{{ u.id }}" {% if assigned_to|default:'' == u.id|stringformat:'s' %}selected{% endif %}>{{ u }}</option>
               {% endfor %}
@@ -290,7 +290,7 @@
             <option value="">Выберите сотрудника</option>
             {% regroup transfer_targets by branch as branches_list %}
             {% for branch_group in branches_list %}
-              <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+              <optgroup label="Подразделение: {{ branch_group.grouper.name|default:"Без подразделения" }}">
                 {% for u in branch_group.list %}
                   <option value="{{ u.id }}">{{ u }} ({{ u.get_role_display }})</option>
                 {% endfor %}

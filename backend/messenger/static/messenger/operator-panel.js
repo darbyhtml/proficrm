@@ -1914,7 +1914,7 @@ class MessengerOperatorPanel {
             <div class="flex items-center justify-between">
               <dt class="text-brand-dark/60 flex items-center gap-1.5">
                 <span>${iconBuilding}</span>
-                <span>Филиал</span>
+                <span>Подразделение</span>
               </dt>
               <dd class="font-medium text-right">${this.escapeHtml(conversation.branch_name || '—')}</dd>
             </div>

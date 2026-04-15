@@ -36,9 +36,9 @@
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-brand-dark mb-1">Филиал <span class="text-red-400">*</span></label>
+          <label class="block text-sm font-medium text-brand-dark mb-1">Подразделение <span class="text-red-400">*</span></label>
           <select name="branch" class="select w-full" required>
-            <option value="">Выберите филиал</option>
+            <option value="">Выберите подразделение</option>
             {% for branch in branches %}
               <option value="{{ branch.id }}" {% if rule and rule.branch_id == branch.id %}selected{% endif %}>{{ branch.name }}</option>
             {% endfor %}

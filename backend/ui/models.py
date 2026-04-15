@@ -20,7 +20,7 @@ class UiGlobalConfig(models.Model):
         ("status", "Статус"),
         ("spheres", "Сферы"),
         ("responsible", "Ответственный"),
-        ("branch", "Филиал"),
+        ("branch", "Подразделение"),
         ("region", "Область"),
         ("updated_at", "Обновлено"),
     ]

@@ -455,7 +455,7 @@
         <!-- Служебная информация -->
         <div class="text-[11px] text-brand-dark/60 text-right mt-1 space-y-0.5">
           <div><span class="text-brand-dark/50">Ответственный:</span> {{ company.responsible }}</div>
-          <div><span class="text-brand-dark/50">Филиал:</span> {{ company.branch }}</div>
+          <div><span class="text-brand-dark/50">Подразделение:</span> {{ company.branch }}</div>
         </div>
       </div>
     </div>
@@ -472,14 +472,14 @@
                   <span class="badge">Головная</span>
                   <div class="font-medium">{{ org_head.name }}</div>
                 {% else %}
-                  <span class="badge">Филиал</span>
+                  <span class="badge">Подразделение</span>
                   <a class="link font-medium" href="/companies/{{ org_head.id }}/">{{ org_head.name }}</a>
                 {% endif %}
               {% else %}
                 <span class="text-brand-dark/70">—</span>
               {% endif %}
               {% if org_branches %}
-                <span class="muted-2 text-xs">· филиалов: {{ org_branches|length }}</span>
+                <span class="muted-2 text-xs">· подразделений: {{ org_branches|length }}</span>
               {% endif %}
             </div>
           </div>
@@ -1157,7 +1157,7 @@
                 <option value="">Выберите ответственного…</option>
                 {% regroup transfer_targets by branch as branches_list %}
                 {% for branch_group in branches_list %}
-                  <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+                  <optgroup label="Подразделение: {{ branch_group.grouper.name|default:"Без подразделения" }}">
                     {% for u in branch_group.list %}
                       <option value="{{ u.id }}">{{ u }} ({{ u.get_role_display }})</option>
                     {% endfor %}
@@ -1166,11 +1166,11 @@
               </select>
               <button class="btn btn-outline" type="submit">Передать</button>
             </form>
-            <div class="text-xs muted-2 mt-1">При передаче филиал компании обновится под филиал нового ответственного.</div>
+            <div class="text-xs muted-2 mt-1">При передаче подразделение компании обновится под подразделение нового ответственного.</div>
           </div>
         {% else %}
           <div class="rounded-xl border border-brand-orange/60 bg-brand-orange/20 px-4 py-3 text-sm text-brand-dark">
-            У вас доступ <b>только на просмотр</b>. Редактировать может ответственный / руководитель филиала / управляющий / администратор.
+            У вас доступ <b>только на просмотр</b>. Редактировать может ответственный / руководитель подразделения / управляющий / администратор.
           </div>
         {% endif %}
         <div class="mt-4 border-t pt-4">
@@ -1240,14 +1240,14 @@
       {% if org_head and org_head.id == company.id %}
         {% if org_branches %}
           <section class="card card-pad">
-            <div class="font-medium mb-3">Филиалы организации</div>
+            <div class="font-medium mb-3">Подразделения организации</div>
             <div class="space-y-2">
               {% for b in org_branches %}
                 <a class="block rounded-lg border p-3 hover:bg-brand-soft/20" href="/companies/{{ b.id }}/">
                   <div class="flex items-start justify-between gap-3">
                     <div>
                       <div class="text-sm font-medium">{{ b.name }}</div>
-                      <div class="text-xs muted-2">ИНН: {{ b.inn|default:"—" }} · Ответственный: {{ b.responsible|default:"—" }} · Филиал: {{ b.branch|default:"—" }}</div>
+                      <div class="text-xs muted-2">ИНН: {{ b.inn|default:"—" }} · Ответственный: {{ b.responsible|default:"—" }} · Подразделение: {{ b.branch|default:"—" }}</div>
                     </div>
                   </div>
                 </a>
@@ -1786,7 +1786,7 @@
             <div class="flex items-start justify-between gap-3">
               <div>
                 <div class="font-medium">Запросить удаление компании</div>
-                <div class="text-xs muted-2 mt-1">Опишите причину — запрос уйдёт РОП и директору филиала.</div>
+                <div class="text-xs muted-2 mt-1">Опишите причину — запрос уйдёт РОП и директору подразделения.</div>
               </div>
               <button type="button" class="btn btn-outline btn-sm" data-close-delreq aria-label="Закрыть" title="Закрыть">✕</button>
             </div>
@@ -1821,7 +1821,7 @@
                 <div class="font-medium" style="color:#b91c1c">Удалить компанию</div>
                 <div class="text-xs muted-2 mt-1">
                   Удаление необратимо. Заметки будут удалены, задачи/контакты отвяжутся от компании.
-                  Если у компании есть клиентские филиалы — они станут самостоятельными (головными).
+                  Если у компании есть клиентские подразделения — они станут самостоятельными (головными).
                 </div>
               </div>
               <button type="button" class="btn btn-outline btn-sm" data-close-delcompany aria-label="Закрыть" title="Закрыть">✕</button>
@@ -3339,11 +3339,11 @@
             </div>
           </div>
 
-          <!-- Статус + ответственный/филиал в компактном виде -->
+          <!-- Статус + ответственный/подразделение в компактном виде -->
           <div class="flex items-center gap-2 text-[11px] text-brand-dark/60 justify-end">
             <div class="hidden sm:block text-right space-y-0.5">
               <div><span class="text-brand-dark/50">Ответственный:</span> {{ company.responsible }}</div>
-              <div><span class="text-brand-dark/50">Филиал:</span> {{ company.branch }}</div>
+              <div><span class="text-brand-dark/50">Подразделение:</span> {{ company.branch }}</div>
             </div>
             <!-- Dropdown только для смены статуса -->
             <div class="relative" id="companyActionsDropdownModern">
@@ -3791,7 +3791,7 @@
                 </div>
                 <div class="space-y-2 text-sm">
                   <div><span class="text-brand-dark/50">Ответственный:</span> {{ company.responsible|default:"—" }}</div>
-                  <div><span class="text-brand-dark/50">Филиал:</span> {{ company.branch|default:"—" }}</div>
+                  <div><span class="text-brand-dark/50">Подразделение:</span> {{ company.branch|default:"—" }}</div>
                   {% if company.activity_kind %}
                     <div><span class="text-brand-dark/50">Сфера:</span> <span class="whitespace-pre-line">{{ company.activity_kind }}</span></div>
                   {% endif %}
@@ -4203,14 +4203,14 @@
                     <span class="badge">Головная</span>
                     <div class="font-medium">{{ org_head.name }}</div>
                   {% else %}
-                    <span class="badge">Филиал</span>
+                    <span class="badge">Подразделение</span>
                     <a class="link font-medium" href="/companies/{{ org_head.id }}/">{{ org_head.name }}</a>
                   {% endif %}
                 {% else %}
                   <span class="text-brand-dark/70">—</span>
                 {% endif %}
                 {% if org_branches %}
-                  <span class="muted-2 text-xs">· филиалов: {{ org_branches|length }}</span>
+                  <span class="muted-2 text-xs">· подразделений: {{ org_branches|length }}</span>
                 {% endif %}
               </div>
             </div>

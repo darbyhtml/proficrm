@@ -837,7 +837,7 @@
                   </select>
                 </div>
                 <div class="flex items-center gap-1">
-                  <span class="text-brand-dark/60">Филиал:</span>
+                  <span class="text-brand-dark/60">Подразделение:</span>
                   <select name="view_as_branch_id" class="select w-auto py-1 px-2 text-xs">
                     <option value="">Все</option>
                     {% for b in view_as_branches %}
@@ -921,7 +921,7 @@
                                   <circle cx="12" cy="12" r="2"/>
                                 </svg>
                               {% elif n.payload.creator_role == 'branch_director' %}
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-600" title="Директор филиала">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-600" title="Директор подразделения">
                                   <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z"/>
                                   <path d="M12 18v4"/>
                                   <path d="M8 22h8"/>
@@ -993,7 +993,7 @@
                     {% endif %}
                   </span>
                   <span>
-                    · филиал —
+                    · подразделение —
                     {% if view_as_branch %}
                       {{ view_as_branch.name }}
                     {% else %}
@@ -1484,7 +1484,7 @@
               if(payload.creator_role === 'sales_head'){
                 roleIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#01948E;display:inline;margin-left:3px" title="РОП"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>';
               } else if(payload.creator_role === 'branch_director'){
-                roleIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#d97706;display:inline;margin-left:3px" title="Директор филиала"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>';
+                roleIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#d97706;display:inline;margin-left:3px" title="Директор подразделения"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>';
               }
               const urgentBadge = payload.is_urgent ? '<span style="display:inline-flex;align-items:center;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:600;background:rgba(239,68,68,.1);color:#b91c1c;border:1px solid rgba(239,68,68,.25);margin-left:4px">СРОЧНО</span>' : '';
               return `<div class="rounded-xl border border-brand-soft px-3 py-2 mb-2 bg-brand-soft/20" data-notif-id="${id}">

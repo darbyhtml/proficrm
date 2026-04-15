@@ -155,7 +155,7 @@ class Company(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="client_branches",
-        help_text="Если эта карточка — филиал/подразделение клиента, выберите головную организацию.",
+        help_text="Если эта карточка — подразделение клиента, выберите головную организацию.",
     )
 
     phone = models.CharField("Телефон (основной)", max_length=50, blank=True, default="", db_index=True)
@@ -178,7 +178,7 @@ class Company(models.Model):
     )
 
     responsible = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="Ответственный", null=True, blank=True, on_delete=models.SET_NULL, related_name="companies")
-    branch = models.ForeignKey("accounts.Branch", verbose_name="Филиал", null=True, blank=True, on_delete=models.SET_NULL, related_name="companies")
+    branch = models.ForeignKey("accounts.Branch", verbose_name="Подразделение", null=True, blank=True, on_delete=models.SET_NULL, related_name="companies")
 
     amocrm_company_id = models.BigIntegerField("ID компании (amo)", null=True, blank=True, db_index=True)
 
@@ -230,8 +230,8 @@ class Company(models.Model):
         
         save() здесь - это "последняя линия обороны", а не единственный путь нормализации.
         """
-        # Филиал компании = филиалу ответственного, если у ответственного задан филиал.
-        # Не только при пустом branch: исправляем и ошибочные (филиал не ответственного).
+        # Подразделение компании = подразделению ответственного, если у ответственного задано подразделение.
+        # Не только при пустом branch: исправляем и ошибочные (подразделение не ответственного).
         if self.responsible_id is not None:
             resp_branch = getattr(self.responsible, "branch", None)
             if resp_branch is not None:
@@ -638,7 +638,7 @@ class CompanyDeletionRequest(models.Model):
     )
     requested_by_branch = models.ForeignKey(
         "accounts.Branch",
-        verbose_name="Филиал автора (снимок)",
+        verbose_name="Подразделение автора (снимок)",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,

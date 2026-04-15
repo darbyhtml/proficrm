@@ -25,7 +25,7 @@
           <option value="">Любой</option>
           {% regroup users by branch as branches_list %}
           {% for branch_group in branches_list %}
-            <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+            <optgroup label="Подразделение: {{ branch_group.grouper.name|default:"Без подразделения" }}">
               {% for u in branch_group.list %}
                 <option value="{{ u.id }}" {% if filter_user == u.id|stringformat:"s" %}selected{% endif %}>
                   {{ u }}

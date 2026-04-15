@@ -14,12 +14,12 @@ class Inbox(models.Model):
     name = models.CharField("Название", max_length=255)
     branch = models.ForeignKey(
         "accounts.Branch",
-        verbose_name="Филиал",
+        verbose_name="Подразделение",
         on_delete=models.CASCADE,
         related_name="inboxes",
         null=True,
         blank=True,
-        help_text="Пусто = общий (глобальный) inbox: филиал диалога определяется по GeoIP и правилам маршрутизации.",
+        help_text="Пусто = общий (глобальный) inbox: подразделение диалога определяется по GeoIP и правилам маршрутизации.",
     )
     is_active = models.BooleanField("Активен", default=True, db_index=True)
     widget_token = models.CharField(
@@ -42,12 +42,12 @@ class Inbox(models.Model):
         """
         Инварианты безопасности:
         - branch задаётся только при создании и не может быть изменён позже,
-          чтобы не "перетягивать" существующие диалоги в другой филиал.
+          чтобы не "перетягивать" существующие диалоги в другое подразделение.
         """
         if self.pk:
             old = type(self).objects.only("branch_id").get(pk=self.pk)
             if old.branch_id != self.branch_id:
-                raise ValidationError("Нельзя изменить филиал Inbox после создания.")
+                raise ValidationError("Нельзя изменить подразделение Inbox после создания.")
 
     def save(self, *args, **kwargs):
         # Генерируем widget_token автоматически, если он не задан.
@@ -254,7 +254,7 @@ class Conversation(models.Model):
         help_text="Для подсчёта непрочитанных входящих сообщений.",
     )
     # Флаг эскалации: менеджер нажимает «Нужна помощь», диалог подсвечивается
-    # РОПу/директору филиала. Поведение будет реализовано в Plan 3.
+    # РОПу/директору подразделения. Поведение будет реализовано в Plan 3.
     needs_help = models.BooleanField(
         "Требует помощи",
         default=False,
@@ -286,7 +286,7 @@ class Conversation(models.Model):
     # ВАЖНО: branch определяется строго из inbox.branch и не редактируется вручную.
     branch = models.ForeignKey(
         "accounts.Branch",
-        verbose_name="Филиал",
+        verbose_name="Подразделение",
         on_delete=models.CASCADE,
         related_name="messenger_conversations",
         editable=False,
@@ -496,7 +496,7 @@ class Conversation(models.Model):
     def clean(self):
         """
         Инварианты безопасности:
-        - для inbox с филиалом: branch диалога совпадает с inbox.branch;
+        - для inbox с подразделением: branch диалога совпадает с inbox.branch;
         - для глобального inbox (inbox.branch_id is None): branch задаётся маршрутизацией при создании;
         - после создания диалога нельзя менять inbox (а значит, и branch).
         """
@@ -509,13 +509,13 @@ class Conversation(models.Model):
                 raise ValidationError("Нельзя изменить inbox существующего диалога.")
         inbox_branch_id = self.inbox.branch_id
         if inbox_branch_id is not None:
-            # Inbox с филиалом: branch диалога должен совпадать с inbox.
+            # Inbox с подразделением: branch диалога должен совпадать с inbox.
             if self.branch_id != inbox_branch_id:
-                raise ValidationError("Филиал диалога должен совпадать с филиалом inbox.")
+                raise ValidationError("Подразделение диалога должно совпадать с подразделением inbox.")
         else:
             # Глобальный inbox: branch задаётся при создании из маршрутизации; должен быть заполнен.
             if not self.branch_id:
-                raise ValidationError("Для глобального inbox филиал диалога должен быть задан из правил маршрутизации.")
+                raise ValidationError("Для глобального inbox подразделение диалога должно быть задано из правил маршрутизации.")
 
     def save(self, *args, **kwargs):
         """
@@ -544,7 +544,7 @@ class Conversation(models.Model):
                 if old.inbox_id != self.inbox_id:
                     raise ValidationError("Нельзя изменить inbox существующего диалога.")
                 if inbox_branch_id is not None and old.branch_id != inbox_branch_id:
-                    raise ValidationError("Нельзя изменить филиал существующего диалога.")
+                    raise ValidationError("Нельзя изменить подразделение существующего диалога.")
             if inbox_branch_id is not None:
                 self.branch_id = inbox_branch_id
         
@@ -1017,7 +1017,7 @@ class RoutingRule(models.Model):
     )
     branch = models.ForeignKey(
         "accounts.Branch",
-        verbose_name="Филиал",
+        verbose_name="Подразделение",
         on_delete=models.CASCADE,
         related_name="messenger_routing_rules",
     )
@@ -1049,7 +1049,7 @@ class CannedResponse(models.Model):
     body = models.TextField("Текст ответа")
     branch = models.ForeignKey(
         "accounts.Branch",
-        verbose_name="Филиал",
+        verbose_name="Подразделение",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -1326,7 +1326,7 @@ class Macro(models.Model):
 
 
 class ConversationTransfer(models.Model):
-    """Лог передачи диалога между операторами/филиалами."""
+    """Лог передачи диалога между операторами/подразделениями."""
 
     conversation = models.ForeignKey(
         Conversation,
@@ -1354,16 +1354,16 @@ class ConversationTransfer(models.Model):
         null=True,
         blank=True,
         related_name="messenger_transfers_out",
-        verbose_name="Филиал-источник",
+        verbose_name="Подразделение-источник",
     )
     to_branch = models.ForeignKey(
         "accounts.Branch",
         on_delete=models.PROTECT,
         related_name="messenger_transfers_in",
-        verbose_name="Филиал-получатель",
+        verbose_name="Подразделение-получатель",
     )
     reason = models.TextField("Причина передачи")
-    cross_branch = models.BooleanField("Межфилиальная передача", default=False)
+    cross_branch = models.BooleanField("Передача между подразделениями", default=False)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:

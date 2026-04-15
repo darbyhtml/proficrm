@@ -87,7 +87,7 @@ class TaskTypeSelectWidget(forms.Select):
 
 
 class UserSelectWithBranchWidget(forms.Select):
-    """Кастомный виджет для выбора пользователя с группировкой по городам филиалов."""
+    """Кастомный виджет для выбора пользователя с группировкой по городам подразделений."""
     
     def optgroups(self, name, value, attrs=None):
         """Группируем пользователей по городам филиалов."""

@@ -53,7 +53,7 @@
 
           {% if inbox %}
           <div>
-            <label class="block text-sm font-medium text-brand-dark mb-1">Филиал</label>
+            <label class="block text-sm font-medium text-brand-dark mb-1">Подразделение</label>
             <div class="text-sm text-brand-dark/60 bg-brand-soft/20 px-3 py-2.5 rounded-lg">
               {% if inbox.branch %}{{ inbox.branch.name }}{% else %}Глобальный{% endif %}
             </div>
@@ -61,7 +61,7 @@
           </div>
           {% else %}
           <div>
-            <label class="block text-sm font-medium text-brand-dark mb-1">Филиал</label>
+            <label class="block text-sm font-medium text-brand-dark mb-1">Подразделение</label>
             <select name="branch" class="input w-full">
               <option value="">Глобальный (по GeoIP и маршрутизации)</option>
               {% for branch in branches %}

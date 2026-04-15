@@ -36,14 +36,14 @@
       <h2 class="font-semibold text-brand-dark">Область действия</h2>
 
       <div>
-        <label class="block text-sm font-medium text-brand-dark mb-1">Филиал</label>
+        <label class="block text-sm font-medium text-brand-dark mb-1">Подразделение</label>
         <select name="branch" class="select w-full">
-          <option value="">Все филиалы</option>
+          <option value="">Все подразделения</option>
           {% for branch in branches %}
             <option value="{{ branch.id }}" {% if canned and canned.branch_id == branch.id %}selected{% endif %}>{{ branch.name }}</option>
           {% endfor %}
         </select>
-        <p class="text-xs text-brand-dark/50 mt-1">Если указан филиал — шаблон будет доступен только операторам этого филиала</p>
+        <p class="text-xs text-brand-dark/50 mt-1">Если указано подразделение — шаблон будет доступен только операторам этого подразделения</p>
       </div>
     </div>
 

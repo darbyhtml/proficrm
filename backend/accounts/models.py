@@ -18,11 +18,11 @@ class Branch(models.Model):
         from django.core.exceptions import ValidationError
         if self.users.filter(is_active=True).exists():
             raise ValidationError(
-                f"Нельзя удалить филиал «{self.name}»: к нему привязаны активные сотрудники."
+                f"Нельзя удалить подразделение «{self.name}»: к нему привязаны активные сотрудники."
             )
         if self.companies.filter().exists():
             raise ValidationError(
-                f"Нельзя удалить филиал «{self.name}»: к нему привязаны компании."
+                f"Нельзя удалить подразделение «{self.name}»: к нему привязаны компании."
             )
         super().delete(*args, **kwargs)
 
@@ -39,7 +39,7 @@ class User(AbstractUser):
 
     class DataScope(models.TextChoices):
         GLOBAL = "global", "Вся база"
-        BRANCH = "branch", "Только филиал"
+        BRANCH = "branch", "Только подразделение"
         SELF = "self", "Только мои компании"
 
     role = models.CharField("Роль", max_length=32, choices=Role.choices, default=Role.MANAGER)
@@ -56,7 +56,7 @@ class User(AbstractUser):
         blank=True,
     )
 
-    branch = models.ForeignKey(Branch, verbose_name="Филиал", null=True, blank=True, on_delete=models.SET_NULL, related_name="users")
+    branch = models.ForeignKey(Branch, verbose_name="Подразделение", null=True, blank=True, on_delete=models.SET_NULL, related_name="users")
 
     # По умолчанию доступ "вся база", но админ может ограничить.
     data_scope = models.CharField("Доступ к базе", max_length=16, choices=DataScope.choices, default=DataScope.GLOBAL)
@@ -167,5 +167,5 @@ class MagicLinkToken(models.Model):
         return magic_link, token
 
 
-# Справочник регионов филиалов (в отдельном файле чтобы не раздувать models.py)
+# Справочник регионов подразделений (в отдельном файле чтобы не раздувать models.py)
 from accounts.models_region import BranchRegion  # noqa: E402, F401

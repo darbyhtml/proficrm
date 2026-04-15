@@ -13,7 +13,7 @@
       <div>
         <h1 class="text-2xl font-semibold">{{ target }}</h1>
         <div class="text-sm text-brand-dark/70">
-          {% if target.branch %}Филиал: {{ target.branch.name }} · {% endif %}
+          {% if target.branch %}Подразделение: {{ target.branch.name }} · {% endif %}
           Период: <b>{% if period == "month" %}Месяц{% else %}День{% endif %}</b> · {{ period_label }}
         </div>
       </div>

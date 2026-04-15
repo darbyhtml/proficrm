@@ -160,7 +160,7 @@
           <span class="text-sm font-medium muted shrink-0">Фильтр:</span>
           {% if branches_for_filter|length > 1 %}
             <select name="branch" class="input w-auto min-w-[10rem] shrink-0" onchange="this.form.submit()">
-              <option value="">Все филиалы</option>
+              <option value="">Все подразделения</option>
               {% for b in branches_for_filter %}
                 <option value="{{ b.id }}" {% if filter_branch_id and filter_branch_id|add:0 == b.id %}selected{% endif %}>{{ b.name }}</option>
               {% endfor %}
@@ -207,7 +207,7 @@
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                           <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75v3M18 21v-3a.75.75 0 0 0-.75-.75h-3a.75.75 0 0 0-.75.75v3M3 3h12m-1 1v13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
                         </svg>
-                        <span>Филиал: {{ group.branch_name }}</span>
+                        <span>Подразделение: {{ group.branch_name }}</span>
                       </div>
                     </td>
                   </tr>
