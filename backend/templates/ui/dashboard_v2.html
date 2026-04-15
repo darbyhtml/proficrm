@@ -4,9 +4,29 @@
 
 {% block extra_head %}
 {% include "ui/_v2/v2_styles.html" %}
+<style>
+  .v2-tz-badge{display:inline-flex;align-items:center;gap:3px;padding:1px 6px;font-size:10px;
+    background:rgba(253,173,58,.12);color:#b45309;border-radius:999px;font-weight:600;
+    border:1px solid rgba(253,173,58,.3)}
+  .v2-task-desc{font-size:11px;color:var(--v2-text-muted);margin-top:2px;line-height:1.4}
+  .v2-quick-actions{display:none;flex-wrap:wrap;gap:4px;margin-top:6px}
+  .v2-item:hover .v2-quick-actions{display:flex}
+  .v2-quick-btn{font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--v2-border);
+    background:#fff;cursor:pointer;color:var(--v2-text);font-weight:500}
+  .v2-quick-btn:hover{background:var(--v2-bg-soft);border-color:var(--v2-primary)}
+  .v2-quick-btn--primary{background:var(--v2-primary);color:#fff;border-color:var(--v2-primary)}
+  .v2-quick-btn--primary:hover{background:var(--v2-primary-600,#017a75)}
+  #v2DashUpdateIndicator{position:fixed;top:16px;right:16px;z-index:50;display:none;
+    background:#fff;border:1px solid var(--v2-border);border-radius:10px;padding:8px 12px;
+    box-shadow:0 4px 16px rgba(0,0,0,.08);font-size:13px;color:var(--v2-text)}
+  #v2DashUpdateIndicator.visible{display:flex;align-items:center;gap:8px}
+  @keyframes v2-spin{to{transform:rotate(360deg)}}
+  .v2-spin{animation:v2-spin 1s linear infinite}
+</style>
 {% endblock %}
 
 {% block content %}
+<form style="display:none">{% csrf_token %}</form>
 <div class="v2 space-y-4">
 
   <div class="v2-banner v2-anim">
@@ -24,7 +44,34 @@
         <div class="v2-hero__title">Здравствуйте, {{ request.user.first_name|default:request.user.username }}</div>
         <div class="v2-hero__sub">Сегодняшние задачи и последние изменения</div>
       </div>
-      <div class="text-sm" style="color:#B3DEDC">{{ local_now|date:"l, d F Y" }}</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="text-sm" style="color:#B3DEDC">{{ local_now|date:"l, d F Y" }}</div>
+        <button type="button" id="v2DashRefreshBtn" class="v2-btn v2-btn--ghost v2-btn--sm"
+                title="Обновить рабочий стол" style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
+          </svg>
+          Обновить
+        </button>
+        {% if can_view_cold_call_reports %}
+        <a href="{% url 'cold_calls_report_day' %}" class="v2-btn v2-btn--ghost v2-btn--sm"
+           style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff"
+           title="Ежедневный отчёт по холодным звонкам">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z"/>
+          </svg>
+          ХЗ: день
+        </a>
+        <a href="{% url 'cold_calls_report_month' %}" class="v2-btn v2-btn--ghost v2-btn--sm"
+           style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff"
+           title="Месячный отчёт по холодным звонкам">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6M7 10h10M7 14h10M7 18h6"/>
+          </svg>
+          ХЗ: месяц
+        </a>
+        {% endif %}
+      </div>
     </div>
     <div class="v2-hero__stats">
       <div class="v2-hero__stat">
@@ -110,8 +157,9 @@
               <div class="v2-item__title">
                 {% if t.is_urgent %}<span title="Срочная" style="color:var(--v2-danger);margin-right:4px">⚡</span>{% endif %}{{ t.title|default:"(без названия)" }}
               </div>
+              {% if t.description %}<div class="v2-task-desc">{{ t.description|truncatechars:100 }}</div>{% endif %}
               <div class="v2-item__meta">
-                {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
+                {% if t.company %}<span>{{ t.company.name }}</span>{% with guessed=t.company.address|guess_ru_tz %}{% with tz=t.company.work_timezone|default:guessed %}{% if tz %}<span class="v2-tz-badge" title="{{ tz }}">{{ tz|tz_now_hhmm }} · {{ tz|tz_label }}</span>{% endif %}{% endwith %}{% endwith %}{% endif %}
                 {% if t.due_at %}<span>·</span><span>до {{ t.due_at|date:"d.m H:i" }}</span>{% endif %}
               </div>
             </div>
@@ -149,8 +197,9 @@
               <div class="v2-item__title">
                 {% if t.is_urgent %}<span title="Срочная" style="color:var(--v2-danger);margin-right:4px">⚡</span>{% endif %}{{ t.title|default:"(без названия)" }}
               </div>
+              {% if t.description %}<div class="v2-task-desc">{{ t.description|truncatechars:100 }}</div>{% endif %}
               <div class="v2-item__meta">
-                {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
+                {% if t.company %}<span>{{ t.company.name }}</span>{% with guessed=t.company.address|guess_ru_tz %}{% with tz=t.company.work_timezone|default:guessed %}{% if tz %}<span class="v2-tz-badge" title="{{ tz }}">{{ tz|tz_now_hhmm }} · {{ tz|tz_label }}</span>{% endif %}{% endwith %}{% endwith %}{% endif %}
                 {% if t.due_at %}<span>·</span><span>{{ t.due_at|date:"d.m H:i" }}</span>{% endif %}
               </div>
             </div>
@@ -188,8 +237,9 @@
               <div class="v2-item__title">
                 {% if t.is_urgent %}<span title="Срочная" style="color:var(--v2-danger);margin-right:4px">⚡</span>{% endif %}{{ t.title|default:"(без названия)" }}
               </div>
+              {% if t.description %}<div class="v2-task-desc">{{ t.description|truncatechars:100 }}</div>{% endif %}
               <div class="v2-item__meta">
-                {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
+                {% if t.company %}<span>{{ t.company.name }}</span>{% with guessed=t.company.address|guess_ru_tz %}{% with tz=t.company.work_timezone|default:guessed %}{% if tz %}<span class="v2-tz-badge" title="{{ tz }}">{{ tz|tz_now_hhmm }} · {{ tz|tz_label }}</span>{% endif %}{% endwith %}{% endwith %}{% endif %}
                 {% if t.due_at %}<span>·</span><span>{{ t.due_at|date:"H:i" }}</span>{% endif %}
               </div>
             </div>
@@ -228,8 +278,9 @@
               <div class="v2-item__title">
                 {% if t.is_urgent %}<span title="Срочная" style="color:var(--v2-danger);margin-right:4px">⚡</span>{% endif %}{{ t.title|default:"(без названия)" }}
               </div>
+              {% if t.description %}<div class="v2-task-desc">{{ t.description|truncatechars:100 }}</div>{% endif %}
               <div class="v2-item__meta">
-                {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
+                {% if t.company %}<span>{{ t.company.name }}</span>{% with guessed=t.company.address|guess_ru_tz %}{% with tz=t.company.work_timezone|default:guessed %}{% if tz %}<span class="v2-tz-badge" title="{{ tz }}">{{ tz|tz_now_hhmm }} · {{ tz|tz_label }}</span>{% endif %}{% endwith %}{% endwith %}{% endif %}
                 {% if t.due_at %}<span>·</span><span>{{ t.due_at|date:"D, d.m H:i" }}</span>{% endif %}
                 {% if t.assigned_to %}<span>·</span><span>{{ t.assigned_to|full_name }}</span>{% endif %}
               </div>
@@ -319,5 +370,107 @@
   </div>
 </div>
 
+<div id="v2DashUpdateIndicator">
+  <svg class="v2-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M21 12a9 9 0 11-6.219-8.56"/>
+  </svg>
+  <span>Обновление…</span>
+</div>
+
 {% include "ui/_v2/v2_toggle.html" with target_url="/" target_label="обычная версия" mode="to-v1" %}
+
+<script>
+// Dashboard v2 — polling, refresh, inline task quick actions
+(function(){
+  const csrf = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
+  const indicator = document.getElementById('v2DashUpdateIndicator');
+  const refreshBtn = document.getElementById('v2DashRefreshBtn');
+  let lastPollTs = Date.now();
+  let isPolling = false;
+
+  function showIndicator(show){
+    if(!indicator) return;
+    if(show) indicator.classList.add('visible');
+    else indicator.classList.remove('visible');
+  }
+
+  async function poll(){
+    if(isPolling) return;
+    isPolling = true;
+    showIndicator(true);
+    try{
+      const res = await fetch('/api/dashboard/poll/?since=' + lastPollTs, {
+        credentials:'same-origin', headers:{'Accept':'application/json'}
+      });
+      if(res.ok){
+        const data = await res.json().catch(() => null);
+        if(data && data.updated){
+          lastPollTs = data.timestamp || Date.now();
+          // Плавная перезагрузка страницы — тут нет диффа
+          window.location.reload();
+          return;
+        }
+      }
+    }catch(_){}
+    finally{
+      showIndicator(false);
+      isPolling = false;
+    }
+  }
+
+  if(refreshBtn) refreshBtn.addEventListener('click', function(){ window.location.reload(); });
+
+  let pollInterval = setInterval(poll, 30000);
+  window.addEventListener('beforeunload', () => { if(pollInterval) clearInterval(pollInterval); });
+  document.addEventListener('visibilitychange', function(){
+    if(document.hidden){
+      if(pollInterval){ clearInterval(pollInterval); pollInterval = null; }
+    } else if(!pollInterval){
+      poll();
+      pollInterval = setInterval(poll, 30000);
+    }
+  });
+
+  // Inline quick actions: вешаем на карточки задач (v2-item внутри секций с for t in ...)
+  // Эвристика: ищем ссылки v2-item, которые ведут на /tasks/<uuid>/
+  document.querySelectorAll('a.v2-item[href*="/tasks/"]').forEach(function(a){
+    const m = a.getAttribute('href').match(/\/tasks\/([0-9a-f-]{36})\//i);
+    if(!m) return;
+    const taskId = m[1];
+    const inner = a.querySelector('.flex-1');
+    if(!inner) return;
+    const actions = document.createElement('div');
+    actions.className = 'v2-quick-actions';
+    actions.innerHTML =
+      '<button type="button" class="v2-quick-btn" data-quick="in_progress">В работу</button>'
+      + '<button type="button" class="v2-quick-btn v2-quick-btn--primary" data-quick="done">Выполнено</button>';
+    inner.appendChild(actions);
+    actions.addEventListener('click', async function(e){
+      const btn = e.target.closest('[data-quick]');
+      if(!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const status = btn.getAttribute('data-quick');
+      btn.disabled = true;
+      try{
+        const fd = new FormData();
+        fd.append('csrfmiddlewaretoken', csrf);
+        fd.append('status', status);
+        const res = await fetch('/tasks/' + taskId + '/status/', {
+          method:'POST', body:fd, credentials:'same-origin',
+          headers:{'X-Requested-With':'XMLHttpRequest'}
+        });
+        if(res.ok){
+          window.location.reload();
+        } else {
+          btn.disabled = false;
+          alert('Не удалось обновить статус');
+        }
+      }catch(_){
+        btn.disabled = false;
+      }
+    });
+  });
+})();
+</script>
 {% endblock %}
