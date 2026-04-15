@@ -7,8 +7,9 @@ from decimal import Decimal
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db.models import Exists, OuterRef, Q, F
+from django.db.models import Exists, OuterRef, Q, F, Subquery, IntegerField
 from django.db.models import Count, Max, Prefetch, Avg
+from django.db.models.functions import Coalesce
 from django.db import models, transaction, IntegrityError
 from django.http import HttpRequest, HttpResponse
 from django.http import StreamingHttpResponse
@@ -341,10 +342,22 @@ def _companies_with_overdue_flag(*, now):
         Contact.objects.filter(company_id=OuterRef("pk"), is_cold_call=True)
         .values("id")
     )
+    # Скалярная подзапрос-аннотация количества активных задач (не ломает JOIN'ы)
+    active_tasks_count_sq = (
+        Task.objects.filter(company_id=OuterRef("pk"))
+        .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+        .values("company_id")
+        .annotate(_c=Count("id"))
+        .values("_c")
+    )
     return Company.objects.all().annotate(
         has_overdue=Exists(overdue_tasks),
         has_any_active_task=Exists(active_tasks),
         has_cold_call_contact=Exists(cold_contacts),
+        active_tasks_count=Coalesce(
+            Subquery(active_tasks_count_sq, output_field=IntegerField()),
+            0,
+        ),
     )
 
 

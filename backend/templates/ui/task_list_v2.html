@@ -19,8 +19,15 @@
       background:#fff;border:1px solid var(--v2-border);border-radius:12px;
       display:flex;flex-wrap:wrap;gap:10px;align-items:center;
       box-shadow:0 2px 8px rgba(0,0,0,.04)}
-    .v2-bulk__label{font-size:13px;font-weight:600;color:var(--v2-text-muted)}
+    .v2-bulk__label{font-size:13px;font-weight:600;color:var(--v2-text)}
     .v2-bulk__count{margin-left:auto;font-size:13px;color:var(--v2-text-muted)}
+    /* Сгруппированные действия: каждое (переназначить / перенести) в своей «пилюле» */
+    .v2-bulk__group{display:inline-flex;align-items:center;gap:8px;padding:6px 10px 6px 12px;
+      background:var(--v2-bg-soft);border:1px solid var(--v2-border);border-radius:10px}
+    .v2-bulk__group-label{font-size:11px;font-weight:700;text-transform:uppercase;
+      color:var(--v2-text-muted);letter-spacing:.04em;white-space:nowrap}
+    .v2-bulk__group .v2-select,.v2-bulk__group .v2-input{padding:5px 8px;min-width:180px}
+    .v2-bulk__group .v2-input[type="datetime-local"]{min-width:200px}
     .v2-chk{width:16px;height:16px;accent-color:var(--v2-primary);cursor:pointer}
     .v2-tr--head{background:var(--v2-bg-soft);font-size:12px;text-transform:uppercase;
       letter-spacing:.04em;color:var(--v2-text-muted);font-weight:600}
@@ -214,36 +221,41 @@
 
       {% if can_bulk_actions and page.object_list %}
       <div class="v2-bulk">
-        <span class="v2-bulk__label">Массовые действия</span>
+        <span class="v2-bulk__label">Выбрано: <b id="v2BulkCount">0</b></span>
 
         {% if transfer_targets %}
         <form method="post" action="{% url 'task_bulk_reassign' %}" id="v2BulkForm" style="display:contents">
           {% csrf_token %}
-          <select name="assigned_to_id" class="v2-select" required>
-            <option value="">Переназначить на…</option>
-            {% regroup transfer_targets by branch as bulk_branches %}
-            {% for bg in bulk_branches %}
-              <optgroup label="{{ bg.grouper.name|default:'Без подразделения' }}">
-                {% for u in bg.list %}
-                  <option value="{{ u.id }}">{{ u|full_name }}</option>
-                {% endfor %}
-              </optgroup>
-            {% endfor %}
-          </select>
-          <button type="submit" name="apply_mode" value="selected" class="v2-btn v2-btn--sm" id="v2BulkApply" disabled>Переназначить</button>
+          <div class="v2-bulk__group">
+            <span class="v2-bulk__group-label">Переназначить</span>
+            <select name="assigned_to_id" class="v2-select" required>
+              <option value="">Выбрать исполнителя…</option>
+              {% regroup transfer_targets by branch as bulk_branches %}
+              {% for bg in bulk_branches %}
+                <optgroup label="{{ bg.grouper.name|default:'Без подразделения' }}">
+                  {% for u in bg.list %}
+                    <option value="{{ u.id }}">{{ u|full_name }}</option>
+                  {% endfor %}
+                </optgroup>
+              {% endfor %}
+            </select>
+            <button type="submit" name="apply_mode" value="selected" class="v2-btn v2-btn--sm" id="v2BulkApply" disabled>Применить</button>
+          </div>
         </form>
         {% endif %}
 
         {% if can_bulk_reschedule %}
         <form method="post" action="{% url 'task_bulk_reschedule' %}" id="v2BulkRescheduleForm" style="display:contents">
           {% csrf_token %}
-          <input type="datetime-local" name="due_at" class="v2-input" style="padding:6px 8px" title="Новый срок" />
-          <button type="submit" name="apply_mode" value="selected" class="v2-btn v2-btn--ghost v2-btn--sm" id="v2BulkRescheduleApply" disabled>Перенести</button>
+          <div class="v2-bulk__group">
+            <span class="v2-bulk__group-label">Перенести срок</span>
+            <input type="datetime-local" name="due_at" class="v2-input" title="Новый срок" />
+            <button type="submit" name="apply_mode" value="selected" class="v2-btn v2-btn--ghost v2-btn--sm" id="v2BulkRescheduleApply" disabled>Применить</button>
+          </div>
         </form>
         {% endif %}
 
-        <span class="v2-bulk__count">Выбрано: <b id="v2BulkCount">0</b></span>
-        <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" id="v2BulkClear" disabled>Снять</button>
+        <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" id="v2BulkClear" disabled style="margin-left:auto">Снять выбор</button>
       </div>
       {% endif %}
 

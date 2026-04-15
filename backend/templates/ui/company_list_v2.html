@@ -63,6 +63,15 @@
       margin-top:14px;padding-top:12px;border-top:1px solid var(--v2-bg-muted)}
     .v2-fpop__hint{margin-right:auto;font-size:11px;color:var(--v2-text-muted)}
     .v2-fbar-wrap{position:relative}
+
+    /* Подсветка строки компании с просрочкой */
+    .v2-tr--overdue{background:linear-gradient(90deg,var(--v2-danger-50) 0%,transparent 180px) !important}
+    .v2-tr--overdue:hover{background:linear-gradient(90deg,color-mix(in srgb, var(--v2-danger-50) 80%, var(--v2-danger)) 0%,var(--v2-bg-soft) 220px) !important}
+    /* Чип сферы — заметнее (цветной border + фон) */
+    .v2-sphere-chip{display:inline-flex;align-items:center;gap:3px;
+      padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;
+      background:#EEF2FF;color:#3730A3;border:1px solid #C7D2FE}
+    .v2-sphere-chip--important{background:#FEF3C7;color:#92400E;border-color:#FCD34D}
   </style>
 {% endblock %}
 
@@ -330,7 +339,7 @@
         </div>
 
         {% for c in page.object_list %}
-        <div class="v2-tr" style="grid-template-columns:{% if is_admin %}28px {% endif %}minmax(0,1.8fr){% if 'responsible' in company_list_columns %} 160px{% endif %}{% if 'branch' in company_list_columns %} 140px{% endif %}{% if 'region' in company_list_columns %} 120px{% endif %}{% if 'status' in company_list_columns %} 120px{% endif %}{% if 'updated_at' in company_list_columns %} 140px{% endif %} 90px;cursor:pointer"
+        <div class="v2-tr {% if c.has_overdue %}v2-tr--overdue{% endif %}" style="grid-template-columns:{% if is_admin %}28px {% endif %}minmax(0,1.8fr){% if 'responsible' in company_list_columns %} 160px{% endif %}{% if 'branch' in company_list_columns %} 140px{% endif %}{% if 'region' in company_list_columns %} 120px{% endif %}{% if 'status' in company_list_columns %} 120px{% endif %}{% if 'updated_at' in company_list_columns %} 140px{% endif %} 90px;cursor:pointer"
              onclick="if(event.target.tagName!=='INPUT'&&event.target.tagName!=='LABEL')location.href='{% url 'company_detail' c.id %}'">
           {% if is_admin %}
           <div onclick="event.stopPropagation()">
@@ -356,8 +365,8 @@
             {% endif %}
             <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:4px">
               {% if 'spheres' in company_list_columns %}{% for s in c.spheres.all %}
-                <span class="v2-count" style="font-size:10px;padding:1px 6px;background:var(--v2-bg-soft);color:var(--v2-text);font-weight:500">
-                  {{ s.name }}{% if s.is_important %}<span title="Важная сфера" style="color:var(--v2-warn);margin-left:2px">★</span>{% endif %}
+                <span class="v2-sphere-chip {% if s.is_important %}v2-sphere-chip--important{% endif %}">
+                  {% if s.is_important %}<span title="Важная сфера">★</span>{% endif %}{{ s.name }}
                 </span>
               {% endfor %}{% endif %}
               {% with guessed=c.address|guess_ru_tz %}{% with tz=c.work_timezone|default:guessed %}
