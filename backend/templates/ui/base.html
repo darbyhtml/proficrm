@@ -1584,6 +1584,18 @@
                 });
               } catch(_e) {}
             }
+
+            // Объявления: раньше обрабатывались отдельным setInterval каждые 60с.
+            // Теперь живут в том же poll, чтобы не бить в /notifications/poll/ дважды.
+            try {
+              if (data.announcement && data.announcement.id && typeof showAnnouncement === 'function') {
+                var ann = data.announcement;
+                if (typeof annShownIds !== 'undefined' && !annShownIds[ann.id]) {
+                  if (typeof saveShown === 'function') saveShown(ann.id);
+                  showAnnouncement(ann);
+                }
+              }
+            } catch(_e) {}
           }catch(_e){
           }finally{
             pollInFlight = false;
@@ -1620,8 +1632,11 @@
           });
         }
 
+        // Один интервал для колокольчика + объявлений: 30с.
+        // Раньше было два параллельных poll (/notifications/poll/ каждые 15с
+        // и ещё раз каждые 60с для announcements) — удвоенная нагрузка без причины.
         pollOnce();
-        setInterval(pollOnce, 15000);
+        setInterval(pollOnce, 30000);
       })();
     </script>
     <script nonce="{{ csp_nonce }}">
@@ -3598,9 +3613,10 @@
             .finally(function(){ annPollInFlight = false; });
         }
 
-        // Run after a short delay to let the page load, then every 60s
+        // Раньше здесь был отдельный setInterval(pollAnnouncement, 60000) —
+        // удалён, потому что тот же эндпоинт уже опрашивается pollOnce каждые 30с,
+        // и объявления обрабатываются там.
         setTimeout(pollAnnouncement, 2000);
-        setInterval(pollAnnouncement, 60000);
       })();
     </script>
     {% if user.is_authenticated %}

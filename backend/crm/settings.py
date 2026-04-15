@@ -764,10 +764,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ENTERPRISE: Mailer configuration (конфигурируемые лимиты)
 # ============================================================================
 
-# Максимальное количество получателей в одной кампании
-# Предотвращает блокировку очереди одной большой кампанией
-MAILER_MAX_CAMPAIGN_RECIPIENTS = int(os.getenv("MAILER_MAX_CAMPAIGN_RECIPIENTS", "10000"))
-
 # Throttling rates (запросов в час на пользователя)
 MAILER_THROTTLE_CAMPAIGN_START_PER_HOUR = int(os.getenv("MAILER_THROTTLE_CAMPAIGN_START_PER_HOUR", "10"))
 MAILER_THROTTLE_TEST_EMAIL_PER_HOUR = int(os.getenv("MAILER_THROTTLE_TEST_EMAIL_PER_HOUR", "5"))

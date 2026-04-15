@@ -864,7 +864,24 @@ class LogoutAllView(APIView):
 
         logger = logging.getLogger(__name__)
         enforce(user=request.user, resource_type="action", resource="phone:logout_all", context={"path": request.path})
-        
+
+        # Реально инвалидируем все outstanding refresh-токены пользователя
+        # через simplejwt blacklist. Без этого «выход со всех устройств»
+        # оставлял украденные токены живыми до истечения.
+        blacklisted = 0
+        try:
+            from rest_framework_simplejwt.token_blacklist.models import (
+                OutstandingToken,
+                BlacklistedToken,
+            )
+            tokens = OutstandingToken.objects.filter(user=request.user)
+            for t in tokens:
+                _, created = BlacklistedToken.objects.get_or_create(token=t)
+                if created:
+                    blacklisted += 1
+        except Exception as exc:
+            logger.warning("LogoutAll: blacklist failed: %s", exc)
+
         # Логируем logout всех устройств
         try:
             from audit.service import log_event
@@ -879,14 +896,18 @@ class LogoutAllView(APIView):
                 meta={
                     "ip": get_client_ip(request),
                     "device_count": device_count,
+                    "tokens_blacklisted": blacklisted,
                 },
             )
         except Exception:
             pass
-        
-        logger.info(f"LogoutAll: user={request.user.id}, all devices logged out")
-        
-        return Response({"ok": True, "message": "Все сессии завершены"})
+
+        logger.info(
+            "LogoutAll: user=%s, tokens_blacklisted=%s",
+            request.user.id, blacklisted,
+        )
+
+        return Response({"ok": True, "message": "Все сессии завершены", "blacklisted": blacklisted})
 
 
 class UserInfoView(APIView):
