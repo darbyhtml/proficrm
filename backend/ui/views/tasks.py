@@ -2092,7 +2092,7 @@ def _v2_task_create_get(request: HttpRequest) -> HttpResponse:
     task_types = list(TaskType.objects.only("id", "name", "icon", "color").all())
     # Preselect company из ?company=<id>
     preselect_company_id = (request.GET.get("company") or "").strip()
-    companies_qs = _editable_company_qs(user).only("id", "name").order_by("name")[:500]
+    companies_qs = _editable_company_qs(user).order_by("name")[:500]
     return render(request, "ui/_v2/task_create_partial.html", {
         "form": form,
         "task_types": task_types,
@@ -2131,7 +2131,7 @@ def task_create_v2_partial(request: HttpRequest) -> HttpResponse:
         html = render(request, "ui/_v2/task_create_partial.html", {
             "form": form,
             "task_types": task_types,
-            "companies_for_picker": _editable_company_qs(user).only("id", "name").order_by("name")[:500],
+            "companies_for_picker": _editable_company_qs(user).order_by("name")[:500],
             "preselect_company_id": (request.POST.get("company") or "").strip(),
         }).content.decode("utf-8")
         return HttpResponse(html, status=422)
