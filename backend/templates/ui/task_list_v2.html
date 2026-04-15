@@ -1,5 +1,5 @@
 {% extends "ui/base.html" %}
-{% load ui_extras %}
+{% load ui_extras accounts_extras %}
 {% block title %}Задачи (v2) — CRM ПРОФИ{% endblock %}
 
 {% comment %}
@@ -85,7 +85,7 @@
             {% if t.due_at %}{{ t.due_at|date:"d.m.Y H:i" }}{% else %}<span class="v2-item__meta">без срока</span>{% endif %}
           </div>
           <div class="v2-td v2-item__meta" style="text-align:right">
-            {% if t.assigned_to %}{{ t.assigned_to.first_name|default:t.assigned_to.username }}{% endif %}
+            {% if t.assigned_to %}{{ t.assigned_to|full_name }}{% endif %}
           </div>
         </a>
         {% empty %}

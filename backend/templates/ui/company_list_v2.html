@@ -1,5 +1,5 @@
 {% extends "ui/base.html" %}
-{% load ui_extras %}
+{% load ui_extras accounts_extras %}
 {% block title %}Компании (v2) — CRM ПРОФИ{% endblock %}
 
 {% comment %}
@@ -56,7 +56,7 @@
           <option value="">Все ответственные</option>
           {% for u in responsibles %}
             <option value="{{ u.id }}" {% if responsible == u.id|stringformat:'s' %}selected{% endif %}>
-              {{ u.first_name|default:u.username }}
+              {{ u|full_name }}
             </option>
           {% endfor %}
         </select>
@@ -79,7 +79,7 @@
             <div class="v2-item__title">{{ c.name }}</div>
             {% if c.main_phone %}<div class="v2-item__meta">{{ c.main_phone }}</div>{% endif %}
           </div>
-          <div class="v2-td">{% if c.responsible %}{{ c.responsible.first_name|default:c.responsible.username }}{% else %}—{% endif %}</div>
+          <div class="v2-td">{% if c.responsible %}{{ c.responsible|full_name }}{% else %}—{% endif %}</div>
           <div class="v2-td">{% if c.branch %}{{ c.branch.name }}{% else %}—{% endif %}</div>
           <div class="v2-td">
             {% if c.status %}<span class="v2-count v2-count--primary">{{ c.status.name }}</span>{% else %}—{% endif %}

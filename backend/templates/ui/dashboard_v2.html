@@ -180,7 +180,7 @@
               <div class="v2-item__meta">
                 {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
                 {% if t.due_at %}<span>·</span><span>{{ t.due_at|date:"D, d.m H:i" }}</span>{% endif %}
-                {% if t.assigned_to %}<span>·</span><span>{{ t.assigned_to.first_name|default:t.assigned_to.username }}</span>{% endif %}
+                {% if t.assigned_to %}<span>·</span><span>{{ t.assigned_to|full_name }}</span>{% endif %}
               </div>
             </div>
           </a>

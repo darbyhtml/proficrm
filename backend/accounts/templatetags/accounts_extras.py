@@ -61,3 +61,23 @@ def role_label(role_value: str) -> str:
         return User.Role(role_value).label
     except ValueError:
         return str(role_value)
+
+
+@register.filter(name="full_name")
+def full_name(user) -> str:
+    """Отображаемое имя пользователя: «Фамилия Имя» (fallback → username).
+
+    Важно в команде с тёзками — одно имя путает. Формат русский:
+    сначала фамилия, потом имя.
+    """
+    if user is None:
+        return ""
+    last = (getattr(user, "last_name", "") or "").strip()
+    first = (getattr(user, "first_name", "") or "").strip()
+    if last and first:
+        return f"{last} {first}"
+    if last:
+        return last
+    if first:
+        return first
+    return getattr(user, "username", "") or ""

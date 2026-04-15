@@ -69,3 +69,30 @@ class RoleLabelFilterTests(TestCase):
 
     def test_unknown_returns_raw(self):
         self.assertEqual(self._render("wtf_unknown"), "wtf_unknown")
+
+
+class FullNameFilterTests(TestCase):
+    def _render(self, user) -> str:
+        tpl = Template('{% load accounts_extras %}{{ u|full_name }}')
+        return tpl.render(Context({"u": user}))
+
+    def test_last_and_first(self):
+        u = User.objects.create_user(
+            username="iv1", password="x", first_name="Иван", last_name="Петров"
+        )
+        self.assertEqual(self._render(u), "Петров Иван")
+
+    def test_only_first(self):
+        u = User.objects.create_user(username="iv2", password="x", first_name="Иван")
+        self.assertEqual(self._render(u), "Иван")
+
+    def test_only_last(self):
+        u = User.objects.create_user(username="pt3", password="x", last_name="Петров")
+        self.assertEqual(self._render(u), "Петров")
+
+    def test_fallback_to_username(self):
+        u = User.objects.create_user(username="zzz9", password="x")
+        self.assertEqual(self._render(u), "zzz9")
+
+    def test_none(self):
+        self.assertEqual(self._render(None), "")
