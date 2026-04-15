@@ -18,7 +18,6 @@ from ui.views._base import (
     JsonResponse,
     Notification,
     Paginator,
-    Prefetch,
     Q,
     Region,
     StreamingHttpResponse,

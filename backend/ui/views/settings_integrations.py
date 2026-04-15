@@ -39,8 +39,6 @@ from ui.views._base import (
 import logging
 logger = logging.getLogger(__name__)
 
-import sys as _sys  # noqa: E402
-
 # amocrm is imported here (and only here) so that other view modules don't
 # trigger its import at startup. Keep these lazy if you want zero-cost startup.
 from amocrm.client import AmoApiError, AmoClient  # noqa: F401,E402

@@ -27,7 +27,6 @@ from ui.views._base import (
     log_event,
     login_required,
     messages,
-    models,
     redirect,
     render,
     require_admin,

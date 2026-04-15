@@ -36,7 +36,6 @@ from ui.views._base import (
     log_event,
     login_required,
     messages,
-    models,
     notify,
     policy_decide,
     policy_required,

@@ -32,7 +32,6 @@ from ui.views._base import (
     JsonResponse,
     Max,
     Notification,
-    PermissionDenied,
     PhoneDevice,
     Prefetch,
     Q,

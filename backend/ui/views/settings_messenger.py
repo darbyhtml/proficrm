@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import secrets
-from collections import defaultdict
 from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
