@@ -1,5 +1,129 @@
 # Решённые проблемы
 
+## [2026-04-15] Outbound webhooks и Web Push теряли payload при рестарте gunicorn
+
+**Симптом:** Уведомления в интегрированные системы (webhook клиента) и
+Web Push в браузеры операторов периодически не доходили. Не было
+понимания «почему» — в логах `WARNING: Webhook call failed` иногда,
+но без retry-истории.
+
+**Причина:** `messenger/integrations.py:_send_webhook_async` и
+`messenger/push.py:send_push_to_user` отправляли из
+`threading.Thread(target=_worker, daemon=True)`. При любом рестарте
+gunicorn (deploy, OOM, gthread cycle) daemon-поток убивался
+вместе с процессом до завершения `requests.post(...)` — payload
+пропадал без следа.
+
+**Решение:** Два новых Celery-таска с `autoretry_for=(Exception,)`,
+`retry_backoff=True`, `retry_backoff_max=600`, `max_retries=5/3`,
+`acks_late=True`:
+- `messenger.send_outbound_webhook` — 4xx не ретраит (проблема
+  конфигурации получателя), 5xx и network errors ретраит с
+  экспоненциальной паузой. SSRF-проверка остаётся на стороне
+  producer (`_is_safe_outbound_url` до `.delay()`), чтобы не
+  отправить мусор в Celery-очередь.
+- `messenger.send_push_notification` — делится по одному таску
+  на каждый `PushSubscription.id`; 404/410 деактивируют подписку
+  без ретрая (endpoint мёртв), остальные ошибки → retry.
+
+Производитель (`_send_webhook_async`) сначала сериализует body
+и считает HMAC-подпись, затем `.delay()` — если Celery отвалится,
+ошибка поднимется наверх (визуально в логе producer'a), а не
+проглотится в потоке.
+
+**Файлы:** `backend/messenger/tasks.py`, `backend/messenger/integrations.py`,
+`backend/messenger/push.py`. Коммит `e118a36`.
+
+---
+
+## [2026-04-15] Race condition при генерации повторяющихся задач
+
+**Симптом:** Теоретически: два параллельных запуска
+`generate_recurring_tasks` (ручной + celery-beat) могли создать
+дубликаты экземпляров повторяющейся задачи — `exists()`-проверка
+перед `create()` не защищает от одновременной вставки.
+
+**Причина:** Защита была в три слоя (redis-lock с TTL 15 мин,
+`select_for_update` на шаблоне, `exists()`-проверка), но все три
+работают на уровне приложения. Нужен был DB-level constraint.
+
+**Решение:** Partial UniqueConstraint в `tasksapp.Task`:
+```python
+UniqueConstraint(
+    fields=["parent_recurring_task", "due_at"],
+    condition=Q(parent_recurring_task__isnull=False),
+    name="uniq_task_recurrence_occurrence",
+)
+```
+PostgreSQL создаёт partial unique index
+`WHERE (parent_recurring_task_id IS NOT NULL)` — не мешает
+ручному созданию задач с `parent_recurring_task=NULL`, но
+гарантирует уникальность сгенерированных экземпляров.
+
+`_process_template` оборачивает `Task.objects.create()` в
+`with transaction.atomic():` (savepoint) и ловит `IntegrityError`
+— если второй воркер как-то обошёл redis-lock и `SELECT FOR UPDATE`,
+он получит DB-конфликт и тихо пропустит вставку, не ломая внешнюю
+транзакцию итерации по шаблонам.
+
+**Файлы:** `backend/tasksapp/models.py`,
+`backend/tasksapp/migrations/0013_task_uniq_recurrence_occurrence.py`,
+`backend/tasksapp/tasks.py`. Коммит `880d445`.
+
+---
+
+## [2026-04-15] `/notifications/poll/` — burst polling от нескольких вкладок
+
+**Симптом:** На страницах с открытыми 5-10 вкладками каждая вкладка
+дёргала `/notifications/poll/` по своему `setInterval` — итого
+десятки запросов в минуту на пользователя, каждый отрабатывал
+`notifications_panel(request)` с cascade-запросами.
+
+**Причина:** Нет кэша на уровне endpoint. Первый слой кэша
+(`bell_data:{user_id}` на 30с) был в `notifications_panel`, но
+он всё равно выполнял Redis-GET + Announcement-query для каждого
+запроса.
+
+**Решение:**
+1. `/notifications/poll/` кэшируется per-user на 3 секунды
+   в Redis (`notif_poll:{user_id}`). 3 секунды — верхний порог
+   незаметности для клик-отклика, но схлопывает burst от N вкладок.
+   Response маркируется `X-Cache: HIT|MISS`.
+2. Инвалидация на `mark_read` и `mark_all_read` через
+   `cache.delete_many([f"bell_data:{id}", f"notif_poll:{id}"])`.
+3. Фронтенд поставлен на паузу через `visibilitychange`: когда
+   вкладка уходит в фон — `clearInterval`, когда возвращается —
+   `poll()` + новый `setInterval`. Два интервала
+   (bell 30s + campaign 15s, был 4s).
+
+**Файлы:** `backend/notifications/views.py`,
+`backend/templates/ui/base.html`, `backend/templates/ui/dashboard.html`.
+Коммиты `ecefbe0`, `0c30357`.
+
+---
+
+## [2026-04-15] Staging build → wrong docker-compose file
+
+**Симптом:** `docker compose build web` на staging завершался с
+`EXIT=0`, но пересобранный образ не содержал новый код. Timestamp
+на образе оставался старым.
+
+**Причина:** `docker-compose.yml` (без `-f`) в
+`/opt/proficrm-staging/` содержит старый black-box config
+(`image: python:3.13-slim`, не build). Реальный staging-стек
+описан в `docker-compose.staging.yml`. Без `-f`
+флага Compose строил несуществующий сервис из неправильного
+файла, выдавая 0 exit code с пустым выводом.
+
+**Решение:** Все docker-compose команды на staging — с
+`-f docker-compose.staging.yml`. Верификация пересборки —
+`docker run --rm --entrypoint sh <image> -c 'grep -c NEW_SYMBOL /app/backend/path'`.
+
+**Файлы:** `/opt/proficrm-staging/docker-compose.staging.yml`
+(staging-only, не в git — fix на уровне procedure).
+
+---
+
 ## [2026-04-07] Массовое переназначение компаний блокировалось при наличии «запрещённых»
 
 **Симптом:** Директор филиала выбирает несколько компаний уволенных сотрудников → нажимает «Переназначить» → ошибка «Некоторые компании нельзя передать», предлагается обновить страницу. Одиночная передача работает.
