@@ -8,6 +8,16 @@ Live-chat UX Completion — реализация по спецификации `
 
 ## Сделано в этом спринте
 
+**[2026-04-15]** — Редизайн Фаза 2 — перенос недостающего функционала (v2 паритет) ✅
+
+После замечания пользователя «Не весь функционал ты перенес, проверяй и анализируй!» — провёл аудит v1 vs v2 (4 parallel Explore-агента), выявил ~40 gaps, закрыл критичные на трёх страницах:
+
+- `1d84432` company_list_v2: экспорт CSV (admin), опция «— Без ответственного —», task_filter (no_tasks/today/tomorrow/…/quarter), per_page 25/50/100/200, сортировка по updated_at (новая колонка «Обновлено»), can_transfer гард на чекбоксах (disabled при отсутствии прав), поменял несуществующее `c.main_phone` на `c.address` (truncatechars:60), bulk preview modal с fetch POST `/companies/bulk-transfer/preview/` — показ allowed/forbidden/companies/old_responsibles, apply_mode=selected|filtered с hidden inputs фильтров.
+- `7252b92` task_list_v2: per_page, сортировки по status/created_at/created_by, колонки «Постановщик» + «Создана», task_type_badge + ⚡ в заголовке, inline actions (Редактировать ссылка / В работу form POST / Выполнено form POST с confirm / Удалить form POST с confirm), bulk reschedule — отдельная форма с datetime-local и кнопкой «Перенести» (при `can_bulk_reschedule`), переработка инжекции фильтров + task_ids для обеих bulk-форм.
+- `bf94d48` dashboard_v2: бейдж живого времени (work_timezone badge) + описания задач во всех 4 секциях (Новые/Просрочено/Сегодня/Неделя) через `guess_ru_tz` + `tz_now_hhmm` + `tz_label`, AJAX polling `/api/dashboard/poll/` 30с с паузой при скрытой вкладке, индикатор «Обновление…», кнопка «Обновить» в hero, ссылки «ХЗ: день» / «ХЗ: месяц» (при `can_view_cold_call_reports`), inline quick actions (hover-reveal «В работу» / «Выполнено» на карточках задач, AJAX POST на `/tasks/<id>/status/`).
+
+Тесты: `ui.test_company_list_v2_preview` (3), `ui.test_task_list_v2_preview` (3), `ui.test_tasks_views` (26), `ui.test_dashboard_v2_preview` + `ui.test_dashboard` (38) — всё OK. Staging деплой после каждого коммита.
+
 **[2026-04-15]** — Редизайн Фаза 2 Tasks (функциональный паритет с v1) ✅
 
 - `c7723cc` dashboard v2: блок «Запросы на удаление» (РОП/директор),
