@@ -45,13 +45,15 @@
     .v2-fchip--warn:hover{background:var(--v2-warn);color:#fff;border-color:var(--v2-warn)}
     .v2-fchip--danger{background:var(--v2-danger-50);color:#8B1A1A;border-color:#F4B5B5}
     .v2-fchip--danger:hover{background:var(--v2-danger);color:#fff;border-color:var(--v2-danger)}
-    .v2-fpop{position:absolute;z-index:40;top:100%;left:0;right:0;margin-top:6px;
+    /* Popover с полями — якорится под кнопку «Фильтр» справа */
+    .v2-fpop-anchor{position:relative;display:inline-flex}
+    .v2-fpop{position:absolute;z-index:40;top:calc(100% + 6px);right:0;left:auto;
       background:var(--v2-bg);border:1px solid var(--v2-border-strong);
       border-radius:var(--v2-radius-lg);box-shadow:var(--v2-shadow-lg);
-      padding:16px;max-width:920px}
+      padding:16px;width:720px;max-width:calc(100vw - 40px)}
     .v2-fpop[hidden]{display:none}
-    .v2-fpop__grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
-    .v2-fpop__field{display:flex;flex-direction:column;gap:4px}
+    .v2-fpop__grid{display:grid;gap:12px;grid-template-columns:1fr 1fr}
+    .v2-fpop__field{display:flex;flex-direction:column;gap:4px;min-width:0}
     .v2-fpop__field label{font-size:11px;font-weight:600;color:var(--v2-text-muted);
       text-transform:uppercase;letter-spacing:.05em}
     .v2-fpop__flags{display:flex;flex-wrap:wrap;gap:8px;padding-top:4px}
@@ -111,13 +113,88 @@
           <input type="search" name="q" value="{{ q|default:'' }}" class="v2-input v2-fbar__search"
                  placeholder="Поиск по названию, телефону, email…" />
 
-          <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" data-v2-fpop-toggle>
-            <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M3.792 2.938A49.069 49.069 0 0112 2.25c2.797 0 5.54.236 8.209.688a1.857 1.857 0 011.541 1.836v1.044a3 3 0 01-.879 2.121l-6.182 6.182a1.5 1.5 0 00-.439 1.061v2.927a3 3 0 01-1.658 2.684l-1.757.878A.75.75 0 019.75 20.25v-5.068a1.5 1.5 0 00-.44-1.06L3.13 7.938a3 3 0 01-.879-2.121V4.774c0-.897.64-1.683 1.542-1.836z" clip-rule="evenodd"/></svg>
-            Фильтр
-            {% if status or sphere or contract_type or region or branch or responsible or task_filter or overdue == '1' %}
-            <span class="v2-fbar__badge" id="v2CompFpopBadge"></span>
-            {% endif %}
-          </button>
+          <div class="v2-fpop-anchor">
+            <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" data-v2-fpop-toggle>
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M3.792 2.938A49.069 49.069 0 0112 2.25c2.797 0 5.54.236 8.209.688a1.857 1.857 0 011.541 1.836v1.044a3 3 0 01-.879 2.121l-6.182 6.182a1.5 1.5 0 00-.439 1.061v2.927a3 3 0 01-1.658 2.684l-1.757.878A.75.75 0 019.75 20.25v-5.068a1.5 1.5 0 00-.44-1.06L3.13 7.938a3 3 0 01-.879-2.121V4.774c0-.897.64-1.683 1.542-1.836z" clip-rule="evenodd"/></svg>
+              Фильтр
+              {% if status or sphere or contract_type or region or branch or responsible or task_filter or overdue == '1' %}
+              <span class="v2-fbar__badge" id="v2CompFpopBadge"></span>
+              {% endif %}
+            </button>
+
+            {# Popover со всеми полями — якорится прямо под кнопку #}
+            <div class="v2-fpop" data-v2-fpop hidden>
+              <div class="v2-fpop__grid">
+                <div class="v2-fpop__field">
+                  <label>Статус</label>
+                  <select name="status" class="v2-select">
+                    <option value="">Все статусы</option>
+                    {% for s in statuses %}<option value="{{ s.id }}" {% if status == s.id|stringformat:'s' %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div class="v2-fpop__field">
+                  <label>Сфера</label>
+                  <select name="sphere" class="v2-select">
+                    <option value="">Все сферы</option>
+                    {% for s in spheres %}<option value="{{ s.id }}" {% if sphere == s.id|stringformat:'s' %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div class="v2-fpop__field">
+                  <label>Договор</label>
+                  <select name="contract_type" class="v2-select">
+                    <option value="">Все договоры</option>
+                    {% for ct in contract_types %}<option value="{{ ct.id }}" {% if contract_type == ct.id|stringformat:'s' %}selected{% endif %}>{{ ct.name }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div class="v2-fpop__field">
+                  <label>Регион</label>
+                  <select name="region" class="v2-select">
+                    <option value="">Все регионы</option>
+                    {% for r in regions %}<option value="{{ r.id }}" {% if region == r.id|stringformat:'s' %}selected{% endif %}>{{ r.name }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div class="v2-fpop__field">
+                  <label>Подразделение</label>
+                  <select name="branch" class="v2-select">
+                    <option value="">Все подразделения</option>
+                    {% for b in branches %}<option value="{{ b.id }}" {% if branch == b.id|stringformat:'s' %}selected{% endif %}>{{ b.name }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div class="v2-fpop__field">
+                  <label>Ответственный</label>
+                  <select name="responsible" class="v2-select">
+                    <option value="">Все ответственные</option>
+                    {% if has_companies_without_responsible %}
+                      <option value="none" {% if responsible == 'none' %}selected{% endif %}>— Без ответственного —</option>
+                    {% endif %}
+                    {% for u in responsibles %}<option value="{{ u.id }}" {% if responsible == u.id|stringformat:'s' %}selected{% endif %}>{{ u|full_name }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div class="v2-fpop__field">
+                  <label>Задачи</label>
+                  <select name="task_filter" class="v2-select">
+                    <option value="">Любые задачи</option>
+                    <option value="no_tasks" {% if task_filter == 'no_tasks' %}selected{% endif %}>Нет задач</option>
+                    <option value="today" {% if task_filter == 'today' %}selected{% endif %}>На сегодня</option>
+                    <option value="tomorrow" {% if task_filter == 'tomorrow' %}selected{% endif %}>На завтра</option>
+                    <option value="week" {% if task_filter == 'week' %}selected{% endif %}>На этой неделе</option>
+                    <option value="month" {% if task_filter == 'month' %}selected{% endif %}>В этом месяце</option>
+                    <option value="quarter" {% if task_filter == 'quarter' %}selected{% endif %}>В этом квартале</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="v2-fpop__flags">
+                <label><input type="checkbox" name="overdue" value="1" {% if overdue == '1' and task_filter != 'no_tasks' %}checked{% endif %} /> Только с просроченными задачами</label>
+              </div>
+
+              <div class="v2-fpop__foot">
+                <span class="v2-fpop__hint">Изменения применятся после нажатия «Применить»</span>
+                <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" data-v2-fpop-close>Отмена</button>
+                <button type="submit" class="v2-btn v2-btn--sm">Применить</button>
+              </div>
+            </div>
+          </div>
 
           {% if q or status or sphere or contract_type or region or branch or responsible or task_filter or overdue == '1' %}
           <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'company_list_v2_preview' %}"
@@ -149,90 +226,9 @@
           {% if overdue == '1' and task_filter != 'no_tasks' %}<button type="button" class="v2-fchip v2-fchip--danger" data-clear-filter="overdue">Просроченные <span class="v2-fchip__x">×</span></button>{% endif %}
         </div>
 
-        {# Popover со всеми полями #}
-        <div class="v2-fpop" data-v2-fpop hidden>
-          <div class="v2-fpop__grid">
-            <div class="v2-fpop__field">
-              <label>Статус</label>
-              <select name="status" class="v2-select">
-                <option value="">Все статусы</option>
-                {% for s in statuses %}<option value="{{ s.id }}" {% if status == s.id|stringformat:'s' %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
-              </select>
-            </div>
-            <div class="v2-fpop__field">
-              <label>Сфера</label>
-              <select name="sphere" class="v2-select">
-                <option value="">Все сферы</option>
-                {% for s in spheres %}<option value="{{ s.id }}" {% if sphere == s.id|stringformat:'s' %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
-              </select>
-            </div>
-            <div class="v2-fpop__field">
-              <label>Договор</label>
-              <select name="contract_type" class="v2-select">
-                <option value="">Все договоры</option>
-                {% for ct in contract_types %}<option value="{{ ct.id }}" {% if contract_type == ct.id|stringformat:'s' %}selected{% endif %}>{{ ct.name }}</option>{% endfor %}
-              </select>
-            </div>
-            <div class="v2-fpop__field">
-              <label>Регион</label>
-              <select name="region" class="v2-select">
-                <option value="">Все регионы</option>
-                {% for r in regions %}<option value="{{ r.id }}" {% if region == r.id|stringformat:'s' %}selected{% endif %}>{{ r.name }}</option>{% endfor %}
-              </select>
-            </div>
-            <div class="v2-fpop__field">
-              <label>Подразделение</label>
-              <select name="branch" class="v2-select">
-                <option value="">Все подразделения</option>
-                {% for b in branches %}<option value="{{ b.id }}" {% if branch == b.id|stringformat:'s' %}selected{% endif %}>{{ b.name }}</option>{% endfor %}
-              </select>
-            </div>
-            <div class="v2-fpop__field">
-              <label>Ответственный</label>
-              <select name="responsible" class="v2-select">
-                <option value="">Все ответственные</option>
-                {% if has_companies_without_responsible %}
-                  <option value="none" {% if responsible == 'none' %}selected{% endif %}>— Без ответственного —</option>
-                {% endif %}
-                {% for u in responsibles %}<option value="{{ u.id }}" {% if responsible == u.id|stringformat:'s' %}selected{% endif %}>{{ u|full_name }}</option>{% endfor %}
-              </select>
-            </div>
-            <div class="v2-fpop__field">
-              <label>Задачи</label>
-              <select name="task_filter" class="v2-select">
-                <option value="">Любые задачи</option>
-                <option value="no_tasks" {% if task_filter == 'no_tasks' %}selected{% endif %}>Нет задач</option>
-                <option value="today" {% if task_filter == 'today' %}selected{% endif %}>На сегодня</option>
-                <option value="tomorrow" {% if task_filter == 'tomorrow' %}selected{% endif %}>На завтра</option>
-                <option value="week" {% if task_filter == 'week' %}selected{% endif %}>На этой неделе</option>
-                <option value="month" {% if task_filter == 'month' %}selected{% endif %}>В этом месяце</option>
-                <option value="quarter" {% if task_filter == 'quarter' %}selected{% endif %}>В этом квартале</option>
-              </select>
-            </div>
-            <div class="v2-fpop__field">
-              <label>Строк на странице</label>
-              <select name="per_page" class="v2-select">
-                <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
-                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
-                <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="v2-fpop__flags">
-            <label><input type="checkbox" name="overdue" value="1" {% if overdue == '1' and task_filter != 'no_tasks' %}checked{% endif %} /> Только с просроченными задачами</label>
-          </div>
-
-          <div class="v2-fpop__foot">
-            <span class="v2-fpop__hint">Изменения применятся после нажатия «Применить»</span>
-            <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" data-v2-fpop-close>Отмена</button>
-            <button type="submit" class="v2-btn v2-btn--sm">Применить</button>
-          </div>
-        </div>
-
         {% if sort %}<input type="hidden" name="sort" value="{{ sort }}" />{% endif %}
         {% if sort_dir %}<input type="hidden" name="dir" value="{{ sort_dir }}" />{% endif %}
+        {% if per_page %}<input type="hidden" name="per_page" value="{{ per_page }}" />{% endif %}
       </form>
 
       {% if is_admin and page.object_list and transfer_targets %}
