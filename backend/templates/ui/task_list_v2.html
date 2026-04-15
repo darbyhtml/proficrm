@@ -464,6 +464,55 @@
 <script>
 // После успешного создания/редактирования задачи в модалке — перезагрузить список
 window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.location.reload(), 250); });
+
+// Круглый чекбокс «выполнить» — кликабельная обёртка вокруг цветного dot
+(function(){
+  const csrf = (document.querySelector('input[name=csrfmiddlewaretoken]') || {}).value || '';
+  document.querySelectorAll('.v2-task-row[data-task-id]').forEach(function(row){
+    if(row.querySelector('.v2-count--success')) return;  // уже выполнена
+    const taskId = row.getAttribute('data-task-id');
+    const dot = row.querySelector('.v2-item__dot');
+    if(!taskId || !dot) return;
+    // Превращаем dot в кликабельную мишень (увеличиваем площадь + hover)
+    dot.style.cssText += ';cursor:pointer;transition:all .15s;position:relative';
+    dot.setAttribute('role', 'button');
+    dot.setAttribute('tabindex', '0');
+    dot.setAttribute('title', 'Отметить выполненной');
+    dot.addEventListener('mouseenter', function(){
+      dot.dataset.origBg = dot.style.backgroundColor;
+      dot.style.boxShadow = '0 0 0 4px rgba(1,148,142,.18)';
+      dot.style.transform = 'scale(1.15)';
+    });
+    dot.addEventListener('mouseleave', function(){
+      dot.style.boxShadow = '';
+      dot.style.transform = '';
+    });
+    dot.addEventListener('click', async function(ev){
+      ev.preventDefault();
+      ev.stopPropagation();
+      if(!confirm('Отметить задачу выполненной?')) return;
+      dot.style.pointerEvents = 'none';
+      dot.style.opacity = '0.5';
+      try{
+        const fd = new FormData();
+        fd.append('csrfmiddlewaretoken', csrf);
+        fd.append('status', 'done');
+        const res = await fetch('/tasks/' + taskId + '/status/', {
+          method:'POST', body:fd, credentials:'same-origin',
+          headers:{'X-Requested-With':'XMLHttpRequest'}
+        });
+        if(res.ok){
+          row.style.transition='opacity .25s ease';
+          row.style.opacity='0.3';
+          setTimeout(() => window.location.reload(), 300);
+        } else {
+          dot.style.pointerEvents=''; dot.style.opacity='';
+          alert('Не удалось обновить статус');
+        }
+      }catch(_){ dot.style.pointerEvents=''; dot.style.opacity=''; }
+    });
+  });
+})();
 </script>
 <script>
 // Bulk selection + reschedule + confirmations
