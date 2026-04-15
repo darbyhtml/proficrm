@@ -225,7 +225,7 @@ class OperatorConsumer(AsyncWebsocketConsumer):
         from .models import AgentProfile
         AgentProfile.objects.update_or_create(
             user=self.user,
-            defaults={"status": AgentProfile.Status.ONLINE, "last_seen_at": timezone.now()},
+            defaults={"status": AgentProfile.Status.ONLINE},
         )
 
     @database_sync_to_async
@@ -233,7 +233,6 @@ class OperatorConsumer(AsyncWebsocketConsumer):
         from .models import AgentProfile
         AgentProfile.objects.filter(user=self.user).update(
             status=AgentProfile.Status.OFFLINE,
-            last_seen_at=timezone.now(),
         )
 
 
@@ -354,16 +353,30 @@ class WidgetConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def _authenticate_session(self, session_token):
-        from .models import Contact
-        try:
-            contact = Contact.objects.get(session_token=session_token)
-            from .models import Conversation
-            conv = Conversation.objects.filter(
-                contact=contact,
-                inbox__widget_token=self.widget_token,
-            ).exclude(
-                status=Conversation.Status.CLOSED,
-            ).order_by("-created_at").first()
-            return conv.id if conv else None
-        except Contact.DoesNotExist:
+        """
+        Аутентификация виджет-сессии: session_token живёт в Redis-кеше
+        (см. utils.get_widget_session), а не как поле модели Contact.
+        Возвращаем conversation_id из WidgetSession, если токен валиден и
+        привязан к этому widget_token.
+        """
+        from .models import Conversation, Inbox
+        from .utils import get_widget_session
+
+        session = get_widget_session(session_token)
+        if not session:
             return None
+        try:
+            inbox = Inbox.objects.get(pk=session.inbox_id)
+        except Inbox.DoesNotExist:
+            return None
+        if inbox.widget_token != self.widget_token or not inbox.is_active:
+            return None
+        try:
+            conv = Conversation.objects.get(pk=session.conversation_id)
+        except Conversation.DoesNotExist:
+            return None
+        if conv.inbox_id != inbox.id:
+            return None
+        if conv.status == Conversation.Status.CLOSED:
+            return None
+        return conv.id

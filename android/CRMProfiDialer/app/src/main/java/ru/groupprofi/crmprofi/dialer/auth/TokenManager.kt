@@ -22,6 +22,14 @@ import kotlinx.coroutines.withContext
 class TokenManager private constructor(private val prefs: SharedPreferences) {
     private val refreshMutex = Mutex()
 
+    // In-memory fallback для JWT, когда EncryptedSharedPreferences недоступны.
+    // Раньше при сбое Encrypted prefs токены писались в plain SharedPreferences,
+    // что небезопасно. Теперь они хранятся только в памяти процесса — при
+    // перезапуске пользователь пройдёт логин заново.
+    @Volatile private var memAccess: String? = null
+    @Volatile private var memRefresh: String? = null
+    @Volatile private var memUsername: String? = null
+
     companion object {
         private const val PREFS = "crmprofi_dialer"
         private const val KEY_ACCESS = "access"
@@ -103,9 +111,15 @@ class TokenManager private constructor(private val prefs: SharedPreferences) {
                     it.edit().putBoolean(KEY_ENCRYPTION_ENABLED, true).apply()
                 }
             } catch (e: Exception) {
-                Log.w("TokenManager", "EncryptedSharedPreferences failed, using fallback: ${e.message}")
+                Log.w("TokenManager", "EncryptedSharedPreferences failed, degrading to in-memory tokens: ${e.message}")
                 val fallback = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                fallback.edit().putBoolean(KEY_ENCRYPTION_ENABLED, false).apply()
+                // Безопасность: выносим любые ранее сохранённые plaintext токены
+                // из обычных prefs и помечаем шифрование как отключённое.
+                fallback.edit()
+                    .remove(KEY_ACCESS)
+                    .remove(KEY_REFRESH)
+                    .putBoolean(KEY_ENCRYPTION_ENABLED, false)
+                    .apply()
                 fallback
             }
         }
@@ -145,23 +159,40 @@ class TokenManager private constructor(private val prefs: SharedPreferences) {
     }
 
     fun getAccessToken(): String? =
-        prefs.getString(KEY_ACCESS, null)?.takeIf { it.isNotBlank() }
+        if (isEncryptionEnabled())
+            prefs.getString(KEY_ACCESS, null)?.takeIf { it.isNotBlank() }
+        else
+            memAccess?.takeIf { it.isNotBlank() }
 
     fun getRefreshToken(): String? =
-        prefs.getString(KEY_REFRESH, null)?.takeIf { it.isNotBlank() }
+        if (isEncryptionEnabled())
+            prefs.getString(KEY_REFRESH, null)?.takeIf { it.isNotBlank() }
+        else
+            memRefresh?.takeIf { it.isNotBlank() }
 
     fun getUsername(): String? =
-        prefs.getString(KEY_USERNAME, null)?.takeIf { it.isNotBlank() }
+        if (isEncryptionEnabled())
+            prefs.getString(KEY_USERNAME, null)?.takeIf { it.isNotBlank() }
+        else
+            memUsername?.takeIf { it.isNotBlank() }
 
     fun getDeviceId(): String? =
         prefs.getString(KEY_DEVICE_ID, null)?.takeIf { it.isNotBlank() }
 
     fun saveTokens(access: String, refresh: String, username: String) {
-        prefs.edit()
-            .putString(KEY_ACCESS, access)
-            .putString(KEY_REFRESH, refresh)
-            .putString(KEY_USERNAME, username)
-            .apply()
+        if (isEncryptionEnabled()) {
+            prefs.edit()
+                .putString(KEY_ACCESS, access)
+                .putString(KEY_REFRESH, refresh)
+                .putString(KEY_USERNAME, username)
+                .apply()
+        } else {
+            // Шифрование недоступно — храним токены только в памяти.
+            Log.w("TokenManager", "Encryption disabled: storing tokens in-memory only")
+            memAccess = access
+            memRefresh = refresh
+            memUsername = username
+        }
     }
 
     fun saveDeviceId(deviceId: String) {
@@ -169,13 +200,20 @@ class TokenManager private constructor(private val prefs: SharedPreferences) {
     }
 
     fun updateAccessToken(access: String) {
-        prefs.edit().putString(KEY_ACCESS, access).apply()
+        if (isEncryptionEnabled()) {
+            prefs.edit().putString(KEY_ACCESS, access).apply()
+        } else {
+            memAccess = access
+        }
     }
 
     fun isEncryptionEnabled(): Boolean =
         prefs.getBoolean(KEY_ENCRYPTION_ENABLED, true)
 
     fun clearAll() {
+        memAccess = null
+        memRefresh = null
+        memUsername = null
         prefs.edit()
             .remove(KEY_ACCESS)
             .remove(KEY_REFRESH)

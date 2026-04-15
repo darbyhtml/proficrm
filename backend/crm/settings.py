@@ -351,6 +351,18 @@ MESSENGER_WIDGET_POLL_MIN_INTERVAL_SECONDS = int(
     os.getenv("MESSENGER_WIDGET_POLL_MIN_INTERVAL_SECONDS", "2")
 )
 
+# Secure-by-default allowlist доменов для виджета.
+# Если True (прод-дефолт), при пустом allowlist запрос блокируется.
+# Если False (dev), пустой allowlist пропускает запрос (обратная совместимость).
+MESSENGER_WIDGET_STRICT_ORIGIN = os.getenv(
+    "MESSENGER_WIDGET_STRICT_ORIGIN",
+    "0" if DEBUG else "1",
+) == "1"
+# Глобальный allowlist доменов (через запятую) — добавляется к inbox.allowed_domains.
+MESSENGER_WIDGET_GLOBAL_ALLOWED_DOMAINS = [
+    d.strip() for d in os.getenv("MESSENGER_WIDGET_GLOBAL_ALLOWED_DOMAINS", "").split(",") if d.strip()
+]
+
 # Privacy‑настройки для публичного виджета (минимальное уведомление о данных)
 MESSENGER_PRIVACY_URL = os.getenv("MESSENGER_PRIVACY_URL", "")
 MESSENGER_PRIVACY_TEXT = os.getenv(
@@ -585,6 +597,13 @@ CELERY_BEAT_SCHEDULE = {
     "generate-recurring-tasks": {
         "task": "tasksapp.tasks.generate_recurring_tasks",
         "schedule": crontab(hour=6, minute=0),  # Ежедневно 06:00 по Moscow
+    },
+    # Ежедневная генерация напоминаний о приближении окончания договоров.
+    # Логика вынесена из context_processors.notifications_panel, чтобы не
+    # писать в БД из GET-запросов (poll колокольчика).
+    "generate-contract-reminders": {
+        "task": "notifications.tasks.generate_contract_reminders",
+        "schedule": crontab(hour=6, minute=30),
     },
     # Retention: еженедельно в воскресенье 03:00 MSK
     "purge-old-activity-events": {

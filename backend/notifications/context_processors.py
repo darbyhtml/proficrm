@@ -6,8 +6,6 @@ from django.utils import timezone
 from django.core.cache import cache
 
 from notifications.models import Notification
-from notifications.models import CompanyContractReminder
-from notifications.service import notify
 from tasksapp.models import Task
 from companies.models import Company
 
@@ -81,16 +79,12 @@ def notifications_panel(request):
     reminder_count = bell["reminder_count"]
     reminder_items = list(bell["reminder_items"])  # copy — contract items appended below
 
-    # Напоминания по договорам (для ответственного): показываем в "Напоминаниях"
-    # + создаём реальное уведомление на порогах (30/14 дней) с дедупликацией.
+    # Напоминания по договорам (для ответственного): только read-only показ
+    # в UI. Создание записей CompanyContractReminder + Notification вынесено
+    # в celery-beat задачу notifications.tasks.generate_contract_reminders,
+    # чтобы не писать в БД из read-пути GET-запроса.
     try:
         today_date = timezone.localdate(now)
-        # лёгкий троттлинг, чтобы не бегать по БД на каждом запросе
-        last_ts = int(request.session.get("contract_reminders_checked_at", 0) or 0)
-        now_ts = int(now.timestamp())
-        should_check = (now_ts - last_ts) > 15 * 60
-        if should_check:
-            request.session["contract_reminders_checked_at"] = now_ts
 
         contract_qs = (
             Company.objects.filter(responsible=user, contract_until__isnull=False)
@@ -128,60 +122,6 @@ def notifications_panel(request):
                 }
             )
         reminder_count += soon.count()
-
-        # 2) Реальные уведомления (с дедупликацией) - используем настройки из ContractType
-        # Для обратной совместимости также создаем напоминание за 30 дней, если warning_days >= 30
-        if should_check:
-            for c in contract_qs:
-                if not c.contract_type or not c.contract_until:
-                    continue
-                warning_days = c.contract_type.warning_days
-                danger_days = c.contract_type.danger_days
-                days_left = (c.contract_until - today_date).days
-                
-                # Формируем список порогов для напоминаний
-                # Если warning_days >= 30, добавляем отдельное напоминание за 30 дней для обратной совместимости
-                thresholds = [warning_days, danger_days]
-                if warning_days < 30:
-                    # Если warning_days меньше 30, добавляем напоминание за 30 дней для обратной совместимости
-                    thresholds.insert(0, 30)
-                
-                # Создаем уведомления на порогах
-                for days_before in thresholds:
-                    if days_before > days_left:
-                        continue
-                    target = c.contract_until - timedelta(days=days_before)
-                    if target.date() != today_date:
-                        continue
-                    
-                    exists = CompanyContractReminder.objects.filter(
-                        user=user, company_id=c.id, contract_until=c.contract_until, days_before=days_before
-                    ).exists()
-                    if exists:
-                        continue
-                    CompanyContractReminder.objects.create(
-                        user=user, company_id=c.id, contract_until=c.contract_until, days_before=days_before
-                    )
-                    # Используем реальное количество оставшихся дней для текста уведомления
-                    if days_before == 30:
-                        title = "До окончания договора остался месяц"
-                        body = f"{c.name} · до {c.contract_until.strftime('%d.%m.%Y')}"
-                    elif days_left == 1:
-                        title = "До окончания договора остался 1 день"
-                        body = f"{c.name} · до {c.contract_until.strftime('%d.%m.%Y')}"
-                    elif days_left in [2, 3, 4]:
-                        title = f"До окончания договора осталось {days_left} дня"
-                        body = f"{c.name} · до {c.contract_until.strftime('%d.%m.%Y')}"
-                    else:
-                        title = f"До окончания договора осталось {days_left} дней"
-                        body = f"{c.name} · до {c.contract_until.strftime('%d.%m.%Y')}"
-                    notify(
-                        user=user,
-                        kind=Notification.Kind.COMPANY,
-                        title=title,
-                        body=body,
-                        url=f"/companies/{c.id}/",
-                    )
     except Exception:
         # не ломаем UI колокольчика из-за напоминаний
         pass
