@@ -8,7 +8,7 @@
         <h1 class="text-2xl font-semibold">Интерфейс</h1>
         <div class="muted text-sm">Настройки отображения для вашего аккаунта.</div>
       </div>
-      <a class="btn btn-outline" href="/preferences/">Назад</a>
+      <a class="btn btn-outline" href="/settings/">Назад</a>
     </div>
 
     <div class="card card-pad">
@@ -52,7 +52,7 @@
             document.documentElement.style.setProperty('--ui-font-scale',scale.toFixed(3));
             try{
               const fd=new FormData();fd.append('font_scale',scale.toFixed(3));
-              await fetch('/preferences/ui/v2-scale/',{method:'POST',headers:{'X-CSRFToken':csrf},body:fd,credentials:'same-origin'});
+              await fetch('/settings/ui/v2-scale/',{method:'POST',headers:{'X-CSRFToken':csrf},body:fd,credentials:'same-origin'});
             }catch(e){console.warn('v2-scale save error',e);}
           });
         });

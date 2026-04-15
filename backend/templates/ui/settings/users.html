@@ -5,10 +5,10 @@
   <div class="space-y-4">
     <div class="flex items-end justify-between gap-3">
       <div>
-        <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> /</div>
+        <div class="text-sm text-brand-dark/70"><a class="underline" href="/admin/">Настройки</a> /</div>
         <h1 class="text-2xl font-semibold">Пользователи</h1>
       </div>
-      <a href="/settings/users/new/" class="btn btn-primary">+ Добавить пользователя</a>
+      <a href="/admin/users/new/" class="btn btn-primary">+ Добавить пользователя</a>
     </div>
 
     <form method="post" class="bg-white border rounded-2xl p-4">
@@ -109,7 +109,7 @@
       </div>
       {% if q or status_filter or role_filter or branch_filter or online_filter %}
         <div class="mt-3 pt-3 border-t border-brand-soft/60">
-          <a href="/settings/users/" class="inline-flex items-center gap-1.5 text-xs text-brand-dark/60 hover:text-brand-teal transition-colors">
+          <a href="/admin/users/" class="inline-flex items-center gap-1.5 text-xs text-brand-dark/60 hover:text-brand-teal transition-colors">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
             </svg>
@@ -314,7 +314,7 @@
                       <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
                     </svg>
                   </button>
-                  <form method="post" action="/settings/users/{{ u.id }}/logout/" onsubmit="return confirm('Вы уверены, что хотите разлогинить этого пользователя? Все его активные сессии будут завершены.');" style="display:inline">
+                  <form method="post" action="/admin/users/{{ u.id }}/logout/" onsubmit="return confirm('Вы уверены, что хотите разлогинить этого пользователя? Все его активные сессии будут завершены.');" style="display:inline">
                     {% csrf_token %}
                     <button type="submit" class="flex items-center justify-center w-8 h-8 rounded bg-white border border-red-300 hover:bg-red-50 transition-colors" title="Разлогинить пользователя" aria-label="Разлогинить пользователя" style="border-color:rgba(220,38,38,.5);color:#b91c1c;">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -350,7 +350,7 @@
               <td class="px-4 py-6 text-brand-dark/70 text-sm" colspan="7">
                 {% if q or status_filter or role_filter or branch_filter or online_filter %}
                   По текущим фильтрам пользователей не найдено.
-                  <a href="/settings/users/" class="underline text-brand-teal">Сбросить фильтры</a>
+                  <a href="/admin/users/" class="underline text-brand-teal">Сбросить фильтры</a>
                 {% else %}
                   Пользователей нет.
                 {% endif %}
@@ -554,7 +554,7 @@
           btn.innerHTML = '<svg class="animate-spin h-4 w-4 text-brand-dark" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3.5-3.5L12 0v4a8 8 0 00-8 8h4z"></path></svg>';
 
           const csrfToken = getCsrfToken();
-          fetch("/settings/users/" + userId + "/magic-link/generate/", {
+          fetch("/admin/users/" + userId + "/magic-link/generate/", {
             method: "POST",
             headers: {
               "X-Requested-With": "XMLHttpRequest",
@@ -679,7 +679,7 @@
           const formData = new FormData(form);
           const csrfToken = getCsrfToken();
 
-          fetch("/settings/users/" + userId + "/update/", {
+          fetch("/admin/users/" + userId + "/update/", {
             method: "POST",
             headers: {
               "X-Requested-With": "XMLHttpRequest",
@@ -757,7 +757,7 @@
           editPanelContent.innerHTML = '<div class="flex items-center justify-center py-12"><div class="animate-spin h-8 w-8 border-2 border-brand-teal border-t-transparent rounded-full"></div></div>';
 
           const csrfToken = getCsrfToken();
-          fetch("/settings/users/" + userId + "/form/", {
+          fetch("/admin/users/" + userId + "/form/", {
             method: "GET",
             headers: {
               "X-Requested-With": "XMLHttpRequest",
@@ -820,7 +820,7 @@
         if (!confirm('Удалить пользователя «' + userName + '»?\n\nКомпании останутся в системе, но поле «Ответственный» будет очищено. Это действие нельзя отменить.')) return;
         try {
           const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-          const resp = await fetch('/settings/users/' + userId + '/delete/', {
+          const resp = await fetch('/admin/users/' + userId + '/delete/', {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken },
           });

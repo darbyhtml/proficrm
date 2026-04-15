@@ -843,15 +843,15 @@
       body header.relative.z-\[70\] form[action="/logout/"] button:hover{
         background:#FEF2F2;border-color:#FCA5A5;color:#DC2626;
       }
-      body header.relative.z-\[70\] a[href="/preferences/#profile"] > div{
+      body header.relative.z-\[70\] a[href="/settings/#profile"] > div{
         background:linear-gradient(135deg,#01948E 0%,#0EA5A0 100%)!important;
         color:#fff!important;border:2px solid #fff;
         box-shadow:0 0 0 1px #E5E7EB;
       }
-      body header.relative.z-\[70\] a[href="/preferences/"]{
+      body header.relative.z-\[70\] a[href="/settings/"]{
         color:#374151!important;font-size:13px;font-weight:500;
       }
-      body header.relative.z-\[70\] a[href="/preferences/"]:hover{
+      body header.relative.z-\[70\] a[href="/settings/"]:hover{
         color:#01948E!important;
       }
       /* Sidebar — слегка подравняем под ту же палитру */
@@ -1018,7 +1018,7 @@
                 </div>
               </div>
             </div>
-            <a href="/preferences/#profile" class="shrink-0" title="Настройки профиля">
+            <a href="/settings/#profile" class="shrink-0" title="Настройки профиля">
               {% if request.user.avatar %}
                 <img src="{{ request.user.avatar.url }}" alt=""
                      class="w-8 h-8 rounded-full object-cover border border-brand-soft shadow-sm hover:opacity-80 transition-opacity" />
@@ -1028,7 +1028,7 @@
                 </div>
               {% endif %}
             </a>
-            <a href="/preferences/" class="text-brand-dark/80 hover:text-brand-dark transition-colors">
+            <a href="/settings/" class="text-brand-dark/80 hover:text-brand-dark transition-colors">
               {% if request.user.first_name or request.user.last_name %}
                 {{ request.user.last_name }} {{ request.user.first_name }}
               {% else %}
@@ -1154,7 +1154,7 @@
                 <span>Помощь</span>
               </a>
               {# Настройки пользователя (персональные) — доступны всем, в том числе администратору #}
-              <a class="flex flex-col items-center gap-1 px-2 py-2 rounded-lg hover:bg-brand-soft/40 text-[12px] text-center {% if request.resolver_match.url_name == 'preferences' or request.resolver_match.url_name == 'preferences_ui' or request.resolver_match.url_name == 'preferences_mail' %}bg-brand-soft/50 font-medium{% endif %}" href="/preferences/">
+              <a class="flex flex-col items-center gap-1 px-2 py-2 rounded-lg hover:bg-brand-soft/40 text-[12px] text-center {% if request.resolver_match.url_name == 'preferences' or request.resolver_match.url_name == 'preferences_ui' or request.resolver_match.url_name == 'preferences_mail' %}bg-brand-soft/50 font-medium{% endif %}" href="/settings/">
                 <span class="nav-ico-wrap">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
@@ -1166,7 +1166,7 @@
               {% policy_can 'ui:settings' as can_nav_settings %}
               {% if can_nav_settings and not view_as_enabled or view_is_admin %}
                 {# Админка CRM — только для администратора; в режиме "просмотр как" показываем только если смотрим от лица админа #}
-                <a class="flex flex-col items-center gap-1 px-2 py-2 rounded-lg hover:bg-brand-soft/40 text-[12px] text-center {% if request.resolver_match.url_name|slice:':9' == 'settings_' %}bg-brand-soft/50 font-medium{% endif %}" href="/settings/">
+                <a class="flex flex-col items-center gap-1 px-2 py-2 rounded-lg hover:bg-brand-soft/40 text-[12px] text-center {% if request.resolver_match.url_name|slice:':9' == 'settings_' %}bg-brand-soft/50 font-medium{% endif %}" href="/admin/">
                   <span class="nav-ico-wrap">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M4 21v-7"/>

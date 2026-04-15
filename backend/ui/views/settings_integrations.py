@@ -114,7 +114,7 @@ def settings_import(request: HttpRequest) -> HttpResponse:
     else:
         form = ImportCompaniesForm()
 
-    return render(request, "ui/settings/import.html", {"form": form, "result": result})
+    return render(request, "ui/admin/import.html", {"form": form, "result": result})
 
 
 @login_required
@@ -174,7 +174,7 @@ def settings_import_tasks(request: HttpRequest) -> HttpResponse:
     else:
         form = ImportTasksIcsForm()
 
-    return render(request, "ui/settings/import_tasks.html", {"form": form, "result": result})
+    return render(request, "ui/admin/import_tasks.html", {"form": form, "result": result})
 
 
 @login_required
@@ -198,7 +198,7 @@ def settings_amocrm(request: HttpRequest) -> HttpResponse:
             # redirect uri: если пусто — построим из request
             ru = (form.cleaned_data.get("redirect_uri") or "").strip()
             if not ru:
-                ru = request.build_absolute_uri("/settings/amocrm/callback/")
+                ru = request.build_absolute_uri("/admin/amocrm/callback/")
             cfg.redirect_uri = ru
             cfg.region_custom_field_id = form.cleaned_data.get("region_custom_field_id") or None
             cfg.save(
@@ -220,7 +220,7 @@ def settings_amocrm(request: HttpRequest) -> HttpResponse:
                 "domain": cfg.domain or "kmrprofi.amocrm.ru",
                 "client_id": cfg.client_id,
                 "client_secret": cfg.client_secret,
-                "redirect_uri": cfg.redirect_uri or request.build_absolute_uri("/settings/amocrm/callback/"),
+                "redirect_uri": cfg.redirect_uri or request.build_absolute_uri("/admin/amocrm/callback/"),
                 "long_lived_token": cfg.long_lived_token,
                 "region_custom_field_id": getattr(cfg, "region_custom_field_id", None),
             }
@@ -234,11 +234,11 @@ def settings_amocrm(request: HttpRequest) -> HttpResponse:
             auth_url = ""
 
     # Вычисляем redirect_uri для отображения в шаблоне
-    redirect_uri_display = cfg.redirect_uri or request.build_absolute_uri("/settings/amocrm/callback/")
+    redirect_uri_display = cfg.redirect_uri or request.build_absolute_uri("/admin/amocrm/callback/")
     
     return render(
         request,
-        "ui/settings/amocrm.html",
+        "ui/admin/amocrm.html",
         {"form": form, "cfg": cfg, "auth_url": auth_url, "redirect_uri_display": redirect_uri_display},
     )
 
@@ -406,7 +406,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
             form = AmoMigrateFilterForm(initial={"dry_run": True, "limit_companies": 10, "offset": 0})
             return render(
                 request,
-                "ui/settings/amocrm_migrate.html",
+                "ui/admin/amocrm_migrate.html",
                 {"cfg": cfg, "form": form, "users": [], "fields": [], "result": None},
             )
 
@@ -608,7 +608,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
     try:
         return render(
             request,
-            "ui/settings/amocrm_migrate.html",
+            "ui/admin/amocrm_migrate.html",
             {
                 "cfg": cfg,
                 "form": form,
@@ -719,7 +719,7 @@ def settings_amocrm_contacts_dry_run(request: HttpRequest) -> HttpResponse:
 
         return render(
             request,
-            "ui/settings/amocrm_contacts_dry_run.html",
+            "ui/admin/amocrm_contacts_dry_run.html",
             {
                 "result": result,
                 "responsible_user_id": responsible_user_id,
@@ -837,7 +837,7 @@ def settings_amocrm_debug_contacts(request: HttpRequest) -> HttpResponse:
 
         return render(
             request,
-            "ui/settings/amocrm_debug_contacts.html",
+            "ui/admin/amocrm_debug_contacts.html",
             {
                 "contacts": contacts_data,
                 "stats": stats,
@@ -874,7 +874,7 @@ def settings_company_columns(request: HttpRequest) -> HttpResponse:
     else:
         form = CompanyListColumnsForm(initial={"columns": cfg.company_list_columns or ["name"]})
 
-    return render(request, "ui/settings/company_columns.html", {"form": form, "cfg": cfg})
+    return render(request, "ui/admin/company_columns.html", {"form": form, "cfg": cfg})
 
 
 @login_required
@@ -911,7 +911,7 @@ def settings_security(request: HttpRequest) -> HttpResponse:
 
     return render(
         request,
-        "ui/settings/security.html",
+        "ui/admin/security.html",
         {
             "exports": exports,
             "export_stats": export_stats,
@@ -965,7 +965,7 @@ def settings_mobile_devices(request: HttpRequest) -> HttpResponse:
 
     return render(
         request,
-        "ui/settings/mobile_devices.html",
+        "ui/admin/mobile_devices.html",
         {
             "page": page,
             "total": total,
@@ -1068,7 +1068,7 @@ def settings_mobile_overview(request: HttpRequest) -> HttpResponse:
 
     return render(
         request,
-        "ui/settings/mobile_overview.html",
+        "ui/admin/mobile_overview.html",
         {
             "total_devices": total_devices,
             "active_devices": active_devices,
@@ -1113,7 +1113,7 @@ def settings_mobile_device_detail(request: HttpRequest, pk) -> HttpResponse:
 
     return render(
         request,
-        "ui/settings/mobile_device_detail.html",
+        "ui/admin/mobile_device_detail.html",
         {
             "device": device,
             "telemetry": telemetry_qs,
@@ -1371,7 +1371,7 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
     
     return render(
         request,
-        "ui/settings/calls_stats.html",
+        "ui/admin/calls_stats.html",
         {
             "period": period,
             "period_label": period_label,
@@ -1482,7 +1482,7 @@ def settings_calls_manager_detail(request: HttpRequest, user_id: int) -> HttpRes
     
     return render(
         request,
-        "ui/settings/calls_manager_detail.html",
+        "ui/admin/calls_manager_detail.html",
         {
             "manager": manager,
             "period": period,

@@ -34,7 +34,7 @@ class CallsStatsViewTemplateSafetyTest(TestCase):
         from django.test import Client
         client = Client()
         client.force_login(self.user)
-        response = client.get("/settings/calls/stats/?period=day")
+        response = client.get("/admin/calls/stats/?period=day")
         
         # Проверяем, что страница рендерится без ошибок
         self.assertEqual(response.status_code, 200)
@@ -56,7 +56,7 @@ class CallsStatsViewTemplateSafetyTest(TestCase):
         from django.test import Client
         client = Client()
         client.force_login(self.user)
-        response = client.get("/settings/calls/stats/?period=day")
+        response = client.get("/admin/calls/stats/?period=day")
         
         # Проверяем, что страница рендерится без ошибок
         self.assertEqual(response.status_code, 200)
@@ -82,7 +82,7 @@ class CallsStatsViewTemplateSafetyTest(TestCase):
         from django.test import Client
         client = Client()
         client.force_login(self.user)
-        response = client.get("/settings/calls/stats/?period=day")
+        response = client.get("/admin/calls/stats/?period=day")
         
         # Проверяем, что страница рендерится без ошибок
         self.assertEqual(response.status_code, 200)
@@ -107,7 +107,7 @@ class CallsStatsViewTemplateSafetyTest(TestCase):
         from django.test import Client
         client = Client()
         client.force_login(self.user)
-        response = client.get("/settings/calls/stats/?period=day")
+        response = client.get("/admin/calls/stats/?period=day")
         
         # Проверяем, что страница рендерится без ошибок
         self.assertEqual(response.status_code, 200)
@@ -124,7 +124,7 @@ class CallsStatsViewTemplateSafetyTest(TestCase):
         from django.test import Client
         client = Client()
         client.force_login(self.user)
-        response = client.get("/settings/calls/stats/?period=day")
+        response = client.get("/admin/calls/stats/?period=day")
         
         # Проверяем, что страница рендерится без ошибок (нет деления на 0)
         self.assertEqual(response.status_code, 200)

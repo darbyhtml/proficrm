@@ -5,10 +5,10 @@
   <div class="space-y-4">
     <div>
       <div class="text-sm muted">
-        <a class="link" href="/settings/">Настройки</a> /
-        <a class="link" href="/settings/mobile/devices/">Мобильное приложение</a> /
+        <a class="link" href="/admin/">Настройки</a> /
+        <a class="link" href="/admin/mobile/devices/">Мобильное приложение</a> /
       </div>
-      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> /</div>
+      <div class="text-sm text-brand-dark/70"><a class="underline" href="/admin/">Настройки</a> /</div>
       <h1 class="text-2xl font-semibold">Мобильное приложение — обзор</h1>
       <div class="text-sm text-brand-dark/70">
         Dashboard с метриками и алертами за последние 24 часа
@@ -81,7 +81,7 @@
             <div class="flex items-start gap-3 p-3 rounded-lg {% if alert.type == 'auth' %}bg-red-50 border border-red-200{% elif alert.type == 'network' %}bg-orange-50 border border-orange-200{% elif alert.type == 'refresh' %}bg-yellow-50 border border-yellow-200{% else %}bg-gray-50 border border-gray-200{% endif %}">
               <div class="flex-1">
                 <div class="font-medium">
-                  <a href="/settings/mobile/devices/{{ alert.device.id }}/" class="link">
+                  <a href="/admin/mobile/devices/{{ alert.device.id }}/" class="link">
                     {{ alert.device.user.get_full_name|default:alert.device.user.username }}
                   </a>
                   <span class="text-sm text-brand-dark/70">· {{ alert.device.device_name|default:alert.device.device_id }}</span>
@@ -113,8 +113,8 @@
     {% endif %}
 
     <div class="flex gap-2">
-      <a href="/settings/mobile/devices/" class="btn btn-primary">Список устройств</a>
-      <a href="/settings/" class="btn btn-outline">Назад в настройки</a>
+      <a href="/admin/mobile/devices/" class="btn btn-primary">Список устройств</a>
+      <a href="/admin/" class="btn btn-outline">Назад в настройки</a>
     </div>
   </div>
 {% endblock %}

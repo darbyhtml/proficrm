@@ -5,10 +5,10 @@
   <div class="space-y-4">
     <div class="flex items-end justify-between gap-3">
       <div>
-        <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> /</div>
+        <div class="text-sm text-brand-dark/70"><a class="underline" href="/admin/">Настройки</a> /</div>
         <h1 class="text-2xl font-semibold">Подразделения</h1>
       </div>
-      <a href="/settings/branches/new/" class="btn btn-primary">+ Добавить подразделение</a>
+      <a href="/admin/branches/new/" class="btn btn-primary">+ Добавить подразделение</a>
     </div>
 
     <div class="bg-white border rounded-2xl overflow-hidden">
@@ -26,7 +26,7 @@
               <td class="px-4 py-3 font-mono">{{ b.code }}</td>
               <td class="px-4 py-3">{{ b.name }}</td>
               <td class="px-4 py-3">
-                <a class="underline" href="/settings/branches/{{ b.id }}/edit/">Редактировать</a>
+                <a class="underline" href="/admin/branches/{{ b.id }}/edit/">Редактировать</a>
               </td>
             </tr>
           {% empty %}

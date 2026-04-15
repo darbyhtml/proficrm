@@ -113,7 +113,7 @@ urlpatterns = [
     # Service Worker для push-уведомлений — отдаём напрямую (браузеры запрещают SW через redirect)
     path("sw-push.js", sw_push_js, name="sw_push"),
     path("favicon.ico", RedirectView.as_view(url=static("ui/favicon-v2.svg"), permanent=True)),
-    path('admin/', admin.site.urls),
+    path('django-admin/', admin.site.urls),
     path("", include("ui.urls")),
     path("", include("messenger.urls")),
     path("", include("mailer.urls")),

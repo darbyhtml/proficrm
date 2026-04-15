@@ -4,7 +4,7 @@
 {% block content %}
   <div class="space-y-4">
     <div>
-      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> /</div>
+      <div class="text-sm text-brand-dark/70"><a class="underline" href="/admin/">Настройки</a> /</div>
       <h1 class="text-2xl font-semibold">amoCRM (API)</h1>
       <div class="text-sm text-brand-dark/70">
         Подключение по OAuth для одноразовой миграции данных (компании/задачи/заметки) и точной привязки.
@@ -24,8 +24,8 @@
         </div>
         <div class="flex gap-2">
           {% if cfg.is_connected %}
-            <a class="btn btn-outline" href="/settings/amocrm/migrate/">Миграция по фильтру</a>
-            <a class="btn btn-outline" href="/settings/amocrm/disconnect/" onclick="return confirm('Отключить amoCRM и удалить токены?');">Отключить</a>
+            <a class="btn btn-outline" href="/admin/amocrm/migrate/">Миграция по фильтру</a>
+            <a class="btn btn-outline" href="/admin/amocrm/disconnect/" onclick="return confirm('Отключить amoCRM и удалить токены?');">Отключить</a>
           {% endif %}
         </div>
       </div>
@@ -39,7 +39,7 @@
         </div>
         <div>
           <label class="block text-sm text-brand-dark/80 mb-1">Redirect URI</label>
-          <input class="input" type="text" name="redirect_uri" value="{{ form.redirect_uri.value|default:'' }}" placeholder="https://ваш-домен/settings/amocrm/callback/" />
+          <input class="input" type="text" name="redirect_uri" value="{{ form.redirect_uri.value|default:'' }}" placeholder="https://ваш-домен/admin/amocrm/callback/" />
           <div class="text-xs muted-2 mt-1">Укажите этот URL в настройках интеграции amo.</div>
         </div>
         <div>
@@ -145,7 +145,7 @@
             <li><strong>Access token</strong> действителен 24 часа, затем автоматически обновляется через <strong>Refresh token</strong></li>
             <li><strong>Refresh token</strong> действителен 3 месяца, после чего потребуется повторная авторизация</li>
             <li>Если используете <strong>long-lived token</strong>, OAuth не требуется (но могут быть ограничения прав)</li>
-            <li>После успешной авторизации можно перейти к <a href="/settings/amocrm/migrate/" class="underline">миграции данных</a></li>
+            <li>После успешной авторизации можно перейти к <a href="/admin/amocrm/migrate/" class="underline">миграции данных</a></li>
           </ul>
         </div>
 

@@ -7282,7 +7282,7 @@
         formData.append('view_mode', mode);
         formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]')?.value || '');
         
-        fetch('/preferences/ui/company-detail-view-mode/', {
+        fetch('/settings/ui/company-detail-view-mode/', {
           method: 'POST',
           body: formData,
           headers: {

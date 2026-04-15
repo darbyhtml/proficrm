@@ -833,7 +833,7 @@ def preferences_ui(request: HttpRequest) -> HttpResponse:
 
         if scale is None or not (0.85 <= scale <= 1.30):
             messages.error(request, "Некорректный масштаб. Допустимо от 85% до 130%.")
-            return redirect("/preferences/#interface")
+            return redirect("/settings/#interface")
 
         prefs = UiUserPreference.load_for_user(user)
         prefs.font_scale = Decimal(f"{scale:.3f}")
@@ -843,9 +843,9 @@ def preferences_ui(request: HttpRequest) -> HttpResponse:
         except Exception:
             pass
         messages.success(request, "Настройки интерфейса сохранены.")
-        return redirect("/preferences/#interface")
+        return redirect("/settings/#interface")
 
-    return redirect("/preferences/#interface")
+    return redirect("/settings/#interface")
 
 
 @login_required
@@ -920,7 +920,7 @@ def preferences_mail(request: HttpRequest) -> HttpResponse:
     """
     Почтовые настройки — редирект на единую страницу настроек.
     """
-    return redirect("/preferences/#mail")
+    return redirect("/settings/#mail")
 
 
 @login_required
@@ -940,7 +940,7 @@ def preferences_profile(request: HttpRequest) -> HttpResponse:
     user.last_name = last_name
     user.save(update_fields=["first_name", "last_name"])
     messages.success(request, "Профиль обновлён.")
-    return redirect("/preferences/#profile")
+    return redirect("/settings/#profile")
 
 
 @login_required
@@ -960,12 +960,12 @@ def preferences_password(request: HttpRequest) -> HttpResponse:
         user = form.save()
         update_session_auth_hash(request, user)
         messages.success(request, "Пароль успешно изменён.")
-        return redirect("/preferences/#security")
+        return redirect("/settings/#security")
     else:
         for field_errors in form.errors.values():
             for err in field_errors:
                 messages.error(request, err)
-        return redirect("/preferences/#security")
+        return redirect("/settings/#security")
 
 
 @login_required
@@ -981,12 +981,12 @@ def preferences_mail_signature(request: HttpRequest) -> HttpResponse:
     signature_html = request.POST.get("email_signature_html", "").strip()
     if len(signature_html) > 10_000:
         messages.error(request, "Подпись слишком длинная (максимум 10 000 символов).")
-        return redirect("/preferences/#mail")
+        return redirect("/settings/#mail")
 
     user.email_signature_html = signature_html
     user.save(update_fields=["email_signature_html"])
     messages.success(request, "Подпись сохранена.")
-    return redirect("/preferences/#mail")
+    return redirect("/settings/#mail")
 
 
 @login_required
@@ -1001,11 +1001,11 @@ def preferences_avatar_upload(request: HttpRequest) -> HttpResponse:
     uploaded = request.FILES.get("avatar")
     if not uploaded:
         messages.error(request, "Файл не выбран.")
-        return redirect("/preferences/#profile")
+        return redirect("/settings/#profile")
 
     if uploaded.size > 5 * 1024 * 1024:
         messages.error(request, "Файл слишком большой (максимум 5 МБ).")
-        return redirect("/preferences/#profile")
+        return redirect("/settings/#profile")
 
     try:
         from PIL import Image
@@ -1046,7 +1046,7 @@ def preferences_avatar_upload(request: HttpRequest) -> HttpResponse:
     except Exception:
         messages.error(request, "Не удалось обработать изображение. Убедитесь, что файл — это JPEG, PNG или WEBP.")
 
-    return redirect("/preferences/#profile")
+    return redirect("/settings/#profile")
 
 
 @login_required
@@ -1068,7 +1068,7 @@ def preferences_avatar_delete(request: HttpRequest) -> HttpResponse:
         user.save(update_fields=["avatar"])
         messages.success(request, "Фото профиля удалено.")
 
-    return redirect("/preferences/#profile")
+    return redirect("/settings/#profile")
 
 
 @login_required
@@ -1103,7 +1103,7 @@ def preferences_table_settings(request: HttpRequest) -> HttpResponse:
     request.session["task_list_per_page"] = per_page
 
     messages.success(request, "Настройки таблиц сохранены.")
-    return redirect("/preferences/#interface")
+    return redirect("/settings/#interface")
 
 
 @login_required

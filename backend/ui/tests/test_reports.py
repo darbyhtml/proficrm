@@ -200,22 +200,22 @@ class ViewAsUpdateTest(TestCase):
 
     def test_requires_login(self):
         self.client.logout()
-        resp = self.client.post("/settings/view-as/")
+        resp = self.client.post("/admin/view-as/")
         self.assertIn(resp.status_code, [302, 401])
 
     def test_non_admin_is_redirected(self):
         self.client.force_login(self.manager)
-        resp = self.client.post("/settings/view-as/", {"view_role": "manager"})
+        resp = self.client.post("/admin/view-as/", {"view_role": "manager"})
         self.assertRedirects(resp, "/", fetch_redirect_response=False)
 
     def test_get_redirects_to_referer(self):
-        resp = self.client.get("/settings/view-as/", HTTP_REFERER="/companies/")
+        resp = self.client.get("/admin/view-as/", HTTP_REFERER="/companies/")
         self.assertIn(resp.status_code, [302])
         self.assertIn("/companies/", resp.get("Location", ""))
 
     def test_set_view_role_in_session(self):
         resp = self.client.post(
-            "/settings/view-as/",
+            "/admin/view-as/",
             {"view_role": "manager"},
         )
         self.assertIn(resp.status_code, [302])
@@ -226,7 +226,7 @@ class ViewAsUpdateTest(TestCase):
         session["view_as_role"] = "manager"
         session.save()
         resp = self.client.post(
-            "/settings/view-as/",
+            "/admin/view-as/",
             {"view_role": "nonexistent_role"},
         )
         self.assertIn(resp.status_code, [302])
@@ -234,7 +234,7 @@ class ViewAsUpdateTest(TestCase):
 
     def test_set_view_user_id_in_session(self):
         resp = self.client.post(
-            "/settings/view-as/",
+            "/admin/view-as/",
             {"view_user_id": str(self.manager.id)},
         )
         self.assertIn(resp.status_code, [302])
@@ -245,7 +245,7 @@ class ViewAsUpdateTest(TestCase):
         session["view_as_user_id"] = 999999
         session.save()
         resp = self.client.post(
-            "/settings/view-as/",
+            "/admin/view-as/",
             {"view_user_id": "999999"},  # non-existent user
         )
         self.assertIn(resp.status_code, [302])
@@ -254,7 +254,7 @@ class ViewAsUpdateTest(TestCase):
     def test_set_view_branch_in_session(self):
         branch = Branch.objects.create(code="b1", name="Branch 1")
         resp = self.client.post(
-            "/settings/view-as/",
+            "/admin/view-as/",
             {"view_branch_id": str(branch.id)},
         )
         self.assertIn(resp.status_code, [302])
@@ -262,7 +262,7 @@ class ViewAsUpdateTest(TestCase):
 
     def test_redirect_to_next_param(self):
         resp = self.client.post(
-            "/settings/view-as/",
+            "/admin/view-as/",
             {"view_role": "manager", "next": "/companies/"},
         )
         self.assertRedirects(resp, "/companies/", fetch_redirect_response=False)
@@ -280,12 +280,12 @@ class ViewAsResetTest(TestCase):
         )
 
     def test_requires_login(self):
-        resp = self.client.get("/settings/view-as/reset/")
+        resp = self.client.get("/admin/view-as/reset/")
         self.assertIn(resp.status_code, [302, 401])
 
     def test_non_admin_is_redirected_to_dashboard(self):
         self.client.force_login(self.manager)
-        resp = self.client.post("/settings/view-as/reset/")
+        resp = self.client.post("/admin/view-as/reset/")
         self.assertRedirects(resp, "/", fetch_redirect_response=False)
 
     def test_clears_session_keys(self):
@@ -296,7 +296,7 @@ class ViewAsResetTest(TestCase):
         session["view_as_branch_id"] = 1
         session.save()
 
-        self.client.get("/settings/view-as/reset/")
+        self.client.get("/admin/view-as/reset/")
         self.assertIsNone(self.client.session.get("view_as_user_id"))
         self.assertIsNone(self.client.session.get("view_as_role"))
         self.assertIsNone(self.client.session.get("view_as_branch_id"))
@@ -304,7 +304,7 @@ class ViewAsResetTest(TestCase):
     def test_redirects_to_referer(self):
         self.client.force_login(self.admin)
         resp = self.client.get(
-            "/settings/view-as/reset/",
+            "/admin/view-as/reset/",
             HTTP_REFERER="/companies/",
         )
         self.assertIn("/companies/", resp.get("Location", ""))

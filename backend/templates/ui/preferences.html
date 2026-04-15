@@ -66,7 +66,7 @@
 
           <div class="flex items-center gap-5">
             {# Avatar — click to upload, auto-submit #}
-            <form method="post" action="/preferences/avatar/upload/" enctype="multipart/form-data" id="avatarUploadForm">
+            <form method="post" action="/settings/avatar/upload/" enctype="multipart/form-data" id="avatarUploadForm">
               {% csrf_token %}
               <label class="relative shrink-0 cursor-pointer group" title="Нажмите, чтобы изменить фото">
                 {% if user.avatar %}
@@ -93,7 +93,7 @@
               <div class="text-sm font-medium">Нажмите на фото, чтобы изменить</div>
               <div class="text-xs muted-2">JPEG, PNG или WEBP · до 5 МБ</div>
               {% if user.avatar %}
-                <form method="post" action="/preferences/avatar/delete/">
+                <form method="post" action="/settings/avatar/delete/">
                   {% csrf_token %}
                   <button type="submit" class="text-xs text-red-500 hover:text-red-700 hover:underline transition-colors"
                           onclick="return confirm('Удалить фото профиля?')">Удалить фото</button>
@@ -109,7 +109,7 @@
             <div class="text-sm muted">Имя, которое видят другие сотрудники в задачах и карточках.</div>
           </div>
 
-          <form method="post" action="/preferences/profile/" class="space-y-4">
+          <form method="post" action="/settings/profile/" class="space-y-4">
             {% csrf_token %}
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -168,7 +168,7 @@
               <div class="text-sm font-semibold whitespace-nowrap" id="fontScaleLabel"></div>
             </div>
 
-            <form method="post" action="/preferences/ui/" class="space-y-3" id="fontScaleForm">
+            <form method="post" action="/settings/ui/" class="space-y-3" id="fontScaleForm">
               {% csrf_token %}
               <input type="hidden" name="font_scale" id="fontScaleHidden" value="{{ ui_font_scale_value|default:1.0 }}" />
 
@@ -223,7 +223,7 @@
               <div class="text-sm muted">Строк на странице и раздел по умолчанию при открытии задач.</div>
             </div>
 
-            <form method="post" action="/preferences/table-settings/" class="space-y-4">
+            <form method="post" action="/settings/table-settings/" class="space-y-4">
               {% csrf_token %}
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -310,7 +310,7 @@
               <div class="text-sm muted">Подпись добавляется в конец каждого исходящего письма.</div>
             </div>
 
-            <form method="post" action="/preferences/mail-signature/" class="space-y-3" id="signatureForm">
+            <form method="post" action="/settings/mail-signature/" class="space-y-3" id="signatureForm">
               {% csrf_token %}
               {# Скрытое поле — заполняется из редактора перед сабмитом #}
               <textarea name="email_signature_html" id="prefSigHidden" class="hidden">{{ user.email_signature_html|default:'' }}</textarea>
@@ -515,7 +515,7 @@
       body.set('view_mode', mode);
       if (csrf) body.set('csrfmiddlewaretoken', csrf.value);
 
-      fetch('/preferences/ui/company-detail-view-mode/', {
+      fetch('/settings/ui/company-detail-view-mode/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrf ? csrf.value : '' },
         body: body.toString(),

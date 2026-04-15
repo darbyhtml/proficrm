@@ -109,7 +109,7 @@
     </svg>
     <div>
       <strong>Preview редизайна.</strong> Основная версия —
-      <a href="{% url 'settings_dashboard' %}" style="color:var(--v2-primary);text-decoration:underline">/settings/</a>.
+      <a href="{% url 'settings_dashboard' %}" style="color:var(--v2-primary);text-decoration:underline">/admin/</a>.
     </div>
   </div>
 
@@ -123,7 +123,7 @@
   <div class="v2-sec-title">CRM</div>
   <div class="v2-settings-grid v2-anim" style="animation-delay:.05s">
 
-    <a class="v2-tile" href="/settings/access/">
+    <a class="v2-tile" href="/admin/access/">
       <div class="v2-tile__icon">
         <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z"/></svg>
       </div>
@@ -133,7 +133,7 @@
       </div>
     </a>
 
-    <a class="v2-tile" href="/settings/users/">
+    <a class="v2-tile" href="/admin/users/">
       <div class="v2-tile__icon">
         <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M8.25 6.75a3.75 3.75 0 117.5 0 3.75 3.75 0 01-7.5 0zM15.75 9.75a3 3 0 116 0 3 3 0 01-6 0zM2.25 9.75a3 3 0 116 0 3 3 0 01-6 0zM6.31 15.117A6.745 6.745 0 0112 12a6.745 6.745 0 016.709 7.498.75.75 0 01-.372.568A12.696 12.696 0 0112 21.75a12.695 12.695 0 01-6.337-1.684.75.75 0 01-.372-.568 6.787 6.787 0 011.019-4.38z"/></svg>
       </div>
@@ -144,7 +144,7 @@
       {% if v2_count_users %}<span class="v2-tile__badge">{{ v2_count_users }}</span>{% endif %}
     </a>
 
-    <a class="v2-tile" href="/settings/branches/">
+    <a class="v2-tile" href="/admin/branches/">
       <div class="v2-tile__icon">
         <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M3 2.25a.75.75 0 000 1.5h.75v16.5H3a.75.75 0 000 1.5h18a.75.75 0 000-1.5h-.75V3.75H21a.75.75 0 000-1.5H3zM6.75 19.5v-2.25a.75.75 0 01.75-.75h3a.75.75 0 01.75.75v2.25h-4.5zm8.25-2.25a.75.75 0 00-.75-.75h-1.5a.75.75 0 00-.75.75V19.5H15v-2.25zM9 6.75A.75.75 0 019.75 6h.75a.75.75 0 010 1.5h-.75A.75.75 0 019 6.75zM9.75 9a.75.75 0 000 1.5h.75a.75.75 0 000-1.5h-.75zM9 12.75a.75.75 0 01.75-.75h.75a.75.75 0 010 1.5h-.75a.75.75 0 01-.75-.75zM13.5 6a.75.75 0 000 1.5h.75a.75.75 0 000-1.5h-.75zm-.75 3.75A.75.75 0 0113.5 9h.75a.75.75 0 010 1.5h-.75a.75.75 0 01-.75-.75zM13.5 12a.75.75 0 000 1.5h.75a.75.75 0 000-1.5h-.75z"/></svg>
       </div>
@@ -155,7 +155,7 @@
       {% if v2_count_branches %}<span class="v2-tile__badge">{{ v2_count_branches }}</span>{% endif %}
     </a>
 
-    <a class="v2-tile" href="/settings/dicts/">
+    <a class="v2-tile" href="/admin/dicts/">
       <div class="v2-tile__icon">
         <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M11.25 4.533A9.707 9.707 0 006 3a9.735 9.735 0 00-3.25.555.75.75 0 00-.5.707v14.25a.75.75 0 001 .707A8.237 8.237 0 016 18.75c1.995 0 3.823.707 5.25 1.886V4.533zM12.75 20.636A8.214 8.214 0 0118 18.75c.966 0 1.89.166 2.75.47a.75.75 0 001-.708V4.262a.75.75 0 00-.5-.707A9.735 9.735 0 0018 3a9.707 9.707 0 00-5.25 1.533v16.103z"/></svg>
       </div>
@@ -168,7 +168,7 @@
       </div>
     </a>
 
-    <a class="v2-tile" href="/settings/activity/">
+    <a class="v2-tile" href="/admin/activity/">
       <div class="v2-tile__icon">
         <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M5.625 1.5c-1.036 0-1.875.84-1.875 1.875v17.25c0 1.035.84 1.875 1.875 1.875h12.75c1.035 0 1.875-.84 1.875-1.875V12.75A3.75 3.75 0 0016.5 9h-1.875a1.875 1.875 0 01-1.875-1.875V5.25A3.75 3.75 0 009 1.5H5.625zM7.5 15a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5A.75.75 0 017.5 15zm.75 2.25a.75.75 0 000 1.5H12a.75.75 0 000-1.5H8.25z"/><path d="M12.971 1.816A5.23 5.23 0 0114.25 5.25v1.875c0 .207.168.375.375.375H16.5a5.23 5.23 0 013.434 1.279 9.768 9.768 0 00-6.963-6.963z"/></svg>
       </div>
@@ -178,7 +178,7 @@
       </div>
     </a>
 
-    <a class="v2-tile" href="/settings/import/">
+    <a class="v2-tile" href="/admin/import/">
       <div class="v2-tile__icon">
         <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M12 1.5a.75.75 0 01.75.75V7.5h-1.5V2.25A.75.75 0 0112 1.5z"/><path d="M11.25 7.5v5.69L9.53 11.47a.75.75 0 00-1.06 1.06l3 3a.75.75 0 001.06 0l3-3a.75.75 0 10-1.06-1.06l-1.72 1.72V7.5h3.75a3 3 0 013 3v9a3 3 0 01-3 3h-15a3 3 0 01-3-3v-9a3 3 0 013-3h3.75z"/></svg>
       </div>
@@ -188,7 +188,7 @@
       </div>
     </a>
 
-    <a class="v2-tile" href="/settings/amocrm/">
+    <a class="v2-tile" href="/admin/amocrm/">
       <div class="v2-tile__icon v2-tile__icon--accent">
         <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M19.902 4.098a3.75 3.75 0 00-5.304 0l-4.5 4.5a3.75 3.75 0 001.035 6.037.75.75 0 01-.646 1.353 5.25 5.25 0 01-1.449-8.45l4.5-4.5a5.25 5.25 0 117.424 7.424l-1.757 1.757a.75.75 0 11-1.06-1.06l1.757-1.757a3.75 3.75 0 000-5.304zM12.75 10.25a.75.75 0 01.75.75 5.25 5.25 0 01-1.449 3.62l-4.5 4.5a5.25 5.25 0 11-7.424-7.424l1.757-1.757a.75.75 0 111.06 1.06l-1.757 1.757a3.75 3.75 0 105.304 5.304l4.5-4.5a3.75 3.75 0 001.035-1.933.75.75 0 01.724-.877z"/></svg>
       </div>
@@ -199,7 +199,7 @@
       </div>
     </a>
 
-    <a class="v2-tile" href="/settings/company-columns/">
+    <a class="v2-tile" href="/admin/company-columns/">
       <div class="v2-tile__icon">
         <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M15 3.75H9v16.5h6V3.75zM16.5 20.25h3.375c1.035 0 1.875-.84 1.875-1.875V5.625c0-1.036-.84-1.875-1.875-1.875H16.5v16.5zM4.125 3.75H7.5v16.5H4.125a1.875 1.875 0 01-1.875-1.875V5.625c0-1.036.84-1.875 1.875-1.875z"/></svg>
       </div>
@@ -209,7 +209,7 @@
       </div>
     </a>
 
-    <a class="v2-tile" href="/settings/security/">
+    <a class="v2-tile" href="/admin/security/">
       <div class="v2-tile__icon">
         <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M12 1.5a.75.75 0 01.53.22l8.25 8.25a.75.75 0 010 1.06l-8.25 8.25a.75.75 0 01-1.06 0L3.22 11.03a.75.75 0 010-1.06L11.47 1.72A.75.75 0 0112 1.5zm3.28 8.03a.75.75 0 00-1.06-1.06L11.25 11.44 9.78 9.97a.75.75 0 00-1.06 1.06l2 2a.75.75 0 001.06 0l3.5-3.5z"/></svg>
       </div>
@@ -223,7 +223,7 @@
       </div>
     </a>
 
-    <a class="v2-tile" href="/settings/mobile/overview/">
+    <a class="v2-tile" href="/admin/mobile/overview/">
       <div class="v2-tile__icon">
         <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M10.5 1.875a1.125 1.125 0 012.25 0v.75h3.375a2.25 2.25 0 012.25 2.25v16.5a2.25 2.25 0 01-2.25 2.25h-8.25a2.25 2.25 0 01-2.25-2.25V4.875a2.25 2.25 0 012.25-2.25H10.5v-.75zM12 18a.75.75 0 100 1.5.75.75 0 000-1.5z"/></svg>
       </div>
@@ -233,7 +233,7 @@
       </div>
     </a>
 
-    <a class="v2-tile" href="/settings/calls/stats/">
+    <a class="v2-tile" href="/admin/calls/stats/">
       <div class="v2-tile__icon">
         <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M18.375 2.25c-1.035 0-1.875.84-1.875 1.875v15.75c0 1.035.84 1.875 1.875 1.875h.75c1.035 0 1.875-.84 1.875-1.875V4.125c0-1.036-.84-1.875-1.875-1.875h-.75zM9.75 8.625c0-1.036.84-1.875 1.875-1.875h.75c1.035 0 1.875.84 1.875 1.875v11.25c0 1.035-.84 1.875-1.875 1.875h-.75a1.875 1.875 0 01-1.875-1.875V8.625zM3 13.125c0-1.036.84-1.875 1.875-1.875h.75c1.035 0 1.875.84 1.875 1.875v6.75c0 1.035-.84 1.875-1.875 1.875h-.75A1.875 1.875 0 013 19.875v-6.75z"/></svg>
       </div>
@@ -243,7 +243,7 @@
       </div>
     </a>
 
-    <a class="v2-tile" href="/settings/announcements/">
+    <a class="v2-tile" href="/admin/announcements/">
       <div class="v2-tile__icon v2-tile__icon--accent">
         <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M16.881 4.346A23.112 23.112 0 018.25 6H7.5a5.25 5.25 0 00-.88 10.427 21.593 21.593 0 001.378 3.94c.464 1.004 1.674 1.32 2.582.796l.657-.379c.88-.508 1.165-1.593.772-2.468a17.116 17.116 0 01-.628-1.607 23.11 23.11 0 015.5 1.636c.76.301 1.619-.239 1.619-1.086V5.432c0-.847-.858-1.387-1.62-1.086z"/></svg>
       </div>
@@ -253,7 +253,7 @@
       </div>
     </a>
 
-    <a class="v2-tile" href="/settings/error-log/">
+    <a class="v2-tile" href="/admin/error-log/">
       <div class="v2-tile__icon v2-tile__icon--accent">
         <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.155 2-.288 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z"/></svg>
       </div>
@@ -268,7 +268,7 @@
   {% if MESSENGER_ENABLED %}
   <div class="v2-sec-title">Live-chat</div>
   <div class="v2-settings-grid v2-anim" style="animation-delay:.1s">
-    <a class="v2-tile" href="/settings/messenger/">
+    <a class="v2-tile" href="/admin/messenger/">
       <div class="v2-tile__icon">
         <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M4.913 2.658c2.075-.27 4.19-.408 6.337-.408 2.147 0 4.262.139 6.337.408 1.922.25 3.291 1.861 3.405 3.727a4.403 4.403 0 00-1.032-.211 50.89 50.89 0 00-8.42 0c-2.358.196-4.04 2.19-4.04 4.434v4.286a4.47 4.47 0 002.433 3.984L7.28 21.53A.75.75 0 016 21v-4.03a48.527 48.527 0 01-1.087-.128C2.905 16.58 1.5 14.833 1.5 12.862V6.638c0-1.97 1.405-3.718 3.413-3.979z"/></svg>
       </div>
@@ -277,7 +277,7 @@
         <div class="v2-tile__desc">Виджеты, домены, назначения операторам</div>
       </div>
     </a>
-    <a class="v2-tile" href="/settings/messenger/campaigns/">
+    <a class="v2-tile" href="/admin/messenger/campaigns/">
       <div class="v2-tile__icon v2-tile__icon--accent">
         <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z"/></svg>
       </div>
@@ -286,7 +286,7 @@
         <div class="v2-tile__desc">Proactive-рассылки посетителям сайта</div>
       </div>
     </a>
-    <a class="v2-tile" href="/settings/messenger/automation/">
+    <a class="v2-tile" href="/admin/messenger/automation/">
       <div class="v2-tile__icon">
         <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M14.615 1.595a.75.75 0 01.359.852L12.982 9.75h7.268a.75.75 0 01.548 1.262l-10.5 11.25a.75.75 0 01-1.272-.71l1.992-7.302H3.75a.75.75 0 01-.548-1.262l10.5-11.25a.75.75 0 01.913-.143z"/></svg>
       </div>
@@ -298,7 +298,7 @@
   </div>
   {% endif %}
 
-  {% include "ui/_v2/v2_toggle.html" with target_url="/settings/" target_label="обычную версию" mode="to-v1" %}
+  {% include "ui/_v2/v2_toggle.html" with target_url="/admin/" target_label="обычную версию" mode="to-v1" %}
 </div>
 
 <script>
@@ -322,7 +322,7 @@
         const fd = new FormData();
         fd.append('csrfmiddlewaretoken', csrf);
         fd.append('scale', scale);
-        const res = await fetch('/preferences/ui/v2-scale/', {
+        const res = await fetch('/settings/ui/v2-scale/', {
           method:'POST', body:fd, credentials:'same-origin',
           headers:{'X-Requested-With':'XMLHttpRequest'}
         });

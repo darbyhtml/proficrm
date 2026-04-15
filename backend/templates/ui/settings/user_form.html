@@ -5,7 +5,7 @@
 {% block content %}
   <div class="space-y-4">
     <div>
-      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> / <a class="underline" href="/settings/users/">Пользователи</a> /</div>
+      <div class="text-sm text-brand-dark/70"><a class="underline" href="/admin/">Настройки</a> / <a class="underline" href="/admin/users/">Пользователи</a> /</div>
       <h1 class="text-2xl font-semibold">{% if mode == 'edit' %}Редактировать пользователя{% else %}Новый пользователь{% endif %}</h1>
     </div>
 
@@ -87,7 +87,7 @@
 
       <div class="flex gap-2">
         <button class="btn btn-primary" type="submit">Сохранить</button>
-        <a class="btn btn-outline" href="/settings/users/">Отмена</a>
+        <a class="btn btn-outline" href="/admin/users/">Отмена</a>
       </div>
     </form>
 
@@ -98,7 +98,7 @@
             <div class="text-lg font-semibold">Ключи доступа</div>
             <div class="text-sm text-brand-dark/70">Сгенерируйте новый ключ доступа для пользователя</div>
           </div>
-          <form method="post" action="/settings/users/{{ u.id }}/magic-link/generate/" id="magicLinkGenerateForm">
+          <form method="post" action="/admin/users/{{ u.id }}/magic-link/generate/" id="magicLinkGenerateForm">
             {% csrf_token %}
             <button type="submit" class="btn btn-outline" id="generateMagicLinkBtn">🔗 Сгенерировать ключ</button>
           </form>

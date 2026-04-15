@@ -21,7 +21,7 @@ _TEST_FERNET_KEY = "85--b5Z37dcxRDvHf_xmpOis4j_NGXACmrek0BtzyZo="
 
 
 def _get_csrf(client):
-    r = client.get("/settings/amocrm/migrate/")
+    r = client.get("/admin/amocrm/migrate/")
     if r.status_code != 200:
         return ""
     m = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', r.content.decode())
@@ -76,7 +76,7 @@ class AmocrmMigrateViewTestCase(TestCase):
 
     def test_progress_active_run_null_when_no_import(self):
         """GET progress: active_run: null, если активного импорта нет."""
-        r = self.client.get("/settings/amocrm/migrate/progress/")
+        r = self.client.get("/admin/amocrm/migrate/progress/")
         self.assertEqual(r.status_code, 200)
         data = r.json()
         self.assertIn("active_run", data)
@@ -89,7 +89,7 @@ class AmocrmMigrateViewTestCase(TestCase):
         """GET progress: active_run с run_id при установленной блокировке (ключ per-user)."""
         import json
         cache.set(self._run_key(), json.dumps({"run_id": "abc-123", "status": "running", "started_at": "2025-01-01T12:00:00"}), timeout=60)
-        r = self.client.get("/settings/amocrm/migrate/progress/")
+        r = self.client.get("/admin/amocrm/migrate/progress/")
         self.assertEqual(r.status_code, 200)
         data = r.json()
         self.assertIsNotNone(data.get("active_run"))
@@ -101,7 +101,7 @@ class AmocrmMigrateViewTestCase(TestCase):
         """GET progress: статус done/failed не считается активным → active_run: null (и self-clean ключа)."""
         import json
         cache.set(self._run_key(), json.dumps({"run_id": "x", "status": "done"}), timeout=60)
-        r = self.client.get("/settings/amocrm/migrate/progress/")
+        r = self.client.get("/admin/amocrm/migrate/progress/")
         self.assertEqual(r.status_code, 200)
         self.assertIsNone(r.json().get("active_run"))
         self.assertIsNone(cache.get(self._run_key()))  # self-clean удалил
@@ -111,7 +111,7 @@ class AmocrmMigrateViewTestCase(TestCase):
         import json
         cache.set(self._run_key(), json.dumps({"run_id": "z", "status": "running"}), timeout=60)
         cache.delete(self._run_key())  # эмуляция TTL или падения до finally
-        r = self.client.get("/settings/amocrm/migrate/progress/")
+        r = self.client.get("/admin/amocrm/migrate/progress/")
         self.assertEqual(r.status_code, 200)
         self.assertIsNone(r.json().get("active_run"))
 
@@ -130,9 +130,9 @@ class AmocrmMigrateViewTestCase(TestCase):
                 "import_notes": "on",
                 "import_contacts": "",
             }
-            r = self.client.post("/settings/amocrm/migrate/", post)
+            r = self.client.post("/admin/amocrm/migrate/", post)
         self.assertEqual(r.status_code, 200)
-        prog = self.client.get("/settings/amocrm/migrate/progress/").json()
+        prog = self.client.get("/admin/amocrm/migrate/progress/").json()
         self.assertIsNone(prog.get("active_run"))
 
     def test_new_import_after_done_new_run_id_progress_from_zero(self):
@@ -150,14 +150,14 @@ class AmocrmMigrateViewTestCase(TestCase):
                 "import_notes": "on",
                 "import_contacts": "",
             }
-            r1 = self.client.post("/settings/amocrm/migrate/", post)
+            r1 = self.client.post("/admin/amocrm/migrate/", post)
         self.assertEqual(r1.status_code, 200)
         self.assertIn("run_id", r1.context or {})
         with self._migrate_patchers(_make_result(companies_matched=2, companies_next_offset=2, companies_has_more=False)):
             csrf2 = _get_csrf(self.client)
             post2 = {"csrfmiddlewaretoken": csrf2, "responsible_user_id": "2", "offset": "0", "dry_run": "on",
                      "limit_companies": "10", "migrate_all_companies": "on", "import_tasks": "on", "import_notes": "on", "import_contacts": ""}
-            r2 = self.client.post("/settings/amocrm/migrate/", post2)
+            r2 = self.client.post("/admin/amocrm/migrate/", post2)
         self.assertEqual(r2.status_code, 200)
         self.assertIsNotNone(r2.context.get("result"))
         self.assertEqual(r2.context["result"].companies_matched, 2)
@@ -180,7 +180,7 @@ class AmocrmMigrateViewTestCase(TestCase):
                 "import_notes": "on",
                 "import_contacts": "",
             }
-            r = self.client.post("/settings/amocrm/migrate/", post)
+            r = self.client.post("/admin/amocrm/migrate/", post)
         self.assertEqual(r.status_code, 200)
         self.assertFalse(mocks[2].called)
         self.assertContains(r, "Импорт уже выполняется")
@@ -200,7 +200,7 @@ class AmocrmMigrateViewTestCase(TestCase):
                 ("custom_field_id", ""), ("custom_value_label", ""), ("custom_value_enum_id", ""),
             ])
             r = self.client.post(
-                "/settings/amocrm/migrate/",
+                "/admin/amocrm/migrate/",
                 body,
                 content_type="application/x-www-form-urlencoded",
             )
@@ -223,7 +223,7 @@ class AmocrmMigrateViewTestCase(TestCase):
                 "import_notes": "on",
                 "import_contacts": "",
             }
-            r = self.client.post("/settings/amocrm/migrate/", post)
+            r = self.client.post("/admin/amocrm/migrate/", post)
         self.assertEqual(r.status_code, 200)
         self.assertTrue(mocks[2].called)
         self.assertEqual(mocks[2].call_args[1]["responsible_user_id"], 1)

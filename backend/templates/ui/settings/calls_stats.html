@@ -6,9 +6,9 @@
   <div class="space-y-4">
     <div>
       <div class="text-sm muted">
-        <a class="link" href="/settings/">Настройки</a> /
+        <a class="link" href="/admin/">Настройки</a> /
       </div>
-      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> /</div>
+      <div class="text-sm text-brand-dark/70"><a class="underline" href="/admin/">Настройки</a> /</div>
       <h1 class="text-2xl font-semibold">Статистика звонков</h1>
       <div class="text-sm text-brand-dark/70">
         Период: <b>{{ period_label }}</b>
@@ -59,7 +59,7 @@
       </div>
       <div class="ml-auto flex gap-2">
         <button class="btn btn-primary" type="submit">Применить</button>
-        <a href="/settings/calls/stats/" class="btn btn-outline">Сброс</a>
+        <a href="/admin/calls/stats/" class="btn btn-outline">Сброс</a>
       </div>
     </form>
 
@@ -84,7 +84,7 @@
               <tr>
                 <td>
                   <div class="font-medium">
-                    <a href="/settings/calls/stats/{{ stat.user.id }}/?period={{ period }}" class="link">
+                    <a href="/admin/calls/stats/{{ stat.user.id }}/?period={{ period }}" class="link">
                       {{ stat.user.get_full_name|default:stat.user.username }}
                     </a>
                   </div>

@@ -5,13 +5,13 @@
   <div class="space-y-4">
     <div class="flex items-start justify-between gap-3 flex-wrap">
       <div>
-        <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> / <a class="underline" href="/settings/access/">Доступы</a> /</div>
+        <div class="text-sm text-brand-dark/70"><a class="underline" href="/admin/">Настройки</a> / <a class="underline" href="/admin/access/">Доступы</a> /</div>
         <h1 class="text-2xl font-semibold">Доступы: {{ role_label }}</h1>
         <div class="text-sm text-brand-dark/70">Роль: <code>{{ role }}</code></div>
       </div>
       <div class="flex items-center gap-2">
         <a class="btn btn-outline" href="{% url 'settings_access' %}">← К ролям</a>
-        <a class="btn btn-outline" href="/settings/">Настройки</a>
+        <a class="btn btn-outline" href="/admin/">Настройки</a>
       </div>
     </div>
 
