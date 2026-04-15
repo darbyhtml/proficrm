@@ -721,48 +721,68 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             | fio_filters
         ).distinct()
 
-    responsible = _get_str_param("responsible")
-    # Если параметр responsible не указан и есть default_responsible_id, применяем фильтр по умолчанию
-    if not responsible and default_responsible_id is not None:
-        qs = qs.filter(responsible_id=default_responsible_id)
-        responsible = str(default_responsible_id)  # Для возврата в результатах
-    elif responsible:
-        if responsible == RESPONSIBLE_FILTER_NONE:
-            qs = qs.filter(responsible__isnull=True)
-        else:
+    # Локальный helper (ниже ниже тоже используется для regions)
+    def _get_list_param_local(key: str) -> list[str]:
+        if hasattr(params, "getlist"):
             try:
-                responsible_id = int(responsible)
-                qs = qs.filter(responsible_id=responsible_id)
+                return [str(x).strip() for x in (params.getlist(key) or []) if str(x).strip()]
+            except Exception:
+                return []
+        v = params.get(key, [])
+        if isinstance(v, list):
+            return [str(x).strip() for x in v if str(x).strip()]
+        if isinstance(v, str):
+            return [v.strip()] if v.strip() else []
+        return []
+
+    def _to_int_list(vals: list[str]) -> list[int]:
+        out: list[int] = []
+        for v in vals:
+            try:
+                out.append(int(v))
             except (ValueError, TypeError):
-                # Некорректный ID - пропускаем фильтр
                 pass
+        return out
 
-    status = _get_str_param("status")
-    if status:
-        try:
-            status_id = int(status)
-            qs = qs.filter(status_id=status_id)
-        except (ValueError, TypeError):
-            # Некорректный ID - пропускаем фильтр
-            pass
+    # --- Responsible (multi-select + "none") ---
+    responsible_raw = _get_list_param_local("responsible")
+    selected_responsibles: list[str] = []
+    has_none = RESPONSIBLE_FILTER_NONE in responsible_raw
+    responsible_ids = _to_int_list([v for v in responsible_raw if v != RESPONSIBLE_FILTER_NONE])
+    if not responsible_raw and default_responsible_id is not None:
+        qs = qs.filter(responsible_id=default_responsible_id)
+        responsible = str(default_responsible_id)
+        selected_responsibles = [responsible]
+    else:
+        if responsible_ids and has_none:
+            qs = qs.filter(Q(responsible_id__in=responsible_ids) | Q(responsible__isnull=True))
+        elif responsible_ids:
+            qs = qs.filter(responsible_id__in=responsible_ids)
+        elif has_none:
+            qs = qs.filter(responsible__isnull=True)
+        selected_responsibles = [str(i) for i in responsible_ids] + ([RESPONSIBLE_FILTER_NONE] if has_none else [])
+        responsible = selected_responsibles[0] if selected_responsibles else ""
 
-    branch = _get_str_param("branch")
-    if branch:
-        try:
-            branch_id = int(branch)
-            qs = qs.filter(branch_id=branch_id)
-        except (ValueError, TypeError):
-            # Некорректный ID - пропускаем фильтр
-            pass
+    # --- Status (multi) ---
+    status_ids = _to_int_list(_get_list_param_local("status"))
+    if status_ids:
+        qs = qs.filter(status_id__in=status_ids)
+    selected_statuses = [str(i) for i in status_ids]
+    status = selected_statuses[0] if selected_statuses else ""
 
-    sphere = _get_str_param("sphere")
-    if sphere:
-        try:
-            sphere_id = int(sphere)
-            qs = qs.filter(spheres__id=sphere_id)
-        except (ValueError, TypeError):
-            # Некорректный ID - пропускаем фильтр
-            pass
+    # --- Branch (multi) ---
+    branch_ids = _to_int_list(_get_list_param_local("branch"))
+    if branch_ids:
+        qs = qs.filter(branch_id__in=branch_ids)
+    selected_branches = [str(i) for i in branch_ids]
+    branch = selected_branches[0] if selected_branches else ""
+
+    # --- Sphere (multi) ---
+    sphere_ids = _to_int_list(_get_list_param_local("sphere"))
+    if sphere_ids:
+        qs = qs.filter(spheres__id__in=sphere_ids)
+    selected_spheres = [str(i) for i in sphere_ids]
+    sphere = selected_spheres[0] if selected_spheres else ""
 
     contract_type = _get_str_param("contract_type")
     if contract_type:
@@ -849,19 +869,24 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             qs = qs.filter(Exists(tasks_in_range))
 
     filter_active = any([
-        q, responsible, status, branch, sphere, contract_type, region_ids,
+        q, responsible_ids, has_none, status_ids, branch_ids, sphere_ids,
+        contract_type, region_ids,
         overdue == "1", bool(task_filter),
     ])
     return {
         "qs": qs.distinct(),
         "q": q,
         "responsible": responsible,
+        "selected_responsibles": selected_responsibles,
         "status": status,
+        "selected_statuses": selected_statuses,
         "branch": branch,
+        "selected_branches": selected_branches,
         "sphere": sphere,
+        "selected_spheres": selected_spheres,
         "contract_type": contract_type,
-        "region": region,  # Для обратной совместимости
-        "selected_regions": selected_regions,  # Список выбранных регионов
+        "region": region,
+        "selected_regions": selected_regions,
         "overdue": overdue,
         "task_filter": task_filter,
         "filter_active": filter_active,
