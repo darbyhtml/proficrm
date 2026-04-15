@@ -144,13 +144,10 @@ class ErrorLog(models.Model):
     
     @staticmethod
     def _get_client_ip(request):
-        """Получить IP адрес клиента из запроса."""
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0].strip()
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip if ip else None
+        """IP клиента через SSOT accounts.security.get_client_ip (PROXY_IPS allowlist)."""
+        from accounts.security import get_client_ip
+        ip = get_client_ip(request)
+        return None if ip == "unknown" else ip
     
     @staticmethod
     def _safe_request_data(request):

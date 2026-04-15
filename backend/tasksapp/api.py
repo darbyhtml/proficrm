@@ -111,6 +111,8 @@ class TaskTypeViewSet(viewsets.ModelViewSet):
     serializer_class = TaskTypeSerializer
     queryset = TaskType.objects.all().order_by("name")
     search_fields = ("name",)
+    permission_classes = [IsAuthenticated, PolicyPermission]
+    policy_resource_prefix = "api:task_types"
 
 
 class TaskViewSet(viewsets.ModelViewSet):

@@ -674,6 +674,9 @@ LOGGING = {
         "require_debug_false": {
             "()": "django.utils.log.RequireDebugFalse",
         },
+        "request_id": {
+            "()": "crm.request_id_middleware.RequestIdLoggingFilter",
+        },
     },
     "handlers": {
         "console": {
@@ -681,6 +684,7 @@ LOGGING = {
             "class": "logging.StreamHandler",
             # ENTERPRISE: JSON formatter в production для structured logging
             "formatter": "json" if not DEBUG else "verbose",
+            "filters": ["request_id"],
         },
         **(
             {

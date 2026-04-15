@@ -26,10 +26,8 @@ def unsubscribe(request: HttpRequest, token: str) -> HttpResponse:
     Отписка по токену. @csrf_exempt оправдан: List-Unsubscribe-Post от email-клиентов
     не несёт CSRF-токен. Защита от перебора — rate limit по IP.
     """
-    ip = (
-        request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
-        or request.META.get("REMOTE_ADDR", "unknown")
-    )
+    from accounts.security import get_client_ip
+    ip = get_client_ip(request)
     throttle_key = f"mailer:unsub_ratelimit:{ip}"
     try:
         from django.core.cache import cache as _cache
