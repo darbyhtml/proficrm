@@ -5,10 +5,27 @@
 {% comment %}
   Preview-версия списка задач. Использует общие стили _v2/v2_styles.html.
   Контекст — тот же что у ui.views.tasks.task_list (через флаг request._preview_v2).
+  Phase 2: sort, date range, bulk reassign, checkboxes, remember filters.
 {% endcomment %}
 
 {% block extra_head %}
   {% include "ui/_v2/v2_styles.html" %}
+  <style>
+    .v2-sort{display:inline-flex;align-items:center;gap:4px;color:inherit;text-decoration:none;cursor:pointer}
+    .v2-sort:hover{color:var(--v2-primary)}
+    .v2-sort--active{color:var(--v2-primary);font-weight:700}
+    .v2-sort__arrow{font-size:10px;opacity:.7}
+    .v2-bulk{position:sticky;top:12px;z-index:20;margin-bottom:12px;padding:10px 14px;
+      background:#fff;border:1px solid var(--v2-border);border-radius:12px;
+      display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+      box-shadow:0 2px 8px rgba(0,0,0,.04)}
+    .v2-bulk__label{font-size:13px;font-weight:600;color:var(--v2-text-muted)}
+    .v2-bulk__count{margin-left:auto;font-size:13px;color:var(--v2-text-muted)}
+    .v2-chk{width:16px;height:16px;accent-color:var(--v2-primary);cursor:pointer}
+    .v2-tr--head{background:var(--v2-bg-soft);font-size:12px;text-transform:uppercase;
+      letter-spacing:.04em;color:var(--v2-text-muted);font-weight:600}
+    .v2-tr--head > *{padding:10px 8px!important}
+  </style>
 {% endblock %}
 
 {% block content %}
@@ -67,6 +84,13 @@
         </select>
         {% endif %}
 
+        <label class="v2-item__meta" style="display:inline-flex;align-items:center;gap:4px">
+          с <input type="date" name="date_from" value="{{ date_from|default:'' }}" class="v2-input" style="padding:6px 8px" onchange="this.form.submit()" />
+        </label>
+        <label class="v2-item__meta" style="display:inline-flex;align-items:center;gap:4px">
+          по <input type="date" name="date_to" value="{{ date_to|default:'' }}" class="v2-input" style="padding:6px 8px" onchange="this.form.submit()" />
+        </label>
+
         <label class="v2-chip {% if mine == '1' %}v2-chip--active{% endif %}" style="cursor:pointer">
           <input type="checkbox" name="mine" value="1" {% if mine == '1' %}checked{% endif %}
                  onchange="this.form.submit()" style="margin-right:6px" />
@@ -88,14 +112,85 @@
           Выполненные
         </label>
 
+        {# Сохраняем сортировку при смене фильтров #}
+        {% if sort_field %}<input type="hidden" name="sort" value="{{ sort_field }}" />{% endif %}
+        {% if sort_dir %}<input type="hidden" name="dir" value="{{ sort_dir }}" />{% endif %}
+
         <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list_v2_preview' %}"
            title="Сбросить все фильтры">Сброс</a>
       </form>
 
+      {% if can_bulk_actions and page.object_list and can_bulk_reschedule %}
+      <form method="post" action="{% url 'task_bulk_reassign' %}" id="v2BulkForm" class="v2-bulk">
+        {% csrf_token %}
+        <span class="v2-bulk__label">Массовые действия</span>
+        {% if transfer_targets %}
+        <select name="assigned_to_id" class="v2-select" required>
+          <option value="">Переназначить на…</option>
+          {% regroup transfer_targets by branch as bulk_branches %}
+          {% for bg in bulk_branches %}
+            <optgroup label="{{ bg.grouper.name|default:'Без подразделения' }}">
+              {% for u in bg.list %}
+                <option value="{{ u.id }}">{{ u|full_name }}</option>
+              {% endfor %}
+            </optgroup>
+          {% endfor %}
+        </select>
+        <button type="submit" name="apply_mode" value="selected" class="v2-btn v2-btn--sm" id="v2BulkApply" disabled>Применить</button>
+        {% endif %}
+        <span class="v2-bulk__count">Выбрано: <b id="v2BulkCount">0</b></span>
+        <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" id="v2BulkClear" disabled>Снять</button>
+      </form>
+      {% endif %}
+
+      {% with grid_cols="grid-template-columns:"|add:""|add:"" %}{% endwith %}
       <div class="v2-table">
+        {% if page.object_list %}
+        <div class="v2-tr v2-tr--head"
+             style="grid-template-columns:{% if show_task_checkboxes %}28px {% endif %}16px minmax(0,1.6fr) minmax(0,1fr) 160px 140px">
+          {% if show_task_checkboxes %}<div><input type="checkbox" id="v2BulkAll" class="v2-chk" /></div>{% endif %}
+          <div></div>
+          <div>
+            <a class="v2-sort {% if sort_field == 'title' %}v2-sort--active{% endif %}"
+               href="?{% if qs %}{{ qs }}&{% endif %}sort=title&dir={% if sort_field == 'title' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+              Задача
+              {% if sort_field == 'title' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+            </a>
+          </div>
+          <div>
+            <a class="v2-sort {% if sort_field == 'company' %}v2-sort--active{% endif %}"
+               href="?{% if qs %}{{ qs }}&{% endif %}sort=company&dir={% if sort_field == 'company' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+              Компания
+              {% if sort_field == 'company' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+            </a>
+          </div>
+          <div>
+            <a class="v2-sort {% if sort_field == 'due_at' %}v2-sort--active{% endif %}"
+               href="?{% if qs %}{{ qs }}&{% endif %}sort=due_at&dir={% if sort_field == 'due_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+              Срок
+              {% if sort_field == 'due_at' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+            </a>
+          </div>
+          <div style="text-align:right">
+            <a class="v2-sort {% if sort_field == 'assignee' %}v2-sort--active{% endif %}"
+               href="?{% if qs %}{{ qs }}&{% endif %}sort=assignee&dir={% if sort_field == 'assignee' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
+              Исполнитель
+              {% if sort_field == 'assignee' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
+            </a>
+          </div>
+        </div>
+        {% endif %}
+
         {% for t in page.object_list %}
-        <a class="v2-tr" href="{% url 'task_view' t.id %}"
-           style="grid-template-columns:16px minmax(0,1.6fr) minmax(0,1fr) 160px 140px">
+        <div class="v2-tr" style="grid-template-columns:{% if show_task_checkboxes %}28px {% endif %}16px minmax(0,1.6fr) minmax(0,1fr) 160px 140px;cursor:pointer"
+             onclick="if(event.target.tagName!=='INPUT'&&event.target.tagName!=='LABEL')location.href='{% url 'task_view' t.id %}'">
+          {% if show_task_checkboxes %}
+          <div onclick="event.stopPropagation()">
+            <label style="display:flex;align-items:center;justify-content:center;cursor:pointer">
+              <input type="checkbox" class="v2-chk v2-bulk-row" name="selected_task_ids" value="{{ t.id }}" form="v2BulkForm" />
+            </label>
+          </div>
+          {% endif %}
           <span class="v2-item__dot
             {% if t.status == 'new' %}v2-item__dot--primary
             {% elif t.status == 'in_progress' %}v2-item__dot--accent
@@ -103,7 +198,7 @@
             {% endif %}
             {% if t.due_at and t.due_at < now and t.status != 'done' %}v2-item__dot--danger{% endif %}"></span>
           <div class="v2-td" style="min-width:0">
-            <div class="v2-item__title">{{ t.title|default:"(без названия)" }}</div>
+            <div class="v2-item__title">{% if t.is_urgent %}⚡ {% endif %}{{ t.title|default:"(без названия)" }}</div>
             {% if t.description %}
               <div class="v2-item__meta">{{ t.description|truncatechars:140 }}</div>
             {% endif %}
@@ -117,7 +212,7 @@
           <div class="v2-td v2-item__meta" style="text-align:right">
             {% if t.assigned_to %}{{ t.assigned_to|full_name }}{% endif %}
           </div>
-        </a>
+        </div>
         {% empty %}
         <div class="v2-card__empty">
           <svg width="48" height="48" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd" style="color:var(--v2-text-muted);margin-bottom:8px">
@@ -133,8 +228,8 @@
       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:12px;border-top:1px solid var(--v2-border);font-size:13px;color:var(--v2-text-muted)">
         <div>Стр. {{ page.number }} из {{ page.paginator.num_pages }} · всего {{ tasks_count }}</div>
         <div style="display:flex;gap:8px">
-          {% if page.has_previous %}<a class="v2-btn v2-btn--ghost v2-btn--sm" href="?page={{ page.previous_page_number }}">← назад</a>{% endif %}
-          {% if page.has_next %}<a class="v2-btn v2-btn--ghost v2-btn--sm" href="?page={{ page.next_page_number }}">вперёд →</a>{% endif %}
+          {% if page.has_previous %}<a class="v2-btn v2-btn--ghost v2-btn--sm" href="?page={{ page.previous_page_number }}{% if qs %}&{{ qs }}{% endif %}">← назад</a>{% endif %}
+          {% if page.has_next %}<a class="v2-btn v2-btn--ghost v2-btn--sm" href="?page={{ page.next_page_number }}{% if qs %}&{{ qs }}{% endif %}">вперёд →</a>{% endif %}
         </div>
       </div>
       {% endif %}
@@ -143,4 +238,80 @@
 
   {% include "ui/_v2/v2_toggle.html" with target_url="/tasks/" target_label="обычную версию" mode="to-v1" %}
 </div>
+
+<script>
+// Bulk selection
+(function(){
+  const form = document.getElementById('v2BulkForm');
+  if(!form) return;
+  const all = document.getElementById('v2BulkAll');
+  const rows = document.querySelectorAll('.v2-bulk-row');
+  const count = document.getElementById('v2BulkCount');
+  const apply = document.getElementById('v2BulkApply');
+  const clear = document.getElementById('v2BulkClear');
+  function update(){
+    const n = document.querySelectorAll('.v2-bulk-row:checked').length;
+    if(count) count.textContent = n;
+    if(apply) apply.disabled = n === 0;
+    if(clear) clear.disabled = n === 0;
+    if(all) all.checked = n > 0 && n === rows.length;
+  }
+  if(all) all.addEventListener('change', function(){
+    rows.forEach(r => r.checked = all.checked);
+    update();
+  });
+  rows.forEach(r => r.addEventListener('change', update));
+  if(clear) clear.addEventListener('click', function(){
+    rows.forEach(r => r.checked = false);
+    if(all) all.checked = false;
+    update();
+  });
+  // Инжектим фильтры в форму при сабмите
+  form.addEventListener('submit', function(e){
+    const filters = document.getElementById('v2TaskFilters');
+    if(!filters) return;
+    ['q','status','assigned_to','date_from','date_to','mine','today','overdue','show_done','sort','dir'].forEach(name => {
+      const el = filters.querySelector('[name="'+name+'"]');
+      if(!el) return;
+      const val = el.type === 'checkbox' ? (el.checked ? el.value : '') : el.value;
+      if(!val) return;
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = name;
+      hidden.value = val;
+      form.appendChild(hidden);
+    });
+  });
+  update();
+})();
+
+// Remember filters в localStorage
+(function(){
+  const KEY = 'v2_task_filters_v1';
+  const form = document.getElementById('v2TaskFilters');
+  if(!form) return;
+  const url = new URL(window.location.href);
+  // Если пришли без параметров — попробовать восстановить
+  const hasParams = Array.from(url.searchParams.keys()).filter(k => k !== 'page').length > 0;
+  if(!hasParams){
+    try{
+      const saved = localStorage.getItem(KEY);
+      if(saved){
+        const params = new URLSearchParams(saved);
+        if(Array.from(params.keys()).length > 0){
+          window.location.search = '?' + params.toString();
+          return;
+        }
+      }
+    }catch(e){}
+  } else {
+    // Сохранить текущие фильтры
+    try{
+      const params = new URLSearchParams(url.search);
+      params.delete('page');
+      localStorage.setItem(KEY, params.toString());
+    }catch(e){}
+  }
+})();
+</script>
 {% endblock %}
