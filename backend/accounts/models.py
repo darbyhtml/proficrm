@@ -29,10 +29,12 @@ class Branch(models.Model):
 
 class User(AbstractUser):
     class Role(models.TextChoices):
+        # NOTE: `sales_head` в коде = «РОП» в UI (см. docs/decisions.md 2026-04-15).
         MANAGER = "manager", "Менеджер"
-        BRANCH_DIRECTOR = "branch_director", "Директор филиала"
-        SALES_HEAD = "sales_head", "Руководитель отдела продаж"
+        BRANCH_DIRECTOR = "branch_director", "Директор подразделения"
+        SALES_HEAD = "sales_head", "РОП"
         GROUP_MANAGER = "group_manager", "Управляющий группой компаний"
+        TENDERIST = "tenderist", "Тендерист"
         ADMIN = "admin", "Администратор"
 
     class DataScope(models.TextChoices):
@@ -71,6 +73,16 @@ class User(AbstractUser):
     def __str__(self) -> str:
         full = f"{self.last_name} {self.first_name}".strip()
         return full or self.get_username()
+
+    @property
+    def is_tenderist(self) -> bool:
+        """Тендерист — read-only роль для тендерного отдела (см. decisions.md 2026-04-15)."""
+        return self.role == self.Role.TENDERIST
+
+    @property
+    def is_admin_role(self) -> bool:
+        """True для role=ADMIN или is_superuser. Использовать вместо is_staff в бизнес-логике."""
+        return self.is_superuser or self.role == self.Role.ADMIN
 
 
 class MagicLinkToken(models.Model):

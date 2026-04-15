@@ -17,6 +17,10 @@ def can_edit_company(user: User, company: Company) -> bool:
     if not user or not user.is_authenticated or not user.is_active:
         return False
 
+    # Тендерист — read-only, редактировать не может никогда
+    if user.role == User.Role.TENDERIST:
+        return False
+
     if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
         return True
 
@@ -39,6 +43,10 @@ def editable_company_qs(user: User) -> QuerySet[Company]:
     Используется для выпадающих списков (например, выбор компании при постановке задачи).
     """
     qs = Company.objects.all().select_related("responsible", "branch")
+
+    # Тендерист не может редактировать ничего
+    if user.role == User.Role.TENDERIST:
+        return qs.none()
 
     if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
         return qs
@@ -132,7 +140,10 @@ def get_users_for_lists(user: User = None, exclude_admin: bool = True) -> QueryS
         QuerySet пользователей, отсортированный по филиалу, фамилии, имени
     """
     qs = User.objects.filter(is_active=True)
-    
+
+    # Тендеристы не могут быть ответственными за компании — исключаем всегда
+    qs = qs.exclude(role=User.Role.TENDERIST)
+
     # Исключаем администраторов
     if exclude_admin:
         qs = qs.exclude(role=User.Role.ADMIN)

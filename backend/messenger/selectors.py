@@ -22,6 +22,10 @@ def visible_inboxes_qs(user: User) -> QuerySet[Inbox]:
     if not user or not user.is_authenticated or not user.is_active:
         return qs.none()
 
+    # Тендерист не участвует в мессенджере вообще.
+    if user.role == User.Role.TENDERIST:
+        return qs.none()
+
     # Полный доступ к inbox'ам только у ADMIN и superuser.
     if user.is_superuser or user.role == User.Role.ADMIN:
         return qs
@@ -43,6 +47,10 @@ def visible_conversations_qs(user: User) -> QuerySet[Conversation]:
     qs = Conversation.objects.select_related("inbox", "contact", "assignee", "branch", "region")
 
     if not user or not user.is_authenticated or not user.is_active:
+        return qs.none()
+
+    # Тендерист не участвует в мессенджере вообще.
+    if user.role == User.Role.TENDERIST:
         return qs.none()
 
     # Полный доступ только у ADMIN и superuser.

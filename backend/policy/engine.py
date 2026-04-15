@@ -89,6 +89,51 @@ def baseline_allowed_for_role(*, role: str, resource_type: str, resource_key: st
     if is_superuser:
         return True
 
+    # --- Тендерист: read-only участник тендерного отдела ---
+    # См. docs/decisions.md [2026-04-15] и docs/roles-access-matrix.md §7.2.
+    # Обрабатываем отдельным блоком, т.к. правила сильно отличаются от остальных ролей.
+    if role == User.Role.TENDERIST:
+        if resource_type == PolicyRule.ResourceType.PAGE:
+            allowed_pages = {
+                "ui:dashboard",
+                "ui:companies:list",
+                "ui:companies:detail",
+                "ui:tasks:list",
+                "ui:tasks:detail",
+                "ui:help",
+                "ui:preferences",
+                "ui:notifications",
+                "ui:notifications:all",
+                "ui:notifications:reminders",
+            }
+            return resource_key in allowed_pages
+        if resource_type == PolicyRule.ResourceType.ACTION:
+            # Задачи — как менеджер, только свои (детальная проверка в коде)
+            if resource_key in (
+                "ui:tasks:create",
+                "ui:tasks:update",
+                "ui:tasks:delete",
+                "ui:tasks:status",
+                "ui:tasks:bulk_reschedule",
+            ):
+                return True
+            # Уведомления
+            if resource_key in (
+                "ui:notifications:poll",
+                "ui:notifications:mark_read",
+                "ui:notifications:mark_all_read",
+            ):
+                return True
+            # Поиск/автокомплит компаний разрешаем (нужно для работы)
+            if resource_key == "ui:companies:autocomplete":
+                return True
+            # Всё остальное: компании write, рассылки, настройки, мессенджер — запрещено
+            return False
+        # API/phone/прочее — запрещено тендеристу по умолчанию
+        if resource_key.startswith("api:") or resource_key.startswith("phone:"):
+            return False
+        return False
+
     # Pages
     if resource_type == PolicyRule.ResourceType.PAGE:
         if resource_key in (

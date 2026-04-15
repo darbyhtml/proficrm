@@ -157,6 +157,8 @@ class InboxRoundRobinService:
                 User.objects.filter(
                     branch_id=self.inbox.branch_id,
                     is_active=True,
-                ).exclude(role=User.Role.ADMIN).values_list('id', flat=True)
+                )
+                .exclude(role__in=[User.Role.ADMIN, User.Role.TENDERIST])
+                .values_list('id', flat=True)
             )
         return []
