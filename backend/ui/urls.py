@@ -73,6 +73,7 @@ urlpatterns = [
     path("companies/<uuid:company_id>/deals/<int:deal_id>/delete/", views.company_deal_delete, name="company_deal_delete"),
     path("phone/call/", views.phone_call_create, name="phone_call_create"),
     path("tasks/", views.task_list, name="task_list"),
+    path("_preview/tasks-v2/", views.task_list_v2_preview, name="task_list_v2_preview"),
     path("tasks/bulk-reassign/", views.task_bulk_reassign, name="task_bulk_reassign"),
     path("tasks/bulk-reschedule/", views.task_bulk_reschedule, name="task_bulk_reschedule"),
     path("tasks/bulk-reschedule/preview/", views.task_bulk_reschedule_preview, name="task_bulk_reschedule_preview"),

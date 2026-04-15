@@ -46,7 +46,7 @@ from ui.views.company_detail import (
     phone_call_create,
 )  # noqa: F401
 from ui.views.tasks import (
-    task_list, task_create,
+    task_list, task_list_v2_preview, task_create,
     task_delete, task_bulk_reassign,
     task_bulk_reschedule, task_bulk_reschedule_preview,
     task_bulk_reschedule_undo,
