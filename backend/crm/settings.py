@@ -292,6 +292,11 @@ SESSION_SAVE_EVERY_REQUEST = True
 
 # Mailer encryption key (Fernet). Generate once and store in env on VDS.
 MAILER_FERNET_KEY = os.getenv("MAILER_FERNET_KEY", "")
+# Старые ключи Fernet для расшифровки уже зашифрованных значений после
+# ротации. Формат: запятой-разделённый список base64 URL-safe ключей.
+MAILER_FERNET_KEYS_OLD = [
+    k.strip() for k in os.getenv("MAILER_FERNET_KEYS_OLD", "").split(",") if k.strip()
+]
 
 # В production MAILER_FERNET_KEY обязателен — без него пароли SMTP хранятся в plaintext.
 # Генерация: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"

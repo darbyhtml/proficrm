@@ -81,6 +81,29 @@ class TaskSerializer(serializers.ModelSerializer):
                 f"Допустимые: {', '.join(valid_freqs)}"
             )
 
+        # Защита от DoS: ограничиваем COUNT и проверяем, что правило вообще
+        # парсится (rrulestr бросит исключение на мусоре).
+        parts = {p.split("=", 1)[0]: p.split("=", 1)[1] for p in value_upper.split(";") if "=" in p}
+        try:
+            count_val = int(parts.get("COUNT", "0") or "0")
+        except ValueError:
+            raise serializers.ValidationError("COUNT должен быть целым числом.")
+        if count_val and count_val > 1000:
+            raise serializers.ValidationError("COUNT не может превышать 1000.")
+        try:
+            interval_val = int(parts.get("INTERVAL", "1") or "1")
+        except ValueError:
+            raise serializers.ValidationError("INTERVAL должен быть целым числом.")
+        if interval_val < 1 or interval_val > 366:
+            raise serializers.ValidationError("INTERVAL должен быть в диапазоне 1..366.")
+
+        try:
+            from dateutil.rrule import rrulestr
+            from django.utils import timezone as _tz
+            rrulestr(value, dtstart=_tz.now())
+        except Exception as exc:
+            raise serializers.ValidationError(f"Некорректное правило RRULE: {exc}")
+
         return value
 
 

@@ -40,15 +40,33 @@ def _parse_rrule_occurrences(rrule_str: str, dtstart, after, until):
 
     Возвращает [] при любой ошибке парсинга.
     """
+    # Жёсткий лимит количества вхождений, чтобы RRULE с COUNT=10_000_000
+    # или FREQ=SECONDLY не подвесил celery-worker.
+    MAX_OCCURRENCES = 1000
+    MAX_ITERATIONS = 100_000
     try:
         from dateutil.rrule import rrulestr
         rule = rrulestr(rrule_str, dtstart=dtstart, ignoretz=False)
         result = []
+        iterated = 0
         for d in rule:
+            iterated += 1
+            if iterated > MAX_ITERATIONS:
+                logger.warning(
+                    "recurrence: RRULE %r превысил MAX_ITERATIONS=%d, обрываем",
+                    rrule_str, MAX_ITERATIONS,
+                )
+                break
             if d > until:
                 break
             if d > after:
                 result.append(d)
+                if len(result) >= MAX_OCCURRENCES:
+                    logger.warning(
+                        "recurrence: RRULE %r достиг MAX_OCCURRENCES=%d, обрываем",
+                        rrule_str, MAX_OCCURRENCES,
+                    )
+                    break
         return result
     except Exception as exc:
         logger.warning("recurrence: не удалось распарсить RRULE %r: %s", rrule_str, exc)
