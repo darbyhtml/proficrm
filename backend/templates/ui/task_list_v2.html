@@ -25,6 +25,46 @@
     .v2-tr--head{background:var(--v2-bg-soft);font-size:12px;text-transform:uppercase;
       letter-spacing:.04em;color:var(--v2-text-muted);font-weight:600}
     .v2-tr--head > *{padding:10px 8px!important}
+
+    /* Компактная панель фильтров: поиск + чипсы + кнопка popover */
+    .v2-fbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+    .v2-fbar__search{flex:1;min-width:220px}
+    .v2-fbar__badge{display:inline-flex;align-items:center;justify-content:center;
+      min-width:18px;height:18px;padding:0 6px;border-radius:999px;
+      background:var(--v2-primary);color:#fff;font-size:11px;font-weight:700;margin-left:4px}
+    .v2-fchips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+    .v2-fchips:empty{display:none}
+    .v2-fchip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;
+      background:var(--v2-primary-50);color:var(--v2-primary-dark);
+      border:1px solid color-mix(in srgb, var(--v2-primary) 20%, transparent);
+      border-radius:999px;font-size:12px;font-weight:500;cursor:pointer;
+      transition:all .12s ease}
+    .v2-fchip:hover{background:var(--v2-primary);color:#fff;border-color:var(--v2-primary)}
+    .v2-fchip__x{opacity:.7;font-size:14px;line-height:1}
+    .v2-fchip--warn{background:var(--v2-warn-50);color:#8B3A0A;border-color:#FFB874}
+    .v2-fchip--warn:hover{background:var(--v2-warn);color:#fff;border-color:var(--v2-warn)}
+    .v2-fchip--danger{background:var(--v2-danger-50);color:#8B1A1A;border-color:#F4B5B5}
+    .v2-fchip--danger:hover{background:var(--v2-danger);color:#fff;border-color:var(--v2-danger)}
+    .v2-fchip--success{background:var(--v2-success-50);color:#1B5E20;border-color:#A5D6A7}
+    .v2-fchip--success:hover{background:var(--v2-success);color:#fff;border-color:var(--v2-success)}
+
+    /* Popover с полями */
+    .v2-fpop{position:absolute;z-index:40;top:100%;left:0;right:0;margin-top:6px;
+      background:var(--v2-bg);border:1px solid var(--v2-border-strong);
+      border-radius:var(--v2-radius-lg);box-shadow:var(--v2-shadow-lg);
+      padding:16px;max-width:760px}
+    .v2-fpop[hidden]{display:none}
+    .v2-fpop__grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+    .v2-fpop__field{display:flex;flex-direction:column;gap:4px}
+    .v2-fpop__field label{font-size:11px;font-weight:600;color:var(--v2-text-muted);
+      text-transform:uppercase;letter-spacing:.05em}
+    .v2-fpop__flags{display:flex;flex-wrap:wrap;gap:8px;padding-top:4px}
+    .v2-fpop__flags label{display:inline-flex;align-items:center;gap:6px;
+      font-size:13px;color:var(--v2-text-soft);cursor:pointer}
+    .v2-fpop__foot{display:flex;gap:8px;justify-content:flex-end;align-items:center;
+      margin-top:14px;padding-top:12px;border-top:1px solid var(--v2-bg-muted)}
+    .v2-fpop__hint{margin-right:auto;font-size:11px;color:var(--v2-text-muted)}
+    .v2-fbar-wrap{position:relative}
   </style>
 {% endblock %}
 
@@ -55,90 +95,116 @@
     </div>
 
     <div class="v2-card__body" style="padding-top:0">
-      {% if mine == '1' or overdue == '1' or today == '1' or show_done == '1' or status or assigned_to or search_q or date_from or date_to %}
-      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px;font-size:12px;color:var(--v2-text-muted)">
-        <span>Активные фильтры:</span>
-        {% if mine == '1' %}<button type="button" class="v2-count v2-count--primary" data-clear-filter="mine" style="cursor:pointer;border:0">Мои <span style="opacity:.6">×</span></button>{% endif %}
-        {% if today == '1' %}<button type="button" class="v2-count v2-count--primary" data-clear-filter="today" style="cursor:pointer;border:0">Сегодня <span style="opacity:.6">×</span></button>{% endif %}
-        {% if overdue == '1' %}<button type="button" class="v2-count v2-count--danger" data-clear-filter="overdue" style="cursor:pointer;border:0">Просрочено <span style="opacity:.6">×</span></button>{% endif %}
-        {% if show_done == '1' %}<button type="button" class="v2-count v2-count--success" data-clear-filter="show_done" style="cursor:pointer;border:0">Выполненные <span style="opacity:.6">×</span></button>{% endif %}
-        {% if status %}<button type="button" class="v2-count v2-count--primary" data-clear-filter="status" style="cursor:pointer;border:0">Статус <span style="opacity:.6">×</span></button>{% endif %}
-        {% if assigned_to %}<button type="button" class="v2-count v2-count--primary" data-clear-filter="assigned_to" style="cursor:pointer;border:0">Исполнитель <span style="opacity:.6">×</span></button>{% endif %}
-        {% if search_q %}<button type="button" class="v2-count v2-count--warn" data-clear-filter="q" style="cursor:pointer;border:0">«{{ search_q }}» <span style="opacity:.6">×</span></button>{% endif %}
-        {% if date_from or date_to %}<button type="button" class="v2-count v2-count--primary" data-clear-filter="date_from,date_to" style="cursor:pointer;border:0">Период <span style="opacity:.6">×</span></button>{% endif %}
-      </div>
-      {% endif %}
+      {# Подсчитываем активные фильтры (для badge на кнопке «Фильтр») #}
+      {% with active_count=0 %}{% endwith %}
 
-      <form method="get" action="{% url 'task_list_v2_preview' %}" id="v2TaskFilters"
-            style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px">
-        <input type="search" name="q" value="{{ search_q|default:'' }}"
-               placeholder="Поиск по названию, описанию, компании…" class="v2-input"
-               style="flex:1;min-width:220px" />
+      <form method="get" action="{% url 'task_list_v2_preview' %}" id="v2TaskFilters" class="v2-fbar-wrap">
+        <div class="v2-fbar">
+          <input type="search" name="q" value="{{ search_q|default:'' }}"
+                 placeholder="Поиск по названию, описанию, компании…" class="v2-input v2-fbar__search" />
 
-        <select name="status" class="v2-select" onchange="this.form.submit()">
-          <option value="">Любой статус</option>
-          <option value="new" {% if status == 'new' %}selected{% endif %}>Новая</option>
-          <option value="in_progress" {% if status == 'in_progress' %}selected{% endif %}>В работе</option>
-          <option value="done" {% if status == 'done' %}selected{% endif %}>Выполнена</option>
-          <option value="cancelled" {% if status == 'cancelled' %}selected{% endif %}>Отменена</option>
-        </select>
+          <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" data-v2-fpop-toggle>
+            <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M3.792 2.938A49.069 49.069 0 0112 2.25c2.797 0 5.54.236 8.209.688a1.857 1.857 0 011.541 1.836v1.044a3 3 0 01-.879 2.121l-6.182 6.182a1.5 1.5 0 00-.439 1.061v2.927a3 3 0 01-1.658 2.684l-1.757.878A.75.75 0 019.75 20.25v-5.068a1.5 1.5 0 00-.44-1.06L3.13 7.938a3 3 0 01-.879-2.121V4.774c0-.897.64-1.683 1.542-1.836z" clip-rule="evenodd"/></svg>
+            Фильтр
+            {% if status or assigned_to or date_from or date_to or mine == '1' or today == '1' or overdue == '1' or show_done == '1' %}
+            <span class="v2-fbar__badge" id="v2FpopBadge"></span>
+            {% endif %}
+          </button>
 
-        {% if filter_assignees %}
-        <select name="assigned_to" class="v2-select" onchange="this.form.submit()"
-                {% if mine == '1' %}disabled{% endif %}>
-          <option value="">Любой исполнитель</option>
-          {% regroup filter_assignees by branch as assignee_branches %}
-          {% for bg in assignee_branches %}
-            <optgroup label="{{ bg.grouper.name|default:'Без подразделения' }}">
-              {% for u in bg.list %}
-                <option value="{{ u.id }}" {% if assigned_to|default:'' == u.id|stringformat:'s' %}selected{% endif %}>{{ u|full_name }}</option>
-              {% endfor %}
-            </optgroup>
-          {% endfor %}
-        </select>
-        {% endif %}
+          {% if status or assigned_to or search_q or date_from or date_to or mine == '1' or today == '1' or overdue == '1' or show_done == '1' %}
+          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list_v2_preview' %}"
+             title="Сбросить все фильтры">Сброс</a>
+          {% endif %}
+        </div>
 
-        <label class="v2-item__meta" style="display:inline-flex;align-items:center;gap:4px">
-          с <input type="date" name="date_from" value="{{ date_from|default:'' }}" class="v2-input" style="padding:6px 8px" onchange="this.form.submit()" />
-        </label>
-        <label class="v2-item__meta" style="display:inline-flex;align-items:center;gap:4px">
-          по <input type="date" name="date_to" value="{{ date_to|default:'' }}" class="v2-input" style="padding:6px 8px" onchange="this.form.submit()" />
-        </label>
+        {# Активные фильтры — чипсы #}
+        <div class="v2-fchips">
+          {% if search_q %}<button type="button" class="v2-fchip v2-fchip--warn" data-clear-filter="q">«{{ search_q|truncatechars:30 }}» <span class="v2-fchip__x">×</span></button>{% endif %}
+          {% if status %}
+            {% if status == 'new' %}<button type="button" class="v2-fchip" data-clear-filter="status">Статус: Новая <span class="v2-fchip__x">×</span></button>
+            {% elif status == 'in_progress' %}<button type="button" class="v2-fchip" data-clear-filter="status">Статус: В работе <span class="v2-fchip__x">×</span></button>
+            {% elif status == 'done' %}<button type="button" class="v2-fchip" data-clear-filter="status">Статус: Выполнена <span class="v2-fchip__x">×</span></button>
+            {% elif status == 'cancelled' %}<button type="button" class="v2-fchip" data-clear-filter="status">Статус: Отменена <span class="v2-fchip__x">×</span></button>
+            {% endif %}
+          {% endif %}
+          {% if assigned_to and filter_assignees %}
+            {% for u in filter_assignees %}{% if u.id|stringformat:'s' == assigned_to|default:'' %}<button type="button" class="v2-fchip" data-clear-filter="assigned_to">Исполнитель: {{ u|full_name }} <span class="v2-fchip__x">×</span></button>{% endif %}{% endfor %}
+          {% endif %}
+          {% if date_from or date_to %}<button type="button" class="v2-fchip" data-clear-filter="date_from,date_to">Период: {{ date_from|default:'…' }} — {{ date_to|default:'…' }} <span class="v2-fchip__x">×</span></button>{% endif %}
+          {% if mine == '1' %}<button type="button" class="v2-fchip" data-clear-filter="mine">Мои <span class="v2-fchip__x">×</span></button>{% endif %}
+          {% if today == '1' %}<button type="button" class="v2-fchip" data-clear-filter="today">Сегодня <span class="v2-fchip__x">×</span></button>{% endif %}
+          {% if overdue == '1' %}<button type="button" class="v2-fchip v2-fchip--danger" data-clear-filter="overdue">Просрочено <span class="v2-fchip__x">×</span></button>{% endif %}
+          {% if show_done == '1' %}<button type="button" class="v2-fchip v2-fchip--success" data-clear-filter="show_done">Выполненные <span class="v2-fchip__x">×</span></button>{% endif %}
+        </div>
 
-        <label class="v2-chip {% if mine == '1' %}v2-chip--active{% endif %}" style="cursor:pointer">
-          <input type="checkbox" name="mine" value="1" {% if mine == '1' %}checked{% endif %}
-                 onchange="this.form.submit()" style="margin-right:6px" />
-          Мои
-        </label>
-        <label class="v2-chip {% if today == '1' %}v2-chip--active{% endif %}" style="cursor:pointer">
-          <input type="checkbox" name="today" value="1" {% if today == '1' %}checked{% endif %}
-                 onchange="this.form.submit()" style="margin-right:6px" />
-          Сегодня
-        </label>
-        <label class="v2-chip {% if overdue == '1' %}v2-chip--active{% endif %}" style="cursor:pointer">
-          <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %}
-                 onchange="this.form.submit()" style="margin-right:6px" />
-          Просрочено
-        </label>
-        <label class="v2-chip {% if show_done == '1' %}v2-chip--active{% endif %}" style="cursor:pointer">
-          <input type="checkbox" name="show_done" value="1" {% if show_done == '1' %}checked{% endif %}
-                 onchange="this.form.submit()" style="margin-right:6px" />
-          Выполненные
-        </label>
+        {# Popover с полями фильтров #}
+        <div class="v2-fpop" data-v2-fpop hidden>
+          <div class="v2-fpop__grid">
+            <div class="v2-fpop__field">
+              <label>Статус</label>
+              <select name="status" class="v2-select">
+                <option value="">Любой статус</option>
+                <option value="new" {% if status == 'new' %}selected{% endif %}>Новая</option>
+                <option value="in_progress" {% if status == 'in_progress' %}selected{% endif %}>В работе</option>
+                <option value="done" {% if status == 'done' %}selected{% endif %}>Выполнена</option>
+                <option value="cancelled" {% if status == 'cancelled' %}selected{% endif %}>Отменена</option>
+              </select>
+            </div>
 
-        <select name="per_page" class="v2-select" onchange="this.form.submit()" title="Задач на странице">
-          <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
-          <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-          <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
-          <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
-        </select>
+            {% if filter_assignees %}
+            <div class="v2-fpop__field">
+              <label>Исполнитель</label>
+              <select name="assigned_to" class="v2-select" {% if mine == '1' %}disabled{% endif %}>
+                <option value="">Любой исполнитель</option>
+                {% regroup filter_assignees by branch as assignee_branches %}
+                {% for bg in assignee_branches %}
+                  <optgroup label="{{ bg.grouper.name|default:'Без подразделения' }}">
+                    {% for u in bg.list %}
+                      <option value="{{ u.id }}" {% if assigned_to|default:'' == u.id|stringformat:'s' %}selected{% endif %}>{{ u|full_name }}</option>
+                    {% endfor %}
+                  </optgroup>
+                {% endfor %}
+              </select>
+            </div>
+            {% endif %}
+
+            <div class="v2-fpop__field">
+              <label>Период с</label>
+              <input type="date" name="date_from" value="{{ date_from|default:'' }}" class="v2-input" />
+            </div>
+            <div class="v2-fpop__field">
+              <label>Период по</label>
+              <input type="date" name="date_to" value="{{ date_to|default:'' }}" class="v2-input" />
+            </div>
+
+            <div class="v2-fpop__field">
+              <label>Задач на странице</label>
+              <select name="per_page" class="v2-select">
+                <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="v2-fpop__flags">
+            <label><input type="checkbox" name="mine" value="1" {% if mine == '1' %}checked{% endif %} /> Мои</label>
+            <label><input type="checkbox" name="today" value="1" {% if today == '1' %}checked{% endif %} /> Сегодня</label>
+            <label><input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %} /> Просрочено</label>
+            <label><input type="checkbox" name="show_done" value="1" {% if show_done == '1' %}checked{% endif %} /> Выполненные</label>
+          </div>
+
+          <div class="v2-fpop__foot">
+            <span class="v2-fpop__hint">Изменения применятся после нажатия «Применить»</span>
+            <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" data-v2-fpop-close>Отмена</button>
+            <button type="submit" class="v2-btn v2-btn--sm">Применить</button>
+          </div>
+        </div>
 
         {# Сохраняем сортировку при смене фильтров #}
         {% if sort_field %}<input type="hidden" name="sort" value="{{ sort_field }}" />{% endif %}
         {% if sort_dir %}<input type="hidden" name="dir" value="{{ sort_dir }}" />{% endif %}
-
-        <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list_v2_preview' %}"
-           title="Сбросить все фильтры">Сброс</a>
       </form>
 
       {% if can_bulk_actions and page.object_list %}
@@ -432,6 +498,58 @@
   });
 
   update();
+})();
+
+// Popover фильтров: toggle, outside-click, счётчик активных
+(function(){
+  const form = document.getElementById('v2TaskFilters');
+  if(!form) return;
+  const toggle = form.querySelector('[data-v2-fpop-toggle]');
+  const pop = form.querySelector('[data-v2-fpop]');
+  const closeBtn = form.querySelector('[data-v2-fpop-close]');
+  const badge = document.getElementById('v2FpopBadge');
+  if(!toggle || !pop) return;
+
+  function countActive(){
+    let n = 0;
+    if(pop.querySelector('select[name="status"]')?.value) n++;
+    if(pop.querySelector('select[name="assigned_to"]')?.value) n++;
+    if(pop.querySelector('input[name="date_from"]')?.value) n++;
+    if(pop.querySelector('input[name="date_to"]')?.value) n++;
+    ['mine','today','overdue','show_done'].forEach(k => {
+      if(pop.querySelector('input[name="'+k+'"]')?.checked) n++;
+    });
+    return n;
+  }
+  function updateBadge(){
+    if(!badge) return;
+    const n = countActive();
+    if(n > 0){ badge.textContent = n; badge.style.display = ''; }
+    else { badge.style.display = 'none'; }
+  }
+  updateBadge();
+
+  toggle.addEventListener('click', function(e){
+    e.stopPropagation();
+    pop.hidden = !pop.hidden;
+  });
+  closeBtn?.addEventListener('click', function(){ pop.hidden = true; });
+  document.addEventListener('click', function(e){
+    if(pop.hidden) return;
+    if(pop.contains(e.target) || toggle.contains(e.target)) return;
+    pop.hidden = true;
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && !pop.hidden){ pop.hidden = true; }
+  });
+
+  // Поиск в верхней строке: Enter → submit формы
+  const searchInput = form.querySelector('input[name="q"]');
+  if(searchInput){
+    searchInput.addEventListener('keydown', function(e){
+      if(e.key === 'Enter'){ e.preventDefault(); form.submit(); }
+    });
+  }
 })();
 
 // Клик по фильтр-чипу — убрать ключ(и) из URL и localStorage, переход
