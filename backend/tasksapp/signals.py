@@ -66,8 +66,9 @@ def notify_task_assigned(sender, instance: Task, created: bool, **kwargs):
     
     body = " · ".join(body_parts) if body_parts else instance.title
     
-    # URL для перехода к задаче
-    url = f"/tasks/{instance.id}/"
+    # URL для перехода к задаче: отдельного /tasks/<id>/ маршрута нет,
+    # список открывается параметром view_task.
+    url = f"/tasks/?view_task={instance.id}"
     
     # Создаём уведомление с payload
     notify(

@@ -169,11 +169,8 @@ class TaskService:
                 ).values_list("id", flat=True):
                     recipient_ids.add(int(uid))
 
-                for uid in recipient_ids:
-                    try:
-                        u = User.objects.get(id=uid, is_active=True)
-                    except User.DoesNotExist:
-                        continue
+                # Один запрос вместо N (убран N+1)
+                for u in User.objects.filter(id__in=recipient_ids, is_active=True).iterator():
                     notify(
                         user=u,
                         kind=Notification.Kind.TASK,

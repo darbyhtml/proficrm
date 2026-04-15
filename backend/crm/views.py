@@ -30,14 +30,14 @@ Disallow: /
 
 def security_txt(request):
     """Security.txt для ответственного раскрытия уязвимостей."""
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     from django.conf import settings
-    
+
     # Получаем email из Django settings (надежнее чем напрямую из os.getenv)
     security_email = getattr(settings, "SECURITY_CONTACT_EMAIL", "") or "security@example.com"
-    
-    # Дата истечения: через год от текущей даты
-    expires_date = (datetime.utcnow() + timedelta(days=365)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+    # Дата истечения: через год от текущей даты (timezone-aware, не deprecated utcnow)
+    expires_date = (datetime.now(timezone.utc) + timedelta(days=365)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     
     # Получаем домен из запроса (всегда используем HTTPS для canonical)
     host = request.get_host()

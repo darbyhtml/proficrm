@@ -340,20 +340,12 @@ def task_list(request: HttpRequest) -> HttpResponse:
     task_types_by_name = {tt.name: tt for tt in TaskType.objects.all()}
     
     # Применяем сопоставление к задачам на текущей странице
-    tasks_to_update = []
+    # (read-only: GET не пишет в БД — backfill вынесен в data-миграцию).
     for task in page.object_list:
         if not task.type and task.title and task.title in task_types_by_name:
             task_type = task_types_by_name[task.title]
             task.type = task_type  # type: ignore[assignment]
             task.type_id = task_type.id  # type: ignore[attr-defined]
-            tasks_to_update.append(task.id)
-    
-    # Сохраняем в БД пакетно для оптимизации
-    if tasks_to_update:
-        for task_id in tasks_to_update:
-            task = next((t for t in page.object_list if t.id == task_id), None)
-            if task and task.type_id:
-                Task.objects.filter(id=task_id).update(type_id=task.type_id)
     
     # Сохраняем сортировку в cookie, если она была изменена через GET параметры
     response = render(

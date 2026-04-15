@@ -289,14 +289,13 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     # Подготавливаем задачи с правами доступа и сопоставляем с TaskType
     for task_list in [tasks_new_list, tasks_today_list, overdue_list, tasks_week_list]:
         for task in task_list:
-            # Если у задачи нет типа, но есть title, проверяем точное совпадение с TaskType
+            # Если у задачи нет типа, но есть title, подбираем TaskType в памяти
+            # (read-only: GET-запрос дашборда не должен писать в БД, иначе race +
+            # нагрузка на каждый рендер; backfill вынесен в одноразовую миграцию).
             if not task.type and task.title and task.title in task_types_by_name:
                 task_type = task_types_by_name[task.title]
                 task.type = task_type  # type: ignore[assignment]
-                # Сохраняем связь в БД для будущих запросов
                 task.type_id = task_type.id  # type: ignore[attr-defined]
-                # Сохраняем в БД, чтобы не делать это каждый раз
-                Task.objects.filter(id=task.id).update(type_id=task_type.id)
             
             task.can_manage_status = _can_manage_task_status_ui(user, task)  # type: ignore[attr-defined]
             task.can_edit_task = _can_edit_task_ui(user, task)  # type: ignore[attr-defined]
@@ -541,26 +540,18 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
     task_types_by_name = {tt.name: tt for tt in TaskType.objects.all()}
     
     # Применяем сопоставление ко всем задачам и добавляем права доступа
-    tasks_to_update = []
+    # (read-only: GET не пишет в БД — backfill вынесен в data-миграцию).
     for task_list in [tasks_new_list, tasks_today_list, overdue_list, tasks_week_list]:
         for task in task_list:
             if not task.type and task.title and task.title in task_types_by_name:
                 task_type = task_types_by_name[task.title]
                 task.type = task_type  # type: ignore[assignment]
                 task.type_id = task_type.id  # type: ignore[attr-defined]
-                tasks_to_update.append(task.id)
-            
+
             # Добавляем права доступа к задачам (для кнопок редактирования/удаления)
             task.can_manage_status = _can_manage_task_status_ui(user, task)  # type: ignore[attr-defined]
             task.can_edit_task = _can_edit_task_ui(user, task)  # type: ignore[attr-defined]
             task.can_delete_task = _can_delete_task_ui(user, task)  # type: ignore[attr-defined]
-    
-    # Сохраняем в БД пакетно для оптимизации
-    if tasks_to_update:
-        for task_id in tasks_to_update:
-            task = next((t for task_list in [tasks_new_list, tasks_today_list, overdue_list, tasks_week_list] for t in task_list if t.id == task_id), None)
-            if task and task.type_id:
-                Task.objects.filter(id=task_id).update(type_id=task.type_id)
     
     # Сериализуем задачи для JSON
     def serialize_task(task):

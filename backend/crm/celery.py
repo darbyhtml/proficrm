@@ -21,5 +21,6 @@ app.autodiscover_tasks()
 
 @app.task(bind=True, ignore_result=True)
 def debug_task(self):
-    print(f'Request: {self.request!r}')
+    import logging
+    logging.getLogger(__name__).debug("debug_task: %r", self.request)
 
