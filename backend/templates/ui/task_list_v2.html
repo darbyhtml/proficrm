@@ -55,6 +55,20 @@
     </div>
 
     <div class="v2-card__body" style="padding-top:0">
+      {% if mine == '1' or overdue == '1' or today == '1' or show_done == '1' or status or assigned_to or search_q or date_from or date_to %}
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px;font-size:12px;color:var(--v2-text-muted)">
+        <span>Активные фильтры:</span>
+        {% if mine == '1' %}<button type="button" class="v2-count v2-count--primary" data-clear-filter="mine" style="cursor:pointer;border:0">Мои <span style="opacity:.6">×</span></button>{% endif %}
+        {% if today == '1' %}<button type="button" class="v2-count v2-count--primary" data-clear-filter="today" style="cursor:pointer;border:0">Сегодня <span style="opacity:.6">×</span></button>{% endif %}
+        {% if overdue == '1' %}<button type="button" class="v2-count v2-count--danger" data-clear-filter="overdue" style="cursor:pointer;border:0">Просрочено <span style="opacity:.6">×</span></button>{% endif %}
+        {% if show_done == '1' %}<button type="button" class="v2-count v2-count--success" data-clear-filter="show_done" style="cursor:pointer;border:0">Выполненные <span style="opacity:.6">×</span></button>{% endif %}
+        {% if status %}<button type="button" class="v2-count v2-count--primary" data-clear-filter="status" style="cursor:pointer;border:0">Статус <span style="opacity:.6">×</span></button>{% endif %}
+        {% if assigned_to %}<button type="button" class="v2-count v2-count--primary" data-clear-filter="assigned_to" style="cursor:pointer;border:0">Исполнитель <span style="opacity:.6">×</span></button>{% endif %}
+        {% if search_q %}<button type="button" class="v2-count v2-count--warn" data-clear-filter="q" style="cursor:pointer;border:0">«{{ search_q }}» <span style="opacity:.6">×</span></button>{% endif %}
+        {% if date_from or date_to %}<button type="button" class="v2-count v2-count--primary" data-clear-filter="date_from,date_to" style="cursor:pointer;border:0">Период <span style="opacity:.6">×</span></button>{% endif %}
+      </div>
+      {% endif %}
+
       <form method="get" action="{% url 'task_list_v2_preview' %}" id="v2TaskFilters"
             style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px">
         <input type="search" name="q" value="{{ search_q|default:'' }}"
@@ -418,6 +432,51 @@
   });
 
   update();
+})();
+
+// Клик по фильтр-чипу — убрать ключ(и) из URL и localStorage, переход
+document.addEventListener('click', function(e){
+  const btn = e.target && e.target.closest ? e.target.closest('[data-clear-filter]') : null;
+  if(!btn) return;
+  const keys = (btn.getAttribute('data-clear-filter') || '').split(',').map(k => k.trim()).filter(Boolean);
+  if(!keys.length) return;
+  const params = new URLSearchParams(window.location.search);
+  keys.forEach(k => params.delete(k));
+  params.delete('page');
+  try{
+    const saved = localStorage.getItem('v2_task_filters_v1') || '';
+    const savedParams = new URLSearchParams(saved);
+    keys.forEach(k => savedParams.delete(k));
+    const s = savedParams.toString();
+    if(s) localStorage.setItem('v2_task_filters_v1', s);
+    else localStorage.removeItem('v2_task_filters_v1');
+  }catch(_){}
+  window.location.href = '/_preview/tasks-v2/' + (params.toString() ? '?' + params.toString() : '');
+});
+
+// Визуальная синхронизация «Мои» ↔ Исполнитель (до сабмита формы)
+(function(){
+  const filters = document.getElementById('v2TaskFilters');
+  if(!filters) return;
+  const mineCb = filters.querySelector('input[name="mine"]');
+  const assignee = filters.querySelector('select[name="assigned_to"]');
+  if(!mineCb || !assignee) return;
+  function sync(){
+    if(mineCb.checked){
+      assignee.dataset.prevValue = assignee.value || '';
+      assignee.value = '';
+      assignee.disabled = true;
+      assignee.style.opacity = '.6';
+      assignee.title = 'Снимите «Мои», чтобы выбрать исполнителя';
+    } else {
+      assignee.disabled = false;
+      assignee.style.opacity = '';
+      assignee.title = '';
+      if(assignee.dataset.prevValue !== undefined) assignee.value = assignee.dataset.prevValue;
+    }
+  }
+  sync();
+  mineCb.addEventListener('change', sync);
 })();
 
 // Remember filters в localStorage

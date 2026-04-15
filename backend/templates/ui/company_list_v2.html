@@ -207,9 +207,10 @@
       </div>
       {% endif %}
 
+      {# Настраиваемые колонки списка (ui_cfg.company_list_columns) #}
       <div class="v2-table">
         <div class="v2-tr v2-tr--head"
-             style="grid-template-columns:{% if is_admin %}28px {% endif %}minmax(0,1.8fr) 160px 140px 120px 140px 90px">
+             style="grid-template-columns:{% if is_admin %}28px {% endif %}minmax(0,1.8fr){% if 'responsible' in company_list_columns %} 160px{% endif %}{% if 'branch' in company_list_columns %} 140px{% endif %}{% if 'region' in company_list_columns %} 120px{% endif %}{% if 'status' in company_list_columns %} 120px{% endif %}{% if 'updated_at' in company_list_columns %} 140px{% endif %} 90px">
           {% if is_admin %}<div><input type="checkbox" id="v2BulkAll" class="v2-chk" /></div>{% endif %}
           <div>
             <a class="v2-sort {% if sort == 'name' %}v2-sort--active{% endif %}"
@@ -218,6 +219,7 @@
               {% if sort == 'name' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
             </a>
           </div>
+          {% if 'responsible' in company_list_columns %}
           <div>
             <a class="v2-sort {% if sort == 'responsible' %}v2-sort--active{% endif %}"
                href="?{% if qs %}{{ qs }}&{% endif %}sort=responsible&dir={% if sort == 'responsible' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
@@ -225,7 +227,10 @@
               {% if sort == 'responsible' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
             </a>
           </div>
-          <div>Подразделение</div>
+          {% endif %}
+          {% if 'branch' in company_list_columns %}<div>Подразделение</div>{% endif %}
+          {% if 'region' in company_list_columns %}<div>Регион</div>{% endif %}
+          {% if 'status' in company_list_columns %}
           <div>
             <a class="v2-sort {% if sort == 'status' %}v2-sort--active{% endif %}"
                href="?{% if qs %}{{ qs }}&{% endif %}sort=status&dir={% if sort == 'status' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
@@ -233,6 +238,8 @@
               {% if sort == 'status' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
             </a>
           </div>
+          {% endif %}
+          {% if 'updated_at' in company_list_columns %}
           <div>
             <a class="v2-sort {% if sort == 'updated_at' %}v2-sort--active{% endif %}"
                href="?{% if qs %}{{ qs }}&{% endif %}sort=updated_at&dir={% if sort == 'updated_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
@@ -240,11 +247,12 @@
               {% if sort == 'updated_at' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
             </a>
           </div>
+          {% endif %}
           <div style="text-align:right">Задачи</div>
         </div>
 
         {% for c in page.object_list %}
-        <div class="v2-tr" style="grid-template-columns:{% if is_admin %}28px {% endif %}minmax(0,1.8fr) 160px 140px 120px 140px 90px;cursor:pointer"
+        <div class="v2-tr" style="grid-template-columns:{% if is_admin %}28px {% endif %}minmax(0,1.8fr){% if 'responsible' in company_list_columns %} 160px{% endif %}{% if 'branch' in company_list_columns %} 140px{% endif %}{% if 'region' in company_list_columns %} 120px{% endif %}{% if 'status' in company_list_columns %} 120px{% endif %}{% if 'updated_at' in company_list_columns %} 140px{% endif %} 90px;cursor:pointer"
              onclick="if(event.target.tagName!=='INPUT'&&event.target.tagName!=='LABEL')location.href='{% url 'company_detail' c.id %}'">
           {% if is_admin %}
           <div onclick="event.stopPropagation()">
@@ -258,27 +266,28 @@
           <div class="v2-td" style="min-width:0">
             <div class="v2-item__title" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
               <span>{{ c.name }}</span>
-              {% if c.inn %}<span class="v2-item__meta" style="font-size:11px">ИНН {{ c.inn }}</span>{% endif %}
-              {% if c.has_overdue %}<span class="v2-count v2-count--danger" style="font-size:10px;padding:1px 6px">просрочка</span>{% endif %}
+              {% if 'inn' in company_list_columns and c.inn %}<span class="v2-item__meta" style="font-size:11px">ИНН {{ c.inn }}</span>{% endif %}
+              {% if 'overdue' in company_list_columns and c.has_overdue %}<span class="v2-count v2-count--danger" style="font-size:10px;padding:1px 6px">просрочка</span>{% endif %}
             </div>
             {% if c.address %}<div class="v2-item__meta">{{ c.address|truncatechars:60 }}</div>{% endif %}
             <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-top:4px">
-              {% for s in c.spheres.all %}
+              {% if 'spheres' in company_list_columns %}{% for s in c.spheres.all %}
                 <span class="v2-count" style="font-size:10px;padding:1px 6px;background:var(--v2-bg-soft);color:var(--v2-text);font-weight:500">
                   {{ s.name }}{% if s.is_important %}<span title="Важная сфера" style="color:var(--v2-warn);margin-left:2px">★</span>{% endif %}
                 </span>
-              {% endfor %}
+              {% endfor %}{% endif %}
               {% with guessed=c.address|guess_ru_tz %}{% with tz=c.work_timezone|default:guessed %}
                 {% if tz %}<span class="v2-count v2-count--warn" style="font-size:10px;padding:1px 6px" title="{{ tz }}">{{ tz|tz_now_hhmm }} · {{ tz|tz_label }}</span>{% endif %}
               {% endwith %}{% endwith %}
             </div>
           </div>
-          <div class="v2-td">{% if c.responsible %}{{ c.responsible|full_name }}{% else %}—{% endif %}</div>
-          <div class="v2-td">{% if c.branch %}{{ c.branch.name }}{% else %}—{% endif %}</div>
-          <div class="v2-td">
+          {% if 'responsible' in company_list_columns %}<div class="v2-td">{% if c.responsible %}{{ c.responsible|full_name }}{% else %}—{% endif %}</div>{% endif %}
+          {% if 'branch' in company_list_columns %}<div class="v2-td">{% if c.branch %}{{ c.branch.name }}{% else %}—{% endif %}</div>{% endif %}
+          {% if 'region' in company_list_columns %}<div class="v2-td">{% if c.region %}{{ c.region.name }}{% else %}—{% endif %}</div>{% endif %}
+          {% if 'status' in company_list_columns %}<div class="v2-td">
             {% if c.status %}<span class="v2-count v2-count--primary">{{ c.status.name }}</span>{% else %}—{% endif %}
-          </div>
-          <div class="v2-td v2-item__meta">{{ c.updated_at|date:"d.m.Y H:i" }}</div>
+          </div>{% endif %}
+          {% if 'updated_at' in company_list_columns %}<div class="v2-td v2-item__meta">{{ c.updated_at|date:"d.m.Y H:i" }}</div>{% endif %}
           <div class="v2-td v2-td--strong" style="text-align:right">{{ c.active_tasks_count|default:0 }}</div>
         </div>
         {% empty %}
