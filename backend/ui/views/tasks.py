@@ -2077,3 +2077,108 @@ def task_edit(request: HttpRequest, task_id) -> HttpResponse:
 # _require_admin moved to crm.utils.require_admin
 
 
+# ============================================================================
+#  v2 partial views: задачи в модалке (gibrid mode).
+#  Возвращают либо чистый HTML-фрагмент (GET ?partial=1), либо JSON на POST.
+#  Отделены от v1 endpoints, чтобы не ломать текущие /tasks/create/ и /tasks/<id>/view/.
+# ============================================================================
+
+def _v2_task_create_get(request: HttpRequest) -> HttpResponse:
+    """GET v2 partial: отдаёт форму создания задачи без заголовка/RRULE."""
+    user: User = request.user
+    form = TaskForm()
+    _set_assigned_to_queryset(form, user)
+    # type_choices — для кастомного рендера плашек (вместо <select>)
+    task_types = list(TaskType.objects.only("id", "name", "icon", "color").all())
+    # Preselect company из ?company=<id>
+    preselect_company_id = (request.GET.get("company") or "").strip()
+    companies_qs = _editable_company_qs(user).only("id", "name").order_by("name")[:500]
+    return render(request, "ui/_v2/task_create_partial.html", {
+        "form": form,
+        "task_types": task_types,
+        "companies_for_picker": companies_qs,
+        "preselect_company_id": preselect_company_id,
+    })
+
+
+@login_required
+@policy_required(resource_type="action", resource="ui:tasks:create")
+def task_create_v2_partial(request: HttpRequest) -> HttpResponse:
+    """
+    v2 partial endpoint для создания задачи внутри модалки.
+    GET  → HTML-фрагмент формы.
+    POST → JSON {ok:true, toast, id} или 422 c HTML-фрагментом (валидационные ошибки).
+    """
+    user: User = request.user
+
+    if request.method == "GET":
+        return _v2_task_create_get(request)
+
+    # POST
+    form = TaskForm(request.POST)
+    form.fields["assigned_to"].queryset = User.objects.filter(is_active=True).select_related("branch")
+
+    assigned_to_id = clean_int_id(request.POST.get("assigned_to", ""))
+    if assigned_to_id is not None:
+        if not form.fields["assigned_to"].queryset.filter(id=assigned_to_id).exists():
+            form.fields["assigned_to"].queryset = User.objects.filter(
+                Q(is_active=True) | Q(id=assigned_to_id)
+            ).select_related("branch")
+
+    if not form.is_valid():
+        # Возвращаем HTML-фрагмент формы с ошибками (status 422) — v2-modal.js перерисует тело
+        task_types = list(TaskType.objects.only("id", "name", "icon", "color").all())
+        html = render(request, "ui/_v2/task_create_partial.html", {
+            "form": form,
+            "task_types": task_types,
+            "companies_for_picker": _editable_company_qs(user).only("id", "name").order_by("name")[:500],
+            "preselect_company_id": (request.POST.get("company") or "").strip(),
+        }).content.decode("utf-8")
+        return HttpResponse(html, status=422)
+
+    task: Task = form.save(commit=False)
+    task.created_by = user
+
+    # Заголовок берём из типа задачи (как в v1)
+    if task.type and not task.title:
+        task.title = task.type.name
+
+    comp = None
+    if task.company_id:
+        comp = Company.objects.select_related("responsible", "branch").filter(id=task.company_id).first()
+        if comp and not _can_edit_company(user, comp):
+            return JsonResponse({"ok": False, "error": "Нет прав на постановку задач по этой компании."}, status=403)
+
+    # RBAC
+    if user.role == User.Role.MANAGER:
+        task.assigned_to = user
+    else:
+        if not task.assigned_to:
+            task.assigned_to = user
+        if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+            if task.assigned_to and task.assigned_to.branch_id and task.assigned_to.branch_id != user.branch_id:
+                return JsonResponse({"ok": False, "error": "Можно назначать задачи только сотрудникам своего подразделения."}, status=400)
+
+    if task.assigned_to and task.assigned_to.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+        return JsonResponse({"ok": False, "error": "Нельзя назначать задачи администратору или управляющему."}, status=400)
+
+    # Статус: сам себе → «В работе», иначе «Новая»
+    task.status = Task.Status.IN_PROGRESS if task.assigned_to_id == user.id else Task.Status.NEW
+    task.save()
+
+    try:
+        log_event(
+            actor=user, verb="task.create", resource_type="task", resource_id=str(task.id),
+            target_user=task.assigned_to, company=task.company, payload={"title": task.title},
+        )
+    except Exception:
+        logger.exception("task_create_v2_partial: log_event failed")
+
+    return JsonResponse({
+        "ok": True,
+        "toast": "Задача создана",
+        "id": str(task.id),
+        "close": True,
+    })
+
+

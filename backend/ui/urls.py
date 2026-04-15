@@ -81,6 +81,7 @@ urlpatterns = [
     path("tasks/bulk-reschedule/preview/", views.task_bulk_reschedule_preview, name="task_bulk_reschedule_preview"),
     path("tasks/bulk-reschedule/undo/<uuid:event_id>/", views.task_bulk_reschedule_undo, name="task_bulk_reschedule_undo"),
     path("tasks/new/", views.task_create, name="task_create"),
+    path("tasks/v2/new/partial/", views.task_create_v2_partial, name="ui_v2_task_create_partial"),
     path("tasks/<uuid:task_id>/", views.task_view, name="task_view"),
     path("tasks/<uuid:task_id>/edit/", views.task_edit, name="task_edit"),
     path("tasks/<uuid:task_id>/status/", views.task_set_status, name="task_set_status"),

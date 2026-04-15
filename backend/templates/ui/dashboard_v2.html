@@ -400,6 +400,9 @@
 
 <script>
 // Dashboard v2 — polling, refresh, inline task quick actions
+// После сохранения задачи/компании в v2-модалке — перезагрузить дашборд
+window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.location.reload(), 250); });
+
 (function(){
   const csrf = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
   const indicator = document.getElementById('v2DashUpdateIndicator');
