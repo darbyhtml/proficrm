@@ -1655,7 +1655,7 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
     elif fid_phone_skynet:
         logger.debug(f"_extract_company_fields: Skynet phone field found but same as main phone field (ID: {fid_phone_skynet})")
     else:
-        logger.debug(f"_extract_company_fields: Skynet phone field (309609 or by name) not found")
+        logger.debug("_extract_company_fields: Skynet phone field (309609 or by name) not found")
     
     # ИНН может приходить как строка с несколькими значениями (через /, запятую, пробел)
     # Используем list_vals для извлечения всех значений, затем нормализуем через inn_utils
@@ -2331,7 +2331,7 @@ def fetch_companies_by_responsible(
         list[dict] или tuple[list[dict], dict]: Список компаний или (список, метаданные)
         Метаданные содержат: pages_fetched, elements_fetched, truncated, limit
     """
-    params = {f"filter[responsible_user_id]": responsible_user_id, "with": "custom_fields"}
+    params = {"filter[responsible_user_id]": responsible_user_id, "with": "custom_fields"}
     # НЕ запрашиваем contacts здесь - это создает огромные ответы и вызывает 504
     # Контакты получаем отдельно через filter[company_id][]
     
@@ -2750,7 +2750,7 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
             out = updated_out
             logger.info(f"fetch_contacts_for_companies: обновлено {len(out)} контактов с полными данными")
         else:
-            logger.info(f"fetch_contacts_for_companies: все контакты уже имеют custom_fields_values, дополнительный запрос не нужен")
+            logger.info("fetch_contacts_for_companies: все контакты уже имеют custom_fields_values, дополнительный запрос не нужен")
     
     # Если через with=contacts ничего не нашли, пробуем способ 2: filter[company_id] для каждого ID
     if not out:
@@ -3703,7 +3703,6 @@ def migrate_filtered(
     region_field_id: int | None = None,
     target_responsible: User | None = None,  # если задан — все компании назначаются этому пользователю в нашей CRM
 ) -> AmoMigrateResult:
-    import time
     start_time = time.time()
     
     # Сбрасываем метрики клиента для нового этапа импорта
@@ -4942,7 +4941,7 @@ def migrate_filtered(
                         logger.debug(f"  - Type: {type(ac)}")
                         logger.debug(f"  - ac is None: {ac is None}")
                         if ac is None:
-                            logger.debug(f"  - ⚠️ Contact is None!")
+                            logger.debug("  - ⚠️ Contact is None!")
                         elif isinstance(ac, dict):
                             logger.debug(f"  - Keys: {list(ac.keys())}")
                             logger.debug(f"  - Has 'id': {'id' in ac}, id value: {ac.get('id')}")
@@ -4975,7 +4974,7 @@ def migrate_filtered(
                                 logger.debug(f"  - Full contact (first 500 chars): {str(ac)[:500]}")
                         else:
                             logger.debug(f"  - Contact is not a dict: {ac}, type: {type(ac)}")
-                            logger.debug(f"===== END RAW STRUCTURE =====")
+                            logger.debug("===== END RAW STRUCTURE =====")
                             structure_logged_count += 1
                         
                         amo_contact_id = int(ac.get("id") or 0) if isinstance(ac, dict) else 0
@@ -5127,7 +5126,7 @@ def migrate_filtered(
                                 # Показываем custom_fields_values с маскированием
                                 custom_fields_debug = ac.get("custom_fields_values")
                                 if custom_fields_debug is None:
-                                    logger.debug(f"  - custom_fields_values: None")
+                                    logger.debug("  - custom_fields_values: None")
                                 elif isinstance(custom_fields_debug, list):
                                     logger.debug(f"  - custom_fields_values: list, length={len(custom_fields_debug)}")
                                     # Показываем первые 2 поля с маскированием
@@ -5227,7 +5226,7 @@ def migrate_filtered(
                                                     first_val = _mask_email(first_val)
                                             logger.debug(f"    [{cf_idx}] {field_name} ({field_code}): {first_val[:50]}")
                                 elif len(custom_fields) == 0:
-                                    logger.debug(f"  - ⚠️ custom_fields is empty list (no custom fields found)")
+                                    logger.debug("  - ⚠️ custom_fields is empty list (no custom fields found)")
                                 else:
                                     logger.debug(f"  - ⚠️ custom_fields is not a list: {type(custom_fields)}")
                         except (NameError, UnboundLocalError, Exception) as debug_err:
@@ -5394,7 +5393,7 @@ def migrate_filtered(
                                             field_code = str(cf.get('field_code') or '').strip()
                                             logger.debug(f"    [{cf_idx}] id={cf.get('field_id')}, code='{field_code}', name='{field_name}'")
                                 elif len(custom_fields) == 0:
-                                    logger.debug(f"  - ⚠️ custom_fields is empty list (no custom fields found)")
+                                    logger.debug("  - ⚠️ custom_fields is empty list (no custom fields found)")
                                 else:
                                     logger.debug(f"  - ⚠️ custom_fields is not a list: {type(custom_fields)}")
                         except (NameError, UnboundLocalError, Exception) as debug_err:
@@ -6085,11 +6084,11 @@ def migrate_filtered(
                                 logger.debug(f"  - note_text found: {note_text}")
                                 logger.debug(f"  - custom_fields_values count: {len(custom_fields)}")
                                 if custom_fields:
-                                    logger.debug(f"  - custom_fields sample (first 3):")
+                                    logger.debug("  - custom_fields sample (first 3):")
                                     for idx, cf in enumerate(custom_fields[:3]):
                                         logger.debug(f"    [{idx}] field_id={cf.get('field_id')}, code={cf.get('code')}, name={cf.get('name')}, type={cf.get('type')}, values={cf.get('values')}")
                                 else:
-                                    logger.debug(f"  - ⚠️ custom_fields_values пуст или отсутствует")
+                                    logger.debug("  - ⚠️ custom_fields_values пуст или отсутствует")
                                 logger.debug(f"  - raw contact top-level keys: {list(ac.keys())[:15] if isinstance(ac, dict) else 'not_dict'}")
                                 logger.debug(f"  - has phone field: {bool(ac.get('phone')) if isinstance(ac, dict) else False}")
                                 logger.debug(f"  - has email field: {bool(ac.get('email')) if isinstance(ac, dict) else False}")
@@ -6804,7 +6803,7 @@ def migrate_filtered(
     # Логируем метрики импорта
     elapsed_time = time.time() - start_time
     metrics = client.get_metrics()
-    logger.info(f"migrate_filtered: ===== МЕТРИКИ ИМПОРТА =====")
+    logger.info("migrate_filtered: ===== МЕТРИКИ ИМПОРТА =====")
     logger.info(f"  Время выполнения: {elapsed_time:.2f} сек")
     logger.info(f"  API-запросов: {metrics['request_count']}")
     logger.info(f"  Средний RPS: {metrics['avg_rps']:.2f}")
@@ -6813,6 +6812,6 @@ def migrate_filtered(
     logger.info(f"  Заметок: seen={res.notes_seen}, created={res.notes_created}, updated={res.notes_updated}")
     logger.info(f"  Контактов: seen={res.contacts_seen}, created={res.contacts_created}")
     logger.info(f"  CompanyPhone: skynet_added={res.skynet_phones_added}, skynet_rejected={res.skynet_phone_values_rejected}, rejected_invalid={res.company_phones_rejected_invalid}")
-    logger.info(f"migrate_filtered: ===== КОНЕЦ МЕТРИК =====")
+    logger.info("migrate_filtered: ===== КОНЕЦ МЕТРИК =====")
     
     return res

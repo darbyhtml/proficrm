@@ -71,7 +71,7 @@ class Command(BaseCommand):
             sphere_ids_raw = filter_meta.get("sphere", [])
             
             if not sphere_ids_raw:
-                self.stdout.write(self.style.WARNING(f"   ⚠️  Нет выбранных сфер в filter_meta, пропускаем"))
+                self.stdout.write(self.style.WARNING("   ⚠️  Нет выбранных сфер в filter_meta, пропускаем"))
                 self.stdout.write("")
                 continue
 
@@ -114,7 +114,7 @@ class Command(BaseCommand):
                 continue
 
             if not sphere_ids:
-                self.stdout.write(self.style.WARNING(f"   ⚠️  Нет валидных ID сфер после нормализации, пропускаем"))
+                self.stdout.write(self.style.WARNING("   ⚠️  Нет валидных ID сфер после нормализации, пропускаем"))
                 self.stdout.write(f"   Исходные данные: {sphere_ids_raw} (тип: {type(sphere_ids_raw)})")
                 self.stdout.write("")
                 continue
@@ -131,7 +131,7 @@ class Command(BaseCommand):
                     filter_meta["sphere"] = sphere_ids
                     campaign.filter_meta = filter_meta
                     campaign.save(update_fields=["filter_meta", "updated_at"])
-                    self.stdout.write(self.style.SUCCESS(f"   ✅ filter_meta обновлен с нормализованными сферами"))
+                    self.stdout.write(self.style.SUCCESS("   ✅ filter_meta обновлен с нормализованными сферами"))
                 else:
                     self.stdout.write(f"   (dry-run) filter_meta будет обновлен: {sphere_ids_raw} -> {sphere_ids}")
 
@@ -235,7 +235,7 @@ class Command(BaseCommand):
                     total_removed += removed_count
                     self.stdout.write(self.style.SUCCESS(f"   ✅ Удалено получателей: {removed_count}"))
             else:
-                self.stdout.write(self.style.SUCCESS(f"   ✅ Все получатели соответствуют выбранным сферам"))
+                self.stdout.write(self.style.SUCCESS("   ✅ Все получатели соответствуют выбранным сферам"))
 
             self.stdout.write("")
 

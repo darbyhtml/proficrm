@@ -677,7 +677,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "queue_entry": qe,
             "deferred_until": (getattr(qe, "deferred_until", None) if qe else None),
             "defer_reason": (getattr(qe, "defer_reason", None) or "") if qe else "",
-            "is_deferred_daily_limit": bool(qe and (getattr(qe, "defer_reason", None) or "") == "daily_limit" and getattr(qe, "deferred_until", None) and getattr(qe, "deferred_until") > timezone.now()),
+            "is_deferred_daily_limit": bool(qe and (getattr(qe, "defer_reason", None) or "") == "daily_limit" and getattr(qe, "deferred_until", None) and qe.deferred_until > timezone.now()),
             "attachment_ext": (
                 ((camp.attachment_original_name or camp.attachment.name).split(".")[-1].upper() if (camp.attachment_original_name or camp.attachment) and "." in (camp.attachment_original_name or camp.attachment.name) else "")
                 if camp.attachment

@@ -292,7 +292,7 @@ class CompanyAPITestCase(TestCase):
         self.company2.refresh_from_db()
         
         # Поиск по названию - используем часть названия
-        response = self.client.get(f"/api/companies/?search=Тестовая", follow=True)
+        response = self.client.get("/api/companies/?search=Тестовая", follow=True)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # API может возвращать список или словарь с results в зависимости от пагинации
         data = getattr(response, 'data', []) if hasattr(response, 'data') else []

@@ -988,7 +988,7 @@ def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> Ht
         logger.error(f"Error finding ContactPhone {contact_phone_id}: {e}", exc_info=True)
         if _is_ajax(request):
             return JsonResponse({"ok": False, "error": "Ошибка: номер телефона не найден."}, status=404)
-        messages.error(request, f"Ошибка: номер телефона не найден.")
+        messages.error(request, "Ошибка: номер телефона не найден.")
         return redirect("dashboard")
     contact = contact_phone.contact
     company = contact.company if contact else None
@@ -1138,7 +1138,7 @@ def company_phone_cold_call_toggle(request: HttpRequest, company_phone_id) -> Ht
         logger.error(f"Error finding CompanyPhone {company_phone_id}: {e}", exc_info=True)
         if _is_ajax(request):
             return JsonResponse({"ok": False, "error": "Ошибка: номер телефона не найден."}, status=404)
-        messages.error(request, f"Ошибка: номер телефона не найден.")
+        messages.error(request, "Ошибка: номер телефона не найден.")
         return redirect("dashboard")
     company = company_phone.company
     if not _can_edit_company(user, company):

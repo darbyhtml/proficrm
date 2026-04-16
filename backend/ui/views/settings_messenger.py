@@ -350,7 +350,7 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
                 )
                 messages.warning(
                     request,
-                    f"Токен виджета обновлён. Старый токен больше не работает. "
+                    "Токен виджета обновлён. Старый токен больше не работает. "
                     "Обновите код вставки на всех сайтах."
                 )
                 return redirect("settings_messenger_inbox_edit", inbox_id=inbox.id)
