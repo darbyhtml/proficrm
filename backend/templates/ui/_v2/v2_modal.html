@@ -76,7 +76,63 @@
   const closeBtn = document.getElementById('v2ModalClose');
   const toastStack = document.getElementById('v2ToastStack');
 
-  let state = { open:false, onClose:null, onSaved:null, dirty:false };
+  let state = { open:false, onClose:null, onSaved:null, dirty:false, _triggerEl:null, _focusTrapHandler:null };
+
+  // --- Focus trap: удерживает клавиатурный фокус внутри модалки ---
+  function trapFocus(container){
+    // Собираем все интерактивные элементы внутри контейнера
+    var focusable = Array.prototype.slice.call(
+      container.querySelectorAll(
+        'a[href], button:not([disabled]), textarea, input:not([disabled]), select, [tabindex]:not([tabindex="-1"])'
+      )
+    ).filter(function(el){ return !el.closest('[hidden]') && !el.closest('[style*="display: none"]'); });
+
+    if(!focusable.length){
+      // Нет фокусируемых элементов — фокусируем сам диалог
+      dialog.setAttribute('tabindex', '-1');
+      dialog.focus();
+      return;
+    }
+
+    var first = focusable[0];
+    var last  = focusable[focusable.length - 1];
+
+    // Удаляем предыдущий обработчик, если он висит (защита от двойного вызова)
+    if(state._focusTrapHandler){
+      container.removeEventListener('keydown', state._focusTrapHandler);
+    }
+
+    state._focusTrapHandler = function(e){
+      if(e.key !== 'Tab') return;
+      if(e.shiftKey){
+        // Shift+Tab на первом элементе → перейти на последний
+        if(document.activeElement === first){ e.preventDefault(); last.focus(); }
+      } else {
+        // Tab на последнем элементе → перейти на первый
+        if(document.activeElement === last){ e.preventDefault(); first.focus(); }
+      }
+    };
+
+    container.addEventListener('keydown', state._focusTrapHandler);
+    // Фокусируем первый элемент (или кнопку закрытия, если она идёт раньше)
+    first.focus();
+  }
+
+  function releaseFocusTrap(){
+    // Снимаем обработчик с диалога
+    if(state._focusTrapHandler){
+      dialog.removeEventListener('keydown', state._focusTrapHandler);
+      state._focusTrapHandler = null;
+    }
+    // Возвращаем фокус элементу, который открыл модалку
+    if(state._triggerEl && typeof state._triggerEl.focus === 'function'){
+      try { state._triggerEl.focus(); } catch(_){}
+    }
+    state._triggerEl = null;
+    // Убираем tabindex, если добавляли его для диалога
+    dialog.removeAttribute('tabindex');
+  }
+  // -----------------------------------------------------------------
 
   function getCsrf(){
     const el = document.querySelector('input[name=csrfmiddlewaretoken]');
@@ -148,8 +204,10 @@
 
   async function openFromUrl(opts){
     const url = opts.url;
-    state.onClose = opts.onClose || null;
-    state.onSaved = opts.onSaved || null;
+    state.onClose  = opts.onClose || null;
+    state.onSaved  = opts.onSaved || null;
+    // Запоминаем элемент, инициировавший открытие, чтобы вернуть ему фокус при закрытии
+    state._triggerEl = opts._triggerEl || document.activeElement || null;
     titleEl.textContent = opts.title || '—';
     bodyEl.classList.add('is-loading');
     bodyEl.innerHTML = 'Загрузка…';
@@ -177,6 +235,8 @@
       runScripts();
       watchDirty();
       wireForms();
+      // Устанавливаем focus trap после полного рендера контента
+      trapFocus(dialog);
     }catch(_){
       bodyEl.classList.remove('is-loading');
       bodyEl.innerHTML = '<div style="color:var(--v2-danger,#dc2626)">Ошибка загрузки</div>';
@@ -184,8 +244,10 @@
   }
 
   function openHtml(opts){
-    state.onClose = opts.onClose || null;
-    state.onSaved = opts.onSaved || null;
+    state.onClose   = opts.onClose || null;
+    state.onSaved   = opts.onSaved || null;
+    // Запоминаем элемент, инициировавший открытие, чтобы вернуть ему фокус при закрытии
+    state._triggerEl = opts._triggerEl || document.activeElement || null;
     titleEl.textContent = opts.title || '—';
     bodyEl.innerHTML = opts.html || '';
     bodyEl.classList.remove('is-loading');
@@ -196,6 +258,8 @@
     runScripts();
     watchDirty();
     wireForms();
+    // Устанавливаем focus trap после рендера контента
+    trapFocus(dialog);
   }
 
   function closeModal(force){
@@ -208,6 +272,8 @@
     state.open = false;
     setDirty(false);
     bodyEl.innerHTML = '';
+    // Снимаем focus trap и возвращаем фокус триггеру
+    releaseFocusTrap();
     if(state.onClose) { try { state.onClose(); } catch(_){} }
     state.onClose = null;
     state.onSaved = null;
@@ -250,7 +316,8 @@
     const url = trigger.getAttribute('data-v2-modal-open') || trigger.getAttribute('href');
     if(!url) return;
     ev.preventDefault();
-    openFromUrl({ url: url, title: trigger.getAttribute('data-v2-modal-title') || '—' });
+    // Передаём trigger как _triggerEl, чтобы при закрытии вернуть фокус на него
+    openFromUrl({ url: url, title: trigger.getAttribute('data-v2-modal-title') || '—', _triggerEl: trigger });
   });
 })();
 </script>

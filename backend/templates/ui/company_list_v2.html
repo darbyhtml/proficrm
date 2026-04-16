@@ -5,62 +5,15 @@
 {% block extra_head %}
   {% include "ui/_v2/v2_styles.html" %}
   <style>
-    .v2-sort{display:inline-flex;align-items:center;gap:4px;color:inherit;text-decoration:none;cursor:pointer}
-    .v2-sort:hover{color:var(--v2-primary)}
-    .v2-sort--active{color:var(--v2-primary);font-weight:700}
-    .v2-sort__arrow{font-size:10px;opacity:.7}
-    .v2-bulk{position:sticky;top:12px;z-index:20;margin-bottom:12px;padding:10px 14px;
-      background:#fff;border:1px solid var(--v2-border);border-radius:12px;
-      display:flex;flex-wrap:wrap;gap:10px;align-items:center;
-      box-shadow:0 2px 8px rgba(0,0,0,.04)}
-    .v2-bulk__label{font-size:13px;font-weight:600;color:var(--v2-text-muted)}
-    .v2-bulk__count{margin-left:auto;font-size:13px;color:var(--v2-text-muted)}
-    .v2-chk{width:16px;height:16px;accent-color:var(--v2-primary);cursor:pointer}
-    .v2-tr--head{background:var(--v2-bg-soft);font-size:12px;text-transform:uppercase;
-      letter-spacing:.04em;color:var(--v2-text-muted);font-weight:600}
-    .v2-tr--head > *{padding:10px 8px!important}
-
-    /* Компактная панель фильтров */
-    .v2-fbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
-    .v2-fbar__search{flex:1;min-width:220px}
-    .v2-fbar__badge{display:inline-flex;align-items:center;justify-content:center;
-      min-width:18px;height:18px;padding:0 6px;border-radius:999px;
-      background:var(--v2-primary);color:#fff;font-size:11px;font-weight:700;margin-left:4px}
-    .v2-fchips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
-    .v2-fchips:empty{display:none}
-    .v2-fchip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;
-      background:var(--v2-primary-50);color:var(--v2-primary-dark);
-      border:1px solid color-mix(in srgb, var(--v2-primary) 20%, transparent);
-      border-radius:999px;font-size:12px;font-weight:500;cursor:pointer;
-      transition:all .12s ease}
-    .v2-fchip:hover{background:var(--v2-primary);color:#fff;border-color:var(--v2-primary)}
-    .v2-fchip__x{opacity:.7;font-size:14px;line-height:1}
-    .v2-fchip--warn{background:var(--v2-warn-50);color:#8B3A0A;border-color:#FFB874}
-    .v2-fchip--warn:hover{background:var(--v2-warn);color:#fff;border-color:var(--v2-warn)}
-    .v2-fchip--danger{background:var(--v2-danger-50);color:#8B1A1A;border-color:#F4B5B5}
-    .v2-fchip--danger:hover{background:var(--v2-danger);color:#fff;border-color:var(--v2-danger)}
-    /* Popover с полями — якорится под кнопку «Фильтр» справа */
-    .v2-fpop-anchor{position:relative;display:inline-flex}
+    /* Popover компаний: ширина 720px */
     .v2-fpop{position:absolute;z-index:40;top:calc(100% + 6px);right:0;left:auto;
       background:var(--v2-bg);border:1px solid var(--v2-border-strong);
       border-radius:var(--v2-radius-lg);box-shadow:var(--v2-shadow-lg);
       padding:16px;width:720px;max-width:calc(100vw - 40px)}
-    .v2-fpop[hidden]{display:none}
-    .v2-fpop__grid{display:grid;gap:12px;grid-template-columns:1fr 1fr}
-    .v2-fpop__field{display:flex;flex-direction:column;gap:4px;min-width:0}
-    .v2-fpop__field label{font-size:11px;font-weight:600;color:var(--v2-text-muted);
-      text-transform:uppercase;letter-spacing:.05em}
-    .v2-fpop__flags{display:flex;flex-wrap:wrap;gap:8px;padding-top:4px}
-    .v2-fpop__flags label{display:inline-flex;align-items:center;gap:6px;
-      font-size:13px;color:var(--v2-text-soft);cursor:pointer}
-    .v2-fpop__foot{display:flex;gap:8px;justify-content:flex-end;align-items:center;
-      margin-top:14px;padding-top:12px;border-top:1px solid var(--v2-bg-muted)}
-    .v2-fpop__hint{margin-right:auto;font-size:11px;color:var(--v2-text-muted)}
     .v2-fpop__hint-inline{font-size:10px;color:var(--v2-text-muted);font-weight:400;margin-left:4px}
     .v2-select--multi{min-height:auto;padding:4px 6px !important;font-size:12px}
     .v2-select--multi option{padding:4px 6px;border-radius:4px}
     .v2-select--multi option:checked{background:linear-gradient(var(--v2-primary),var(--v2-primary));color:#fff}
-    .v2-fbar-wrap{position:relative}
 
     /* Подсветка строки компании с просрочкой */
     .v2-tr--overdue{background:linear-gradient(90deg,var(--v2-danger-50) 0%,transparent 180px) !important}
