@@ -387,11 +387,11 @@
           </h2>
           <span class="v2-count">{{ stale_companies_count|default:0 }}</span>
         </div>
-        <div class="v2-card__body" style="padding:0">
+        <div class="v2-card__body">
           {% if stale_companies %}
-          <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--v2-border)">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--v2-border);margin:-2px -20px 0;padding:0 8px">
             {% for c in stale_companies %}
-            <a class="v2-item" href="{% url 'company_detail' c.id %}" style="padding:10px 20px;border-bottom:1px solid var(--v2-border){% if forloop.counter|divisibleby:2 %};border-left:1px solid var(--v2-border){% endif %}">
+            <a class="v2-item" href="{% url 'company_detail' c.id %}" style="padding:12px 14px;margin:0;border-radius:8px">
               <span class="v2-item__dot"></span>
               <div class="flex-1 min-w-0">
                 <div class="v2-item__title">{{ c.name }}</div>
@@ -400,7 +400,7 @@
             {% endfor %}
           </div>
           {% else %}
-          <div class="v2-card__empty" style="padding:12px 20px">У всех компаний есть активные задачи</div>
+          <div class="v2-card__empty">У всех компаний есть активные задачи</div>
           {% endif %}
         </div>
         {% if stale_companies_count > 10 %}

@@ -309,7 +309,7 @@ def _build_dashboard_context(request: HttpRequest) -> dict:
         .order_by("name")
     )
     stale_companies_count = stale_companies_qs.count()
-    stale_companies = list(stale_companies_qs[:5])
+    stale_companies = list(stale_companies_qs[:10])
 
     # Запросы на удаление компаний для РОП/директора
     deletion_requests = []
