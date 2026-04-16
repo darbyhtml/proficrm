@@ -98,9 +98,13 @@
     border-top: 1px solid var(--v2-bg-muted);
   }
   .v2-card__empty {
-    padding: 20px 18px;
+    padding: 12px 18px;
     text-align: center; color: var(--v2-text-muted);
     font-size: 13px;
+  }
+  /* Сжимаем карточку, если body содержит только пустое состояние */
+  .v2-card__body:has(> .v2-card__empty:only-child) {
+    padding: 0;
   }
 
   /* Бейджи-счётчики */

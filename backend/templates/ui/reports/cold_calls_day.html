@@ -1,0 +1,102 @@
+{% extends "ui/base.html" %}
+{% load ui_extras accounts_extras %}
+{% block title %}Отчёт за {{ day_label }} — CRM ПРОФИ{% endblock %}
+
+{% block extra_head %}
+{% include "ui/_v2/v2_styles.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="v2 space-y-4">
+
+  <!-- Заголовок -->
+  <div class="v2-card v2-anim" style="padding:18px 22px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div>
+        <h1 class="v2-h2" style="margin:0">Ежедневный отчёт</h1>
+        <div class="v2-muted" style="margin-top:2px">{{ day_label }}</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        {% if prev_date %}
+        <a href="?date={{ prev_date }}" class="v2-btn v2-btn--ghost v2-btn--sm" title="Предыдущий день">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 19l-7-7 7-7"/></svg>
+        </a>
+        {% endif %}
+        {% if next_date %}
+        <a href="?date={{ next_date }}" class="v2-btn v2-btn--ghost v2-btn--sm" title="Следующий день">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>
+        </a>
+        {% endif %}
+        <a href="{% url 'dashboard' %}" class="v2-btn v2-btn--ghost v2-btn--sm">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1"/></svg>
+          На рабочий стол
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Статистика -->
+  <div class="v2-grid">
+    <div class="v2-col-3 v2-anim">
+      <div class="v2-card" style="padding:14px 18px;text-align:center">
+        <div style="font-size:28px;font-weight:800;color:var(--v2-primary)">{{ stats.cold_calls }}</div>
+        <div class="v2-muted" style="margin-top:2px">Холодных звонков</div>
+      </div>
+    </div>
+    <div class="v2-col-3 v2-anim">
+      <div class="v2-card" style="padding:14px 18px;text-align:center">
+        <div style="font-size:28px;font-weight:800;color:var(--v2-text)">{{ stats.incoming_calls }}</div>
+        <div class="v2-muted" style="margin-top:2px">Входящих звонков</div>
+      </div>
+    </div>
+    <div class="v2-col-3 v2-anim">
+      <div class="v2-card" style="padding:14px 18px;text-align:center">
+        <div style="font-size:28px;font-weight:800;color:var(--v2-success)">{{ stats.tasks_done }}</div>
+        <div class="v2-muted" style="margin-top:2px">Задач выполнено</div>
+      </div>
+    </div>
+    <div class="v2-col-3 v2-anim">
+      <div class="v2-card" style="padding:14px 18px;text-align:center">
+        <div style="font-size:28px;font-weight:800;color:var(--v2-accent-600)">{{ stats.new_companies }}</div>
+        <div class="v2-muted" style="margin-top:2px">Новых компаний</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Детализация -->
+  {% if items %}
+  <div class="v2-card v2-anim" style="animation-delay:.08s">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title" style="margin:0">
+        <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z" clip-rule="evenodd"/></svg>
+        Детализация холодных звонков
+      </h2>
+      <span class="v2-count">{{ items|length }}</span>
+    </div>
+    <div class="v2-card__body">
+      <div class="v2-table">
+        <div class="v2-tr v2-tr--head" style="grid-template-columns: 60px 1fr 1fr 140px">
+          <div class="v2-td">Время</div>
+          <div class="v2-td">Контакт</div>
+          <div class="v2-td">Компания</div>
+          <div class="v2-td">Телефон</div>
+        </div>
+        {% for item in items %}
+        <div class="v2-tr" style="grid-template-columns: 60px 1fr 1fr 140px">
+          <div class="v2-td v2-td--strong">{{ item.time }}</div>
+          <div class="v2-td">{{ item.contact|default:"—" }}</div>
+          <div class="v2-td">{{ item.company|default:"—" }}</div>
+          <div class="v2-td" style="font-family:monospace;font-size:13px">{{ item.phone|default:"—" }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="v2-card v2-anim" style="animation-delay:.08s">
+    <div class="v2-card__empty">За {{ day_label }} холодных звонков нет</div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

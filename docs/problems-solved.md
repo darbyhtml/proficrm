@@ -1,5 +1,13 @@
 # Решённые проблемы
 
+## [2026-04-16] Отчёты cold_calls: JsonResponse вместо HTML, сломанный фильтр
+
+**Симптом:** Кнопки «Отчет: день/месяц» на дашборде открывали страницу с сырым JSON вместо отформатированного отчёта. Ссылка «Все без задач» показывала все компании вместо компаний текущего пользователя (неправильный GET-параметр `no_active_tasks=1` вместо `task_filter=no_tasks`).
+
+**Причина:** `cold_calls_report_day` и `cold_calls_report_month` возвращали `JsonResponse` напрямую — HTML-шаблоны не были подключены. Фильтр `no_active_tasks` не существовал в `_apply_company_filters`, правильный параметр — `task_filter=no_tasks`.
+
+**Фикс:** Views переведены на `render()` с v2-шаблонами `cold_calls_day.html` и `cold_calls_month.html`. Добавлен счётчик выполненных задач (`tasks_done`). Ссылки с дашборда получили правильные параметры фильтрации + `responsible=user.id`.
+
 ## [2026-04-16] Dashboard: N+1 запросы, мёртвый SSE, дублированная логика poll
 
 **Симптом:** Аудит дашборда выявил 3 взаимосвязанных проблемы: 1) до 48 лишних SQL-запросов из-за deferred field access (`.only()` без нужных полей при `select_related`), 2) мёртвый SSE endpoint `dashboard_sse` с бесконечным `while True: time.sleep(5)` — каждое подключение навсегда блокировало gunicorn worker, 3) `dashboard_poll` дублировал 170 строк логики из `_build_dashboard_context`, хотя клиент использовал только `{updated: true/false}` → `location.reload()`.

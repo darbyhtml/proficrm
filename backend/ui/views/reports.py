@@ -7,8 +7,10 @@ from ui.views._base import (
     ContactPhone,
     F,
     HttpRequest,
+    HttpResponse,
     JsonResponse,
     Q,
+    Task,
     User,
     _add_months,
     _can_view_cold_call_reports,
@@ -19,6 +21,7 @@ from ui.views._base import (
     datetime,
     login_required,
     policy_required,
+    render,
     timedelta,
     timezone,
 )
@@ -75,7 +78,7 @@ def _month_label(d: _date) -> str:
 
 @login_required
 @policy_required(resource_type="page", resource="ui:dashboard")
-def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
+def cold_calls_report_day(request: HttpRequest) -> HttpResponse:
     user: User = request.user
     if not _can_view_cold_call_reports(user):
         return JsonResponse({"ok": False, "detail": "forbidden"}, status=403)
@@ -161,7 +164,15 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
         created_at__gte=day_start,
         created_at__lt=day_end
     ).count()
-    
+
+    # 4. Выполненные задачи за день
+    tasks_done_count = Task.objects.filter(
+        assigned_to=user,
+        status=Task.Status.DONE,
+        updated_at__gte=day_start,
+        updated_at__lt=day_end,
+    ).count()
+
     # Считаем количество до итерации, чтобы ниже пройти qs через .iterator()
     # без повторного SQL-запроса на каждой итерации.
     qs_count = qs.count()
@@ -254,25 +265,26 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
         items.append({"time": t, "phone": phone, "contact": contact_name, "company": company_name})
         lines.append(f"{i}) {t} — {who2} — {phone} (ручная отметка)")
 
-    return JsonResponse({
-        "ok": True,
-        "range": "day",
-        "date": day_label,
-        "count": len(items),
+    prev_date = (target_date - timedelta(days=1)).strftime("%Y-%m-%d")
+    next_date = (target_date + timedelta(days=1)).strftime("%Y-%m-%d") if target_date < timezone.localdate(timezone.now()) else None
+
+    return render(request, "ui/reports/cold_calls_day.html", {
+        "day_label": day_label,
+        "prev_date": prev_date,
+        "next_date": next_date,
         "items": items,
-        "text": "\n".join(lines),
         "stats": {
             "cold_calls": len(items),
             "incoming_calls": incoming_calls_count,
+            "tasks_done": tasks_done_count,
             "new_companies": new_companies_count,
-            "new_contacts": new_contacts_count,
         },
     })
 
 
 @login_required
 @policy_required(resource_type="page", resource="ui:dashboard")
-def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
+def cold_calls_report_month(request: HttpRequest) -> HttpResponse:
     user: User = request.user
     if not _can_view_cold_call_reports(user):
         return JsonResponse({"ok": False, "detail": "forbidden"}, status=403)
@@ -377,6 +389,14 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
         created_at__lt=month_end_aware
     ).count()
 
+    # 4. Выполненные задачи за месяц
+    tasks_done_count = Task.objects.filter(
+        assigned_to=user,
+        status=Task.Status.DONE,
+        updated_at__gte=month_start_aware,
+        updated_at__lt=month_end_aware,
+    ).count()
+
     # Сохраняем count до итерации — в цикле ниже qs проходится через .iterator().
     qs_count = qs.count()
 
@@ -472,24 +492,24 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
         lines.append(f"{i}) {t} — {who2} — {phone} (ручная отметка)")
 
     month_options = [{"key": ms.strftime("%Y-%m"), "label": _month_label(ms)} for ms in available]
-    return JsonResponse(
-        {
-            "ok": True,
-            "range": "month",
-            "month": selected.strftime("%Y-%m"),
-            "month_label": _month_label(selected),
-            "available_months": month_options,
-            "count": len(items),
-            "items": items,
-            "text": "\n".join(lines),
-            "stats": {
-                "cold_calls": total_cold,
-                "incoming_calls": incoming_calls_count,
-                "new_companies": new_companies_count,
-                "new_contacts": new_contacts_count,
-            },
-        }
-    )
+
+    prev_month = _add_months(selected, -1).strftime("%Y-%m") if selected > available[0] else None
+    next_month = _add_months(selected, 1).strftime("%Y-%m") if selected < available[-1] else None
+
+    return render(request, "ui/reports/cold_calls_month.html", {
+        "month_label": _month_label(selected),
+        "selected_month": selected.strftime("%Y-%m"),
+        "prev_month": prev_month,
+        "next_month": next_month,
+        "month_options": month_options,
+        "items": items,
+        "stats": {
+            "cold_calls": total_cold,
+            "incoming_calls": incoming_calls_count,
+            "tasks_done": tasks_done_count,
+            "new_companies": new_companies_count,
+        },
+    })
 
 
 @login_required
