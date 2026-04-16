@@ -316,8 +316,7 @@ class MobileAppQrToken(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["token"]),
-            models.Index(fields=["token_hash"]),
+            # token и token_hash уже имеют unique=True → индексы автоматические
             models.Index(fields=["user", "-created_at"]),
             models.Index(fields=["expires_at"]),
         ]

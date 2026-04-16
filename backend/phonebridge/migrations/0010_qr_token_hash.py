@@ -23,14 +23,14 @@ class Migration(migrations.Migration):
             model_name='mobileappqrtoken',
             name='token_hash',
             field=models.CharField(
-                blank=True, db_index=True, default='',
+                blank=True, default='',
                 max_length=64, verbose_name='Хеш токена',
             ),
             preserve_default=False,
         ),
         # Шаг 2: заполняем хеши для существующих записей
         migrations.RunPython(forwards, migrations.RunPython.noop),
-        # Шаг 3: делаем поле unique после заполнения данных
+        # Шаг 3: делаем поле unique (unique создаёт index автоматически)
         migrations.AlterField(
             model_name='mobileappqrtoken',
             name='token_hash',
@@ -38,10 +38,5 @@ class Migration(migrations.Migration):
                 blank=True, db_index=True, max_length=64,
                 unique=True, verbose_name='Хеш токена',
             ),
-        ),
-        # Шаг 4: добавляем индекс
-        migrations.AddIndex(
-            model_name='mobileappqrtoken',
-            index=models.Index(fields=['token_hash'], name='phonebridge_mob_token_h_idx'),
         ),
     ]
