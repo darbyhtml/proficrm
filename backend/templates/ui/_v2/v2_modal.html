@@ -85,6 +85,14 @@
 
   function setDirty(v){ state.dirty = !!v; }
 
+  function runScripts(){
+    bodyEl.querySelectorAll('script').forEach(function(old){
+      var s = document.createElement('script');
+      s.textContent = old.textContent;
+      old.parentNode.replaceChild(s, old);
+    });
+  }
+
   function watchDirty(){
     bodyEl.querySelectorAll('input,textarea,select').forEach(function(el){
       el.addEventListener('input', () => setDirty(true), { once:false });
@@ -123,6 +131,7 @@
             // Partial HTML — скорее всего форма с ошибками валидации
             bodyEl.innerHTML = html;
             bodyEl.classList.remove('is-loading');
+            runScripts();
             watchDirty();
             wireForms();
             if(!res.ok){
@@ -165,6 +174,7 @@
       // Попытка забрать заголовок из partial, если он есть
       const hdr = bodyEl.querySelector('[data-v2-modal-title]');
       if(hdr) { titleEl.textContent = hdr.textContent.trim(); hdr.style.display='none'; }
+      runScripts();
       watchDirty();
       wireForms();
     }catch(_){
@@ -183,6 +193,7 @@
     backdrop.setAttribute('aria-hidden','false');
     state.open = true;
     setDirty(false);
+    runScripts();
     watchDirty();
     wireForms();
   }
