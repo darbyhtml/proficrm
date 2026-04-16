@@ -154,23 +154,23 @@
   </section>
   {% endif %}
 
-  <!-- КАРТОЧКИ -->
-  <div class="v2-grid">
+  <!-- СТРОКА 2: задачи (На сегодня / Просрочено / Новые) — одинаковая высота -->
+  <div class="v2-grid v2-row--stretch">
 
-    <!-- Новые -->
+    <!-- На сегодня -->
     <div class="v2-col-4 v2-anim">
       <div class="v2-card v2-card--hover">
         <div class="v2-card__head">
           <h2 class="v2-card__title">
-            <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.25a.75.75 0 01.75.75v7.5h7.5a.75.75 0 010 1.5h-7.5v7.5a.75.75 0 01-1.5 0v-7.5h-7.5a.75.75 0 010-1.5h7.5V3a.75.75 0 01.75-.75z" clip-rule="evenodd"/></svg>
-            Новые задачи
+            <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M6.75 2.25A.75.75 0 017.5 3v1.5h9V3a.75.75 0 011.5 0v1.5h.75a3 3 0 013 3v11.25a3 3 0 01-3 3H5.25a3 3 0 01-3-3V7.5a3 3 0 013-3H6V3a.75.75 0 01.75-.75zM3.75 18.75v-7.5a1.5 1.5 0 011.5-1.5h13.5a1.5 1.5 0 011.5 1.5v7.5a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5z" clip-rule="evenodd"/></svg>
+            На сегодня
           </h2>
-          <span class="v2-count v2-count--primary">{{ tasks_new_count|default:0 }}</span>
+          <span class="v2-count v2-count--accent">{{ tasks_today_count|default:0 }}</span>
         </div>
         <div class="v2-card__body">
-          {% for t in tasks_new %}
+          {% for t in tasks_today %}
           <a class="v2-item" href="{% url 'task_view' t.id %}">
-            <span class="v2-item__dot v2-item__dot--primary"></span>
+            <span class="v2-item__dot v2-item__dot--accent"></span>
             <div class="flex-1 min-w-0">
               <div class="v2-item__title">
                 {% if t.is_urgent %}<span title="Срочная" style="color:var(--v2-danger);margin-right:4px">⚡</span>{% endif %}{{ t.title|default:"(без названия)" }}
@@ -178,18 +178,18 @@
               {% if t.description %}<div class="v2-task-desc">{{ t.description|truncatechars:100 }}</div>{% endif %}
               <div class="v2-item__meta">
                 {% if t.company %}<span>{{ t.company.name }}</span>{% with guessed=t.company.address|guess_ru_tz %}{% with tz=t.company.work_timezone|default:guessed %}{% if tz %}<span class="v2-tz-badge" title="{{ tz }}">{{ tz|tz_now_hhmm }} · {{ tz|tz_label }}</span>{% endif %}{% endwith %}{% endwith %}{% endif %}
-                {% if t.due_at %}<span>·</span><span>до {{ t.due_at|date:"d.m H:i" }}</span>{% endif %}
+                {% if t.due_at %}<span>·</span><span>{{ t.due_at|date:"H:i" }}</span>{% endif %}
               </div>
             </div>
           </a>
           {% empty %}
-          <div class="v2-card__empty">Новых задач нет</div>
+          <div class="v2-card__empty">На сегодня пусто</div>
           {% endfor %}
         </div>
-        {% if tasks_new_count > 3 %}
+        {% if tasks_today_count > 3 %}
         <div class="v2-card__foot">
-          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list' %}?mine=1&status=new">
-            Все новые ({{ tasks_new_count }})
+          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list' %}?mine=1&today=1">
+            Все на сегодня ({{ tasks_today_count }})
             <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 010 1.06l-7.5 7.5a.75.75 0 01-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 011.06-1.06l7.5 7.5z" clip-rule="evenodd"/></svg>
           </a>
         </div>
@@ -237,20 +237,20 @@
       </div>
     </div>
 
-    <!-- На сегодня -->
+    <!-- Новые задачи -->
     <div class="v2-col-4 v2-anim">
       <div class="v2-card v2-card--hover">
         <div class="v2-card__head">
           <h2 class="v2-card__title">
-            <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M6.75 2.25A.75.75 0 017.5 3v1.5h9V3a.75.75 0 011.5 0v1.5h.75a3 3 0 013 3v11.25a3 3 0 01-3 3H5.25a3 3 0 01-3-3V7.5a3 3 0 013-3H6V3a.75.75 0 01.75-.75zM3.75 18.75v-7.5a1.5 1.5 0 011.5-1.5h13.5a1.5 1.5 0 011.5 1.5v7.5a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5z" clip-rule="evenodd"/></svg>
-            На сегодня
+            <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.25a.75.75 0 01.75.75v7.5h7.5a.75.75 0 010 1.5h-7.5v7.5a.75.75 0 01-1.5 0v-7.5h-7.5a.75.75 0 010-1.5h7.5V3a.75.75 0 01.75-.75z" clip-rule="evenodd"/></svg>
+            Новые задачи
           </h2>
-          <span class="v2-count v2-count--accent">{{ tasks_today_count|default:0 }}</span>
+          <span class="v2-count v2-count--primary">{{ tasks_new_count|default:0 }}</span>
         </div>
         <div class="v2-card__body">
-          {% for t in tasks_today %}
+          {% for t in tasks_new %}
           <a class="v2-item" href="{% url 'task_view' t.id %}">
-            <span class="v2-item__dot v2-item__dot--accent"></span>
+            <span class="v2-item__dot v2-item__dot--primary"></span>
             <div class="flex-1 min-w-0">
               <div class="v2-item__title">
                 {% if t.is_urgent %}<span title="Срочная" style="color:var(--v2-danger);margin-right:4px">⚡</span>{% endif %}{{ t.title|default:"(без названия)" }}
@@ -258,24 +258,29 @@
               {% if t.description %}<div class="v2-task-desc">{{ t.description|truncatechars:100 }}</div>{% endif %}
               <div class="v2-item__meta">
                 {% if t.company %}<span>{{ t.company.name }}</span>{% with guessed=t.company.address|guess_ru_tz %}{% with tz=t.company.work_timezone|default:guessed %}{% if tz %}<span class="v2-tz-badge" title="{{ tz }}">{{ tz|tz_now_hhmm }} · {{ tz|tz_label }}</span>{% endif %}{% endwith %}{% endwith %}{% endif %}
-                {% if t.due_at %}<span>·</span><span>{{ t.due_at|date:"H:i" }}</span>{% endif %}
+                {% if t.due_at %}<span>·</span><span>до {{ t.due_at|date:"d.m H:i" }}</span>{% endif %}
               </div>
             </div>
           </a>
           {% empty %}
-          <div class="v2-card__empty">На сегодня пусто</div>
+          <div class="v2-card__empty">Новых задач нет</div>
           {% endfor %}
         </div>
-        {% if tasks_today_count > 3 %}
+        {% if tasks_new_count > 3 %}
         <div class="v2-card__foot">
-          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list' %}?mine=1&today=1">
-            Все на сегодня ({{ tasks_today_count }})
+          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list' %}?mine=1&status=new">
+            Все новые ({{ tasks_new_count }})
             <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 010 1.06l-7.5 7.5a.75.75 0 01-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 011.06-1.06l7.5 7.5z" clip-rule="evenodd"/></svg>
           </a>
         </div>
         {% endif %}
       </div>
     </div>
+
+  </div>
+
+  <!-- СТРОКА 3: Договоры + Ближайшие 7 дней — одинаковая высота -->
+  <div class="v2-grid v2-row--stretch">
 
     <!-- Договоры -->
     <div class="v2-col-6 v2-anim">
@@ -330,40 +335,7 @@
       </div>
     </div>
 
-    <!-- Компании без задач -->
-    <div class="v2-col-6 v2-anim">
-      <div class="v2-card v2-card--hover">
-        <div class="v2-card__head">
-          <h2 class="v2-card__title">
-            <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M4.5 2.25a.75.75 0 000 1.5v16.5h-.75a.75.75 0 000 1.5h16.5a.75.75 0 000-1.5h-.75V3.75a.75.75 0 000-1.5h-15zM9 6a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5H9zM9 9.75A.75.75 0 019.75 9h1.5a.75.75 0 010 1.5h-1.5A.75.75 0 019 9.75zM9.75 12a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5h-1.5zM9 15.75a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zM13.5 6a.75.75 0 000 1.5H15a.75.75 0 000-1.5h-1.5zm-.75 3.75A.75.75 0 0113.5 9H15a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zM13.5 12a.75.75 0 000 1.5H15a.75.75 0 000-1.5h-1.5zm-.75 3.75a.75.75 0 01.75-.75H15a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75z" clip-rule="evenodd"/></svg>
-            Компании без активных задач
-          </h2>
-          <span class="v2-count">{{ stale_companies_count|default:0 }}</span>
-        </div>
-        <div class="v2-card__body">
-          {% for c in stale_companies %}
-          <a class="v2-item" href="{% url 'company_detail' c.id %}">
-            <span class="v2-item__dot"></span>
-            <div class="flex-1 min-w-0">
-              <div class="v2-item__title">{{ c.name }}</div>
-            </div>
-          </a>
-          {% empty %}
-          <div class="v2-card__empty">У всех компаний есть активные задачи</div>
-          {% endfor %}
-        </div>
-        {% if stale_companies_count > 5 %}
-        <div class="v2-card__foot">
-          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'company_list' %}?task_filter=no_tasks&responsible={{ request.user.id }}">
-            Все без задач ({{ stale_companies_count }})
-            <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M16.28 11.47a.75.75 0 010 1.06l-7.5 7.5a.75.75 0 01-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 011.06-1.06l7.5 7.5z"/></svg>
-          </a>
-        </div>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- На неделю (перенесён вниз — менее срочная информация) -->
+    <!-- Ближайшие 7 дней -->
     <div class="v2-col-6 v2-anim">
       <div class="v2-card v2-card--hover">
         <div class="v2-card__head">
@@ -375,18 +347,16 @@
           <span class="v2-count">{{ tasks_week_count|default:0 }}</span>
         </div>
         <div class="v2-card__body">
-          {% for t in tasks_week %}
+          {% for t in tasks_week|slice:":5" %}
           <a class="v2-item" href="{% url 'task_view' t.id %}">
             <span class="v2-item__dot"></span>
             <div class="flex-1 min-w-0">
               <div class="v2-item__title">
                 {% if t.is_urgent %}<span title="Срочная" style="color:var(--v2-danger);margin-right:4px">⚡</span>{% endif %}{{ t.title|default:"(без названия)" }}
               </div>
-              {% if t.description %}<div class="v2-task-desc">{{ t.description|truncatechars:100 }}</div>{% endif %}
               <div class="v2-item__meta">
-                {% if t.company %}<span>{{ t.company.name }}</span>{% with guessed=t.company.address|guess_ru_tz %}{% with tz=t.company.work_timezone|default:guessed %}{% if tz %}<span class="v2-tz-badge" title="{{ tz }}">{{ tz|tz_now_hhmm }} · {{ tz|tz_label }}</span>{% endif %}{% endwith %}{% endwith %}{% endif %}
+                {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
                 {% if t.due_at %}<span>·</span><span>{{ t.due_at|date:"D, d.m H:i" }}</span>{% endif %}
-                {% if t.assigned_to %}<span>·</span><span>{{ t.assigned_to|full_name }}</span>{% endif %}
               </div>
             </div>
           </a>
@@ -394,7 +364,7 @@
           <div class="v2-card__empty">На неделе задач нет</div>
           {% endfor %}
         </div>
-        {% if tasks_week_count > 3 %}
+        {% if tasks_week_count > 5 %}
         <div class="v2-card__foot">
           <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list' %}?mine=1&date_from={{ week_range_start|date:'Y-m-d' }}&date_to={{ week_range_end|date:'Y-m-d' }}">Все задачи на неделю ({{ tasks_week_count }})
             <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 010 1.06l-7.5 7.5a.75.75 0 01-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 011.06-1.06l7.5 7.5z" clip-rule="evenodd"/></svg>
@@ -404,6 +374,45 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- СТРОКА 4: Компании без активных задач — на всю ширину, два столбца -->
+  <div class="v2-grid">
+    <div class="v2-col-12 v2-anim">
+      <div class="v2-card v2-card--hover">
+        <div class="v2-card__head">
+          <h2 class="v2-card__title">
+            <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M4.5 2.25a.75.75 0 000 1.5v16.5h-.75a.75.75 0 000 1.5h16.5a.75.75 0 000-1.5h-.75V3.75a.75.75 0 000-1.5h-15zM9 6a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5H9zM9 9.75A.75.75 0 019.75 9h1.5a.75.75 0 010 1.5h-1.5A.75.75 0 019 9.75zM9.75 12a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5h-1.5zM9 15.75a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zM13.5 6a.75.75 0 000 1.5H15a.75.75 0 000-1.5h-1.5zm-.75 3.75A.75.75 0 0113.5 9H15a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zM13.5 12a.75.75 0 000 1.5H15a.75.75 0 000-1.5h-1.5zm-.75 3.75a.75.75 0 01.75-.75H15a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75z" clip-rule="evenodd"/></svg>
+            Компании без активных задач
+          </h2>
+          <span class="v2-count">{{ stale_companies_count|default:0 }}</span>
+        </div>
+        <div class="v2-card__body" style="padding:0">
+          {% if stale_companies %}
+          <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--v2-border)">
+            {% for c in stale_companies %}
+            <a class="v2-item" href="{% url 'company_detail' c.id %}" style="padding:10px 20px;border-bottom:1px solid var(--v2-border){% if forloop.counter|divisibleby:2 %};border-left:1px solid var(--v2-border){% endif %}">
+              <span class="v2-item__dot"></span>
+              <div class="flex-1 min-w-0">
+                <div class="v2-item__title">{{ c.name }}</div>
+              </div>
+            </a>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="v2-card__empty" style="padding:12px 20px">У всех компаний есть активные задачи</div>
+          {% endif %}
+        </div>
+        {% if stale_companies_count > 10 %}
+        <div class="v2-card__foot">
+          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'company_list' %}?task_filter=no_tasks&responsible={{ request.user.id }}">
+            Все без задач ({{ stale_companies_count }})
+            <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M16.28 11.47a.75.75 0 010 1.06l-7.5 7.5a.75.75 0 01-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 011.06-1.06l7.5 7.5z"/></svg>
+          </a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
   </div>
 </div>
 
