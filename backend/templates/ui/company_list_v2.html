@@ -1,12 +1,6 @@
 {% extends "ui/base.html" %}
 {% load ui_extras accounts_extras %}
-{% block title %}Компании (v2) — CRM ПРОФИ{% endblock %}
-
-{% comment %}
-  Preview-версия списка компаний. Общие стили — _v2/v2_styles.html.
-  Флаг request._preview_v2 в ui.views.company_list.company_list.
-  Phase 2: filters (status/sphere/contract/region/branch), sort, bulk transfer, remember filters.
-{% endcomment %}
+{% block title %}Компании — CRM ПРОФИ{% endblock %}
 
 {% block extra_head %}
   {% include "ui/_v2/v2_styles.html" %}
@@ -121,7 +115,7 @@
     </div>
 
     <div class="v2-card__body">
-      <form method="get" action="{% url 'company_list_v2_preview' %}" id="v2CompanyFilters" class="v2-fbar-wrap">
+      <form method="get" action="{% url 'company_list' %}" id="v2CompanyFilters" class="v2-fbar-wrap">
         <div class="v2-fbar">
           <input type="search" name="q" value="{{ q|default:'' }}" class="v2-input v2-fbar__search"
                  placeholder="Поиск по названию, телефону, email…" />
@@ -205,7 +199,7 @@
           </div>
 
           {% if q or selected_statuses or selected_spheres or contract_type or selected_regions or selected_branches or selected_responsibles or task_filter or overdue == '1' %}
-          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'company_list_v2_preview' %}"
+          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'company_list' %}"
              title="Сбросить все фильтры">Сброс</a>
           {% endif %}
         </div>
@@ -414,7 +408,6 @@
     </div>
   </div>
 
-  {% include "ui/_v2/v2_toggle.html" with target_url="/companies/" target_label="обычную версию" mode="to-v1" %}
   {% include "ui/_v2/v2_modal.html" %}
 </div>
 

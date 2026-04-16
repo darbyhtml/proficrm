@@ -348,10 +348,9 @@ def task_list(request: HttpRequest) -> HttpResponse:
             task.type_id = task_type.id  # type: ignore[attr-defined]
     
     # Сохраняем сортировку в cookie, если она была изменена через GET параметры
-    _template_name = "ui/task_list_v2.html" if getattr(request, "_preview_v2", False) else "ui/task_list.html"
     response = render(
         request,
-        _template_name,
+        "ui/task_list_v2.html",
         {
             "now": now,
             "local_now": local_now,
@@ -388,16 +387,6 @@ def task_list(request: HttpRequest) -> HttpResponse:
     
     return response
 
-
-@login_required
-@policy_required(resource_type="page", resource="ui:tasks:list")
-def task_list_v2_preview(request: HttpRequest) -> HttpResponse:
-    """Preview редизайна списка задач (Notion-стиль). Только ADMIN."""
-    if not (request.user.is_superuser or getattr(request.user, "role", None) == User.Role.ADMIN):
-        from django.core.exceptions import PermissionDenied as _PD
-        raise _PD("Preview доступен только администраторам")
-    request._preview_v2 = True  # type: ignore[attr-defined]
-    return task_list(request)
 
 
 @login_required

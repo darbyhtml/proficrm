@@ -4,7 +4,6 @@ from . import views
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
-    path("_preview/dashboard-v2/", views.dashboard_v2_preview, name="dashboard_v2_preview"),
     path("api/dashboard/poll/", views.dashboard_poll, name="dashboard_poll"),
     path("api/dashboard/sse/", views.dashboard_sse, name="dashboard_sse"),
     path("analytics/", views.analytics, name="analytics"),
@@ -25,7 +24,6 @@ urlpatterns = [
     path("reports/cold-calls/month/", views.cold_calls_report_month, name="cold_calls_report_month"),
     path("reports/cold-calls/last-7-days/", views.cold_calls_report_last_7_days, name="cold_calls_report_last_7_days"),
     path("companies/", views.company_list, name="company_list"),
-    path("_preview/companies-v2/", views.company_list_v2_preview, name="company_list_v2_preview"),
     path("companies/ajax/", views.company_list_ajax, name="company_list_ajax"),
     path("companies/autocomplete/", views.company_autocomplete, name="company_autocomplete"),
     path("companies/duplicates/", views.company_duplicates, name="company_duplicates"),
@@ -75,7 +73,6 @@ urlpatterns = [
     path("companies/<uuid:company_id>/deals/<int:deal_id>/delete/", views.company_deal_delete, name="company_deal_delete"),
     path("phone/call/", views.phone_call_create, name="phone_call_create"),
     path("tasks/", views.task_list, name="task_list"),
-    path("_preview/tasks-v2/", views.task_list_v2_preview, name="task_list_v2_preview"),
     path("tasks/bulk-reassign/", views.task_bulk_reassign, name="task_bulk_reassign"),
     path("tasks/bulk-reschedule/", views.task_bulk_reschedule, name="task_bulk_reschedule"),
     path("tasks/bulk-reschedule/preview/", views.task_bulk_reschedule_preview, name="task_bulk_reschedule_preview"),
@@ -92,7 +89,6 @@ urlpatterns = [
 
     # Settings (admin only)
     path("admin/", views.settings_dashboard, name="settings_dashboard"),
-    path("_preview/admin-v2/", views.settings_dashboard_v2_preview, name="settings_dashboard_v2_preview"),
     path("admin/announcements/", views.settings_announcements, name="settings_announcements"),
     path("admin/access/", views.settings_access, name="settings_access"),
     path("admin/access/roles/<str:role>/", views.settings_access_role, name="settings_access_role"),

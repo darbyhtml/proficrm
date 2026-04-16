@@ -9,7 +9,7 @@
       <h1 class="text-2xl font-semibold">Аналитика Messenger</h1>
       <p class="text-sm text-brand-dark/70 mt-1">Период: последние {{ days }} дней</p>
     </div>
-    {% include "ui/admin/messenger_nav.html" with active="analytics" %}
+    {% include "ui/settings/messenger_nav.html" with active="analytics" %}
 
     <div class="flex gap-2 flex-wrap">
       <a class="btn btn-outline btn-sm {% if days == 7 %}btn-primary{% endif %}" href="?days=7">7 дней</a>

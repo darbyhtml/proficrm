@@ -42,40 +42,19 @@ def settings_dashboard(request: HttpRequest) -> HttpResponse:
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
-    _template_name = (
-        "ui/settings/dashboard_v2.html"
-        if getattr(request, "_preview_v2", False)
-        else "ui/settings/dashboard.html"
-    )
+    from companies.models import Company
     ctx = {
         "MESSENGER_ENABLED": getattr(settings, "MESSENGER_ENABLED", False),
+        "v2_count_users": User.objects.count(),
+        "v2_count_branches": Branch.objects.count(),
+        "v2_count_statuses": CompanyStatus.objects.count(),
+        "v2_count_spheres": CompanySphere.objects.count(),
+        "v2_count_task_types": TaskType.objects.count(),
+        "v2_count_contract_types": ContractType.objects.count(),
+        "v2_count_companies": Company.objects.count(),
     }
 
-    # v2 превью показывает счётчики в плитках — считаем только когда нужно,
-    # чтобы не тратить запросы на обычной странице.
-    if getattr(request, "_preview_v2", False):
-        from companies.models import Company
-        ctx.update({
-            "v2_count_users": User.objects.count(),
-            "v2_count_branches": Branch.objects.count(),
-            "v2_count_statuses": CompanyStatus.objects.count(),
-            "v2_count_spheres": CompanySphere.objects.count(),
-            "v2_count_task_types": TaskType.objects.count(),
-            "v2_count_contract_types": ContractType.objects.count(),
-            "v2_count_companies": Company.objects.count(),
-        })
-
-    return render(request, _template_name, ctx)
-
-
-@login_required
-def settings_dashboard_v2_preview(request: HttpRequest) -> HttpResponse:
-    """Preview редизайна админки (Notion-стиль). Только ADMIN."""
-    if not require_admin(request.user):
-        from django.core.exceptions import PermissionDenied as _PD
-        raise _PD("Preview доступен только администраторам")
-    request._preview_v2 = True  # type: ignore[attr-defined]
-    return settings_dashboard(request)
+    return render(request, "ui/settings/dashboard_v2.html", ctx)
 
 
 @login_required

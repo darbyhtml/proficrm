@@ -4,7 +4,7 @@ from __future__ import annotations
 from ui.views._base import RESPONSIBLE_FILTER_NONE, STRONG_CONFIRM_THRESHOLD  # noqa: F401
 from ui.views.dashboard import (
     view_as_update, view_as_reset,
-    dashboard, dashboard_v2_preview, dashboard_poll, dashboard_sse,
+    dashboard, dashboard_poll, dashboard_sse,
     analytics, analytics_user,
     help_page,
     preferences, preferences_ui, preferences_company_detail_view_mode,
@@ -18,7 +18,7 @@ from ui.views.reports import (
     cold_calls_report_last_7_days,
 )  # noqa: F401
 from ui.views.company_list import (
-    company_list, company_list_v2_preview, company_list_ajax,
+    company_list, company_list_ajax,
     company_bulk_transfer_preview, company_bulk_transfer,
     company_export, company_create,
     company_autocomplete, company_duplicates,
@@ -47,7 +47,7 @@ from ui.views.company_detail import (
     phone_call_create,
 )  # noqa: F401
 from ui.views.tasks import (
-    task_list, task_list_v2_preview, task_create, task_create_v2_partial,
+    task_list, task_create, task_create_v2_partial,
     task_view_v2_partial, task_edit_v2_partial,
     task_delete, task_bulk_reassign,
     task_bulk_reschedule, task_bulk_reschedule_preview,
@@ -58,7 +58,7 @@ from ui.views.tasks import (
     _create_note_from_task,  # accessed by tasksapp/management/commands/cleanup_old_tasks.py
 )  # noqa: F401
 from ui.views.settings_core import (
-    settings_dashboard, settings_dashboard_v2_preview, settings_announcements,
+    settings_dashboard, settings_announcements,
     settings_access, settings_access_role,
     settings_branches, settings_branch_create, settings_branch_edit,
     settings_users, settings_user_create, settings_user_edit,

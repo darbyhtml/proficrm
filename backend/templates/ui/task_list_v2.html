@@ -1,12 +1,6 @@
 {% extends "ui/base.html" %}
 {% load ui_extras accounts_extras %}
-{% block title %}Задачи (v2) — CRM ПРОФИ{% endblock %}
-
-{% comment %}
-  Preview-версия списка задач. Использует общие стили _v2/v2_styles.html.
-  Контекст — тот же что у ui.views.tasks.task_list (через флаг request._preview_v2).
-  Phase 2: sort, date range, bulk reassign, checkboxes, remember filters.
-{% endcomment %}
+{% block title %}Задачи — CRM ПРОФИ{% endblock %}
 
 {% block extra_head %}
   {% include "ui/_v2/v2_styles.html" %}
@@ -120,7 +114,7 @@
       {# Подсчитываем активные фильтры (для badge на кнопке «Фильтр») #}
       {% with active_count=0 %}{% endwith %}
 
-      <form method="get" action="{% url 'task_list_v2_preview' %}" id="v2TaskFilters" class="v2-fbar-wrap">
+      <form method="get" action="{% url 'task_list' %}" id="v2TaskFilters" class="v2-fbar-wrap">
         <div class="v2-fbar">
           <input type="search" name="q" value="{{ search_q|default:'' }}"
                  placeholder="Поиск по названию, описанию, компании…" class="v2-input v2-fbar__search" />
@@ -191,7 +185,7 @@
           </div>
 
           {% if status or assigned_to or search_q or date_from or date_to or mine == '1' or today == '1' or overdue == '1' or show_done == '1' %}
-          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list_v2_preview' %}"
+          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list' %}"
              title="Сбросить все фильтры">Сброс</a>
           {% endif %}
         </div>
@@ -457,7 +451,6 @@
     </div>
   </div>
 
-  {% include "ui/_v2/v2_toggle.html" with target_url="/tasks/" target_label="обычную версию" mode="to-v1" %}
   {% include "ui/_v2/v2_modal.html" %}
 </div>
 

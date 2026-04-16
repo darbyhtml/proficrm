@@ -301,35 +301,4 @@
   .v2-anim:nth-child(4) { animation-delay: .12s; }
   .v2-anim:nth-child(5) { animation-delay: .16s; }
   .v2-anim:nth-child(6) { animation-delay: .20s; }
-
-  /* Toggle v1↔v2 (плавающий) */
-  .v2-toggle {
-    position: fixed;
-    right: 18px; bottom: 18px;
-    z-index: 9000;
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 8px 14px 8px 10px;
-    background: var(--v2-text);
-    color: #ffffff;
-    border-radius: 999px;
-    text-decoration: none;
-    box-shadow: 0 8px 22px rgba(15,21,20,0.22), 0 2px 6px rgba(15,21,20,0.12);
-    font-size: 13px; font-weight: 500;
-    transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
-  }
-  .v2-toggle:hover {
-    transform: translateY(-2px);
-    background: #0A0A07;
-    box-shadow: 0 12px 26px rgba(15,21,20,0.28), 0 3px 10px rgba(15,21,20,0.16);
-    color: #fff;
-  }
-  .v2-toggle__icon {
-    width: 22px; height: 22px; border-radius: 999px;
-    background: var(--v2-primary);
-    color: #fff;
-    display: inline-flex; align-items: center; justify-content: center;
-  }
-  .v2-toggle__icon svg { width: 13px; height: 13px; }
-  .v2-toggle__label { line-height: 1; }
-  .v2-toggle__label small { display: block; font-size: 10px; color: #9B9B94; margin-top: 2px; font-weight: 400; }
 </style>

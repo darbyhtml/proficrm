@@ -333,14 +333,13 @@ class DashboardViewTestCase(TestCase):
 
     def test_empty_states_displayed(self):
         """Тест: пустые состояния отображаются корректно."""
-        # Не создаём никаких задач и договоров
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "На сегодня задач нет")
+        self.assertContains(response, "На сегодня пусто")
         self.assertContains(response, "Новых задач нет")
-        self.assertContains(response, "Нет просроченных задач")
-        self.assertContains(response, "На ближайшую неделю задач нет")
-        self.assertContains(response, "Ближайших окончаний договоров нет")
+        self.assertContains(response, "Всё в срок")
+        self.assertContains(response, "На неделе задач нет")
+        self.assertContains(response, "Нет предупреждений по договорам")
 
     def test_tasks_ordered_by_due_at(self):
         """Тест: задачи на сегодня упорядочены по due_at."""
@@ -520,13 +519,9 @@ class DashboardViewTestCase(TestCase):
         self.assertEqual(context["tasks_today_count"], 10)
 
     def test_view_all_links_with_correct_filters(self):
-        """Тест: кнопки 'Посмотреть все' имеют правильные фильтры."""
-        # Создаём больше 5 задач в каждой категории
+        """Тест: кнопки «Все задачи…» имеют правильные фильтры."""
         for i in range(7):
-            # Задачи на сегодня - создаём с due_at в будущем относительно local_now,
-            # но в пределах сегодняшнего дня, чтобы они не попадали в просроченные
             due_at_today = self.local_now + timedelta(hours=i+1)
-            # Убеждаемся что не выходим за пределы сегодняшнего дня
             if due_at_today >= self.tomorrow_start:
                 due_at_today = self.tomorrow_start - timedelta(minutes=1)
             Task.objects.create(
@@ -536,14 +531,12 @@ class DashboardViewTestCase(TestCase):
                 due_at=due_at_today,
                 status=Task.Status.IN_PROGRESS
             )
-            # Новые задачи
             Task.objects.create(
                 title=f"Новая задача {i}",
                 assigned_to=self.user,
                 company=self.company,
                 status=Task.Status.NEW
             )
-            # Просроченные задачи
             Task.objects.create(
                 title=f"Просроченная задача {i}",
                 assigned_to=self.user,
@@ -554,34 +547,12 @@ class DashboardViewTestCase(TestCase):
 
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        
-        # Проверяем наличие кнопок "Посмотреть все" с правильными фильтрами
-        # Django может экранировать & в &amp; или оставлять как есть, проверяем оба варианта
         response_text = response.content.decode('utf-8')
-        # Проверяем наличие ссылок с нужными параметрами
-        # Для "На сегодня" - должна быть ссылка с mine=1&today=1 (или &amp;today=1)
-        self.assertTrue(
-            'href="/tasks/?mine=1&today=1"' in response_text or 
-            'href="/tasks/?mine=1&amp;today=1"' in response_text,
-            "Не найдена ссылка для задач на сегодня"
-        )
-        # Для "Новые задачи" - должна быть ссылка с mine=1&status=new (или &amp;status=new)
-        self.assertTrue(
-            'href="/tasks/?mine=1&status=new"' in response_text or 
-            'href="/tasks/?mine=1&amp;status=new"' in response_text,
-            "Не найдена ссылка для новых задач"
-        )
-        # Для "Просрочено" - должна быть ссылка с mine=1&overdue=1 (или &amp;overdue=1)
-        self.assertTrue(
-            'href="/tasks/?mine=1&overdue=1"' in response_text or 
-            'href="/tasks/?mine=1&amp;overdue=1"' in response_text,
-            "Не найдена ссылка для просроченных задач"
-        )
-        
-        # Проверяем, что счетчики отображаются
-        self.assertContains(response, "Посмотреть все")
-        # Должно быть 7 задач в каждой категории
-        self.assertContains(response, "(7)", count=3)  # Для каждой категории
+
+        # v2 ссылки: /tasks/?today=1, /tasks/?status=new, /tasks/?overdue=1
+        self.assertIn("/tasks/?today=1", response_text)
+        self.assertIn("/tasks/?status=new", response_text)
+        self.assertIn("/tasks/?overdue=1", response_text)
 
     def test_task_status_badges_displayed(self):
         """Тест: статусы задач отображаются с правильными бейджами."""
@@ -624,8 +595,8 @@ class DashboardViewTestCase(TestCase):
             all_task_titles.extend([t.title for t in task_list])
         self.assertNotIn("Выполненная задача", all_task_titles)
 
-    def test_due_date_displayed_on_separate_line(self):
-        """Тест: дедлайн отображается на отдельной строке."""
+    def test_due_date_displayed(self):
+        """Тест: дедлайн отображается в карточке задачи."""
         task = Task.objects.create(
             title="Задача с дедлайном",
             assigned_to=self.user,
@@ -636,17 +607,13 @@ class DashboardViewTestCase(TestCase):
 
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        
-        # Проверяем, что дедлайн отображается с иконкой календаря
-        # Форматируем дату так же, как в шаблоне
-        formatted_date = task.due_at.strftime("%d.%m.%Y %H:%M")
-        self.assertContains(response, formatted_date)
-        # Проверяем наличие SVG иконки календаря
-        self.assertContains(response, "M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6")
+        # v2 формат зависит от секции: H:i для «Сегодня», d.m H:i для других
+        formatted_time = task.due_at.strftime("%H:%M")
+        self.assertContains(response, formatted_time)
 
     def test_overdue_tasks_highlighted(self):
-        """Тест: просроченные задачи выделены красным цветом."""
-        overdue_task = Task.objects.create(
+        """Тест: просроченные задачи отображаются в секции «Просрочено»."""
+        Task.objects.create(
             title="Просроченная задача",
             assigned_to=self.user,
             company=self.company,
@@ -656,34 +623,23 @@ class DashboardViewTestCase(TestCase):
 
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        
-        # Проверяем наличие красного выделения
-        self.assertContains(response, "border-red-300")
-        self.assertContains(response, "bg-red-50/50")
-        self.assertContains(response, "text-red-700")
-        self.assertContains(response, "badge-danger")
+        self.assertContains(response, "Просроченная задача")
+        self.assertContains(response, "v2-item__dot--danger")
 
-    def test_task_buttons_have_same_height(self):
-        """Тест: все кнопки в шапке имеют одинаковую высоту."""
+    def test_hero_section_rendered(self):
+        """Тест: hero-блок дашборда отображается с метриками."""
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        
-        # Проверяем наличие единой минимальной высоты для кнопок (в шаблоне используется 2.375rem ≈ 38px)
-        # Refresh, ХЗ день, ХЗ месяц (если can_view_cold_call_reports=True), + Новая компания, + Новая задача
-        # Для менеджера должно быть 5 кнопок (добавлена кнопка обновления рабочего стола)
-        self.assertContains(response, 'style="min-height:2.375rem"', count=5)
+        self.assertContains(response, "v2-hero")
 
-    def test_new_company_button_text(self):
-        """Тест: кнопка создания компании имеет правильный текст."""
+    def test_new_task_button(self):
+        """Тест: кнопка создания задачи присутствует."""
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        
-        # Проверяем наличие правильного текста
-        self.assertContains(response, "+ Новая компания")
-        self.assertNotContains(response, "+ Компания")
+        self.assertContains(response, "data-v2-modal-open")
 
-    def test_task_modal_buttons_functionality(self):
-        """Тест: кнопки для открытия модального окна задачи работают корректно."""
+    def test_task_links_present(self):
+        """Тест: задачи на дашборде имеют ссылки для перехода."""
         task = Task.objects.create(
             title="Тестовая задача",
             assigned_to=self.user,
@@ -691,10 +647,6 @@ class DashboardViewTestCase(TestCase):
             status=Task.Status.NEW
         )
 
-        # Проверяем, что на dashboard есть кнопка для открытия задачи в модальном окне
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        
-        # Проверяем наличие атрибута data-view-task для открытия модального окна
-        self.assertContains(response, 'data-view-task')
-        self.assertContains(response, f'data-task-id="{task.id}"')
+        self.assertContains(response, f"/tasks/{task.id}/")

@@ -114,7 +114,7 @@ def settings_import(request: HttpRequest) -> HttpResponse:
     else:
         form = ImportCompaniesForm()
 
-    return render(request, "ui/admin/import.html", {"form": form, "result": result})
+    return render(request, "ui/settings/import.html", {"form": form, "result": result})
 
 
 @login_required
@@ -174,7 +174,7 @@ def settings_import_tasks(request: HttpRequest) -> HttpResponse:
     else:
         form = ImportTasksIcsForm()
 
-    return render(request, "ui/admin/import_tasks.html", {"form": form, "result": result})
+    return render(request, "ui/settings/import_tasks.html", {"form": form, "result": result})
 
 
 @login_required
@@ -238,7 +238,7 @@ def settings_amocrm(request: HttpRequest) -> HttpResponse:
     
     return render(
         request,
-        "ui/admin/amocrm.html",
+        "ui/settings/amocrm.html",
         {"form": form, "cfg": cfg, "auth_url": auth_url, "redirect_uri_display": redirect_uri_display},
     )
 
@@ -406,7 +406,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
             form = AmoMigrateFilterForm(initial={"dry_run": True, "limit_companies": 10, "offset": 0})
             return render(
                 request,
-                "ui/admin/amocrm_migrate.html",
+                "ui/settings/amocrm_migrate.html",
                 {"cfg": cfg, "form": form, "users": [], "fields": [], "result": None},
             )
 
@@ -608,7 +608,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
     try:
         return render(
             request,
-            "ui/admin/amocrm_migrate.html",
+            "ui/settings/amocrm_migrate.html",
             {
                 "cfg": cfg,
                 "form": form,
@@ -719,7 +719,7 @@ def settings_amocrm_contacts_dry_run(request: HttpRequest) -> HttpResponse:
 
         return render(
             request,
-            "ui/admin/amocrm_contacts_dry_run.html",
+            "ui/settings/amocrm_contacts_dry_run.html",
             {
                 "result": result,
                 "responsible_user_id": responsible_user_id,
@@ -837,7 +837,7 @@ def settings_amocrm_debug_contacts(request: HttpRequest) -> HttpResponse:
 
         return render(
             request,
-            "ui/admin/amocrm_debug_contacts.html",
+            "ui/settings/amocrm_debug_contacts.html",
             {
                 "contacts": contacts_data,
                 "stats": stats,
@@ -874,7 +874,7 @@ def settings_company_columns(request: HttpRequest) -> HttpResponse:
     else:
         form = CompanyListColumnsForm(initial={"columns": cfg.company_list_columns or ["name"]})
 
-    return render(request, "ui/admin/company_columns.html", {"form": form, "cfg": cfg})
+    return render(request, "ui/settings/company_columns.html", {"form": form, "cfg": cfg})
 
 
 @login_required
@@ -911,7 +911,7 @@ def settings_security(request: HttpRequest) -> HttpResponse:
 
     return render(
         request,
-        "ui/admin/security.html",
+        "ui/settings/security.html",
         {
             "exports": exports,
             "export_stats": export_stats,
@@ -965,7 +965,7 @@ def settings_mobile_devices(request: HttpRequest) -> HttpResponse:
 
     return render(
         request,
-        "ui/admin/mobile_devices.html",
+        "ui/settings/mobile_devices.html",
         {
             "page": page,
             "total": total,
@@ -1068,7 +1068,7 @@ def settings_mobile_overview(request: HttpRequest) -> HttpResponse:
 
     return render(
         request,
-        "ui/admin/mobile_overview.html",
+        "ui/settings/mobile_overview.html",
         {
             "total_devices": total_devices,
             "active_devices": active_devices,
@@ -1113,7 +1113,7 @@ def settings_mobile_device_detail(request: HttpRequest, pk) -> HttpResponse:
 
     return render(
         request,
-        "ui/admin/mobile_device_detail.html",
+        "ui/settings/mobile_device_detail.html",
         {
             "device": device,
             "telemetry": telemetry_qs,
@@ -1371,7 +1371,7 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
     
     return render(
         request,
-        "ui/admin/calls_stats.html",
+        "ui/settings/calls_stats.html",
         {
             "period": period,
             "period_label": period_label,
@@ -1482,7 +1482,7 @@ def settings_calls_manager_detail(request: HttpRequest, user_id: int) -> HttpRes
     
     return render(
         request,
-        "ui/admin/calls_manager_detail.html",
+        "ui/settings/calls_manager_detail.html",
         {
             "manager": manager,
             "period": period,

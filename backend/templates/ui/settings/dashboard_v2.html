@@ -1,10 +1,5 @@
 {% extends "ui/base.html" %}
-{% block title %}Настройки (v2) — CRM ПРОФИ{% endblock %}
-
-{% comment %}
-  Preview-версия дашборда настроек. Общие стили — ui/_v2/v2_styles.html.
-  Флаг request._preview_v2 в ui.views.settings_core.settings_dashboard.
-{% endcomment %}
+{% block title %}Настройки — CRM ПРОФИ{% endblock %}
 
 {% block extra_head %}
   {% include "ui/_v2/v2_styles.html" %}
@@ -298,7 +293,6 @@
   </div>
   {% endif %}
 
-  {% include "ui/_v2/v2_toggle.html" with target_url="/admin/" target_label="обычную версию" mode="to-v1" %}
 </div>
 
 <script>

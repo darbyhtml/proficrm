@@ -252,10 +252,9 @@ def company_list(request: HttpRequest) -> HttpResponse:
 
     is_admin = require_admin(user)
 
-    _template_name = "ui/company_list_v2.html" if getattr(request, "_preview_v2", False) else "ui/company_list.html"
     return render(
         request,
-        _template_name,
+        "ui/company_list_v2.html",
         {
             "page": page,
             "qs": qs_no_page,
@@ -294,16 +293,6 @@ def company_list(request: HttpRequest) -> HttpResponse:
         },
     )
 
-
-@login_required
-@policy_required(resource_type="page", resource="ui:companies:list")
-def company_list_v2_preview(request: HttpRequest) -> HttpResponse:
-    """Preview редизайна списка компаний (Notion-стиль). Только ADMIN."""
-    if not (request.user.is_superuser or getattr(request.user, "role", None) == User.Role.ADMIN):
-        from django.core.exceptions import PermissionDenied as _PD
-        raise _PD("Preview доступен только администраторам")
-    request._preview_v2 = True  # type: ignore[attr-defined]
-    return company_list(request)
 
 
 @login_required
