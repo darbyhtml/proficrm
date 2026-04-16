@@ -407,3 +407,35 @@ def phone_local_info(raw_phone: str) -> str:
     except Exception:
         return ""
 
+
+# Русские названия месяцев в родительном падеже
+_RU_MONTHS_GENITIVE = {
+    1: "января", 2: "февраля", 3: "марта", 4: "апреля",
+    5: "мая", 6: "июня", 7: "июля", 8: "августа",
+    9: "сентября", 10: "октября", 11: "ноября", 12: "декабря",
+}
+
+_RU_WEEKDAYS = {
+    0: "понедельник", 1: "вторник", 2: "среда", 3: "четверг",
+    4: "пятница", 5: "суббота", 6: "воскресенье",
+}
+
+
+@register.filter(name="ru_date")
+def ru_date(value):
+    """Дата на русском в формате «среда, 16 апреля 2026».
+
+    Django date:"l, d F Y" выдаёт именительный падеж месяца (Апрель),
+    а в русском языке правильно родительный (апреля).
+    """
+    if not value:
+        return ""
+    try:
+        weekday = _RU_WEEKDAYS.get(value.weekday(), "")
+        day = value.day
+        month = _RU_MONTHS_GENITIVE.get(value.month, "")
+        year = value.year
+        return f"{weekday}, {day} {month} {year}"
+    except (AttributeError, TypeError):
+        return str(value)
+

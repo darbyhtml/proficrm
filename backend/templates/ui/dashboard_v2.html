@@ -18,18 +18,21 @@
   .v2-done-check{flex:0 0 auto;width:22px;height:22px;border-radius:50%;
     border:1.5px solid var(--v2-border);background:#fff;cursor:pointer;
     display:inline-flex;align-items:center;justify-content:center;margin-right:8px;
-    transition:all .15s ease;padding:0;color:transparent}
+    transition:all .15s ease;padding:0;color:transparent;position:relative}
+  .v2-done-check::before{content:"";position:absolute;inset:-7px;border-radius:50%}
   .v2-done-check:hover{border-color:var(--v2-primary);background:var(--v2-bg-soft);color:var(--v2-primary)}
   .v2-done-check svg{width:14px;height:14px}
   .v2-done-check.is-done{background:var(--v2-primary);border-color:var(--v2-primary);color:#fff}
   /* Компактная шапка (hero) */
   .v2-hero{padding:16px 20px !important}
-  .v2-hero__title{font-size:18px !important;margin-bottom:2px !important}
+  .v2-hero__title{font-size:18px !important;margin:0 0 2px 0 !important}
   .v2-hero__sub{font-size:12px !important;opacity:.9}
   .v2-hero__stats{margin-top:12px !important;gap:8px !important}
   .v2-hero__stat{padding:8px 12px !important}
   .v2-hero__stat-value{font-size:20px !important;line-height:1.1 !important}
   .v2-hero__stat-label{font-size:10px !important;letter-spacing:.04em}
+  a.v2-hero__stat{transition:transform .15s ease,background .15s ease}
+  a.v2-hero__stat:hover{transform:translateY(-1px);background:rgba(255,255,255,.16)}
   #v2DashUpdateIndicator{position:fixed;top:16px;right:16px;z-index:50;display:none;
     background:#fff;border:1px solid var(--v2-border);border-radius:10px;padding:8px 12px;
     box-shadow:0 4px 16px rgba(0,0,0,.08);font-size:13px;color:var(--v2-text)}
@@ -44,14 +47,22 @@
 <div class="v2 space-y-4">
 
   <!-- HERO -->
-  <section class="v2-hero v2-anim">
+  <section class="v2-hero v2-anim" aria-label="Сводка по задачам">
     <div class="flex items-start justify-between gap-4 flex-wrap relative">
       <div>
-        <div class="v2-hero__title">Здравствуйте, {{ request.user.first_name|default:request.user.username }}</div>
-        <div class="v2-hero__sub">Сегодняшние задачи и последние изменения</div>
+        <h1 class="v2-hero__title">Здравствуйте, {{ request.user.first_name|default:request.user.username }}</h1>
+        <div class="v2-hero__sub" style="color:#E6F4F3">Сегодняшние задачи и последние изменения</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <div class="text-sm" style="color:#B3DEDC">{{ local_now|date:"l, d F Y" }}</div>
+        <div class="text-sm" style="color:#E6F4F3">{{ local_now|ru_date }}</div>
+        <a href="{% url 'task_create' %}" class="v2-btn v2-btn--ghost v2-btn--sm"
+           style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff"
+           title="Создать новую задачу">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Задача
+        </a>
         <button type="button" id="v2DashRefreshBtn" class="v2-btn v2-btn--ghost v2-btn--sm"
                 title="Обновить рабочий стол" style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -66,7 +77,7 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z"/>
           </svg>
-          ХЗ: день
+          Звонки: день
         </a>
         <a href="{% url 'cold_calls_report_month' %}" class="v2-btn v2-btn--ghost v2-btn--sm"
            style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff"
@@ -74,28 +85,28 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6M7 10h10M7 14h10M7 18h6"/>
           </svg>
-          ХЗ: месяц
+          Звонки: месяц
         </a>
         {% endif %}
       </div>
     </div>
     <div class="v2-hero__stats">
-      <div class="v2-hero__stat">
+      <a class="v2-hero__stat" href="{% url 'task_list' %}?mine=1&today=1" style="text-decoration:none;color:inherit">
         <div class="v2-hero__stat-value">{{ tasks_today_count|default:0 }}</div>
         <div class="v2-hero__stat-label">На сегодня</div>
-      </div>
-      <div class="v2-hero__stat v2-hero__stat--danger">
+      </a>
+      <a class="v2-hero__stat v2-hero__stat--danger" href="{% url 'task_list' %}?mine=1&overdue=1" style="text-decoration:none;color:inherit">
         <div class="v2-hero__stat-value">{{ overdue_count|default:0 }}</div>
         <div class="v2-hero__stat-label">Просрочено</div>
-      </div>
-      <div class="v2-hero__stat">
+      </a>
+      <a class="v2-hero__stat" href="{% url 'task_list' %}?mine=1&date_from={{ week_range_start|date:'Y-m-d' }}&date_to={{ week_range_end|date:'Y-m-d' }}" style="text-decoration:none;color:inherit">
         <div class="v2-hero__stat-value">{{ tasks_week_count|default:0 }}</div>
         <div class="v2-hero__stat-label">На неделю</div>
-      </div>
-      <div class="v2-hero__stat v2-hero__stat--accent">
+      </a>
+      <a class="v2-hero__stat v2-hero__stat--accent" href="{% url 'task_list' %}?mine=1&today=1&show_done=1" style="text-decoration:none;color:inherit">
         <div class="v2-hero__stat-value">{{ tasks_done_today|default:0 }}</div>
         <div class="v2-hero__stat-label">Готово сегодня</div>
-      </div>
+      </a>
     </div>
   </section>
 
@@ -103,12 +114,12 @@
   <!-- Запросы на удаление (только для РОП / Директора подразделения) -->
   <section class="v2-card v2-anim" style="animation-delay:.04s;border-color:var(--v2-warn)">
     <div class="v2-card__head">
-      <div class="v2-card__title">
+      <h2 class="v2-card__title">
         <svg class="v2-ic" style="color:var(--v2-warn)" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd">
           <path d="M16.5 4.478v.227a48.816 48.816 0 013.878.512.75.75 0 11-.256 1.478l-.209-.035-1.005 13.07a3 3 0 01-2.991 2.77H8.084a3 3 0 01-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 01-.256-1.478A48.567 48.567 0 017.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 013.369 0c1.603.051 2.815 1.387 2.815 2.951zm-6.136-1.452a51.196 51.196 0 013.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 00-6 0v-.113c0-.794.609-1.428 1.364-1.452zm-.355 5.945a.75.75 0 10-1.5.058l.347 9a.75.75 0 101.499-.058l-.346-9zm5.48.058a.75.75 0 10-1.498-.058l-.347 9a.75.75 0 001.5.058l.345-9z"/>
         </svg>
         Запросы на удаление
-      </div>
+      </h2>
       <div style="display:flex;align-items:center;gap:10px">
         <span class="v2-count v2-count--warn">{{ deletion_requests_count }}</span>
         {% if deletion_requests_count > 3 %}
@@ -149,10 +160,10 @@
     <div class="v2-col-4 v2-anim">
       <div class="v2-card v2-card--hover">
         <div class="v2-card__head">
-          <div class="v2-card__title">
+          <h2 class="v2-card__title">
             <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.25a.75.75 0 01.75.75v7.5h7.5a.75.75 0 010 1.5h-7.5v7.5a.75.75 0 01-1.5 0v-7.5h-7.5a.75.75 0 010-1.5h7.5V3a.75.75 0 01.75-.75z" clip-rule="evenodd"/></svg>
             Новые задачи
-          </div>
+          </h2>
           <span class="v2-count v2-count--primary">{{ tasks_new_count|default:0 }}</span>
         </div>
         <div class="v2-card__body">
@@ -176,7 +187,7 @@
         </div>
         {% if tasks_new_count > 3 %}
         <div class="v2-card__foot">
-          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list' %}?status=new">
+          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list' %}?mine=1&status=new">
             Все новые ({{ tasks_new_count }})
             <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 010 1.06l-7.5 7.5a.75.75 0 01-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 011.06-1.06l7.5 7.5z" clip-rule="evenodd"/></svg>
           </a>
@@ -189,10 +200,10 @@
     <div class="v2-col-4 v2-anim">
       <div class="v2-card v2-card--hover">
         <div class="v2-card__head">
-          <div class="v2-card__title">
+          <h2 class="v2-card__title">
             <svg class="v2-ic" style="color:var(--v2-danger)" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clip-rule="evenodd"/></svg>
             Просрочено
-          </div>
+          </h2>
           <span class="v2-count v2-count--danger">{{ overdue_count|default:0 }}</span>
         </div>
         <div class="v2-card__body">
@@ -216,7 +227,7 @@
         </div>
         {% if overdue_count > 3 %}
         <div class="v2-card__foot">
-          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list' %}?overdue=1">
+          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list' %}?mine=1&overdue=1">
             Все просроченные ({{ overdue_count }})
             <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 010 1.06l-7.5 7.5a.75.75 0 01-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 011.06-1.06l7.5 7.5z" clip-rule="evenodd"/></svg>
           </a>
@@ -229,10 +240,10 @@
     <div class="v2-col-4 v2-anim">
       <div class="v2-card v2-card--hover">
         <div class="v2-card__head">
-          <div class="v2-card__title">
+          <h2 class="v2-card__title">
             <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M6.75 2.25A.75.75 0 017.5 3v1.5h9V3a.75.75 0 011.5 0v1.5h.75a3 3 0 013 3v11.25a3 3 0 01-3 3H5.25a3 3 0 01-3-3V7.5a3 3 0 013-3H6V3a.75.75 0 01.75-.75zM3.75 18.75v-7.5a1.5 1.5 0 011.5-1.5h13.5a1.5 1.5 0 011.5 1.5v7.5a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5z" clip-rule="evenodd"/></svg>
             На сегодня
-          </div>
+          </h2>
           <span class="v2-count v2-count--accent">{{ tasks_today_count|default:0 }}</span>
         </div>
         <div class="v2-card__body">
@@ -256,7 +267,7 @@
         </div>
         {% if tasks_today_count > 3 %}
         <div class="v2-card__foot">
-          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list' %}?today=1">
+          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list' %}?mine=1&today=1">
             Все на сегодня ({{ tasks_today_count }})
             <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 010 1.06l-7.5 7.5a.75.75 0 01-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 011.06-1.06l7.5 7.5z" clip-rule="evenodd"/></svg>
           </a>
@@ -269,10 +280,10 @@
     <div class="v2-col-6 v2-anim">
       <div class="v2-card v2-card--hover">
         <div class="v2-card__head">
-          <div class="v2-card__title">
+          <h2 class="v2-card__title">
             <svg class="v2-ic" style="color:var(--v2-accent-600)" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M5.625 1.5H9a3.75 3.75 0 013.75 3.75v1.875c0 1.036.84 1.875 1.875 1.875H16.5a3.75 3.75 0 013.75 3.75v7.875c0 1.035-.84 1.875-1.875 1.875H5.625a1.875 1.875 0 01-1.875-1.875V3.375c0-1.036.84-1.875 1.875-1.875zM9.75 17.25a.75.75 0 00-1.5 0V18a.75.75 0 001.5 0v-.75zm2.25-3a.75.75 0 01.75.75v3a.75.75 0 01-1.5 0v-3a.75.75 0 01.75-.75zm3.75-1.5a.75.75 0 00-1.5 0V18a.75.75 0 001.5 0v-5.25z" clip-rule="evenodd"/></svg>
             Договоры
-          </div>
+          </h2>
           <span class="v2-count v2-count--warn">{{ contracts_soon|length }}</span>
         </div>
         <div class="v2-card__body">
@@ -308,6 +319,13 @@
           <div class="v2-card__empty">Нет предупреждений по договорам</div>
           {% endfor %}
         </div>
+        {% if contracts_soon|length > 5 %}
+        <div class="v2-card__foot">
+          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'company_list' %}?contract_warning=1">Все договоры ({{ contracts_soon|length }})
+            <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 010 1.06l-7.5 7.5a.75.75 0 01-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 011.06-1.06l7.5 7.5z" clip-rule="evenodd"/></svg>
+          </a>
+        </div>
+        {% endif %}
       </div>
     </div>
 
@@ -315,10 +333,10 @@
     <div class="v2-col-6 v2-anim">
       <div class="v2-card v2-card--hover">
         <div class="v2-card__head">
-          <div class="v2-card__title">
+          <h2 class="v2-card__title">
             <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M4.5 2.25a.75.75 0 000 1.5v16.5h-.75a.75.75 0 000 1.5h16.5a.75.75 0 000-1.5h-.75V3.75a.75.75 0 000-1.5h-15zM9 6a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5H9zM9 9.75A.75.75 0 019.75 9h1.5a.75.75 0 010 1.5h-1.5A.75.75 0 019 9.75zM9.75 12a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5h-1.5zM9 15.75a.75.75 0 01.75-.75h1.5a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zM13.5 6a.75.75 0 000 1.5H15a.75.75 0 000-1.5h-1.5zm-.75 3.75A.75.75 0 0113.5 9H15a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zM13.5 12a.75.75 0 000 1.5H15a.75.75 0 000-1.5h-1.5zm-.75 3.75a.75.75 0 01.75-.75H15a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75z" clip-rule="evenodd"/></svg>
             Компании без активных задач
-          </div>
+          </h2>
           <span class="v2-count">{{ stale_companies_count|default:0 }}</span>
         </div>
         <div class="v2-card__body">
@@ -348,11 +366,11 @@
     <div class="v2-col-6 v2-anim">
       <div class="v2-card v2-card--hover">
         <div class="v2-card__head">
-          <div class="v2-card__title">
+          <h2 class="v2-card__title">
             <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM12.75 6a.75.75 0 00-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 000-1.5h-3.75V6z" clip-rule="evenodd"/></svg>
             Ближайшие 7 дней
-            <span class="v2-muted" style="font-weight:400;font-size:12px;margin-left:4px">{{ week_monday|date:"d.m" }} — {{ week_sunday|date:"d.m" }}</span>
-          </div>
+            <span class="v2-muted" style="font-weight:400;font-size:12px;margin-left:4px">{{ week_range_start|date:"d.m" }} — {{ week_range_end|date:"d.m" }}</span>
+          </h2>
           <span class="v2-count">{{ tasks_week_count|default:0 }}</span>
         </div>
         <div class="v2-card__body">
@@ -377,7 +395,7 @@
         </div>
         {% if tasks_week_count > 3 %}
         <div class="v2-card__foot">
-          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list' %}">Все задачи на неделю ({{ tasks_week_count }})
+          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list' %}?mine=1&date_from={{ week_range_start|date:'Y-m-d' }}&date_to={{ week_range_end|date:'Y-m-d' }}">Все задачи на неделю ({{ tasks_week_count }})
             <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 010 1.06l-7.5 7.5a.75.75 0 01-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 011.06-1.06l7.5 7.5z" clip-rule="evenodd"/></svg>
           </a>
         </div>
@@ -475,7 +493,21 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
       e.preventDefault();
       e.stopPropagation();
       if(btn.disabled) return;
-      if(!confirm('Отметить задачу как выполненную?')) return;
+      // Двойной клик для подтверждения (первый = «Точно?», второй = выполнение)
+      if(!btn._confirmed){
+        btn._confirmed = true;
+        btn.style.borderColor = 'var(--v2-primary)';
+        btn.style.background = 'var(--v2-primary-50)';
+        btn.title = 'Нажмите ещё раз для подтверждения';
+        btn._resetTimer = setTimeout(()=>{
+          btn._confirmed = false;
+          btn.style.borderColor = '';
+          btn.style.background = '';
+          btn.title = 'Отметить выполненной';
+        }, 2500);
+        return;
+      }
+      clearTimeout(btn._resetTimer);
       btn.disabled = true;
       btn.classList.add('is-done');
       try{

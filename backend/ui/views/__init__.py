@@ -4,7 +4,7 @@ from __future__ import annotations
 from ui.views._base import RESPONSIBLE_FILTER_NONE, STRONG_CONFIRM_THRESHOLD  # noqa: F401
 from ui.views.dashboard import (
     view_as_update, view_as_reset,
-    dashboard, dashboard_poll, dashboard_sse,
+    dashboard, dashboard_poll,
     analytics, analytics_user,
     help_page,
     preferences, preferences_ui, preferences_company_detail_view_mode,
