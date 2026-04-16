@@ -128,10 +128,10 @@
             }
           } else {
             const html = await res.text();
-            // Partial HTML — скорее всего форма с ошибками валидации
             bodyEl.innerHTML = html;
             bodyEl.classList.remove('is-loading');
             runScripts();
+            setDirty(false);
             watchDirty();
             wireForms();
             if(!res.ok){
