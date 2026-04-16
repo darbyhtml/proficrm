@@ -690,7 +690,7 @@ class TaskForm(forms.ModelForm):
             self.fields['assigned_to'] = FlexibleUserChoiceField(
                 queryset=User.objects.filter(is_active=True).select_related("branch"),
                 widget=original_field.widget,
-                required=original_field.required,
+                required=False,
                 label=original_field.label,
                 help_text=original_field.help_text,
             )

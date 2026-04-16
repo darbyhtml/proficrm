@@ -137,7 +137,7 @@
   <div class="v2f-row">
     <label for="v2f_due">Дедлайн <span style="color:var(--v2-danger,#dc2626)">*</span></label>
     <input type="datetime-local" id="v2f_due" name="due_at" required
-           value="{% if form.due_at.value %}{{ form.due_at.value|date:'Y-m-d\TH:i' }}{% endif %}" />
+           value="{{ form.due_at.value|default:'' }}" />
     {% if form.due_at.errors %}<div class="v2f-errors">{{ form.due_at.errors|join:" " }}</div>{% endif %}
   </div>
 
