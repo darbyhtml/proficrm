@@ -1,5 +1,5 @@
 import mimetypes
-from ui.timezone_utils import RUS_TZ_CHOICES, guess_ru_timezone_from_address
+from core.timezone_utils import RUS_TZ_CHOICES, guess_ru_timezone_from_address
 from companies.normalizers import normalize_phone, normalize_inn, normalize_work_schedule
 from uuid import UUID
 from django import forms
@@ -455,7 +455,7 @@ class CompanyInlineEditForm(forms.ModelForm):
         return (self.cleaned_data.get("activity_kind") or "").strip()
 
     def clean_work_timezone(self):
-        from ui.timezone_utils import RUS_TZ_CHOICES
+        from core.timezone_utils import RUS_TZ_CHOICES
 
         v = (self.cleaned_data.get("work_timezone") or "").strip()
         if not v:

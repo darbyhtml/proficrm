@@ -57,7 +57,7 @@ from tasksapp.models import Task, TaskComment, TaskEvent, TaskType
 from tasksapp.policy import visible_tasks_qs, can_manage_task_status
 from notifications.models import Notification
 from notifications.service import notify
-from phonebridge.models import CallRequest, PhoneDevice, MobileAppBuild, MobileAppQrToken
+# phonebridge models — lazy import в функциях, где используются (company_detail, settings_integrations)
 import json
 import logging
 import mimetypes
@@ -97,7 +97,7 @@ from ..forms import (
 )
 from ui.models import UiGlobalConfig, AmoApiConfig, UiUserPreference
 
-from crm.utils import require_admin, get_effective_user, get_view_as_user
+from accounts.permissions import require_admin, get_effective_user, get_view_as_user
 from policy.decorators import policy_required
 from policy.engine import decide as policy_decide
 from django.core.exceptions import PermissionDenied
@@ -171,7 +171,7 @@ __all__ = [
     "visible_tasks_qs", "can_manage_task_status",
     "Notification",
     "notify",
-    "CallRequest", "PhoneDevice", "MobileAppBuild", "MobileAppQrToken",
+    # phonebridge models убраны из __all__ — lazy import
     "json",
     "mimetypes",
     "os",
@@ -902,7 +902,7 @@ def _qs_without_page(request: HttpRequest, *, page_key: str = "page") -> str:
     try:
         params.pop(page_key, None)
     except Exception as e:
-        from crm.request_id_middleware import get_request_id
+        from core.request_id import get_request_id
         logger.warning(
             f"Ошибка при удалении параметра '{page_key}' из URL: {e}",
             exc_info=True,

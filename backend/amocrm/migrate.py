@@ -4113,7 +4113,7 @@ def migrate_filtered(
                     # ОПТИМИЗАЦИЯ: bulk операции для CompanyPhone (основные телефоны + Скайнет 309609)
                     skynet_phones = extra.get("skynet_phones") or []
                     if (extra_phones or skynet_phones) and not dry_run:
-                        from ui.forms import _normalize_phone
+                        from companies.normalizers import normalize_phone as _normalize_phone
                         from django.db.models import Max
                         
                         # Получаем максимальный order для существующих телефонов

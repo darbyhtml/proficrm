@@ -226,7 +226,7 @@ _TZ_LABELS: dict[str, str] = {
     "Asia/Kamchatka": "КМЧ",
 }
 
-from ui.timezone_utils import RUS_TZ_CHOICES, guess_ru_timezone_from_address
+from core.timezone_utils import RUS_TZ_CHOICES, guess_ru_timezone_from_address
 
 
 @lru_cache(maxsize=128)

@@ -27,11 +27,11 @@ class MailAccount(models.Model):
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
 
     def set_password(self, password: str):
-        from mailer.crypto import encrypt_str
+        from core.crypto import encrypt_str
         self.smtp_password_enc = encrypt_str(password or "")
 
     def get_password(self) -> str:
-        from mailer.crypto import decrypt_str
+        from core.crypto import decrypt_str
         return decrypt_str(self.smtp_password_enc or "")
 
     def __str__(self) -> str:
@@ -71,11 +71,11 @@ class GlobalMailAccount(models.Model):
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
 
     def set_api_key(self, key: str) -> None:
-        from mailer.crypto import encrypt_str
+        from core.crypto import encrypt_str
         self.smtp_bz_api_key_enc = encrypt_str(key or "")
 
     def get_api_key(self) -> str:
-        from mailer.crypto import decrypt_str
+        from core.crypto import decrypt_str
         return decrypt_str(self.smtp_bz_api_key_enc or "")
 
     @property
@@ -89,11 +89,11 @@ class GlobalMailAccount(models.Model):
         return obj
 
     def set_password(self, password: str):
-        from mailer.crypto import encrypt_str
+        from core.crypto import encrypt_str
         self.smtp_password_enc = encrypt_str(password or "")
 
     def get_password(self) -> str:
-        from mailer.crypto import decrypt_str
+        from core.crypto import decrypt_str
         return decrypt_str(self.smtp_password_enc or "")
 
     def __str__(self) -> str:

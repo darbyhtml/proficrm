@@ -303,6 +303,10 @@ class MobileAppQrToken(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="qr_tokens")
     token = models.CharField(max_length=128, unique=True, db_index=True, verbose_name="Токен")
+    token_hash = models.CharField(
+        max_length=64, unique=True, db_index=True, blank=True,
+        verbose_name="Хеш токена",
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
     expires_at = models.DateTimeField(verbose_name="Истекает")
     used_at = models.DateTimeField(null=True, blank=True, verbose_name="Использован")
@@ -313,14 +317,23 @@ class MobileAppQrToken(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["token"]),
+            models.Index(fields=["token_hash"]),
             models.Index(fields=["user", "-created_at"]),
             models.Index(fields=["expires_at"]),
         ]
+
+    @staticmethod
+    def hash_token(token: str) -> str:
+        """SHA-256 хеш токена для безопасного хранения и поиска."""
+        return hashlib.sha256(token.encode()).hexdigest()
 
     def save(self, *args, **kwargs):
         # Автоматически устанавливаем expires_at при создании
         if not self.expires_at:
             self.expires_at = timezone.now() + timedelta(minutes=5)
+        # Автоматически вычисляем хеш токена
+        if self.token and not self.token_hash:
+            self.token_hash = self.hash_token(self.token)
         super().save(*args, **kwargs)
 
     def is_valid(self) -> bool:
@@ -343,5 +356,6 @@ class MobileAppQrToken(models.Model):
         return secrets.token_urlsafe(64)
 
     def __str__(self) -> str:
-        return f"QRToken({self.user.username}, {self.token[:16]}..., expires={self.expires_at})"
+        hash_prefix = self.token_hash[:12] if self.token_hash else "no-hash"
+        return f"QRToken({self.user.username}, hash={hash_prefix}..., expires={self.expires_at})"
 

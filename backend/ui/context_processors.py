@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from accounts.models import User, Branch
-from crm.utils import get_view_as_user
+from accounts.permissions import get_view_as_user
 
 
 def ui_globals(request):

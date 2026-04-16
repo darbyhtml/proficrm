@@ -700,7 +700,7 @@ class QrTokenCreateView(APIView):
                 user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
             )
 
-            logger.info(f"QrTokenCreate: user={request.user.id}, token={token[:16]}...")
+            logger.info(f"QrTokenCreate: user={request.user.id}, hash={qr_token.token_hash[:12]}...")
 
             return Response({
                 "token": token,
@@ -746,9 +746,11 @@ class QrTokenExchangeView(APIView):
 
         # Находим токен
         try:
-            qr_token = MobileAppQrToken.objects.get(token=token)
+            qr_token = MobileAppQrToken.objects.get(
+                token_hash=MobileAppQrToken.hash_token(token)
+            )
         except MobileAppQrToken.DoesNotExist:
-            logger.warning(f"QrTokenExchange: invalid token {token[:16]}...")
+            logger.warning(f"QrTokenExchange: invalid token hash={MobileAppQrToken.hash_token(token)[:12]}...")
             return Response(
                 {"detail": "Неверный или истекший токен"},
                 status=status.HTTP_400_BAD_REQUEST
@@ -756,7 +758,7 @@ class QrTokenExchangeView(APIView):
 
         # Проверяем валидность
         if not qr_token.is_valid():
-            logger.warning(f"QrTokenExchange: expired or used token {token[:16]}...")
+            logger.warning(f"QrTokenExchange: expired or used token hash={MobileAppQrToken.hash_token(token)[:12]}...")
             return Response(
                 {"detail": "Неверный или истекший токен"},
                 status=status.HTTP_400_BAD_REQUEST
@@ -772,7 +774,7 @@ class QrTokenExchangeView(APIView):
         refresh = RefreshToken.for_user(qr_token.user)
         access = refresh.access_token
 
-        logger.info(f"QrTokenExchange: user={qr_token.user.id}, token={token[:16]}... - success")
+        logger.info(f"QrTokenExchange: user={qr_token.user.id}, hash={qr_token.token_hash[:12]}... - success")
 
         # Определяем, является ли пользователь администратором
         from accounts.models import User

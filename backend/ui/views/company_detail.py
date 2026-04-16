@@ -1,7 +1,7 @@
 from __future__ import annotations
+from phonebridge.models import CallRequest, PhoneDevice
 from ui.views._base import (
     ActivityEvent,
-    CallRequest,
     Company,
     CompanyContractForm,
     CompanyDeal,
@@ -32,7 +32,6 @@ from ui.views._base import (
     JsonResponse,
     Max,
     Notification,
-    PhoneDevice,
     Prefetch,
     Q,
     Task,
@@ -1282,7 +1281,7 @@ def company_main_phone_update(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company.id)
 
     raw = (request.POST.get("phone") or "").strip()
-    from ui.forms import _normalize_phone
+    from companies.normalizers import normalize_phone as _normalize_phone
     normalized = _normalize_phone(raw) if raw else ""
 
     # Проверка дублей с доп. телефонами
@@ -1331,7 +1330,7 @@ def company_phone_value_update(request: HttpRequest, company_phone_id) -> HttpRe
         return redirect("company_detail", company_id=company.id)
 
     raw = (request.POST.get("phone") or "").strip()
-    from ui.forms import _normalize_phone
+    from companies.normalizers import normalize_phone as _normalize_phone
     normalized = _normalize_phone(raw) if raw else ""
     if not normalized:
         return JsonResponse({"success": False, "error": "Телефон не может быть пустым."}, status=400)
@@ -1379,7 +1378,7 @@ def company_phone_create(request: HttpRequest, company_id) -> HttpResponse:
         return JsonResponse({"success": False, "error": "Нет прав на редактирование этой компании."}, status=403)
 
     raw = (request.POST.get("phone") or "").strip()
-    from ui.forms import _normalize_phone
+    from companies.normalizers import normalize_phone as _normalize_phone
     normalized = _normalize_phone(raw) if raw else ""
     if not normalized:
         return JsonResponse({"success": False, "error": "Телефон не может быть пустым."}, status=400)
@@ -1837,7 +1836,7 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
                     new_company_phones.append((index, raw))
 
             # Валидация телефонов: проверка на дубликаты и использование в других контактах
-            from ui.forms import _normalize_phone
+            from companies.normalizers import normalize_phone as _normalize_phone
             
             # Собираем все телефоны (основной + дополнительные)
             all_phones = []
@@ -2059,7 +2058,7 @@ def company_inline_update(request: HttpRequest, company_id) -> HttpResponse:
     if field == "work_timezone":
         try:
             from zoneinfo import ZoneInfo
-            from ui.timezone_utils import RUS_TZ_CHOICES, guess_ru_timezone_from_address
+            from core.timezone_utils import RUS_TZ_CHOICES, guess_ru_timezone_from_address
 
             guessed = guess_ru_timezone_from_address(company.address or "")
             effective_tz = (((company.work_timezone or "").strip()) or guessed or "Europe/Moscow").strip()

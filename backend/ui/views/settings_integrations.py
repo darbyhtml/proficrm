@@ -5,7 +5,6 @@ from ui.views._base import (
     AmoApiConfigForm,
     AmoMigrateFilterForm,
     Avg,
-    CallRequest,
     CompanyListColumnsForm,
     Count,
     HttpRequest,
@@ -15,7 +14,6 @@ from ui.views._base import (
     JsonResponse,
     Max,
     Paginator,
-    PhoneDevice,
     Q,
     UiGlobalConfig,
     User,
@@ -191,7 +189,7 @@ def settings_amocrm(request: HttpRequest) -> HttpResponse:
             cfg.client_id = (form.cleaned_data.get("client_id") or "").strip()
             secret = (form.cleaned_data.get("client_secret") or "").strip()
             if secret:
-                cfg.client_secret = secret
+                cfg.set_client_secret(secret)
             token = (form.cleaned_data.get("long_lived_token") or "").strip()
             if token:
                 cfg.long_lived_token = token
@@ -205,7 +203,8 @@ def settings_amocrm(request: HttpRequest) -> HttpResponse:
                 update_fields=[
                     "domain",
                     "client_id",
-                    "client_secret",
+                    "client_secret",       # очищается set_client_secret()
+                    "client_secret_enc",
                     "redirect_uri",
                     "long_lived_token_enc",
                     "region_custom_field_id",
@@ -219,7 +218,7 @@ def settings_amocrm(request: HttpRequest) -> HttpResponse:
             initial={
                 "domain": cfg.domain or "kmrprofi.amocrm.ru",
                 "client_id": cfg.client_id,
-                "client_secret": cfg.client_secret,
+                "client_secret": cfg.get_client_secret(),
                 "redirect_uri": cfg.redirect_uri or request.build_absolute_uri("/admin/amocrm/callback/"),
                 "long_lived_token": cfg.long_lived_token,
                 "region_custom_field_id": getattr(cfg, "region_custom_field_id", None),
@@ -282,7 +281,7 @@ def settings_amocrm_callback(request: HttpRequest) -> HttpResponse:
         messages.error(request, "Client ID не настроен. Проверьте настройки AmoCRM.")
         return redirect("settings_amocrm")
     
-    if not cfg.client_secret:
+    if not cfg.get_client_secret():
         messages.error(request, "Client Secret не настроен. Проверьте настройки AmoCRM.")
         return redirect("settings_amocrm")
     

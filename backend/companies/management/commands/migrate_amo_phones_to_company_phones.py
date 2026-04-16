@@ -9,7 +9,7 @@ from django.db import transaction
 from django.db.models import Max
 
 from companies.models import Company, Contact, ContactPhone, CompanyPhone
-from ui.forms import _normalize_phone
+from companies.normalizers import normalize_phone as _normalize_phone
 
 
 class Command(BaseCommand):

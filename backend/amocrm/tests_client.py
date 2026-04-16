@@ -40,6 +40,7 @@ def _make_cfg(
     cfg.expires_at = expires_at
     cfg.client_id = client_id
     cfg.client_secret = client_secret
+    cfg.get_client_secret = Mock(return_value=client_secret)
     cfg.redirect_uri = redirect_uri
     cfg.last_error = ""
     cfg.save = Mock()

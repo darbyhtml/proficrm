@@ -1185,7 +1185,7 @@ class MacroViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
             return Response({"detail": "conversation_id required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            conversation = models.Conversation.objects.get(pk=conversation_id)
+            conversation = selectors.visible_conversations_qs(request.user).get(pk=conversation_id)
         except models.Conversation.DoesNotExist:
             return Response({"detail": "Conversation not found"}, status=status.HTTP_404_NOT_FOUND)
 

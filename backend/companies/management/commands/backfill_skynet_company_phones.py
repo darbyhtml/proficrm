@@ -10,7 +10,7 @@ from django.db.models import Max
 import logging
 
 from companies.models import Company, CompanyPhone
-from ui.forms import _normalize_phone
+from companies.normalizers import normalize_phone as _normalize_phone
 
 logger = logging.getLogger(__name__)
 

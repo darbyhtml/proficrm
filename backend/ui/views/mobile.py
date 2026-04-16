@@ -1,12 +1,11 @@
 from __future__ import annotations
+from phonebridge.models import MobileAppBuild, MobileAppQrToken
 from ui.views._base import (
     ActivityEvent,
     FileResponse,
     Http404,
     HttpRequest,
     HttpResponse,
-    MobileAppBuild,
-    MobileAppQrToken,
     cache,
     get_object_or_404,
     log_event,
@@ -100,7 +99,9 @@ def mobile_app_qr_image(request: HttpRequest) -> HttpResponse:
     
     # Проверяем, что токен существует и принадлежит текущему пользователю
     try:
-        qr_token = MobileAppQrToken.objects.get(user=request.user, token=token)
+        qr_token = MobileAppQrToken.objects.get(
+            user=request.user, token_hash=MobileAppQrToken.hash_token(token)
+        )
     except MobileAppQrToken.DoesNotExist:
         raise Http404("Токен не найден")
     

@@ -84,6 +84,7 @@ class AmoApiConfig(models.Model):
     domain = models.CharField("Домен amoCRM", max_length=255, blank=True, default="")  # kmrprofi.amocrm.ru
     client_id = models.CharField("OAuth Client ID", max_length=255, blank=True, default="")
     client_secret = models.CharField("OAuth Client Secret", max_length=255, blank=True, default="")
+    client_secret_enc = models.TextField("Client Secret (зашифрован)", blank=True, default="")
     redirect_uri = models.CharField("Redirect URI", max_length=500, blank=True, default="")
 
     # Токены хранятся зашифрованными (Fernet, ключ MAILER_FERNET_KEY).
@@ -108,18 +109,18 @@ class AmoApiConfig(models.Model):
         verbose_name_plural = "Интеграция amoCRM"
 
     # ------------------------------------------------------------------
-    # Шифрование токенов (Fernet, тот же ключ что у mailer)
+    # Шифрование токенов (Fernet, core/crypto.py)
     # ------------------------------------------------------------------
 
     def _encrypt(self, value: str) -> str:
-        from mailer.crypto import encrypt_str
+        from core.crypto import encrypt_str
         return encrypt_str(value or "")
 
     def _decrypt(self, value: str) -> str:
         if not value:
             return ""
         try:
-            from mailer.crypto import decrypt_str
+            from core.crypto import decrypt_str
             return decrypt_str(value)
         except Exception:
             # Could be plaintext (fallback) or wrong key — return as-is
@@ -149,6 +150,28 @@ class AmoApiConfig(models.Model):
     def long_lived_token(self, value: str) -> None:
         self.long_lived_token_enc = self._encrypt(value)
 
+    # ------------------------------------------------------------------
+    # client_secret: шифрование с обратной совместимостью
+    # Поле client_secret (CharField) остаётся для миграции — очищается
+    # при вызове set_client_secret(). get_client_secret() фоллбэчит
+    # на plaintext если client_secret_enc пуст.
+    # ------------------------------------------------------------------
+
+    def get_client_secret(self) -> str:
+        """Возвращает расшифрованный client_secret."""
+        if self.client_secret_enc:
+            return self._decrypt(self.client_secret_enc)
+        return self.client_secret  # фоллбэк для незашифрованных записей
+
+    def set_client_secret(self, value: str) -> None:
+        """Шифрует client_secret и очищает plaintext-поле."""
+        if value:
+            self.client_secret_enc = self._encrypt(value)
+            self.client_secret = ""  # очищаем plaintext
+        else:
+            self.client_secret_enc = ""
+            self.client_secret = ""
+
     @classmethod
     def load(cls) -> "AmoApiConfig":
         obj, _ = cls.objects.get_or_create(pk=1, defaults={"domain": "kmrprofi.amocrm.ru"})
@@ -158,7 +181,7 @@ class AmoApiConfig(models.Model):
         # Либо OAuth (access+refresh), либо долгосрочный токен
         if self.long_lived_token and self.domain:
             return True
-        return bool(self.access_token and self.refresh_token and self.domain and self.client_id and self.client_secret)
+        return bool(self.access_token and self.refresh_token and self.domain and self.client_id and self.get_client_secret())
 
 
 class UiUserPreference(models.Model):

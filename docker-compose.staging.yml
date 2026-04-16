@@ -62,7 +62,7 @@ services:
     command: >
       sh -c "python manage.py migrate &&
              python manage.py collectstatic --noinput &&
-             gunicorn crm.wsgi:application --bind 0.0.0.0:8000 --worker-class gthread --workers 4 --threads 8 --timeout 120 --access-logfile - --error-logfile -"
+             gunicorn crm.wsgi:application --bind 0.0.0.0:8000 --worker-class gthread --workers 4 --threads 8 --timeout 120 --max-requests 1000 --max-requests-jitter 50 --access-logfile - --error-logfile -"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
       interval: 30s

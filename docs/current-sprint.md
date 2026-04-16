@@ -2,11 +2,31 @@
 
 ## Текущая задача
 
-Live-chat UX Completion — реализация по спецификации `docs/superpowers/specs/2026-04-13-livechat-ux-completion-design.md`.
+Комплексное улучшение проекта по мастер-плану `docs/improvement-plan.md` (8 фаз, ~215 находок).
 
-**Статус:** Plan 1, Plan 2, Plan 3, Plan 4 завершены 2026-04-13. Live-chat UX Completion — все 4 плана закрыты.
+**Статус:** Аудит завершён (8 агентов). Мастер-план создан. Следующий шаг — Фаза 1 (Безопасность P0).
+
+**Предыдущая задача:** Live-chat UX Completion — все 4 плана закрыты (2026-04-13).
 
 ## Сделано в этом спринте
+
+**[2026-04-16]** — Полный аудит проекта (8 параллельных агентов) ✅
+
+Запущено 8 специализированных агентов для сквозного аудита: архитектура, безопасность, производительность, фронтенд/UI, зависимости, БД, DevOps, тесты. Итого ~215 находок (20 P0, 64 P1, 95 P2, 41 P3). Создан `docs/improvement-plan.md` — мастер-план из 8 фаз с приоритизацией и порядком выполнения.
+
+**[2026-04-16]** — Архитектурный рефакторинг: консолидация зависимостей ✅
+
+По результатам анализа graphify-графа (5281 узел, 20558 рёбер) запущено 5 параллельных агентов-архитекторов. Выявлено 8 структурных проблем, выполнен полный рефакторинг:
+
+- **core/ пакет:** `crypto.py` (из mailer), `timezone_utils.py` (из ui), `request_id.py` + `json_formatter.py` + `exceptions.py` + `test_runner.py` (из crm). Все оригиналы → backward-compatible re-export shim'ы.
+- **accounts/permissions.py:** `require_admin`, `get_view_as_user`, `get_effective_user` (из crm/utils.py). Shim на месте.
+- **phonebridge decoupling:** убран top-level import в `_base.py` (−387 транзитивных рёбер в графе). 5 sub-view файлов импортируют напрямую из `phonebridge.models`.
+- **normalize_phone:** 10 мест переведены с `ui.forms._normalize_phone` на единственный источник `companies.normalizers.normalize_phone`.
+- **Dead code:** удалены `ui/work_schedule_utils.py`, `_task_status_badge.html`, 3 debug management commands.
+- **500.html:** создана standalone error page (без extends, inline CSS).
+- **AmoApiConfig:** осознанно оставлен в `ui/models.py` (amocrm/ не Django app, миграция рискована).
+- **settings.py:** 5 string references обновлены на core/.
+- Django check: 0 issues. 16 import checks passed.
 
 **[2026-04-16]** — Аудит и рефакторинг дашборда ✅
 

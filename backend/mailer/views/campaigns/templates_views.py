@@ -12,7 +12,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from accounts.models import User
 from mailer.models import Campaign
-from crm.utils import require_admin
+from accounts.permissions import require_admin
 from policy.engine import enforce
 from mailer.views._helpers import _can_manage_campaign
 

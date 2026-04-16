@@ -115,7 +115,6 @@ class MagicLinkToken(models.Model):
         verbose_name = "Токен входа"
         verbose_name_plural = "Токены входа"
         indexes = [
-            models.Index(fields=["token_hash"]),
             models.Index(fields=["user", "expires_at", "used_at"]),
         ]
 

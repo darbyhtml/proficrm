@@ -1204,7 +1204,7 @@ def company_create(request: HttpRequest) -> HttpResponse:
                     new_company_phones.append((index, raw))
             
             # Валидация телефонов: проверка на дубликаты
-            from ui.forms import _normalize_phone
+            from companies.normalizers import normalize_phone as _normalize_phone
             all_phones = []
             if company.phone:
                 normalized_main = _normalize_phone(company.phone)

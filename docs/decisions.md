@@ -1,5 +1,24 @@
 # Архитектурные решения
 
+## [2026-04-16] Архитектурный рефакторинг: консолидация общих утилит в core/ и accounts/
+
+**Контекст:** Анализ через graphify-граф выявил 8 структурных проблем: god-модуль `_base.py` (387 рёбер к phonebridge через транзитивный импорт), крипто-логика жила в `mailer/crypto.py` но использовалась в `ui/models.py` и `amocrm/client.py`, авторизация (`require_admin`, `get_effective_user`) жила в `crm/utils.py` вместо `accounts/`, инфраструктура (request_id, json_formatter, exceptions, test_runner) жила в `crm/` — ядре Django, которое должно содержать только settings/urls/wsgi. `_normalize_phone` дублировался через `ui.forms` вместо единственного источника `companies.normalizers`.
+
+**Решение:**
+1. Создан пакет `core/` — общие утилиты: crypto, timezone_utils, request_id, json_formatter, exceptions, test_runner
+2. Авторизация перенесена в `accounts/permissions.py`
+3. Все оригинальные файлы заменены re-export shim'ами (backward compatibility для миграций и неизвестных ссылок)
+4. Все прямые импорты обновлены на новые пути (включая string references в settings.py)
+5. phonebridge: top-level import в `_base.py` убран, каждый sub-view импортирует напрямую из `phonebridge.models`
+6. `_normalize_phone`: 10 мест переведены с `ui.forms` на `companies.normalizers`
+7. AmoApiConfig оставлен в `ui/models.py` — перенос Django-модели между приложениями слишком рискован (миграции, данные на проде), а `amocrm/` даже не является Django app
+
+**Удалённый dead code:** `ui/work_schedule_utils.py` (дубль core), `_task_status_badge.html` (не включался), 3 debug management commands (`debug_contacts`, `debug_amo_events`, `test_migration_speed`).
+
+**Создано:** `templates/500.html` — standalone error page (без extends base.html).
+
+**Альтернативы:** Полный перенос AmoApiConfig в amocrm app (отклонено: потребовал бы создание Django app + SeparateDatabaseAndState миграция + ручное применение на проде).
+
 ## [2026-04-16] Dashboard poll: только {updated: true/false}, без сериализации данных
 
 **Контекст:** `dashboard_poll` дублировал 170 строк логики из `_build_dashboard_context()` — полную сериализацию задач и договоров в JSON. Клиентский JS при `updated: true` делал `window.location.reload()`, не используя остальные данные ответа. SSE endpoint (`dashboard_sse`) был добавлен как альтернатива, но не подключён.

@@ -1,8 +1,8 @@
 from __future__ import annotations
+from phonebridge.models import CallRequest
 from ui.views._base import (
     ActivityEvent,
     Branch,
-    CallRequest,
     Company,
     CompanyDeletionRequest,
     CompanyPhone,
@@ -386,7 +386,7 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
     try:
         since_dt = datetime.fromtimestamp(int(since) / 1000, tz=timezone.UTC)
     except (ValueError, TypeError):
-        from crm.request_id_middleware import get_request_id
+        from core.request_id import get_request_id
         logger.warning(
             f"Некорректный параметр 'since' в dashboard_poll: {since}",
             extra={"user_id": user.id, "since": since, "request_id": get_request_id()},

@@ -34,16 +34,25 @@ CRM/
 ├── tailwind.config.js         — brand colors, template paths
 │
 ├── backend/
-│   ├── crm/                   — ЯДРО DJANGO
+│   ├── crm/                   — ЯДРО DJANGO (минимум: settings, urls, wsgi/asgi, celery)
 │   │   ├── settings.py        — конфигурация (750+ LOC)
 │   │   ├── urls.py            — все URL-маршруты (184 LOC)
 │   │   ├── wsgi.py / asgi.py  — точки входа
 │   │   ├── middleware.py       — SecurityHeaders, ErrorLogging
-│   │   ├── request_id_middleware.py — X-Request-ID корреляция
 │   │   └── celery.py          — конфиг Celery
+│   │
+│   ├── core/                  — ИНФРАСТРУКТУРА (общие утилиты)
+│   │   ├── crypto.py          — Fernet encrypt/decrypt (MultiFernet, ротация ключей)
+│   │   ├── timezone_utils.py  — RUS_TZ_CHOICES, guess_ru_timezone_from_address
+│   │   ├── request_id.py      — X-Request-ID middleware + logging filter
+│   │   ├── json_formatter.py  — JSON log formatter
+│   │   ├── exceptions.py      — DRF custom_exception_handler
+│   │   ├── test_runner.py     — SQLiteCompatibleTestRunner
+│   │   └── work_schedule_utils.py — рабочие дни/часы
 │   │
 │   ├── accounts/              — ПОЛЬЗОВАТЕЛИ (2 модели)
 │   │   ├── models.py          — User (5 ролей, data scope), Branch
+│   │   ├── permissions.py     — require_admin, get_view_as_user, get_effective_user
 │   │   ├── middleware.py      — RateLimitMiddleware (DDoS защита)
 │   │   └── views.py           — SecureLoginView, MagicLinkLogin
 │   │
@@ -70,7 +79,7 @@ CRM/
 │   ├── mailer/                — EMAIL-РАССЫЛКИ (11 моделей)
 │   │   ├── models.py          — Campaign, MailAccount, GlobalMailAccount, Queue
 │   │   ├── smtp_sender.py     — SMTP отправка, build_message
-│   │   ├── crypto.py          — Fernet encrypt/decrypt
+│   │   ├── crypto.py          — shim → core/crypto.py
 │   │   └── tasks.py           — send_pending, sync_quota, reconcile
 │   │
 │   ├── tasksapp/              — ЗАДАЧИ (4 модели)
@@ -87,7 +96,6 @@ CRM/
 │   ├── audit/                 — АУДИТ (2 модели)
 │   ├── policy/                — ПОЛИТИКИ (2 модели)
 │   ├── amocrm/                — ИНТЕГРАЦИЯ AMOCRM
-│   ├── core/                  — утилиты
 │   ├── templates/             — 89 HTML шаблонов
 │   └── requirements.txt       — Python зависимости
 │

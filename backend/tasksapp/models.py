@@ -31,7 +31,7 @@ class Task(models.Model):
     title = models.CharField("Заголовок", max_length=255)
     description = models.TextField("Описание", blank=True, default="")
 
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.NEW)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.NEW, db_index=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -78,6 +78,12 @@ class Task(models.Model):
     external_uid = models.CharField("Внешний UID", max_length=120, blank=True, default="", db_index=True)
 
     class Meta:
+        indexes = [
+            # Составные индексы для основных сценариев фильтрации задач
+            models.Index(fields=["assigned_to", "status", "due_at"], name="task_assignee_status_due_idx"),
+            models.Index(fields=["company", "status"], name="task_company_status_idx"),
+            models.Index(fields=["status", "due_at"], name="task_status_due_idx"),
+        ]
         constraints = [
             # Защита от race в generate_recurring_tasks: параллельные воркеры
             # не должны создать два экземпляра одной и той же родительской
@@ -87,6 +93,11 @@ class Task(models.Model):
                 fields=["parent_recurring_task", "due_at"],
                 condition=models.Q(parent_recurring_task__isnull=False),
                 name="uniq_task_recurrence_occurrence",
+            ),
+            # Гарантия допустимых значений статуса на уровне БД
+            models.CheckConstraint(
+                condition=models.Q(status__in=["new", "in_progress", "done", "cancelled"]),
+                name="task_valid_status",
             ),
         ]
 

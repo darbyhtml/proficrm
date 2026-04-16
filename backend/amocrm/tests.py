@@ -828,7 +828,7 @@ class TestMainPhoneCommentMerge(unittest.TestCase):
         """Тест: основной номер + комментарий из обычного телефона -> phone_comment обновляется, CompanyPhone не создаётся."""
         from companies.models import CompanyPhone
         from amocrm.migrate import parse_phone_value, merge_comment_segments
-        from ui.forms import _normalize_phone
+        from companies.normalizers import normalize_phone as _normalize_phone
         
         # Парсим телефон с комментарием
         parsed = parse_phone_value("+73453522095 неправ. номер")
@@ -865,7 +865,7 @@ class TestMainPhoneCommentMerge(unittest.TestCase):
         """Тест: основной номер + комментарий из Skynet -> phone_comment обновляется, CompanyPhone не создаётся."""
         from companies.models import CompanyPhone
         from amocrm.migrate import merge_comment_segments
-        from ui.forms import _normalize_phone
+        from companies.normalizers import normalize_phone as _normalize_phone
         
         # Симулируем Skynet телефон с комментарием
         raw_value = "+73453522095"

@@ -287,7 +287,7 @@ class Conversation(models.Model):
     branch = models.ForeignKey(
         "accounts.Branch",
         verbose_name="Подразделение",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,  # Удаление Branch не должно каскадно удалять диалоги
         related_name="messenger_conversations",
         editable=False,
     )
@@ -434,6 +434,12 @@ class Conversation(models.Model):
             models.Index(fields=["contact", "inbox", "status"], name="msg_conv_cont_inbox_st_idx"),
             # Индекс для сортировки по waiting_since (уже есть в базовых, но добавляем для явности)
         ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=["open", "pending", "resolved", "closed"]),
+                name="conversation_valid_status",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"Conversation #{self.pk} ({self.inbox})"
@@ -527,20 +533,23 @@ class Conversation(models.Model):
         is_new = self.pk is None
         old_status = None
         old_assignee_id = None
-        
-        # Сохраняем старые значения для событий
+
+        # Один SELECT для старых значений (вместо двух отдельных)
         if not is_new:
             try:
-                old = type(self).objects.only("status", "assignee_id").get(pk=self.pk)
+                old = type(self).objects.only(
+                    "status", "assignee_id", "inbox_id", "branch_id"
+                ).get(pk=self.pk)
                 old_status = old.status
                 old_assignee_id = old.assignee_id
             except type(self).DoesNotExist:
-                pass
-        
+                old = None
+        else:
+            old = None
+
         if self.inbox_id:
             inbox_branch_id = self.inbox.branch_id
-            if self.pk:
-                old = type(self).objects.only("inbox_id", "branch_id").get(pk=self.pk)
+            if old is not None:
                 if old.inbox_id != self.inbox_id:
                     raise ValidationError("Нельзя изменить inbox существующего диалога.")
                 if inbox_branch_id is not None and old.branch_id != inbox_branch_id:

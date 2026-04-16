@@ -24,16 +24,12 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
             return response
 
         # Добавляем CSP только в production
+        # NB: nonce генерируется (request.csp_nonce), но пока не встраивается
+        # в CSP-заголовок, т.к. при наличии nonce браузер игнорирует
+        # unsafe-inline, а шаблоны содержат inline onclick=/style=.
+        # Рефакторинг шаблонов → Фаза 6 improvement-plan.
         if not settings.DEBUG and getattr(settings, 'CSP_HEADER', None):
-            nonce = getattr(request, 'csp_nonce', None)
-            if nonce:
-                # Используем unsafe-inline без nonce в script-src,
-                # т.к. JS-панели генерируют onclick= через innerHTML,
-                # а CSP игнорирует unsafe-inline при наличии nonce.
-                csp = settings.CSP_HEADER
-            else:
-                csp = settings.CSP_HEADER
-            response['Content-Security-Policy'] = csp
+            response['Content-Security-Policy'] = settings.CSP_HEADER
 
         # Permissions-Policy (ограничение доступа к браузерным API)
         if not settings.DEBUG:

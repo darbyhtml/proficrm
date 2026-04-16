@@ -1097,11 +1097,11 @@ class MailerApiKeyEncryptionTests(TestCase):
 
     def setUp(self):
         # Сбрасываем lru_cache чтобы settings изменились
-        from mailer.crypto import _fernet
+        from core.crypto import _fernet
         _fernet.cache_clear()
 
     def tearDown(self):
-        from mailer.crypto import _fernet
+        from core.crypto import _fernet
         _fernet.cache_clear()
 
     def test_set_and_get_api_key_roundtrip(self):

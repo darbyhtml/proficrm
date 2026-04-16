@@ -20,7 +20,7 @@ from audit.models import ActivityEvent
 from companies.models import Company, CompanyPhone, CompanyEmail, CompanyNote, CompanyNoteAttachment, CompanyHistoryEvent, Contact, ContactPhone
 from companies.normalizers import normalize_phone as _normalize_phone
 from companies.permissions import can_edit_company, can_transfer_company
-from crm.request_id_middleware import get_request_id
+from core.request_id import get_request_id
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ def get_worktime_status(company: Company) -> dict:
 
     try:
         from zoneinfo import ZoneInfo
-        from ui.timezone_utils import guess_ru_timezone_from_address
+        from core.timezone_utils import guess_ru_timezone_from_address
         from core.work_schedule_utils import get_worktime_status_from_schedule
 
         guessed = guess_ru_timezone_from_address(company.address or "")

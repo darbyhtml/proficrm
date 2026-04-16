@@ -1,6 +1,6 @@
 from __future__ import annotations
+from phonebridge.models import CallRequest
 from ui.views._base import (
-    CallRequest,
     Company,
     CompanyPhone,
     Contact,

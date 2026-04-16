@@ -172,7 +172,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
-    'crm.request_id_middleware.RequestIdMiddleware',  # Добавляет request_id для корреляции логов
+    'core.request_id.RequestIdMiddleware',  # Добавляет request_id для корреляции логов
     'django.middleware.security.SecurityMiddleware',
     # Serve static files in production (admin CSS/JS) without relying on DEBUG=1.
     'whitenoise.middleware.WhiteNoiseMiddleware',
@@ -395,7 +395,7 @@ REST_FRAMEWORK = {
         "rest_framework.filters.OrderingFilter",
     ),
     # Защита от утечки информации через ошибки API
-    "EXCEPTION_HANDLER": "crm.exceptions.custom_exception_handler",
+    "EXCEPTION_HANDLER": "core.exceptions.custom_exception_handler",
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     # Throttling для phonebridge hot endpoints. ScopedRateThrottle
     # смотрит на throttle_scope во view и применяет соответствующий rate.
@@ -667,7 +667,7 @@ LOGGING = {
             "style": "{",
         },
         "json": {
-            "()": "crm.json_formatter.JSONFormatter",
+            "()": "core.json_formatter.JSONFormatter",
         },
     },
     "filters": {
@@ -675,7 +675,7 @@ LOGGING = {
             "()": "django.utils.log.RequireDebugFalse",
         },
         "request_id": {
-            "()": "crm.request_id_middleware.RequestIdLoggingFilter",
+            "()": "core.request_id.RequestIdLoggingFilter",
         },
     },
     "handlers": {
@@ -810,4 +810,4 @@ if not DEBUG and MAILER_LOG_HASH_SALT == _DEFAULT_LOG_HASH_SALT:
 
 # Custom test runner: при тестах на SQLite игнорирует PostgreSQL-специфичный синтаксис
 # (GIN/trigram/tsvector индексы, расширения, триггеры). На PostgreSQL — стандартный DiscoverRunner.
-TEST_RUNNER = "crm.test_runner.SQLiteCompatibleTestRunner"
+TEST_RUNNER = "core.test_runner.SQLiteCompatibleTestRunner"

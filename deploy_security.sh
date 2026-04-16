@@ -39,10 +39,10 @@ fi
 echo "📥 Обновление кода..."
 git pull origin main
 
-# 4. Сборка и подъём db, redis, typesense (typesense остаётся в docker-compose, но не используется приложением)
-echo "📦 Сборка образов и запуск db/redis/typesense..."
+# 4. Сборка и подъём db, redis
+echo "📦 Сборка образов и запуск db/redis..."
 $COMPOSE build
-$COMPOSE up -d db redis typesense
+$COMPOSE up -d db redis
 echo "Ожидание db/redis 15 сек..."
 sleep 15
 
@@ -63,10 +63,6 @@ $COMPOSE run --rm -u root --entrypoint "" web chown -R 1000:1000 /app/backend/st
 # Обязательно при первом деплое; при последующих деплоях сигналы обновляют индекс.
 echo "🔍 Перестроение поискового индекса компаний (FTS)..."
 $COMPOSE run --rm web python manage.py rebuild_company_search_index
-
-# 5.2. Историческая команда индексации в Typesense (no-op; оставлена для обратной совместимости)
-echo "🔍 Индексация Typesense (Typesense отключён, команда no-op)..."
-$COMPOSE run --rm web python manage.py index_companies_typesense --chunk 300 || true
 
 # 6. Запуск всех сервисов
 echo "🔄 Запуск web, celery, celery-beat..."

@@ -19,7 +19,7 @@ from django.urls import reverse
 from accounts.models import Branch, User
 from companies.models import Region
 from companies.permissions import get_users_for_lists
-from crm.utils import get_effective_user
+from accounts.permissions import get_effective_user
 from messenger.models import AgentProfile, Conversation, Message
 from messenger.selectors import visible_conversations_qs
 from messenger.utils import ensure_messenger_enabled_view

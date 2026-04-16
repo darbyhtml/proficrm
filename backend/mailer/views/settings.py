@@ -19,7 +19,7 @@ from mailer.constants import PER_USER_DAILY_LIMIT_DEFAULT
 from mailer.forms import GlobalMailAccountForm, EmailSignatureForm
 from mailer.models import Campaign, CampaignQueue, CampaignRecipient, GlobalMailAccount, SendLog, SmtpBzQuota
 from mailer.utils import msk_day_bounds
-from crm.utils import require_admin
+from accounts.permissions import require_admin
 from policy.engine import enforce
 from mailer.views._helpers import (
     _can_manage_campaign, _contains_links, _dispatch_test_email,

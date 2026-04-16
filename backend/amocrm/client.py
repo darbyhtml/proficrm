@@ -80,7 +80,7 @@ class AmoClient:
         url = f"{self.base}/oauth2/access_token"
         payload = {
             "client_id": self.cfg.client_id,
-            "client_secret": self.cfg.client_secret,
+            "client_secret": self.cfg.get_client_secret(),
             "grant_type": "refresh_token",
             "refresh_token": self.cfg.refresh_token,
             "redirect_uri": self.cfg.redirect_uri,
@@ -129,7 +129,7 @@ class AmoClient:
         url = f"{self.base}/oauth2/access_token"
         payload = {
             "client_id": self.cfg.client_id,
-            "client_secret": self.cfg.client_secret,
+            "client_secret": self.cfg.get_client_secret(),
             "grant_type": "authorization_code",
             "code": code,
             "redirect_uri": self.cfg.redirect_uri,

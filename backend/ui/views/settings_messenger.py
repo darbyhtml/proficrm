@@ -11,7 +11,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from crm.utils import require_admin
+from accounts.permissions import require_admin
 from messenger.models import Conversation, Message, Inbox, RoutingRule, Channel, CannedResponse, Campaign, AutomationRule, Macro
 from messenger.logging_utils import ui_logger
 from messenger.utils import ensure_messenger_enabled_view
