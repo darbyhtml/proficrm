@@ -389,15 +389,24 @@
         </div>
         <div class="v2-card__body">
           {% if stale_companies %}
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--v2-border);margin:-2px -20px 0;padding:0 8px">
-            {% for c in stale_companies %}
-            <a class="v2-item" href="{% url 'company_detail' c.id %}" style="padding:12px 14px;margin:0;border-radius:8px">
-              <span class="v2-item__dot"></span>
-              <div class="flex-1 min-w-0">
-                <div class="v2-item__title">{{ c.name }}</div>
-              </div>
-            </a>
-            {% endfor %}
+          <div style="display:grid;grid-template-columns:1fr 1px 1fr;margin:0 -6px">
+            <div>
+            {% for c in stale_companies %}{% if forloop.counter0|divisibleby:2 %}
+              <a class="v2-item" href="{% url 'company_detail' c.id %}" style="padding:10px 14px;margin:0;border-radius:8px">
+                <span class="v2-item__dot"></span>
+                <div class="flex-1 min-w-0"><div class="v2-item__title">{{ c.name }}</div></div>
+              </a>
+            {% endif %}{% endfor %}
+            </div>
+            <div style="background:var(--v2-border);margin:4px 0"></div>
+            <div>
+            {% for c in stale_companies %}{% if not forloop.counter0|divisibleby:2 %}
+              <a class="v2-item" href="{% url 'company_detail' c.id %}" style="padding:10px 14px;margin:0;border-radius:8px">
+                <span class="v2-item__dot"></span>
+                <div class="flex-1 min-w-0"><div class="v2-item__title">{{ c.name }}</div></div>
+              </a>
+            {% endif %}{% endfor %}
+            </div>
           </div>
           {% else %}
           <div class="v2-card__empty">У всех компаний есть активные задачи</div>
