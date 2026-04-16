@@ -24,14 +24,13 @@
   /* Плашки TaskType */
   .v2-tt-grid{display:flex;flex-wrap:wrap;gap:8px}
   .v2-tt-card{display:flex;align-items:center;gap:8px;padding:8px 12px;
-    border:1.5px solid var(--v2-border);border-radius:10px;background:#fff;cursor:pointer;
-    font-size:13px;color:var(--v2-text);transition:all .15s;user-select:none;white-space:nowrap}
-  .v2-tt-card:hover{border-color:var(--v2-primary);background:var(--v2-bg-soft)}
-  .v2-tt-card.is-selected{border-color:var(--v2-primary);background:var(--v2-primary-50,#e6f4f3);
-    box-shadow:0 0 0 3px rgba(1,148,142,.12)}
-  .v2-tt-card__dot{width:20px;height:20px;border-radius:50%;flex:0 0 auto;
+    border:1.5px solid transparent;border-radius:10px;cursor:pointer;
+    font-size:13px;font-weight:500;transition:all .15s;user-select:none;white-space:nowrap}
+  .v2-tt-card:hover{opacity:.85;transform:scale(1.02)}
+  .v2-tt-card.is-selected{box-shadow:0 0 0 3px rgba(1,148,142,.18);transform:scale(1.03)}
+  .v2-tt-card__dot{width:22px;height:22px;border-radius:50%;flex:0 0 auto;
     display:inline-flex;align-items:center;justify-content:center;
-    background:var(--v2-bg-muted);color:var(--v2-text-muted);font-size:12px}
+    background:rgba(255,255,255,.55);color:inherit;font-size:12px}
   .v2-tt-card__name{flex:1;min-width:0}
 
   .v2f-urgent{display:flex;align-items:center;gap:10px;padding:10px 12px;
@@ -59,8 +58,8 @@
     <label>Тип задачи <span style="color:var(--v2-danger,#dc2626)">*</span></label>
     <div class="v2-tt-grid" id="v2TtGrid">
       {% for tt in task_types %}
-        <label class="v2-tt-card" data-tt-id="{{ tt.id }}">
-          <span class="v2-tt-card__dot" style="{% if tt.color == 'badge-amber' %}background:#fef3c7;color:#92400e{% elif tt.color == 'badge-orange' %}background:#ffedd5;color:#9a3412{% elif tt.color == 'badge-teal' %}background:#ccfbf1;color:#115e59{% elif tt.color == 'badge-green' %}background:#dcfce7;color:#166534{% elif tt.color == 'badge-pink' %}background:#fce7f3;color:#9d174d{% elif tt.color == 'badge-blue' %}background:#dbeafe;color:#1e40af{% elif tt.color == 'badge-red' %}background:#fee2e2;color:#991b1b{% elif tt.color == 'badge-indigo' %}background:#e0e7ff;color:#3730a3{% elif tt.color == 'badge-purple' %}background:#f3e8ff;color:#6b21a8{% else %}background:#f3f4f6;color:#374151{% endif %}">
+        <label class="v2-tt-card" data-tt-id="{{ tt.id }}" style="{% if tt.color == 'badge-amber' %}background:#fef3c7;color:#92400e;border-color:#fde68a{% elif tt.color == 'badge-orange' %}background:#ffedd5;color:#9a3412;border-color:#fed7aa{% elif tt.color == 'badge-teal' %}background:#ccfbf1;color:#115e59;border-color:#99f6e4{% elif tt.color == 'badge-green' %}background:#dcfce7;color:#166534;border-color:#bbf7d0{% elif tt.color == 'badge-pink' %}background:#fce7f3;color:#9d174d;border-color:#fbcfe8{% elif tt.color == 'badge-blue' %}background:#dbeafe;color:#1e40af;border-color:#bfdbfe{% elif tt.color == 'badge-red' %}background:#fee2e2;color:#991b1b;border-color:#fecaca{% elif tt.color == 'badge-indigo' %}background:#e0e7ff;color:#3730a3;border-color:#c7d2fe{% elif tt.color == 'badge-purple' %}background:#f3e8ff;color:#6b21a8;border-color:#e9d5ff{% else %}background:#f3f4f6;color:#374151;border-color:#e5e7eb{% endif %}">
+          <span class="v2-tt-card__dot">
             {% if tt.icon == 'phone' %}<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z"/></svg>
             {% elif tt.icon == 'document' %}<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 2h8l4 4v16H7z"/><path d="M15 2v4h4"/></svg>
             {% elif tt.icon == 'education' %}<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 10l8-4 8 4-8 4-8-4z"/><path d="M6 12v4l6 3 6-3v-4"/></svg>
