@@ -28,7 +28,6 @@ from ui.views._base import (
     get_effective_user,
     get_object_or_404,
     get_users_for_lists,
-    json,
     login_required,
     messages,
     policy_required,

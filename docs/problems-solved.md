@@ -1,5 +1,21 @@
 # Решённые проблемы
 
+## [2026-04-16] Dashboard: N+1 запросы, мёртвый SSE, дублированная логика poll
+
+**Симптом:** Аудит дашборда выявил 3 взаимосвязанных проблемы: 1) до 48 лишних SQL-запросов из-за deferred field access (`.only()` без нужных полей при `select_related`), 2) мёртвый SSE endpoint `dashboard_sse` с бесконечным `while True: time.sleep(5)` — каждое подключение навсегда блокировало gunicorn worker, 3) `dashboard_poll` дублировал 170 строк логики из `_build_dashboard_context`, хотя клиент использовал только `{updated: true/false}` → `location.reload()`.
+
+**Причина:** Исторически poll строил полный JSON-ответ с задачами и договорами, но клиентский JS никогда не использовал эти данные — просто перезагружал страницу. SSE endpoint был добавлен как альтернатива, но не подключён нигде в шаблонах.
+
+**Фикс** (`c27f3fd`): 1) Добавлены `assigned_to`, `is_urgent`, `company__address`, `company__work_timezone` в `.only()` + `select_related("assigned_to")`. 2) Удалён `dashboard_sse` (view, URL, import, StreamingHttpResponse). 3) `dashboard_poll` сокращён до EXISTS-проверки (2 SQL вместо ~15).
+
+## [2026-04-16] Gunicorn кэширует скомпилированные шаблоны в воркерах
+
+**Симптом:** После `git pull` + `docker compose up -d web` на staging баннер «Preview редизайна» то появлялся, то исчезал при обновлении страницы.
+
+**Причина:** `up -d` не перезапускает контейнер, если конфигурация Docker не менялась. Разные gunicorn workers держат разные версии скомпилированных шаблонов в памяти.
+
+**Фикс:** При деплое шаблонов — `docker compose restart web`, а не `up -d web`.
+
 ## [2026-04-15] v2 task partial — 500 Internal Server Error при открытии задачи в модалке
 
 **Симптом:** На staging после деплоя редизайна Фаза 2 клик по карточке

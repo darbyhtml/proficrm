@@ -8,6 +8,16 @@ Live-chat UX Completion — реализация по спецификации `
 
 ## Сделано в этом спринте
 
+**[2026-04-16]** — Аудит и рефакторинг дашборда ✅
+
+- `c27f3fd` Комплексный аудит dashboard: performance, UX, accessibility (32 находки → 18 правок).
+- **Performance (P0):** select_related + .only() для assigned_to, company__address, is_urgent — устранено до 48 N+1 запросов. Удалён мёртвый SSE endpoint (блокировал gunicorn workers). dashboard_poll упрощён до `{updated: true/false}` — удалено 170 строк дублированной логики сериализации.
+- **UX (P2):** русское склонение даты (`ru_date` фильтр — «среда, 16 апреля 2026»). Hero-статистики стали кликабельными ссылками. Кнопка «+ Задача» в hero. «ХЗ: день/месяц» → «Звонки: день/месяц». Кнопка «показать все» для договоров. confirm() заменён на двойной клик с подсветкой (2.5с timeout).
+- **Accessibility (P1):** heading hierarchy (h1+h2), aria-label на hero-секции, touch target 36px для чекбокса.
+- **Code quality:** переименованы week_monday/week_sunday → week_range_start/week_range_end. Удалены неиспользуемые импорты (cache, дубль TaskType, StreamingHttpResponse). Все ссылки «Посмотреть все» получили фильтр mine=1.
+- Контраст даты и подзаголовка в hero улучшен (#E6F4F3 вместо #B3DEDC).
+- Staging задеплоен, Playwright-тест OK.
+
 **[2026-04-16]** — v2 → основной интерфейс, удалены v1 шаблоны ✅
 
 - `2ccc112` Dashboard/Tasks/Companies/Settings всегда рендерят v2 шаблоны.
