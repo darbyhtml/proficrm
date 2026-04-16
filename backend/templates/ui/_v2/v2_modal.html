@@ -219,7 +219,7 @@
     if(ev.key === 'Escape' && state.open) closeModal(false);
   });
 
-  window.V2Modal = { open: openFromUrl, openHtml: openHtml, close: closeModal };
+  window.V2Modal = { open: openFromUrl, openHtml: openHtml, close: closeModal, _setDirty: setDirty };
 
   // Toast
   function showToast(msg, opts){

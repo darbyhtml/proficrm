@@ -311,6 +311,8 @@
           div.scrollIntoView({behavior:'smooth', block:'nearest'});
         }
         if(textarea) textarea.value = '';
+        // Сбросить dirty-флаг модалки — комментарий уже сохранён
+        if(window.V2Modal && window.V2Modal._setDirty) window.V2Modal._setDirty(false);
       })
       .catch(function(){
         if(submitBtn) submitBtn.disabled = false;
