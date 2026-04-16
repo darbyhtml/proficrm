@@ -8,6 +8,18 @@ Live-chat UX Completion — реализация по спецификации `
 
 ## Сделано в этом спринте
 
+**[2026-04-16]** — v2 → основной интерфейс, удалены v1 шаблоны ✅
+
+- `2ccc112` Dashboard/Tasks/Companies/Settings всегда рендерят v2 шаблоны.
+  Удалены v1 шаблоны: `dashboard.html` (1764 строки), `task_list.html` (2134),
+  `company_list.html` (1813), `settings/dashboard.html` (619). Итого −6770 строк.
+- Удалены 4 preview view-функции и `/_preview/*` URL-маршруты.
+  Удалён `v2_toggle.html` переключатель и его CSS из `v2_styles.html`.
+- Удалены 4 тестовых файла preview, обновлены 7 dashboard-тестов под v2 разметку.
+- Побочный баг-фикс: template paths `ui/admin/*` → `ui/settings/*` (ошибка
+  из URL-рефактора, ломала amocrm_migrate и calls_stats).
+- 177 ui тестов OK. Staging задеплоен, все 6 страниц 200.
+
 **[2026-04-15]** — Редизайн Фаза 2 — v2-модалка, SPA-задачи, круглый чекбокс ✅
 
 - `6616287` v2-modal/v2-toast компонент (`templates/ui/_v2/v2_modal.html`):
