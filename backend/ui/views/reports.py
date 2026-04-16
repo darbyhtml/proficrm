@@ -265,6 +265,25 @@ def cold_calls_report_day(request: HttpRequest) -> HttpResponse:
         items.append({"time": t, "phone": phone, "contact": contact_name, "company": company_name})
         lines.append(f"{i}) {t} — {who2} — {phone} (ручная отметка)")
 
+    stats = {
+        "cold_calls": len(items),
+        "incoming_calls": incoming_calls_count,
+        "tasks_done": tasks_done_count,
+        "new_companies": new_companies_count,
+    }
+
+    # AJAX → JSON (для модалки на дашборде), обычный → HTML
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse({
+            "ok": True,
+            "range": "day",
+            "date": day_label,
+            "count": len(items),
+            "items": items,
+            "text": "\n".join(lines),
+            "stats": stats,
+        })
+
     prev_date = (target_date - timedelta(days=1)).strftime("%Y-%m-%d")
     next_date = (target_date + timedelta(days=1)).strftime("%Y-%m-%d") if target_date < timezone.localdate(timezone.now()) else None
 
@@ -273,12 +292,7 @@ def cold_calls_report_day(request: HttpRequest) -> HttpResponse:
         "prev_date": prev_date,
         "next_date": next_date,
         "items": items,
-        "stats": {
-            "cold_calls": len(items),
-            "incoming_calls": incoming_calls_count,
-            "tasks_done": tasks_done_count,
-            "new_companies": new_companies_count,
-        },
+        "stats": stats,
     })
 
 
@@ -492,6 +506,26 @@ def cold_calls_report_month(request: HttpRequest) -> HttpResponse:
         lines.append(f"{i}) {t} — {who2} — {phone} (ручная отметка)")
 
     month_options = [{"key": ms.strftime("%Y-%m"), "label": _month_label(ms)} for ms in available]
+    stats = {
+        "cold_calls": total_cold,
+        "incoming_calls": incoming_calls_count,
+        "tasks_done": tasks_done_count,
+        "new_companies": new_companies_count,
+    }
+
+    # AJAX → JSON (для модалки на дашборде), обычный → HTML
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse({
+            "ok": True,
+            "range": "month",
+            "month": selected.strftime("%Y-%m"),
+            "month_label": _month_label(selected),
+            "available_months": month_options,
+            "count": len(items),
+            "items": items,
+            "text": "\n".join(lines),
+            "stats": stats,
+        })
 
     prev_month = _add_months(selected, -1).strftime("%Y-%m") if selected > available[0] else None
     next_month = _add_months(selected, 1).strftime("%Y-%m") if selected < available[-1] else None
@@ -503,12 +537,7 @@ def cold_calls_report_month(request: HttpRequest) -> HttpResponse:
         "next_month": next_month,
         "month_options": month_options,
         "items": items,
-        "stats": {
-            "cold_calls": total_cold,
-            "incoming_calls": incoming_calls_count,
-            "tasks_done": tasks_done_count,
-            "new_companies": new_companies_count,
-        },
+        "stats": stats,
     })
 
 

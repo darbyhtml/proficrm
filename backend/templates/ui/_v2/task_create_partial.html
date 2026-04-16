@@ -22,17 +22,17 @@
   .v2f-errors{color:var(--v2-danger,#dc2626);font-size:12px;margin-top:2px}
 
   /* Плашки TaskType */
-  .v2-tt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
-  .v2-tt-card{display:flex;align-items:center;gap:8px;padding:8px 10px;
+  .v2-tt-grid{display:flex;flex-wrap:wrap;gap:8px}
+  .v2-tt-card{display:flex;align-items:center;gap:8px;padding:8px 12px;
     border:1.5px solid var(--v2-border);border-radius:10px;background:#fff;cursor:pointer;
-    font-size:13px;color:var(--v2-text);transition:all .15s;user-select:none}
+    font-size:13px;color:var(--v2-text);transition:all .15s;user-select:none;white-space:nowrap}
   .v2-tt-card:hover{border-color:var(--v2-primary);background:var(--v2-bg-soft)}
   .v2-tt-card.is-selected{border-color:var(--v2-primary);background:var(--v2-primary-50,#e6f4f3);
     box-shadow:0 0 0 3px rgba(1,148,142,.12)}
-  .v2-tt-card__dot{width:18px;height:18px;border-radius:50%;flex:0 0 auto;
+  .v2-tt-card__dot{width:20px;height:20px;border-radius:50%;flex:0 0 auto;
     display:inline-flex;align-items:center;justify-content:center;
-    background:var(--v2-bg-muted);color:var(--v2-text-muted);font-size:11px}
-  .v2-tt-card__name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    background:var(--v2-bg-muted);color:var(--v2-text-muted);font-size:12px}
+  .v2-tt-card__name{flex:1;min-width:0}
 
   .v2f-urgent{display:flex;align-items:center;gap:10px;padding:10px 12px;
     background:var(--v2-bg-soft);border:1px solid var(--v2-border);border-radius:10px;cursor:pointer}

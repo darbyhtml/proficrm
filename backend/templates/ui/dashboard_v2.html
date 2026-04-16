@@ -72,22 +72,22 @@
           Обновить
         </button>
         {% if can_view_cold_call_reports %}
-        <a href="{% url 'cold_calls_report_day' %}" class="v2-btn v2-btn--ghost v2-btn--sm"
+        <button type="button" id="v2OpenReportDay" class="v2-btn v2-btn--ghost v2-btn--sm"
            style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff"
            title="Ежедневный отчёт">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
           </svg>
           Отчет: день
-        </a>
-        <a href="{% url 'cold_calls_report_month' %}" class="v2-btn v2-btn--ghost v2-btn--sm"
+        </button>
+        <button type="button" id="v2OpenReportMonth" class="v2-btn v2-btn--ghost v2-btn--sm"
            style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff"
            title="Ежемесячный отчёт">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
           </svg>
           Отчет: месяц
-        </a>
+        </button>
         {% endif %}
       </div>
     </div>
@@ -407,6 +407,37 @@
   </div>
 </div>
 
+{% if can_view_cold_call_reports %}
+<!-- Модалка отчётов -->
+<div id="v2ReportModal" style="display:none;position:fixed;inset:0;z-index:200">
+  <div style="position:fixed;inset:0;background:rgba(0,0,0,.35)" data-report-close></div>
+  <div style="position:absolute;inset:16px;top:80px;margin:0 auto;max-width:680px;max-height:calc(100vh - 120px);display:flex;flex-direction:column">
+    <div class="v2-card" style="display:flex;flex-direction:column;max-height:100%;overflow:hidden">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--v2-border)">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+          <div style="min-width:0">
+            <div id="v2ReportTitle" style="font-weight:600;font-size:15px;color:var(--v2-text)">Отчёт</div>
+            <div id="v2ReportSub" class="v2-muted" style="margin-top:2px;font-size:12px">—</div>
+          </div>
+          <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" data-report-close title="Закрыть">✕</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px">
+          <select id="v2ReportDaySelect" class="v2-select" style="display:none;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--v2-border);min-width:180px"></select>
+          <select id="v2ReportMonthSelect" class="v2-select" style="display:none;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--v2-border);min-width:180px"></select>
+          <button type="button" id="v2ReportCopy" class="v2-btn v2-btn--sm" style="font-weight:600">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Скопировать
+          </button>
+        </div>
+      </div>
+      <div style="flex:1;overflow:auto;padding:12px 20px">
+        <textarea id="v2ReportText" readonly style="width:100%;min-height:280px;border:1px solid var(--v2-border);border-radius:8px;padding:10px 12px;font-size:12px;font-family:'Courier New',monospace;color:var(--v2-text);background:var(--v2-bg-soft);resize:vertical;line-height:1.5"></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <div id="v2DashUpdateIndicator">
   <svg class="v2-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
     <path d="M21 12a9 9 0 11-6.219-8.56"/>
@@ -535,6 +566,100 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
       }
     });
   });
+
+  // Отчёты — модалка с fetch→JSON
+  (function(){
+    const modal = document.getElementById('v2ReportModal');
+    const titleEl = document.getElementById('v2ReportTitle');
+    const subEl = document.getElementById('v2ReportSub');
+    const txtEl = document.getElementById('v2ReportText');
+    const daySel = document.getElementById('v2ReportDaySelect');
+    const monthSel = document.getElementById('v2ReportMonthSelect');
+    const btnDay = document.getElementById('v2OpenReportDay');
+    const btnMonth = document.getElementById('v2OpenReportMonth');
+    const btnCopy = document.getElementById('v2ReportCopy');
+    if(!modal || !txtEl) return;
+
+    let mode = 'day';
+    let monthKey = '';
+    let selectedDate = '';
+
+    function open(){ modal.style.display = ''; }
+    function close(){ modal.style.display = 'none'; }
+    modal.querySelectorAll('[data-report-close]').forEach(function(b){ b.addEventListener('click', close); });
+    document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && modal.style.display !== 'none') close(); });
+
+    async function loadDay(){
+      mode = 'day';
+      if(monthSel) monthSel.style.display = 'none';
+      if(daySel) daySel.style.display = '';
+      titleEl.textContent = 'Ежедневный отчёт';
+      subEl.textContent = 'Загружаю…';
+      txtEl.value = '';
+      try{
+        var resDays = await fetch('/reports/cold-calls/last-7-days/', {credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest'}});
+        var daysData = await resDays.json().catch(function(){return null;});
+        if(daysData && daysData.ok && daySel){
+          daySel.innerHTML = '';
+          (daysData.days || []).forEach(function(d){
+            var opt = document.createElement('option');
+            opt.value = d.date;
+            opt.textContent = d.label + ' (' + d.count + ')';
+            daySel.appendChild(opt);
+          });
+          if(selectedDate) daySel.value = selectedDate;
+          else if(daySel.options.length){ daySel.value = daySel.options[daySel.options.length - 1].value; selectedDate = daySel.value; }
+        }
+      }catch(_){}
+      var q = selectedDate ? '?date=' + encodeURIComponent(selectedDate) : '';
+      var res = await fetch('/reports/cold-calls/day/' + q, {credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest'}});
+      var data = await res.json().catch(function(){return null;});
+      if(!data || !data.ok){ subEl.textContent = 'Не удалось загрузить'; return; }
+      subEl.textContent = data.date + ' · Всего: ' + data.count + ' · Звонков: ' + data.stats.cold_calls + ' · Задач: ' + data.stats.tasks_done;
+      txtEl.value = data.text || '';
+    }
+
+    async function loadMonth(){
+      mode = 'month';
+      if(daySel) daySel.style.display = 'none';
+      if(monthSel) monthSel.style.display = '';
+      titleEl.textContent = 'Ежемесячный отчёт';
+      subEl.textContent = 'Загружаю…';
+      txtEl.value = '';
+      var q = monthKey ? '?month=' + encodeURIComponent(monthKey) : '';
+      var res = await fetch('/reports/cold-calls/month/' + q, {credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest'}});
+      var data = await res.json().catch(function(){return null;});
+      if(!data || !data.ok){ subEl.textContent = 'Не удалось загрузить'; return; }
+      if(monthSel){
+        monthSel.innerHTML = '';
+        (data.available_months || []).forEach(function(o){
+          var opt = document.createElement('option');
+          opt.value = o.key;
+          opt.textContent = o.label;
+          monthSel.appendChild(opt);
+        });
+        if(data.month) monthSel.value = data.month;
+        monthKey = data.month || '';
+      }
+      subEl.textContent = data.month_label + ' · Всего: ' + data.count + ' · Звонков: ' + data.stats.cold_calls + ' · Задач: ' + data.stats.tasks_done;
+      txtEl.value = data.text || '';
+    }
+
+    if(daySel) daySel.addEventListener('change', function(){ selectedDate = daySel.value; loadDay(); });
+    if(monthSel) monthSel.addEventListener('change', function(){ monthKey = monthSel.value; loadMonth(); });
+    if(btnDay) btnDay.addEventListener('click', function(){ selectedDate = ''; open(); loadDay(); });
+    if(btnMonth) btnMonth.addEventListener('click', function(){ open(); loadMonth(); });
+    if(btnCopy) btnCopy.addEventListener('click', async function(){
+      var text = txtEl.value || '';
+      try{
+        await navigator.clipboard.writeText(text);
+        btnCopy.querySelector('svg').style.display = 'none';
+        var origHTML = btnCopy.innerHTML;
+        btnCopy.textContent = '✓ Скопировано';
+        setTimeout(function(){ btnCopy.innerHTML = origHTML; }, 1500);
+      }catch(_){ txtEl.focus(); txtEl.select(); document.execCommand('copy'); }
+    });
+  })();
 
   // Inline contract amount edit
   document.querySelectorAll('.v2-inline-amount [data-inline-save]').forEach(function(btn){
