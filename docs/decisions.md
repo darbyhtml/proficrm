@@ -1,5 +1,28 @@
 # Архитектурные решения
 
+## [2026-04-16] Claude Code хуки: 4 узких операционных защиты, НЕ skill-auto-routing
+
+**Контекст:** После обсуждения автоматизации работы Claude Code в проекте рассматривались два варианта: (А) жёсткое авто-срабатывание скиллов по ключевым словам задачи через хуки (например, auth → security-review); (Б) 4 точечных хука, закрывающих конкретные операционные ошибки, которые уже случались в проекте.
+
+**Решение:** Вариант Б. Скилл-роутинг оставлен на уровне памяти (`MEMORY.md` + раздел «Маршрутизация скиллов» в `CLAUDE.md`) — Claude сверяется с таблицей триггеров на старте сессии.
+
+**4 хука в `.claude/settings.json`:**
+
+1. **PreToolUse/Bash → `block-prod.py`** — блокирует команды, затрагивающие `/opt/proficrm/` (прод). `/opt/proficrm-staging/` и `/opt/proficrm-backup/` разрешены. Закрывает самое строгое правило проекта.
+2. **PreToolUse/Bash `if Bash(git commit*)` → `check-secrets.py`** — сканирует `git diff --cached` на FERNET_KEY, DJANGO_SECRET_KEY, password=, api_key=, PRIVATE KEY, AWS/GitHub токены. Повод — `.playwright-mcp/` с токенами в 2026-04-07.
+3. **PostToolUse/Write|Edit → `ruff-fix.py`** — прогоняет `ruff check --fix` на изменённых `.py` в `backend/`. Fail-safe: если ruff не установлен, молча пропускает.
+4. **PostToolUse/Write|Edit → `template-reminder.py`** — при правке `backend/templates/**.html` напоминает использовать `docker compose restart web` (не `up -d`) — gunicorn кэширует скомпилированные шаблоны (см. `problems-solved.md` 2026-04-16).
+
+**Почему не skill-auto-routing:** (а) хуки не умеют вызывать скиллы — только инжектить текст в контекст модели; (б) паттерн-матчинг по словам даёт шум; (в) семантическое решение «какой скилл нужен» лучше остаётся за моделью по таблице в CLAUDE.md.
+
+**Архитектура:** Хук-скрипты на Python (не bash/jq — на хосте нет jq, но Python 3.13+ гарантированно есть, т.к. это язык проекта). Каждый скрипт читает JSON со stdin, возвращает либо пусто (пропустить), либо JSON с `hookSpecificOutput.permissionDecision=deny` или `systemMessage`.
+
+**`.gitignore`:** `.claude/settings.json` и `.claude/hooks/` — коммитятся (shared). `.claude/settings.local.json`, `.claude/agents/`, `.claude/skills/`, `.claude/commands/`, `.claude/vendor/`, `.claude/worktrees/` — игнорируются.
+
+**Альтернативы:**
+- Pre-commit hook (Git, не Claude Code) для проверки секретов — плюс: работает для всех, не только через Claude; минус: дополнительная инсталляция у команды. Хук Claude Code — zero-setup для любого, кто использует Claude.
+- Расширить до 10+ хуков («всё автоматизировать») — отклонено: over-engineering, шум, сложность поддержки.
+
 ## [2026-04-16] Архитектурный рефакторинг: консолидация общих утилит в core/ и accounts/
 
 **Контекст:** Анализ через graphify-граф выявил 8 структурных проблем: god-модуль `_base.py` (387 рёбер к phonebridge через транзитивный импорт), крипто-логика жила в `mailer/crypto.py` но использовалась в `ui/models.py` и `amocrm/client.py`, авторизация (`require_admin`, `get_effective_user`) жила в `crm/utils.py` вместо `accounts/`, инфраструктура (request_id, json_formatter, exceptions, test_runner) жила в `crm/` — ядре Django, которое должно содержать только settings/urls/wsgi. `_normalize_phone` дублировался через `ui.forms` вместо единственного источника `companies.normalizers`.

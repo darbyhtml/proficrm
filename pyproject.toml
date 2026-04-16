@@ -1,0 +1,43 @@
+# pyproject.toml — конфиг dev-инструментов проекта.
+# Само приложение CRM ПРОФИ не пакетируется (Django-проект, запускается
+# как скрипт через manage.py), поэтому секции [project] / [build-system]
+# отсутствуют — здесь только настройки линтеров и форматтеров.
+
+[tool.ruff]
+# Длиннее дефолта — стиль проекта шире 88 символов, исторически.
+line-length = 120
+target-version = "py313"
+extend-exclude = [
+    "backend/*/migrations",
+    "backend/staticfiles",
+    "backend/media",
+    ".venv",
+    "graphify-out",
+    "knowledge-base",
+]
+
+[tool.ruff.lint]
+# Консервативный набор: только реальные баги, не стиль.
+# F   — pyflakes: undefined names, unused imports/variables, неправильные impl
+# E9  — синтаксические ошибки и IOError
+# W6  — устаревшие конструкции, опечатки
+# B   — flake8-bugbear: реальные антипаттерны (mutable default args и т.п.)
+select = ["F", "E9", "W6", "B"]
+
+ignore = [
+    "F401",   # unused-import — законно в __init__.py для re-export shim'ов
+    "F403",   # star-imports — используется в settings.py проекта
+    "F405",   # undefined-via-star — следствие F403
+    "F841",   # unused-variable — иногда для читаемости (_ = result)
+    "B008",   # function-call-in-default-argument — конфликтует с Django (Q(), timezone.now)
+    "B904",   # raise-without-from-inside-except — много мест, не критично
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Миграции — автогенерируемый код Django, не трогаем.
+"**/migrations/*.py" = ["F", "E", "W", "B"]
+# Настройки проекта используют `from .base import *` паттерн.
+"backend/crm/settings*.py" = ["F403", "F405"]
+# Тесты — разрешаем assert в голом виде и мутабельные дефолты.
+"**/tests*.py" = ["B"]
+"**/test_*.py" = ["B"]

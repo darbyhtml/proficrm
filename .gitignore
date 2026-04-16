@@ -1,5 +1,14 @@
-# Claude Code
-.claude/
+# Claude Code: shared-конфиг коммитим (settings.json + hooks/),
+# личные настройки, агенты, скиллы, кэши, worktrees — игнорируем
+.claude/settings.local.json
+.claude/agents/
+.claude/commands/
+.claude/skills/
+.claude/vendor/
+.claude/worktrees/
+
+# Python virtual environment
+.venv/
 
 # Python
 __pycache__/
@@ -114,9 +123,8 @@ chatwoot-reference/
 test-screenshots/
 
 # Скриншоты UI в корне (артефакты Playwright/тестирования)
-messenger-*.png
-settings-dashboard.png
-widget-opened.png
+*.png
+dashboard-snapshot.md
 
 # Local knowledge base (не коммитить)
 knowledge-base/

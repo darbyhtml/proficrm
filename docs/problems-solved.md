@@ -1,5 +1,15 @@
 # Решённые проблемы
 
+## [2026-04-16] Migration: дубль _like индекса при AddField + AlterField(unique=True)
+
+**Симптом:** На staging при `migrate` — `ProgrammingError: relation "phonebridge_mobileappqrtoken_token_hash_8a962ef6_like" already exists`. Миграция `phonebridge.0010_qr_token_hash` падала на шаге 3 (AlterField с `unique=True`).
+
+**Причина:** Шаг 1 (AddField) содержал `db_index=True`, который создавал `_like` индекс для CharField. Шаг 3 (AlterField с `unique=True, db_index=True`) пытался создать тот же `_like` индекс повторно. Дополнительно, шаг 4 был явным AddIndex, который дублировал уже существующий unique index.
+
+**Фикс** (`dd23bea`): убран `db_index=True` из шага 1 AddField (unique в шаге 3 сам создаёт индекс). Удалён шаг 4 (лишний AddIndex). Также удалены дубли в `Meta.indexes` модели — `unique=True` автоматически создаёт индекс, явные `models.Index` для `token` и `token_hash` были избыточны. Создана миграция `0011_remove_duplicate_qr_indexes` для очистки.
+
+**Урок:** При миграции «добавить поле → data migration → сделать unique» — не ставить `db_index=True` на шаге AddField, если следующим шагом будет AlterField с `unique=True`. Unique constraint сам создаёт все нужные индексы.
+
 ## [2026-04-16] Отчёты cold_calls: JsonResponse вместо HTML, сломанный фильтр
 
 **Симптом:** Кнопки «Отчет: день/месяц» на дашборде открывали страницу с сырым JSON вместо отформатированного отчёта. Ссылка «Все без задач» показывала все компании вместо компаний текущего пользователя (неправильный GET-параметр `no_active_tasks=1` вместо `task_filter=no_tasks`).

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/block-prod.py",
+            "timeout": 5,
+            "statusMessage": "Проверка: не прод ли это?"
+          },
+          {
+            "type": "command",
+            "command": "python .claude/hooks/check-secrets.py",
+            "if": "Bash(git commit*)",
+            "timeout": 15,
+            "statusMessage": "Скан staged-файлов на секреты..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/ruff-fix.py",
+            "timeout": 25,
+            "statusMessage": "ruff check --fix..."
+          },
+          {
+            "type": "command",
+            "command": "python .claude/hooks/template-reminder.py",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

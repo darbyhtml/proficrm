@@ -4,11 +4,51 @@
 
 Комплексное улучшение проекта по мастер-плану `docs/improvement-plan.md` (8 фаз, ~215 находок).
 
-**Статус:** Аудит завершён (8 агентов). Мастер-план создан. Следующий шаг — Фаза 1 (Безопасность P0).
+**Статус:** ✅ ВСЕ 8 ФАЗ ЗАВЕРШЕНЫ. Задеплоено на staging, 145 тестов зелёные, smoke OK.
 
 **Предыдущая задача:** Live-chat UX Completion — все 4 плана закрыты (2026-04-13).
 
 ## Сделано в этом спринте
+
+**[2026-04-16]** — Ruff установлен, baseline + безопасный автофикс ✅
+
+- `backend/requirements-dev.txt` — новый файл, ruff==0.14.5, с комментарием
+  про Claude Code хук. `requirements.txt` (идёт в Docker) не трогали.
+- `pyproject.toml` — новый файл, мягкий ruff-конфиг: `select = [F, E9, W6, B]`,
+  `line-length = 120`, `target-version = py313`. Миграции и
+  `backend/crm/settings*.py` исключены из проверок.
+- `ruff check --fix` прошёл в `.venv` через проектный конфиг. Автофикс
+  только F541 (f-string без плейсхолдеров) и B009 — 21 правка в 6 файлах,
+  косметика. Синтаксис всех файлов валиден.
+- **Baseline после автофикса — 81 замечание, из них нужно разобрать:**
+  - **F821 (10)** — ссылки на несуществующие переменные (`notes`,
+    `amo_ids_set`) в `backend/amocrm/migrate.py`. Код падает в рантайме
+    на этих ветках. **Отдельная задача заспавнена.**
+  - **F811 (35)** — переопределение функций/переменных без использования.
+    Возможен мёртвый код или конфликт имён.
+  - **B023 (26)** — захват loop-переменной в closure (классическая
+    Python-ловушка).
+  - **B007 (8)** — неиспользуемая loop-переменная (можно заменить на `_`).
+  - **B028, F601** — по 1 случаю.
+- Хук `ruff-fix.py` обновлён — ищет ruff в порядке `.venv/Scripts/ruff.exe`
+  → `.venv/bin/ruff` → системный PATH. Работает из коробки после
+  `pip install -r backend/requirements-dev.txt`.
+
+**[2026-04-16]** — Claude Code хуки и автоматический роутинг скиллов ✅
+
+- Добавлен раздел «Маршрутизация скиллов» в `CLAUDE.md` (3 таблицы + чёрный список + правила) — Claude Code сам выбирает нужный скилл по таблице триггеров.
+- В `MEMORY.md` (auto-memory) — запись `feedback_skill_routing.md`, ссылающаяся на таблицу.
+- `.claude/settings.json` + 4 Python-хука в `.claude/hooks/`:
+  - `block-prod.py` — блок bash-команд с `/opt/proficrm/` (прод), staging/backup разрешены.
+  - `check-secrets.py` — блок `git commit` при утечках секретов в staged-файлах (FERNET/DJANGO/SECRET_KEY, password=, api_key=, PRIVATE KEY, AWS/GitHub токены).
+  - `ruff-fix.py` — автопрогон `ruff check --fix` на изменённых `.py` в `backend/` (fail-safe если ruff нет).
+  - `template-reminder.py` — напоминание про `restart web` при правке Django-шаблонов.
+- `.gitignore`: shared-конфиг (`settings.json` + `hooks/`) коммитится, личные данные (`settings.local.json`, `agents/`, `skills/`, и т.п.) игнорируются.
+- Все 4 хука прошли пайп-тесты (синтетический JSON payload → корректное решение блок/пропуск).
+- ADR в `docs/decisions.md` — почему не полноценный skill-auto-routing, а узкие операционные защиты.
+- **Важно:** хуки подхватятся после команды `/hooks` или перезапуска сессии (Claude Code watcher не видит `.claude/settings.json`, созданный мид-сессии).
+
+
 
 **[2026-04-16]** — Полный аудит проекта (8 параллельных агентов) ✅
 
@@ -403,6 +443,19 @@ P2-9, P2-11, P2-12. Из P1 осталось — ничего (все actionable
 - Тесты: 120/120 зелёных (`messenger accounts`)
 - Staging: миграции `accounts.0010-0012` + `messenger.0016-0019` применены; BranchRegion=95, health=200
 - Pre-existing issue в логах celery: Fernet InvalidToken на SMTP (MAILER_FERNET_KEY из Round 2 P0 backlog, не связан с Plan 1)
+
+**[2026-04-16]** — Первичное покрытие пакета core/ тестами ✅
+
+Создан `backend/core/tests.py` — 145 тестов, 100% pass, 0.139 сек.
+
+Покрыты все 7 модулей пакета:
+- `crypto.py` (21 тест): round-trip Fernet, пустая строка, None, InvalidToken, RuntimeError при отсутствии ключа, MultiFernet ротация (шифрование старым → расшифровка после ротации), _collect_keys дубликаты/empty.
+- `timezone_utils.py` (22 теста): RUS_TZ_CHOICES структура, 14 городов/регионов (Москва, Екатеринбург, Тюмень, Владивосток, Иркутск, Калининград и др.), нормализация «ё»→«е», пунктуация, пустая строка, None, латиница, неизвестный кириллический адрес → Europe/Moscow.
+- `request_id.py` (13 тестов): process_request устанавливает 8-символьный ID, process_response добавляет X-Request-ID, очистка thread-local, полный цикл через __call__, RequestIdLoggingFilter (с/без thread-local, always True), get_request_id потокобезопасность.
+- `exceptions.py` (9 тестов): 400/401/403/404 в DEBUG не изменяются, 400 в production сохраняет детали, не-DRF исключения (ValueError, ZeroDivisionError, Exception) → None.
+- `work_schedule_utils.py` (39 тестов): parse_work_schedule (24/7, круглосуточно, будни, ежедневно, перерыв, одиночный день, обратный диапазон), normalize (форматирование HH:MM, перерыв, ежедневно), get_worktime_status (ok/warn_end/off/unknown/no_tzinfo, warn_end=60мин), _expand_day_spec, _parse_time_token.
+- `input_cleaners.py` (16 тестов): clean_int_id (int/str/list/JSON scalar/JSON list/JSON dict/Python literal, None/empty/negative/zero/float/мусор), clean_uuid (valid/quoted/without-dashes/int/None/invalid).
+- `json_formatter.py` (11 тестов): валидный JSON, обязательные поля, level INFO/ERROR, имя логгера, timestamp заканчивается Z, extra через record.extra dict, extra через setattr, несериализуемый объект → строка, exc_info → поле "exception".
 
 ## Следующее
 

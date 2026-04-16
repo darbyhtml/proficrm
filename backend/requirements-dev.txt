@@ -1,0 +1,11 @@
+# Dev-only зависимости — НЕ устанавливаются в Docker-образ.
+# Используются локально разработчиками и в Claude Code хуках.
+#
+# Установка: pip install -r backend/requirements-dev.txt
+# (в активной .venv или системно)
+
+-r requirements.txt
+
+# Линтер/форматтер — Rust-based, быстрый
+# Используется через .claude/hooks/ruff-fix.py при Edit/Write .py файлов
+ruff==0.14.5
