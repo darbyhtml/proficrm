@@ -1,5 +1,46 @@
 # Текущий спринт
 
+**[2026-04-18]** — F5: Off-hours форма вне рабочих часов ✅
+
+Коммиты `0dfeed17` (backend) + `6672fc7d`/`a1eac52a` (tests fix) +
+`70336940` (widget UI) + `2db6b21a` (operator UI).
+
+**Q9 из roadmap:** клиент вне рабочих часов видит форму «Наши
+менеджеры сейчас недоступны» с выбором канала (call / messenger /
+email / other) и полем контакта. Диалог уходит в новый статус
+**WAITING_OFFLINE**.
+
+**Backend:**
+- Модель `Conversation`: новый Status.WAITING_OFFLINE, OffHoursChannel,
+  поля off_hours_channel/contact/note/requested_at, contacted_back_at/by.
+- Миграция 0025: RemoveConstraint → 6 AddField → AddConstraint с
+  waiting_offline в списке статусов.
+- Endpoint `POST /api/widget/offhours-request/` — валидирует session,
+  канал, contact_value. Переводит в WAITING_OFFLINE, создаёт INTERNAL
+  Message с деталями.
+- Action `POST /api/conversations/{id}/contacted-back/` — менеджер
+  отмечает «Я связался». Права: assignee / менеджер того же подразделения
+  / ADMIN / BRANCH_DIRECTOR / SALES_HEAD. Переводит OPEN и авто-берёт
+  в работу если assignee пуст.
+- Bootstrap: off_hours_form_enabled / title / subtitle (кастомизация
+  через `inbox.settings.off_hours_form`).
+
+**Widget JS (+272 строки widget.js/css):**
+- Форма с radio-выбором канала (2x2 grid), полями «Имя», «Телефон/email»
+  (обязательно), «Сообщение», кнопкой submit и success-состоянием.
+- Accent-color #01948E, inline-валидация, блок повторной отправки.
+
+**Operator JS:**
+- Бейдж «Ждёт связи» (amber) в списке диалогов для waiting_offline.
+- Кнопка «✓ Я связался» в header-меню, показывается условно
+  (status === 'waiting_offline'). После клика — toast + reload.
+
+**Тесты (staging):** 8/8 pass. Таблица test_widget_offhours.py с
+`@override_settings(SECURE_SSL_REDIRECT=False)` обходит staging-specific
+301 — до настоящего settings_test.py (F11).
+
+---
+
 **[2026-04-18]** — F5: Понедельная ротация общих регионов ✅
 
 Коммит `061432ae`. Q8 из roadmap: Москва/МО, СПб/ЛО, Новгородская обл., Псковская обл. —
