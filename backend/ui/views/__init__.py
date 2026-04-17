@@ -10,6 +10,7 @@ from ui.views.dashboard import (
     preferences, preferences_ui, preferences_company_detail_view_mode,
     preferences_v2_scale,
     preferences_mail, preferences_profile, preferences_password,
+    preferences_absence_create, preferences_absence_delete,
     preferences_mail_signature, preferences_avatar_upload,
     preferences_avatar_delete, preferences_table_settings,
 )  # noqa: F401

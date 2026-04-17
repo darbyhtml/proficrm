@@ -15,6 +15,9 @@ urlpatterns = [
     path("settings/mail/", views.preferences_mail, name="preferences_mail"),
     path("settings/profile/", views.preferences_profile, name="preferences_profile"),
     path("settings/password/", views.preferences_password, name="preferences_password"),
+    # F5: личный учёт отсутствия (отпуск/больничный/отгул)
+    path("settings/absence/create/", views.preferences_absence_create, name="preferences_absence_create"),
+    path("settings/absence/<int:absence_id>/delete/", views.preferences_absence_delete, name="preferences_absence_delete"),
     path("settings/mail-signature/", views.preferences_mail_signature, name="preferences_mail_signature"),
     path("settings/avatar/upload/", views.preferences_avatar_upload, name="preferences_avatar_upload"),
     path("settings/avatar/delete/", views.preferences_avatar_delete, name="preferences_avatar_delete"),

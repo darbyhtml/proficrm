@@ -716,10 +716,17 @@ def help_page(request: HttpRequest) -> HttpResponse:
 def preferences(request: HttpRequest) -> HttpResponse:
     """
     Единая страница настроек пользователя.
-    Включает: профиль, безопасность, интерфейс, почта.
+    Включает: профиль, безопасность, интерфейс, почта, отсутствие.
     """
+    from accounts.models import UserAbsence
+
     user = request.user
     prefs = UiUserPreference.load_for_user(user)
+    today = timezone.localdate()
+    # Сортируем: текущие/будущие сверху (по start_date), прошлые внизу (старые последние)
+    absences = list(
+        UserAbsence.objects.filter(user=user).order_by("-end_date")[:20]
+    )
     return render(
         request,
         "ui/preferences.html",
@@ -729,6 +736,10 @@ def preferences(request: HttpRequest) -> HttpResponse:
             "company_detail_view_mode": prefs.company_detail_view_mode,
             "tasks_per_page": prefs.tasks_per_page,
             "default_task_tab": prefs.default_task_tab,
+            "absences": absences,
+            "absence_today": today,
+            "absence_type_choices": UserAbsence.Type.choices,
+            "is_currently_absent": user.is_currently_absent(today),
         },
     )
 
@@ -886,6 +897,102 @@ def preferences_password(request: HttpRequest) -> HttpResponse:
             for err in field_errors:
                 messages.error(request, err)
         return redirect("/settings/#security")
+
+
+@login_required
+@policy_required(resource_type="action", resource="ui:preferences")
+def preferences_absence_create(request: HttpRequest) -> HttpResponse:
+    """F5: пользователь сам отмечает своё отсутствие (отпуск/больничный/отгул).
+
+    POST /settings/absence/create/
+    Поля: type, start_date (YYYY-MM-DD), end_date (YYYY-MM-DD), note
+
+    Валидации:
+    - end_date >= start_date (также на уровне CheckConstraint БД)
+    - start_date не в прошлом более чем на 7 дней (защита от мусора)
+    - type в списке choices
+    """
+    from datetime import date, timedelta as _td
+    from accounts.models import UserAbsence
+
+    if request.method != "POST":
+        return redirect("/settings/#absence")
+
+    user = request.user
+    type_value = (request.POST.get("type") or "").strip()
+    start_str = (request.POST.get("start_date") or "").strip()
+    end_str = (request.POST.get("end_date") or "").strip()
+    note = (request.POST.get("note") or "").strip()[:255]
+
+    valid_types = {c[0] for c in UserAbsence.Type.choices}
+    if type_value not in valid_types:
+        messages.error(request, "Неверный тип отсутствия.")
+        return redirect("/settings/#absence")
+
+    try:
+        start_date = date.fromisoformat(start_str)
+        end_date = date.fromisoformat(end_str)
+    except ValueError:
+        messages.error(request, "Даты должны быть в формате ГГГГ-ММ-ДД.")
+        return redirect("/settings/#absence")
+
+    if end_date < start_date:
+        messages.error(request, "Дата окончания раньше даты начала.")
+        return redirect("/settings/#absence")
+
+    today = timezone.localdate()
+    if start_date < today - _td(days=7):
+        messages.error(
+            request,
+            "Дата начала слишком давняя (больше 7 дней назад). "
+            "Свяжитесь с администратором для ретро-записи.",
+        )
+        return redirect("/settings/#absence")
+
+    UserAbsence.objects.create(
+        user=user,
+        start_date=start_date,
+        end_date=end_date,
+        type=type_value,
+        note=note,
+        created_by=user,
+    )
+    messages.success(
+        request,
+        f"Отсутствие сохранено: {start_date:%d.%m.%Y} — {end_date:%d.%m.%Y}. "
+        "Новые диалоги в чате не будут назначаться на вас на это время.",
+    )
+    return redirect("/settings/#absence")
+
+
+@login_required
+@policy_required(resource_type="action", resource="ui:preferences")
+def preferences_absence_delete(request: HttpRequest, absence_id: int) -> HttpResponse:
+    """F5: удаление собственной записи UserAbsence (или администратор может удалить чужую).
+
+    POST /settings/absence/<id>/delete/
+    """
+    from accounts.models import UserAbsence
+
+    if request.method != "POST":
+        return redirect("/settings/#absence")
+
+    user = request.user
+    try:
+        absence = UserAbsence.objects.get(id=absence_id)
+    except UserAbsence.DoesNotExist:
+        messages.error(request, "Запись не найдена.")
+        return redirect("/settings/#absence")
+
+    is_owner = absence.user_id == user.id
+    is_admin = bool(user.is_superuser or user.role == User.Role.ADMIN)
+    if not (is_owner or is_admin):
+        messages.error(request, "Нет прав на удаление этой записи.")
+        return redirect("/settings/#absence")
+
+    absence.delete()
+    messages.success(request, "Запись об отсутствии удалена.")
+    return redirect("/settings/#absence")
 
 
 @login_required
