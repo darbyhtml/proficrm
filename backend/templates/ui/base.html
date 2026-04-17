@@ -867,6 +867,8 @@
     {% block extra_head %}{% endblock %}
   </head>
   <body class="bg-brand-soft/40 text-brand-dark">
+    {# WCAG 2.4.1: skip-link — keyboard-only user пропускает навигацию, сразу в main #}
+    <a href="#main-content" class="skip-link" style="position:absolute;left:-9999px;top:0;z-index:9999;background:#01948E;color:#fff;padding:10px 14px;border-radius:0 0 8px 0;font-weight:600;text-decoration:none" onfocus="this.style.left='0'" onblur="this.style.left='-9999px'">Перейти к основному содержимому</a>
     <div class="min-h-screen">
       <header class="relative z-[70] border-b border-brand-soft bg-white/80 backdrop-blur">
         <div class="mx-auto max-w-screen-2xl px-4 py-3 flex items-center justify-between">
@@ -1206,7 +1208,7 @@
           </div>
         </aside>
 
-        <main class="flex-1 min-w-0">
+        <main id="main-content" class="flex-1 min-w-0" tabindex="-1">
           {% if messages %}
             <div class="space-y-2 mb-4">
               {% for message in messages %}

@@ -5,22 +5,26 @@
 {% block extra_head %}
 {% include "ui/_v2/v2_styles.html" %}
 <style>
+  /* WCAG AA: контраст повышен с ~3.8:1 до ~5.2:1 */
   .v2-tz-badge{display:inline-flex;align-items:center;gap:3px;padding:1px 6px;font-size:10px;
-    background:rgba(253,173,58,.12);color:#b45309;border-radius:999px;font-weight:600;
+    background:rgba(253,173,58,.15);color:#92400E;border-radius:999px;font-weight:600;
     border:1px solid rgba(253,173,58,.3)}
   .v2-task-desc{font-size:11px;color:var(--v2-text-muted);margin-top:2px;line-height:1.4}
-  .v2-quick-btn{font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--v2-border);
-    background:#fff;cursor:pointer;color:var(--v2-text);font-weight:500}
+  .v2-quick-btn{font-size:11px;padding:6px 10px;border-radius:6px;border:1px solid var(--v2-border);
+    background:#fff;cursor:pointer;color:var(--v2-text);font-weight:500;min-height:28px}
   .v2-quick-btn:hover{background:var(--v2-bg-soft);border-color:var(--v2-primary)}
+  .v2-quick-btn:focus-visible{outline:2px solid var(--v2-primary);outline-offset:2px}
   .v2-quick-btn--primary{background:var(--v2-primary);color:#fff;border-color:var(--v2-primary)}
   .v2-quick-btn--primary:hover{background:var(--v2-primary-600,#017a75)}
-  /* Круглый чекбокс «выполнить» слева от задачи */
+  /* Круглый чекбокс «выполнить» слева от задачи.
+     WCAG 2.5.5: touch target 44×44 через расширенную ::before зону клика. */
   .v2-done-check{flex:0 0 auto;width:22px;height:22px;border-radius:50%;
     border:1.5px solid var(--v2-border);background:#fff;cursor:pointer;
     display:inline-flex;align-items:center;justify-content:center;margin-right:8px;
     transition:all .15s ease;padding:0;color:transparent;position:relative}
-  .v2-done-check::before{content:"";position:absolute;inset:-7px;border-radius:50%}
+  .v2-done-check::before{content:"";position:absolute;inset:-11px;border-radius:50%}
   .v2-done-check:hover{border-color:var(--v2-primary);background:var(--v2-bg-soft);color:var(--v2-primary)}
+  .v2-done-check:focus-visible{outline:2px solid var(--v2-primary);outline-offset:3px}
   .v2-done-check svg{width:14px;height:14px}
   .v2-done-check.is-done{background:var(--v2-primary);border-color:var(--v2-primary);color:#fff}
   /* Компактная шапка (hero) */
@@ -50,11 +54,11 @@
   <section class="v2-hero v2-anim" aria-label="Сводка по задачам">
     <div class="flex items-start justify-between gap-4 flex-wrap relative">
       <div>
-        <h1 class="v2-hero__title">Здравствуйте, {{ request.user.first_name|default:request.user.username }}</h1>
-        <div class="v2-hero__sub" style="color:#E6F4F3">Сегодняшние задачи и последние изменения</div>
+        <h1 class="v2-hero__title">{{ greeting|default:"Здравствуйте" }}, {{ request.user.first_name|default:request.user.username }}</h1>
+        <div class="v2-hero__sub">Сегодняшние задачи и последние изменения</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <div class="text-sm" style="color:#E6F4F3">{{ local_now|ru_date }}</div>
+        <div class="text-sm" style="color:rgba(255,255,255,0.92)">{{ local_now|ru_date }}</div>
         <a href="#" class="v2-btn v2-btn--ghost v2-btn--sm"
            style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff"
            title="Создать новую задачу"
@@ -65,12 +69,15 @@
           Задача
         </a>
         <button type="button" id="v2DashRefreshBtn" class="v2-btn v2-btn--ghost v2-btn--sm"
-                title="Обновить рабочий стол" style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff">
+                title="Обновить рабочий стол" aria-label="Обновить рабочий стол"
+                style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
           </svg>
           Обновить
         </button>
+        <span id="v2LastUpdate" style="font-size:10px;color:rgba(255,255,255,.7);padding:0 4px"
+              title="Время последнего успешного обновления" aria-live="polite"></span>
         {% if can_view_cold_call_reports %}
         <button type="button" id="v2OpenReportDay" class="v2-btn v2-btn--ghost v2-btn--sm"
            style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff"
@@ -92,21 +99,21 @@
       </div>
     </div>
     <div class="v2-hero__stats">
-      <a class="v2-hero__stat" href="{% url 'task_list' %}?mine=1&today=1" style="text-decoration:none;color:inherit">
-        <div class="v2-hero__stat-value">{{ tasks_today_count|default:0 }}</div>
-        <div class="v2-hero__stat-label">На сегодня</div>
+      <a class="v2-hero__stat" href="{% url 'task_list' %}?mine=1&today=1" style="text-decoration:none;color:inherit" aria-label="{{ tasks_today_count|default:0 }} задач на сегодня">
+        <div class="v2-hero__stat-value" aria-hidden="true">{{ tasks_today_count|default:0 }}</div>
+        <div class="v2-hero__stat-label" aria-hidden="true">На сегодня</div>
       </a>
-      <a class="v2-hero__stat v2-hero__stat--danger" href="{% url 'task_list' %}?mine=1&overdue=1" style="text-decoration:none;color:inherit">
-        <div class="v2-hero__stat-value">{{ overdue_count|default:0 }}</div>
-        <div class="v2-hero__stat-label">Просрочено</div>
+      <a class="v2-hero__stat v2-hero__stat--danger" href="{% url 'task_list' %}?mine=1&overdue=1" style="text-decoration:none;color:inherit" aria-label="{{ overdue_count|default:0 }} просроченных задач">
+        <div class="v2-hero__stat-value" aria-hidden="true">{{ overdue_count|default:0 }}</div>
+        <div class="v2-hero__stat-label" aria-hidden="true">Просрочено</div>
       </a>
-      <a class="v2-hero__stat" href="{% url 'task_list' %}?mine=1&date_from={{ week_range_start|date:'Y-m-d' }}&date_to={{ week_range_end|date:'Y-m-d' }}" style="text-decoration:none;color:inherit">
-        <div class="v2-hero__stat-value">{{ tasks_week_count|default:0 }}</div>
-        <div class="v2-hero__stat-label">На неделю</div>
+      <a class="v2-hero__stat" href="{% url 'task_list' %}?mine=1&date_from={{ week_range_start|date:'Y-m-d' }}&date_to={{ week_range_end|date:'Y-m-d' }}" style="text-decoration:none;color:inherit" aria-label="{{ tasks_week_count|default:0 }} задач на неделю">
+        <div class="v2-hero__stat-value" aria-hidden="true">{{ tasks_week_count|default:0 }}</div>
+        <div class="v2-hero__stat-label" aria-hidden="true">На неделю</div>
       </a>
-      <a class="v2-hero__stat v2-hero__stat--accent" href="{% url 'task_list' %}?mine=1&today=1&show_done=1" style="text-decoration:none;color:inherit">
-        <div class="v2-hero__stat-value">{{ tasks_done_today|default:0 }}</div>
-        <div class="v2-hero__stat-label">Готово сегодня</div>
+      <a class="v2-hero__stat v2-hero__stat--accent" href="{% url 'task_list' %}?mine=1&today=1&show_done=1" style="text-decoration:none;color:inherit" aria-label="{{ tasks_done_today|default:0 }} задач выполнено сегодня">
+        <div class="v2-hero__stat-value" aria-hidden="true">{{ tasks_done_today|default:0 }}</div>
+        <div class="v2-hero__stat-label" aria-hidden="true">Готово сегодня</div>
       </a>
     </div>
   </section>
@@ -157,47 +164,7 @@
   <!-- СТРОКА 2: задачи (На сегодня / Просрочено / Новые) — одинаковая высота -->
   <div class="v2-grid v2-row--stretch">
 
-    <!-- На сегодня -->
-    <div class="v2-col-4 v2-anim">
-      <div class="v2-card v2-card--hover">
-        <div class="v2-card__head">
-          <h2 class="v2-card__title">
-            <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M6.75 2.25A.75.75 0 017.5 3v1.5h9V3a.75.75 0 011.5 0v1.5h.75a3 3 0 013 3v11.25a3 3 0 01-3 3H5.25a3 3 0 01-3-3V7.5a3 3 0 013-3H6V3a.75.75 0 01.75-.75zM3.75 18.75v-7.5a1.5 1.5 0 011.5-1.5h13.5a1.5 1.5 0 011.5 1.5v7.5a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5z" clip-rule="evenodd"/></svg>
-            На сегодня
-          </h2>
-          <span class="v2-count v2-count--accent">{{ tasks_today_count|default:0 }}</span>
-        </div>
-        <div class="v2-card__body">
-          {% for t in tasks_today %}
-          <a class="v2-item" href="{% url 'task_view' t.id %}">
-            <span class="v2-item__dot v2-item__dot--accent"></span>
-            <div class="flex-1 min-w-0">
-              <div class="v2-item__title">
-                {% if t.is_urgent %}<span title="Срочная" style="color:var(--v2-danger);margin-right:4px">⚡</span>{% endif %}{{ t.title|default:"(без названия)" }}
-              </div>
-              {% if t.description %}<div class="v2-task-desc">{{ t.description|truncatechars:100 }}</div>{% endif %}
-              <div class="v2-item__meta">
-                {% if t.company %}<span>{{ t.company.name }}</span>{% with guessed=t.company.address|guess_ru_tz %}{% with tz=t.company.work_timezone|default:guessed %}{% if tz %}<span class="v2-tz-badge" title="{{ tz }}">{{ tz|tz_now_hhmm }} · {{ tz|tz_label }}</span>{% endif %}{% endwith %}{% endwith %}{% endif %}
-                {% if t.due_at %}<span>·</span><span>{{ t.due_at|date:"H:i" }}</span>{% endif %}
-              </div>
-            </div>
-          </a>
-          {% empty %}
-          <div class="v2-card__empty">На сегодня пусто</div>
-          {% endfor %}
-        </div>
-        {% if tasks_today_count > 3 %}
-        <div class="v2-card__foot">
-          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list' %}?mine=1&today=1">
-            Все на сегодня ({{ tasks_today_count }})
-            <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 010 1.06l-7.5 7.5a.75.75 0 01-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 011.06-1.06l7.5 7.5z" clip-rule="evenodd"/></svg>
-          </a>
-        </div>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- Просрочено -->
+    <!-- Просрочено (ПЕРВАЯ колонка — scan order: самое срочное слева) -->
     <div class="v2-col-4 v2-anim">
       <div class="v2-card v2-card--hover">
         <div class="v2-card__head">
@@ -205,15 +172,15 @@
             <svg class="v2-ic" style="color:var(--v2-danger)" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clip-rule="evenodd"/></svg>
             Просрочено
           </h2>
-          <span class="v2-count v2-count--danger">{{ overdue_count|default:0 }}</span>
+          <span class="v2-count v2-count--danger" title="Количество просроченных задач">{{ overdue_count|default:0 }}</span>
         </div>
         <div class="v2-card__body">
           {% for t in overdue %}
           <a class="v2-item" href="{% url 'task_view' t.id %}">
-            <span class="v2-item__dot v2-item__dot--danger"></span>
+            <span class="v2-item__dot v2-item__dot--danger" title="Просрочено"></span>
             <div class="flex-1 min-w-0">
               <div class="v2-item__title">
-                {% if t.is_urgent %}<span title="Срочная" style="color:var(--v2-danger);margin-right:4px">⚡</span>{% endif %}{{ t.title|default:"(без названия)" }}
+                {% if t.is_urgent %}<span aria-label="Срочная задача" title="Срочная" style="color:var(--v2-danger);margin-right:4px">⚡</span>{% endif %}{{ t.title|default:"(без названия)" }}
               </div>
               {% if t.description %}<div class="v2-task-desc">{{ t.description|truncatechars:100 }}</div>{% endif %}
               <div class="v2-item__meta">
@@ -223,7 +190,7 @@
             </div>
           </a>
           {% empty %}
-          <div class="v2-card__empty">Всё в срок</div>
+          <div class="v2-card__empty">✓ Всё в срок</div>
           {% endfor %}
         </div>
         {% if overdue_count > 3 %}
@@ -237,23 +204,66 @@
       </div>
     </div>
 
-    <!-- Новые задачи -->
+    <!-- На сегодня (ВТОРАЯ колонка) -->
     <div class="v2-col-4 v2-anim">
       <div class="v2-card v2-card--hover">
         <div class="v2-card__head">
           <h2 class="v2-card__title">
-            <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.25a.75.75 0 01.75.75v7.5h7.5a.75.75 0 010 1.5h-7.5v7.5a.75.75 0 01-1.5 0v-7.5h-7.5a.75.75 0 010-1.5h7.5V3a.75.75 0 01.75-.75z" clip-rule="evenodd"/></svg>
+            <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M6.75 2.25A.75.75 0 017.5 3v1.5h9V3a.75.75 0 011.5 0v1.5h.75a3 3 0 013 3v11.25a3 3 0 01-3 3H5.25a3 3 0 01-3-3V7.5a3 3 0 013-3H6V3a.75.75 0 01.75-.75zM3.75 18.75v-7.5a1.5 1.5 0 011.5-1.5h13.5a1.5 1.5 0 011.5 1.5v7.5a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5z" clip-rule="evenodd"/></svg>
+            На сегодня
+          </h2>
+          <span class="v2-count v2-count--accent" title="Количество задач на сегодня">{{ tasks_today_count|default:0 }}</span>
+        </div>
+        <div class="v2-card__body">
+          {% for t in tasks_today %}
+          <a class="v2-item" href="{% url 'task_view' t.id %}">
+            <span class="v2-item__dot v2-item__dot--accent" title="На сегодня"></span>
+            <div class="flex-1 min-w-0">
+              <div class="v2-item__title">
+                {% if t.is_urgent %}<span aria-label="Срочная задача" title="Срочная" style="color:var(--v2-danger);margin-right:4px">⚡</span>{% endif %}{{ t.title|default:"(без названия)" }}
+              </div>
+              {% if t.description %}<div class="v2-task-desc">{{ t.description|truncatechars:100 }}</div>{% endif %}
+              <div class="v2-item__meta">
+                {% if t.company %}<span>{{ t.company.name }}</span>{% with guessed=t.company.address|guess_ru_tz %}{% with tz=t.company.work_timezone|default:guessed %}{% if tz %}<span class="v2-tz-badge" title="{{ tz }}">{{ tz|tz_now_hhmm }} · {{ tz|tz_label }}</span>{% endif %}{% endwith %}{% endwith %}{% endif %}
+                {% if t.due_at %}<span>·</span><span>{{ t.due_at|date:"H:i" }}</span>{% endif %}
+              </div>
+            </div>
+          </a>
+          {% empty %}
+          <div class="v2-card__empty" style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px">
+            <div>На сегодня пусто</div>
+            <a href="#" class="v2-btn v2-btn--sm" data-v2-modal-open="{% url 'ui_v2_task_create_partial' %}">+ Создать задачу</a>
+          </div>
+          {% endfor %}
+        </div>
+        {% if tasks_today_count > 3 %}
+        <div class="v2-card__foot">
+          <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list' %}?mine=1&today=1">
+            Все на сегодня ({{ tasks_today_count }})
+            <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 010 1.06l-7.5 7.5a.75.75 0 01-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 011.06-1.06l7.5 7.5z" clip-rule="evenodd"/></svg>
+          </a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Новые задачи (ТРЕТЬЯ колонка) -->
+    <div class="v2-col-4 v2-anim">
+      <div class="v2-card v2-card--hover">
+        <div class="v2-card__head">
+          <h2 class="v2-card__title">
+            <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M1.5 8.67v8.58a3 3 0 003 3h15a3 3 0 003-3V8.67l-8.928 5.493a3 3 0 01-3.144 0L1.5 8.67zM22.5 6.908V6.75a3 3 0 00-3-3h-15a3 3 0 00-3 3v.158l9.714 5.978a1.5 1.5 0 001.572 0L22.5 6.908z"/></svg>
             Новые задачи
           </h2>
-          <span class="v2-count v2-count--primary">{{ tasks_new_count|default:0 }}</span>
+          <span class="v2-count v2-count--primary" title="Количество новых задач">{{ tasks_new_count|default:0 }}</span>
         </div>
         <div class="v2-card__body">
           {% for t in tasks_new %}
           <a class="v2-item" href="{% url 'task_view' t.id %}">
-            <span class="v2-item__dot v2-item__dot--primary"></span>
+            <span class="v2-item__dot v2-item__dot--primary" title="Новая задача"></span>
             <div class="flex-1 min-w-0">
               <div class="v2-item__title">
-                {% if t.is_urgent %}<span title="Срочная" style="color:var(--v2-danger);margin-right:4px">⚡</span>{% endif %}{{ t.title|default:"(без названия)" }}
+                {% if t.is_urgent %}<span aria-label="Срочная задача" title="Срочная" style="color:var(--v2-danger);margin-right:4px">⚡</span>{% endif %}{{ t.title|default:"(без названия)" }}
               </div>
               {% if t.description %}<div class="v2-task-desc">{{ t.description|truncatechars:100 }}</div>{% endif %}
               <div class="v2-item__meta">
@@ -309,11 +319,14 @@
             </div>
             {% if item.is_annual %}
               <div class="v2-inline-amount" data-company-id="{{ item.company.id }}" style="display:flex;align-items:center;gap:4px">
-                <input type="number" step="0.01" class="v2-input" style="width:100px;padding:4px 6px;font-size:12px"
+                <label for="contract-amount-{{ item.company.id }}" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Сумма годового договора, ₽</label>
+                <input type="number" step="0.01" min="0" class="v2-input"
+                       id="contract-amount-{{ item.company.id }}"
+                       style="width:100px;padding:4px 6px;font-size:12px"
                        value="{% if item.amount %}{{ item.amount }}{% endif %}"
                        placeholder="Сумма, ₽"
                        data-inline-input />
-                <button type="button" class="v2-quick-btn v2-quick-btn--primary" data-inline-save title="Сохранить">✓</button>
+                <button type="button" class="v2-quick-btn v2-quick-btn--primary" data-inline-save aria-label="Сохранить сумму договора" title="Сохранить">✓</button>
               </div>
             {% else %}
               <span class="v2-count v2-count--{% if item.level == 'danger' %}danger{% else %}warn{% endif %}">
@@ -426,29 +439,32 @@
 </div>
 
 {% if can_view_cold_call_reports %}
-<!-- Модалка отчётов -->
-<div id="v2ReportModal" style="display:none;position:fixed;inset:0;z-index:200">
+<!-- Модалка отчётов: WCAG — role/aria-modal/aria-labelledby + focus trap в JS -->
+<div id="v2ReportModal" role="dialog" aria-modal="true" aria-labelledby="v2ReportTitle" aria-hidden="true" style="display:none;position:fixed;inset:0;z-index:200">
   <div style="position:fixed;inset:0;background:rgba(0,0,0,.35)" data-report-close></div>
   <div style="position:absolute;inset:16px;top:80px;margin:0 auto;max-width:680px;max-height:calc(100vh - 120px);display:flex;flex-direction:column">
     <div class="v2-card" style="display:flex;flex-direction:column;max-height:100%;overflow:hidden">
       <div style="padding:16px 20px;border-bottom:1px solid var(--v2-border)">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
           <div style="min-width:0">
-            <div id="v2ReportTitle" style="font-weight:600;font-size:15px;color:var(--v2-text)">Отчёт</div>
+            <h2 id="v2ReportTitle" style="font-weight:600;font-size:15px;color:var(--v2-text);margin:0">Отчёт</h2>
             <div id="v2ReportSub" class="v2-muted" style="margin-top:2px;font-size:12px">—</div>
           </div>
-          <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" data-report-close title="Закрыть">✕</button>
+          <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" data-report-close aria-label="Закрыть отчёт" title="Закрыть">
+            <span aria-hidden="true">✕</span>
+          </button>
         </div>
         <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px">
-          <select id="v2ReportDaySelect" class="v2-select" style="display:none;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--v2-border);min-width:180px"></select>
-          <select id="v2ReportMonthSelect" class="v2-select" style="display:none;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--v2-border);min-width:180px"></select>
+          <select id="v2ReportDaySelect" class="v2-select" aria-label="Выбор дня отчёта" style="display:none;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--v2-border);min-width:180px"></select>
+          <select id="v2ReportMonthSelect" class="v2-select" aria-label="Выбор месяца отчёта" style="display:none;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--v2-border);min-width:180px"></select>
           <button type="button" id="v2ReportCopy" class="v2-btn v2-btn--sm" style="font-weight:600">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             Скопировать
           </button>
         </div>
       </div>
       <div style="flex:1;overflow:auto;padding:12px 20px">
+        <label for="v2ReportText" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Текст отчёта</label>
         <textarea id="v2ReportText" readonly style="width:100%;min-height:280px;border:1px solid var(--v2-border);border-radius:8px;padding:10px 12px;font-size:12px;font-family:'Courier New',monospace;color:var(--v2-text);background:var(--v2-bg-soft);resize:vertical;line-height:1.5"></textarea>
       </div>
     </div>
@@ -456,8 +472,8 @@
 </div>
 {% endif %}
 
-<div id="v2DashUpdateIndicator">
-  <svg class="v2-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+<div id="v2DashUpdateIndicator" role="status" aria-live="polite" aria-atomic="true">
+  <svg class="v2-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
     <path d="M21 12a9 9 0 11-6.219-8.56"/>
   </svg>
   <span>Обновление…</span>
@@ -467,6 +483,15 @@
 
 <script>
 // Dashboard v2 — polling, refresh, inline task quick actions
+
+// WCAG 1.3.1: помечаем декоративные SVG как aria-hidden, чтобы screen reader
+// не зачитывал их как пустые элементы. Делаем автоматически в init-фазе —
+// это избавляет от расстановки атрибута на каждый svg в разметке.
+document.querySelectorAll('.v2 svg:not([aria-hidden]):not([aria-label]):not([role="img"])').forEach(function(el){
+  el.setAttribute('aria-hidden', 'true');
+  el.setAttribute('focusable', 'false');
+});
+
 // После сохранения задачи/компании в v2-модалке — перезагрузить дашборд
 window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.location.reload(), 250); });
 
@@ -476,6 +501,8 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
   const refreshBtn = document.getElementById('v2DashRefreshBtn');
   let lastPollTs = Date.now();
   let isPolling = false;
+  let consecutiveFailures = 0; // для exponential backoff
+  const lastUpdateEl = document.getElementById('v2LastUpdate');
 
   function showIndicator(show){
     if(!indicator) return;
@@ -483,15 +510,31 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
     else indicator.classList.remove('visible');
   }
 
+  function _fmtTime(d){
+    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+  function updateLastUpdateLabel(){
+    if(!lastUpdateEl) return;
+    lastUpdateEl.textContent = 'обновлено в ' + _fmtTime(new Date());
+  }
+  updateLastUpdateLabel(); // начальный — сразу при загрузке
+
   async function poll(){
     if(isPolling) return;
     isPolling = true;
     showIndicator(true);
     try{
+      // Обрабатываем 304 Not Modified (ETag) отдельно — no-op, обновление не требуется.
       const res = await fetch('/api/dashboard/poll/?since=' + lastPollTs, {
         credentials:'same-origin', headers:{'Accept':'application/json'}
       });
+      if(res.status === 304){
+        consecutiveFailures = 0;
+        updateLastUpdateLabel();
+        return;
+      }
       if(res.ok){
+        consecutiveFailures = 0;
         const data = await res.json().catch(() => null);
         if(data && data.updated){
           lastPollTs = data.timestamp || Date.now();
@@ -499,8 +542,16 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
           window.location.reload();
           return;
         }
+        updateLastUpdateLabel();
+      } else if(res.status === 400){
+        // Битый `since` — сбрасываем к текущему времени (фикс от бесконечного reload)
+        lastPollTs = Date.now();
+      } else {
+        consecutiveFailures++;
       }
-    }catch(_){}
+    }catch(_){
+      consecutiveFailures++;
+    }
     finally{
       showIndicator(false);
       isPolling = false;
@@ -509,14 +560,31 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
 
   if(refreshBtn) refreshBtn.addEventListener('click', function(){ window.location.reload(); });
 
-  let pollInterval = setInterval(poll, 30000);
-  window.addEventListener('beforeunload', () => { if(pollInterval) clearInterval(pollInterval); });
+  // Exponential backoff: при повторяющихся ошибках снижаем частоту поллинга
+  // чтобы не усиливать нагрузку при инциденте на сервере.
+  let pollInterval = null;
+  function _currentDelay(){
+    if(consecutiveFailures === 0) return 30000;           // обычно
+    if(consecutiveFailures < 3) return 60000;             // 1–2 ошибки — 1 мин
+    if(consecutiveFailures < 6) return 120000;            // 3–5 ошибок — 2 мин
+    return 300000;                                        // 6+ — 5 мин
+  }
+  function _schedulePoll(){
+    if(pollInterval) clearTimeout(pollInterval);
+    // jitter 0–5 сек, чтобы 50 пользователей не синхронно били сервер на 30-й секунде
+    const jitter = Math.floor(Math.random() * 5000);
+    pollInterval = setTimeout(async () => {
+      await poll();
+      _schedulePoll();
+    }, _currentDelay() + jitter);
+  }
+  window.addEventListener('beforeunload', () => { if(pollInterval) clearTimeout(pollInterval); });
   document.addEventListener('visibilitychange', function(){
     if(document.hidden){
-      if(pollInterval){ clearInterval(pollInterval); pollInterval = null; }
+      if(pollInterval){ clearTimeout(pollInterval); pollInterval = null; }
     } else if(!pollInterval){
       poll();
-      pollInterval = setInterval(poll, 30000);
+      _schedulePoll();
     }
   });
 
@@ -539,25 +607,51 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
     btn.setAttribute('aria-label', 'Отметить выполненной');
     btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
     a.insertBefore(btn, a.firstChild);
+    // Клавиатурная активация: Enter/Space на кнопке-чекбоксе не должны всплывать
+    // до родительского <a> (который ведёт на задачу). Без этого keyboard-only
+    // пользователь не может пометить задачу выполненной.
+    btn.addEventListener('keydown', function(e){
+      if(e.key === 'Enter' || e.key === ' '){
+        e.preventDefault();
+        e.stopPropagation();
+        btn.click();
+      }
+    });
     btn.addEventListener('click', async function(e){
       e.preventDefault();
       e.stopPropagation();
       if(btn.disabled) return;
-      // Двойной клик для подтверждения (первый = «Точно?», второй = выполнение)
+      // Двойной клик для подтверждения (первый = «Точно?», второй = выполнение).
+      // Показываем явный badge-подсказку «Нажмите ещё раз» рядом с кнопкой,
+      // чтобы паттерн был видим (title не работает на touch и не читается screen reader).
       if(!btn._confirmed){
         btn._confirmed = true;
         btn.style.borderColor = 'var(--v2-primary)';
         btn.style.background = 'var(--v2-primary-50)';
         btn.title = 'Нажмите ещё раз для подтверждения';
+        btn.setAttribute('aria-label', 'Подтвердите: нажмите ещё раз для выполнения');
+        // Визуальная подсказка-бейдж
+        if(!btn._hint){
+          const hint = document.createElement('span');
+          hint.textContent = 'Нажмите ещё раз';
+          hint.setAttribute('role', 'status');
+          hint.style.cssText = 'position:absolute;left:100%;top:50%;transform:translate(8px,-50%);background:var(--v2-primary);color:#fff;font-size:10px;padding:2px 6px;border-radius:6px;white-space:nowrap;pointer-events:none;z-index:2;box-shadow:0 2px 4px rgba(0,0,0,.15)';
+          btn.style.position = 'relative';
+          btn.appendChild(hint);
+          btn._hint = hint;
+        }
         btn._resetTimer = setTimeout(()=>{
           btn._confirmed = false;
           btn.style.borderColor = '';
           btn.style.background = '';
           btn.title = 'Отметить выполненной';
+          btn.setAttribute('aria-label', 'Отметить выполненной');
+          if(btn._hint){ btn._hint.remove(); btn._hint = null; }
         }, 2500);
         return;
       }
       clearTimeout(btn._resetTimer);
+      if(btn._hint){ btn._hint.remove(); btn._hint = null; }
       btn.disabled = true;
       btn.classList.add('is-done');
       try{
@@ -576,11 +670,18 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
         } else {
           btn.disabled = false;
           btn.classList.remove('is-done');
-          alert('Не удалось обновить статус');
+          if(window.V2Toast){
+            V2Toast.show({message: 'Не удалось обновить статус', type: 'error'});
+          } else {
+            alert('Не удалось обновить статус');
+          }
         }
       }catch(_){
         btn.disabled = false;
         btn.classList.remove('is-done');
+        if(window.V2Toast){
+          V2Toast.show({message: 'Ошибка соединения', type: 'error'});
+        }
       }
     });
   });
@@ -602,10 +703,43 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
     let monthKey = '';
     let selectedDate = '';
 
-    function open(){ modal.style.display = ''; }
-    function close(){ modal.style.display = 'none'; }
+    // WCAG: focus trap + перемещение фокуса при открытии модалки, возврат после закрытия
+    let _triggerEl = null;
+    function _getFocusable(){
+      return modal.querySelectorAll('button:not([disabled]), [href], select:not([disabled]), textarea:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])');
+    }
+    function open(){
+      _triggerEl = document.activeElement;
+      modal.style.display = '';
+      modal.removeAttribute('aria-hidden');
+      // Перемещаем фокус на первый focusable внутри модалки
+      const focusable = _getFocusable();
+      if(focusable.length) focusable[0].focus();
+    }
+    function close(){
+      modal.style.display = 'none';
+      modal.setAttribute('aria-hidden', 'true');
+      // Возвращаем фокус триггеру, чтобы keyboard-пользователь не потерялся
+      if(_triggerEl && typeof _triggerEl.focus === 'function') _triggerEl.focus();
+      _triggerEl = null;
+    }
     modal.querySelectorAll('[data-report-close]').forEach(function(b){ b.addEventListener('click', close); });
-    document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && modal.style.display !== 'none') close(); });
+    document.addEventListener('keydown', function(e){
+      if(modal.style.display === 'none') return;
+      if(e.key === 'Escape'){ close(); return; }
+      if(e.key === 'Tab'){
+        // Focus trap: удерживаем фокус внутри модалки
+        const focusable = _getFocusable();
+        if(!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if(e.shiftKey && document.activeElement === first){
+          e.preventDefault(); last.focus();
+        } else if(!e.shiftKey && document.activeElement === last){
+          e.preventDefault(); first.focus();
+        }
+      }
+    });
 
     async function loadDay(){
       mode = 'day';

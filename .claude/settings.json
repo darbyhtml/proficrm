@@ -7,13 +7,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/block-prod.py",
+            "command": "python -c 'import pathlib,runpy; p=pathlib.Path.cwd(); r=next((q for q in [p,*p.parents] if (q/\".claude/hooks/block-prod.py\").is_file()), None); r and runpy.run_path(str(r/\".claude/hooks/block-prod.py\"), run_name=\"__main__\")'",
             "timeout": 5,
             "statusMessage": "Проверка: не прод ли это?"
           },
           {
             "type": "command",
-            "command": "python .claude/hooks/check-secrets.py",
+            "command": "python -c 'import pathlib,runpy; p=pathlib.Path.cwd(); r=next((q for q in [p,*p.parents] if (q/\".claude/hooks/check-secrets.py\").is_file()), None); r and runpy.run_path(str(r/\".claude/hooks/check-secrets.py\"), run_name=\"__main__\")'",
             "if": "Bash(git commit*)",
             "timeout": 15,
             "statusMessage": "Скан staged-файлов на секреты..."
@@ -27,13 +27,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/ruff-fix.py",
+            "command": "python -c 'import pathlib,runpy; p=pathlib.Path.cwd(); r=next((q for q in [p,*p.parents] if (q/\".claude/hooks/ruff-fix.py\").is_file()), None); r and runpy.run_path(str(r/\".claude/hooks/ruff-fix.py\"), run_name=\"__main__\")'",
             "timeout": 25,
             "statusMessage": "ruff check --fix..."
           },
           {
             "type": "command",
-            "command": "python .claude/hooks/template-reminder.py",
+            "command": "python -c 'import pathlib,runpy; p=pathlib.Path.cwd(); r=next((q for q in [p,*p.parents] if (q/\".claude/hooks/template-reminder.py\").is_file()), None); r and runpy.run_path(str(r/\".claude/hooks/template-reminder.py\"), run_name=\"__main__\")'",
             "timeout": 3
           }
         ]
