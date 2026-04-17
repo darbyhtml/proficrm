@@ -94,6 +94,8 @@ urlpatterns = [
     path("admin/announcements/", views.settings_announcements, name="settings_announcements"),
     path("admin/access/", views.settings_access, name="settings_access"),
     path("admin/access/roles/<str:role>/", views.settings_access_role, name="settings_access_role"),
+    # F7 R1: ролевые KPI-дашборды v2 (MVP — MANAGER)
+    path("analytics/v2/", views.analytics_v2_home, name="analytics_v2_home"),
     # F6 R1+R2: SMTP onboarding wizard + Fernet re-save UI + config edit
     path("admin/mail/setup/", views.settings_mail_setup, name="settings_mail_setup"),
     path("admin/mail/setup/save-password/", views.settings_mail_save_password, name="settings_mail_save_password"),

@@ -97,6 +97,9 @@ from ui.views.settings_mail import (
     settings_mail_save_config,
     settings_mail_toggle_enabled,
 )  # noqa: F401
+
+# F7 R1: ролевые KPI-дашборды v2
+from ui.views.analytics_v2 import analytics_v2_home  # noqa: F401
 from ui.views.mobile import (
     mobile_app_page, mobile_app_download, mobile_app_qr_image,
 )  # noqa: F401

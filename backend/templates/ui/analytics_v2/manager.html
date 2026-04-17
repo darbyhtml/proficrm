@@ -1,0 +1,193 @@
+{% extends "ui/base.html" %}
+{% block title %}Моя продуктивность — CRM ПРОФИ{% endblock %}
+
+{% block extra_head %}
+  {% include "ui/_v2/v2_styles.html" %}
+  {% include "ui/_v2/v3_styles.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="v2 space-y-4">
+
+  <nav class="text-xs text-brand-dark/50 mb-1" aria-label="Хлебные крошки">
+    <a href="/" class="hover:text-brand-teal transition">Главная</a>
+    <span class="mx-1" aria-hidden="true">›</span>
+    <span>Аналитика v2</span>
+  </nav>
+
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h1 class="v2-h1" style="margin:0">Моя продуктивность</h1>
+      <div class="v2-muted">{{ dashboard.user.get_full_name|default:dashboard.user.username }} · {{ dashboard.period_label_month }}</div>
+    </div>
+  </div>
+
+  {# ── Задачи: сегодня / неделя / месяц ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Задачи выполнено</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+        <div class="v3-kpi-card">
+          <div class="v3-kpi-card__label">Сегодня</div>
+          <div class="v3-kpi-card__value">{{ dashboard.tasks.today }}</div>
+        </div>
+        <div class="v3-kpi-card">
+          <div class="v3-kpi-card__label">На неделе</div>
+          <div class="v3-kpi-card__value">{{ dashboard.tasks.week }}</div>
+        </div>
+        <div class="v3-kpi-card">
+          <div class="v3-kpi-card__label">За месяц</div>
+          <div class="v3-kpi-card__value">{{ dashboard.tasks.month }}</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ── Качество: % задач в срок ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Качество работы (месяц)</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px">
+      {% if dashboard.on_time.ratio is None %}
+        <div class="v2-muted">Нет закрытых задач за период.</div>
+      {% else %}
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+          <div>
+            <div style="font-size:13px;color:var(--v2-muted)">В срок выполнено</div>
+            <div style="font-size:28px;font-weight:600;color:var(--brand-dark)">
+              {{ dashboard.on_time.on_time }} / {{ dashboard.on_time.total }}
+              <span style="font-size:14px;color:var(--v2-muted);margin-left:8px">({{ dashboard.on_time.ratio }}%)</span>
+            </div>
+          </div>
+          <div style="flex:1;min-width:200px;max-width:400px">
+            <div class="v3-progress">
+              <div class="v3-progress__bar" style="width:{{ dashboard.on_time.ratio }}%"></div>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  {# ── Рабочая нагрузка ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Рабочая нагрузка</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+        <div class="v3-kpi-card">
+          <div class="v3-kpi-card__label">Всего компаний</div>
+          <div class="v3-kpi-card__value">{{ dashboard.workload.total }}</div>
+        </div>
+        <div class="v3-kpi-card">
+          <div class="v3-kpi-card__label">С активными задачами</div>
+          <div class="v3-kpi-card__value" style="color:#059669">{{ dashboard.workload.with_active_tasks }}</div>
+        </div>
+        <div class="v3-kpi-card">
+          <div class="v3-kpi-card__label">Без активных дел</div>
+          <div class="v3-kpi-card__value" style="color:{% if dashboard.workload.idle > 5 %}#dc2626{% else %}#6b7280{% endif %}">{{ dashboard.workload.idle }}</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ── Холодные звонки ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Холодные звонки (месяц)</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px">
+      {% if dashboard.cold_calls.total == 0 %}
+        <div class="v2-muted">Нет звонков за период.</div>
+      {% else %}
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          <div class="v3-kpi-card">
+            <div class="v3-kpi-card__label">Всего попыток</div>
+            <div class="v3-kpi-card__value">{{ dashboard.cold_calls.total }}</div>
+          </div>
+          <div class="v3-kpi-card">
+            <div class="v3-kpi-card__label">Успешных</div>
+            <div class="v3-kpi-card__value" style="color:#059669">{{ dashboard.cold_calls.success }}</div>
+          </div>
+          <div class="v3-kpi-card">
+            <div class="v3-kpi-card__label">Conversion</div>
+            <div class="v3-kpi-card__value">{{ dashboard.cold_calls.ratio }}%</div>
+          </div>
+        </div>
+        <div class="v2-muted" style="margin-top:8px;font-size:12px">
+          Успех — создана задача в течение 24 часов после звонка.
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  {# ── Договоры, истекающие в 30 дней ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Договоры истекают в ближайшие 30 дней</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px">
+      {% if dashboard.expiring_contracts %}
+        <ul style="list-style:none;padding:0;margin:0">
+          {% for c in dashboard.expiring_contracts %}
+            <li style="padding:8px 0;border-bottom:1px solid var(--v3-border);display:flex;align-items:center;justify-content:space-between;gap:12px">
+              <div>
+                <a href="/companies/{{ c.id }}/" class="link" style="font-weight:500">{{ c.name }}</a>
+                <div class="v2-muted" style="font-size:12px">до {{ c.until|date:"d.m.Y" }}</div>
+              </div>
+              <span class="v3-badge v3-badge--{% if c.level == 'danger' %}danger{% elif c.level == 'warn' %}warn{% else %}info{% endif %}">
+                {{ c.days_left }} дн.
+              </span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="v2-muted">Все договоры в порядке.</div>
+      {% endif %}
+    </div>
+  </section>
+
+  <div class="v2-muted" style="font-size:12px;padding:8px 4px">
+    F7 R1 — ролевые дашборды. Рейтинг команды, тренды, графики — в R2.
+  </div>
+
+</div>
+
+<style>
+.v3-kpi-card {
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid var(--v3-border, #e2e8f0);
+  border-radius: 8px;
+}
+.v3-kpi-card__label {
+  font-size: 12px;
+  color: var(--v2-muted, #64748b);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.v3-kpi-card__value {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--brand-dark, #0f172a);
+  line-height: 1.1;
+}
+.v3-progress {
+  height: 10px;
+  background: #f1f5f9;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.v3-progress__bar {
+  height: 100%;
+  background: linear-gradient(90deg, #01948E, #059669);
+  border-radius: 999px;
+  transition: width 0.3s;
+}
+</style>
+{% endblock %}
