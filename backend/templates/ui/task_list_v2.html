@@ -248,11 +248,10 @@
         {% endif %}
 
         {% for t in page.object_list %}
-        <div class="v2-tr v2-task-row" data-task-id="{{ t.id }}"
-             style="grid-template-columns:{% if show_task_checkboxes %}28px {% endif %}16px minmax(0,1.6fr) minmax(0,1fr) 140px 110px 140px 130px 120px 140px;cursor:pointer"
-             onclick="if(event.target.tagName==='INPUT'||event.target.tagName==='LABEL'||event.target.tagName==='BUTTON'||event.target.tagName==='A'||event.target.closest('button')||event.target.closest('a'))return; V2Modal.open({url:'/tasks/v2/{{ t.id }}/partial/',title:'Задача'})">
+        <div class="v2-tr v2-task-row" data-task-id="{{ t.id }}" data-task-url="/tasks/v2/{{ t.id }}/partial/"
+             style="grid-template-columns:{% if show_task_checkboxes %}28px {% endif %}16px minmax(0,1.6fr) minmax(0,1fr) 140px 110px 140px 130px 120px 140px;cursor:pointer">
           {% if show_task_checkboxes %}
-          <div onclick="event.stopPropagation()">
+          <div class="v2-bulk-cell">
             <label style="display:flex;align-items:center;justify-content:center;cursor:pointer">
               <input type="checkbox" class="v2-chk v2-bulk-row" value="{{ t.id }}" />
             </label>
@@ -317,7 +316,7 @@
           <div class="v2-td v2-item__meta">
             {{ t.created_at|date:"d.m.Y H:i" }}
           </div>
-          <div class="v2-td" style="display:flex;gap:4px;justify-content:center;align-items:center" onclick="event.stopPropagation()">
+          <div class="v2-td v2-task-actions-cell" style="display:flex;gap:4px;justify-content:center;align-items:center">
             {% if t.can_edit_task %}
               <a href="{% url 'task_edit' t.id %}"
                  data-v2-modal-open="/tasks/v2/{{ t.id }}/edit/partial/"
@@ -370,7 +369,7 @@
           <form method="get" style="display:inline-flex;align-items:center;gap:6px">
             {% for k, v in request.GET.items %}{% if k != 'per_page' and k != 'page' %}<input type="hidden" name="{{ k }}" value="{{ v }}" />{% endif %}{% endfor %}
             <label style="font-size:12px">На странице</label>
-            <select name="per_page" class="v2-input v2-input--sm" style="width:auto" onchange="this.form.submit()">
+            <select name="per_page" class="v2-input v2-input--sm v2-autosubmit" style="width:auto">
               <option value="25"{% if per_page == 25 %} selected{% endif %}>25</option>
               <option value="50"{% if per_page == 50 %} selected{% endif %}>50</option>
               <option value="100"{% if per_page == 100 %} selected{% endif %}>100</option>
@@ -392,6 +391,31 @@
 </div>
 
 <script>
+// CSP-safe обработчики: раньше здесь были inline onclick/onchange в шаблоне,
+// их блокирует strict script-src 'self'. Перенесено в addEventListener.
+
+// 1. Клик по строке задачи → открыть V2Modal с карточкой задачи
+document.querySelectorAll('.v2-task-row[data-task-url]').forEach(function(row){
+  row.addEventListener('click', function(e){
+    const t = e.target;
+    if(t.tagName === 'INPUT' || t.tagName === 'LABEL' || t.tagName === 'BUTTON' ||
+       t.tagName === 'A' || t.closest('button') || t.closest('a') ||
+       t.closest('.v2-bulk-cell') || t.closest('.v2-task-actions-cell')) return;
+    if(typeof V2Modal !== 'undefined'){
+      V2Modal.open({url: row.dataset.taskUrl, title: 'Задача'});
+    }
+  });
+});
+// Клики в ячейке-чекбоксе и ячейке-действиях не должны всплывать до строки
+document.querySelectorAll('.v2-task-row .v2-bulk-cell, .v2-task-row .v2-task-actions-cell').forEach(function(cell){
+  cell.addEventListener('click', function(e){ e.stopPropagation(); });
+});
+
+// 2. Auto-submit при смене «На странице» (per_page) — без inline onchange
+document.querySelectorAll('.v2-autosubmit').forEach(function(sel){
+  sel.addEventListener('change', function(){ if(sel.form) sel.form.submit(); });
+});
+
 // После успешного создания/редактирования задачи в модалке — перезагрузить список
 window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.location.reload(), 250); });
 
@@ -417,10 +441,41 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
       dot.style.boxShadow = '';
       dot.style.transform = '';
     });
+    // Двойной клик для подтверждения (первый клик — hint «Нажмите ещё раз»,
+    // второй в течение 2.5с — выполнение). То же UX что и на Dashboard.
+    // Убрана browser confirm() — не работает на touch, не читается screen reader,
+    // блокирует JS. Теперь явный визуальный badge.
+    dot.addEventListener('keydown', function(ev){
+      if(ev.key === 'Enter' || ev.key === ' '){
+        ev.preventDefault();
+        dot.click();
+      }
+    });
     dot.addEventListener('click', async function(ev){
       ev.preventDefault();
       ev.stopPropagation();
-      if(!confirm('Отметить задачу выполненной?')) return;
+      if(dot.dataset.busy === '1') return;
+      if(dot.dataset.confirmed !== '1'){
+        dot.dataset.confirmed = '1';
+        dot.setAttribute('aria-label', 'Подтвердите: нажмите ещё раз для выполнения');
+        if(!dot._hint){
+          const hint = document.createElement('span');
+          hint.textContent = 'Нажмите ещё раз';
+          hint.setAttribute('role', 'status');
+          hint.style.cssText = 'position:absolute;left:100%;top:50%;transform:translate(8px,-50%);background:var(--v2-primary,#01948E);color:#fff;font-size:10px;padding:2px 6px;border-radius:6px;white-space:nowrap;pointer-events:none;z-index:2;box-shadow:0 2px 4px rgba(0,0,0,.15)';
+          dot.appendChild(hint);
+          dot._hint = hint;
+        }
+        dot._resetTimer = setTimeout(function(){
+          dot.dataset.confirmed = '';
+          if(dot._hint){ dot._hint.remove(); dot._hint = null; }
+          dot.setAttribute('aria-label', 'Отметить выполненной');
+        }, 2500);
+        return;
+      }
+      clearTimeout(dot._resetTimer);
+      if(dot._hint){ dot._hint.remove(); dot._hint = null; }
+      dot.dataset.busy = '1';
       dot.style.pointerEvents = 'none';
       dot.style.opacity = '0.5';
       try{
@@ -436,10 +491,15 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
           row.style.opacity='0.3';
           setTimeout(() => window.location.reload(), 300);
         } else {
-          dot.style.pointerEvents=''; dot.style.opacity='';
-          alert('Не удалось обновить статус');
+          dot.style.pointerEvents=''; dot.style.opacity=''; dot.dataset.busy='';
+          if(window.V2Toast){
+            V2Toast.show({message:'Не удалось обновить статус', type:'error'});
+          }
         }
-      }catch(_){ dot.style.pointerEvents=''; dot.style.opacity=''; }
+      }catch(_){
+        dot.style.pointerEvents=''; dot.style.opacity=''; dot.dataset.busy='';
+        if(window.V2Toast){ V2Toast.show({message:'Ошибка соединения', type:'error'}); }
+      }
     });
   });
 })();

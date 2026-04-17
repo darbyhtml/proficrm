@@ -173,7 +173,7 @@
         {% if sort_dir %}<input type="hidden" name="dir" value="{{ sort_dir }}" />{% endif %}
       </form>
 
-      {% if is_admin and page.object_list and transfer_targets %}
+      {% if can_bulk_transfer and page.object_list and transfer_targets %}
       <form method="post" action="{% url 'company_bulk_transfer' %}" id="v2CompanyBulk" class="v2-bulk">
         {% csrf_token %}
         <input type="hidden" name="apply_mode" id="v2BulkApplyMode" value="selected" />
@@ -230,8 +230,8 @@
       {# Настраиваемые колонки списка (ui_cfg.company_list_columns) #}
       <div class="v2-table">
         <div class="v2-tr v2-tr--head"
-             style="grid-template-columns:{% if is_admin %}28px {% endif %}minmax(0,1.8fr){% if 'responsible' in company_list_columns %} 160px{% endif %}{% if 'branch' in company_list_columns %} 140px{% endif %}{% if 'region' in company_list_columns %} 120px{% endif %}{% if 'status' in company_list_columns %} 120px{% endif %}{% if 'updated_at' in company_list_columns %} 140px{% endif %} 90px">
-          {% if is_admin %}<div><input type="checkbox" id="v2BulkAll" class="v2-chk" /></div>{% endif %}
+             style="grid-template-columns:{% if can_bulk_transfer %}28px {% endif %}minmax(0,1.8fr){% if 'responsible' in company_list_columns %} 160px{% endif %}{% if 'branch' in company_list_columns %} 140px{% endif %}{% if 'region' in company_list_columns %} 120px{% endif %}{% if 'status' in company_list_columns %} 120px{% endif %}{% if 'updated_at' in company_list_columns %} 140px{% endif %} 90px">
+          {% if can_bulk_transfer %}<div><input type="checkbox" id="v2BulkAll" class="v2-chk" /></div>{% endif %}
           <div>
             <a class="v2-sort {% if sort == 'name' %}v2-sort--active{% endif %}"
                href="?{% if qs %}{{ qs }}&{% endif %}sort=name&dir={% if sort == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
@@ -272,10 +272,10 @@
         </div>
 
         {% for c in page.object_list %}
-        <div class="v2-tr {% if c.has_overdue %}v2-tr--overdue{% endif %}" style="grid-template-columns:{% if is_admin %}28px {% endif %}minmax(0,1.8fr){% if 'responsible' in company_list_columns %} 160px{% endif %}{% if 'branch' in company_list_columns %} 140px{% endif %}{% if 'region' in company_list_columns %} 120px{% endif %}{% if 'status' in company_list_columns %} 120px{% endif %}{% if 'updated_at' in company_list_columns %} 140px{% endif %} 90px;cursor:pointer"
-             onclick="if(event.target.tagName!=='INPUT'&&event.target.tagName!=='LABEL')location.href='{% url 'company_detail' c.id %}'">
-          {% if is_admin %}
-          <div onclick="event.stopPropagation()">
+        <div class="v2-tr {% if c.has_overdue %}v2-tr--overdue{% endif %} v2-company-row" data-company-url="{% url 'company_detail' c.id %}"
+             style="grid-template-columns:{% if can_bulk_transfer %}28px {% endif %}minmax(0,1.8fr){% if 'responsible' in company_list_columns %} 160px{% endif %}{% if 'branch' in company_list_columns %} 140px{% endif %}{% if 'region' in company_list_columns %} 120px{% endif %}{% if 'status' in company_list_columns %} 120px{% endif %}{% if 'updated_at' in company_list_columns %} 140px{% endif %} 90px;cursor:pointer">
+          {% if can_bulk_transfer %}
+          <div class="v2-bulk-cell">
             <label style="display:flex;align-items:center;justify-content:center;cursor:pointer">
               <input type="checkbox" class="v2-chk v2-bulk-row" name="company_ids" value="{{ c.id }}" form="v2CompanyBulk"
                      data-can-transfer="{% if c.can_transfer %}1{% else %}0{% endif %}"
@@ -355,6 +355,23 @@
 </div>
 
 <script>
+// WCAG + CSP: клик по строке компании → переход на карточку.
+// Раньше был inline onclick на <div> (блокируется strict CSP script-src 'self').
+// Теперь — через addEventListener с data-атрибутом, без inline-хендлеров.
+document.querySelectorAll('.v2-company-row').forEach(function(row){
+  row.addEventListener('click', function(e){
+    // Не перехватываем клики по чекбоксу/ссылке/метке — пусть отработают сами.
+    const t = e.target;
+    if(t.tagName === 'INPUT' || t.tagName === 'LABEL' || t.tagName === 'A' || t.closest('.v2-bulk-cell')) return;
+    const url = row.dataset.companyUrl;
+    if(url) window.location.href = url;
+  });
+});
+// Защита от всплытия клика из bulk-ячейки — чтобы не триггерить переход.
+document.querySelectorAll('.v2-bulk-cell').forEach(function(cell){
+  cell.addEventListener('click', function(e){ e.stopPropagation(); });
+});
+
 // Bulk selection + preview modal
 (function(){
   const form = document.getElementById('v2CompanyBulk');
