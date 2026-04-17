@@ -29,6 +29,25 @@ logger = logging.getLogger(__name__)
 # Чистые функции (без сайд-эффектов)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Константы-пороги для алертов по договорам.
+# Единственный источник правды для UI (дашборд + карточка компании)
+# и периодических задач-напоминаний.
+# ---------------------------------------------------------------------------
+
+# Fallback, если у компании не указан contract_type (обычный, не-annual).
+DEFAULT_CONTRACT_WARNING_DAYS = 30
+DEFAULT_CONTRACT_DANGER_DAYS = 14
+
+# Пороги для годовых (annual) договоров — по сумме contract_amount.
+# Если сумма не указана — "warn" (напомнить ввести).
+ANNUAL_CONTRACT_DANGER_AMOUNT = 25000
+ANNUAL_CONTRACT_WARN_AMOUNT = 70000
+
+# Лимит на количество договоров в выборку дашборда.
+DASHBOARD_CONTRACTS_LIMIT = 50
+
+
 def get_contract_alert(company: Company) -> tuple[str, int | None]:
     """
     Вычисляет уровень тревоги для договора компании.
@@ -51,12 +70,114 @@ def get_contract_alert(company: Company) -> tuple[str, int | None]:
             return "warn", days_left
     else:
         # Fallback на жёстко заданные пороги
-        if days_left < 14:
+        if days_left < DEFAULT_CONTRACT_DANGER_DAYS:
             return "danger", days_left
-        if days_left <= 30:
+        if days_left <= DEFAULT_CONTRACT_WARNING_DAYS:
             return "warn", days_left
 
     return "", days_left
+
+
+def _get_annual_contract_alert(amount) -> str | None:
+    """
+    Определяет уровень алерта для годового договора по сумме.
+
+    Returns:
+        "danger" | "warn" | None
+    """
+    if amount is None:
+        # Нет суммы → напомнить заполнить
+        return "warn"
+    if amount < ANNUAL_CONTRACT_DANGER_AMOUNT:
+        return "danger"
+    if amount < ANNUAL_CONTRACT_WARN_AMOUNT:
+        return "warn"
+    return None
+
+
+def get_dashboard_contracts(user, today=None, limit: int = DASHBOARD_CONTRACTS_LIMIT) -> list[dict]:
+    """
+    Возвращает список алертов по договорам для дашборда.
+
+    Единая точка правды: объединяет обычные договоры (по сроку) и
+    годовые (по сумме). Используется в `_build_dashboard_context`;
+    любые изменения бизнес-правил меняются только здесь.
+
+    Args:
+        user: ответственный пользователь (Company.responsible)
+        today: дата "сегодня" (tz-aware), для тестов; по умолчанию timezone.now()
+        limit: верхний предел на каждую из выборок
+
+    Returns:
+        list из dict: {company, level: "danger"|"warn", is_annual: bool,
+                       days_left: int | None, amount: Decimal | None}
+        Порядок: regular contracts (по contract_until), затем annual (по amount).
+    """
+    from datetime import timedelta
+
+    today_date = (today or timezone.now()).date() if hasattr(today or timezone.now(), "date") else (today or timezone.localdate())
+    contract_until_30 = today_date + timedelta(days=DEFAULT_CONTRACT_WARNING_DAYS)
+
+    result: list[dict] = []
+
+    # --- Обычные договоры (по сроку) ---
+    regular_qs = (
+        Company.objects.filter(responsible=user, contract_until__isnull=False)
+        .exclude(contract_type__is_annual=True)
+        .filter(contract_until__gte=today_date, contract_until__lte=contract_until_30)
+        .select_related("contract_type")
+        .only("id", "name", "contract_type", "contract_until")
+        .order_by("contract_until", "name")[:limit]
+    )
+    for c in regular_qs:
+        days_left = (c.contract_until - today_date).days if c.contract_until else None
+        if days_left is None:
+            continue
+        if c.contract_type:
+            warning_days = c.contract_type.warning_days
+            danger_days = c.contract_type.danger_days
+            if days_left <= danger_days:
+                level = "danger"
+            elif days_left <= warning_days:
+                level = "warn"
+            else:
+                level = None
+        else:
+            # Fallback thresholds (совпадают с get_contract_alert).
+            if days_left < DEFAULT_CONTRACT_DANGER_DAYS:
+                level = "danger"
+            elif days_left <= DEFAULT_CONTRACT_WARNING_DAYS:
+                level = "warn"
+            else:
+                level = None
+        if level:
+            result.append({
+                "company": c,
+                "days_left": days_left,
+                "level": level,
+                "is_annual": False,
+                "amount": None,
+            })
+
+    # --- Годовые договоры (по сумме) ---
+    annual_qs = (
+        Company.objects.filter(responsible=user, contract_type__is_annual=True)
+        .select_related("contract_type")
+        .only("id", "name", "contract_type", "contract_amount")
+        .order_by("contract_amount", "name")[:limit]
+    )
+    for c in annual_qs:
+        level = _get_annual_contract_alert(c.contract_amount)
+        if level:
+            result.append({
+                "company": c,
+                "amount": c.contract_amount,
+                "level": level,
+                "is_annual": True,
+                "days_left": None,
+            })
+
+    return result
 
 
 def get_worktime_status(company: Company) -> dict:

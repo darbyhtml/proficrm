@@ -37,6 +37,7 @@ from ui.views._base import (
     timezone,
 )
 from django.utils.http import url_has_allowed_host_and_scheme
+from audit.service import log_event
 import logging
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,56 @@ def _safe_redirect_url(request, url, fallback="/"):
     if url and url_has_allowed_host_and_scheme(url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
         return url
     return fallback
+
+
+def _log_view_as_event(actor: User, action: str, *, target_user: User | None = None, role: str = "", branch_id: int | None = None, ip: str = "") -> None:
+    """Пишет audit-событие о включении/изменении/сбросе режима «просмотр как».
+
+    Critical для compliance: без лога невозможно ответить на вопрос
+    «кто и когда смотрел данные менеджера X?» при расследовании инцидентов.
+    """
+    try:
+        if target_user is not None:
+            target_name = target_user.get_full_name() or target_user.username
+            message = f"View-as включён: {actor.username} → {target_name} (id={target_user.id})"
+        elif role or branch_id:
+            parts = []
+            if role:
+                parts.append(f"role={role}")
+            if branch_id:
+                parts.append(f"branch_id={branch_id}")
+            message = f"View-as фильтр: {actor.username} → {', '.join(parts)}"
+        else:
+            message = f"View-as {action}: {actor.username}"
+
+        log_event(
+            actor=actor,
+            verb=ActivityEvent.Verb.UPDATE,
+            entity_type="session_impersonation",
+            entity_id=str(actor.id),
+            message=message[:255],
+            meta={
+                "action": action,
+                "target_user_id": getattr(target_user, "id", None),
+                "target_username": getattr(target_user, "username", None),
+                "role": role or None,
+                "branch_id": branch_id,
+                "ip": ip,
+            },
+        )
+    except Exception:
+        # Аудит не должен ронять основную функциональность,
+        # но обязан оставлять след при сбое.
+        logger.exception("Failed to write view-as audit event for actor=%s", getattr(actor, "id", None))
+
+
+def _client_ip(request: HttpRequest) -> str:
+    """Безопасное извлечение IP для audit-meta (без модификации логики security)."""
+    try:
+        from accounts.security import get_client_ip
+        return get_client_ip(request) or ""
+    except Exception:
+        return request.META.get("REMOTE_ADDR", "") or ""
 
 
 @login_required
@@ -65,12 +116,20 @@ def view_as_update(request: HttpRequest) -> HttpResponse:
     view_role = (request.POST.get("view_role") or "").strip()
     view_branch_id = (request.POST.get("view_as_branch_id") or request.POST.get("view_branch_id") or "").strip()
 
+    ip = _client_ip(request)
+
     # Приоритет: если выбран конкретный пользователь, используем его
     # и сбрасываем роль/филиал (они берутся из пользователя)
     if view_user_id:
         try:
             user_id = int(view_user_id)
             view_as_user = User.objects.filter(id=user_id, is_active=True).first()
+            # L1 security: запрещаем имперсонировать суперпользователя.
+            # ADMIN ≠ superuser, это важное различие для compliance.
+            if view_as_user and view_as_user.is_superuser and not user.is_superuser:
+                messages.error(request, "Нельзя включить просмотр как суперпользователь.")
+                _log_view_as_event(user, "denied_superuser_target", target_user=view_as_user, ip=ip)
+                return redirect(_safe_redirect_url(request, request.POST.get("next") or request.META.get("HTTP_REFERER")))
             if view_as_user:
                 request.session["view_as_user_id"] = user_id
                 # Автоматически устанавливаем роль и филиал из выбранного пользователя
@@ -79,16 +138,18 @@ def view_as_update(request: HttpRequest) -> HttpResponse:
                     request.session["view_as_branch_id"] = view_as_user.branch_id
                 else:
                     request.session.pop("view_as_branch_id", None)
-                # Сбрасываем старые настройки
                 messages.success(request, f"Режим просмотра: от лица пользователя {view_as_user.get_full_name() or view_as_user.username}")
+                # AUDIT: имперсонация — обязательна для аудит-трейла
+                _log_view_as_event(user, "set_user", target_user=view_as_user, ip=ip)
             else:
                 request.session.pop("view_as_user_id", None)
+                _log_view_as_event(user, "set_user_not_found", ip=ip)
         except (TypeError, ValueError):
             request.session.pop("view_as_user_id", None)
     else:
         # Если пользователь не выбран, работаем с ролью/филиалом как раньше
         request.session.pop("view_as_user_id", None)
-        
+
         # Валидация и сохранение роли
         valid_roles = {choice[0] for choice in User.Role.choices}
         if view_role and view_role in valid_roles:
@@ -97,17 +158,23 @@ def view_as_update(request: HttpRequest) -> HttpResponse:
             request.session.pop("view_as_role", None)
 
         # Валидация и сохранение филиала
+        resolved_bid: int | None = None
         if view_branch_id:
             try:
                 bid = int(view_branch_id)
                 if Branch.objects.filter(id=bid).exists():
                     request.session["view_as_branch_id"] = bid
+                    resolved_bid = bid
                 else:
                     request.session.pop("view_as_branch_id", None)
             except (TypeError, ValueError):
                 request.session.pop("view_as_branch_id", None)
         else:
             request.session.pop("view_as_branch_id", None)
+
+        # AUDIT: смена role/branch фильтра тоже логируется
+        if view_role or resolved_bid:
+            _log_view_as_event(user, "set_filter", role=view_role, branch_id=resolved_bid, ip=ip)
 
     next_url = _safe_redirect_url(request, request.POST.get("next") or request.META.get("HTTP_REFERER"))
     return redirect(next_url)
@@ -123,35 +190,85 @@ def view_as_reset(request: HttpRequest) -> HttpResponse:
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
+    had_state = bool(
+        request.session.get("view_as_user_id")
+        or request.session.get("view_as_role")
+        or request.session.get("view_as_branch_id")
+    )
+
     request.session.pop("view_as_user_id", None)
     request.session.pop("view_as_role", None)
     request.session.pop("view_as_branch_id", None)
 
+    # AUDIT: сброс view-as логируем только если было что сбрасывать (снизить шум)
+    if had_state:
+        _log_view_as_event(user, "reset", ip=_client_ip(request))
+
     return redirect(_safe_redirect_url(request, request.META.get("HTTP_REFERER")))
 
 
-def _build_dashboard_context(request: HttpRequest) -> dict:
-    """Собирает весь context рабочего стола. Права уже проверены декоратором выше."""
-    # Эффективный пользователь для отображения данных (режим «просмотр как»). Права не меняются.
-    user: User = get_effective_user(request)
-    now = timezone.now()
-    # Важно: при USE_TZ=True timezone.now() в UTC. Для фильтров "сегодня/неделя" считаем границы по локальной TZ.
-    local_now = timezone.localtime(now)
-    today_date = timezone.localdate(now)
+# ---------------------------------------------------------------------------
+# Константы дашборда — единственный источник правды для подстраиваемых лимитов
+# ---------------------------------------------------------------------------
+
+DASHBOARD_PREVIEW_LIMIT = 3          # задач на карточку «Сегодня/Просрочено/…»
+DASHBOARD_WEEK_PREVIEW_LIMIT = 5     # задач в карточке «Ближайшие 7 дней»
+DASHBOARD_STALE_COMPANIES_LIMIT = 10 # компаний без задач
+DASHBOARD_DELETION_REQUESTS_LIMIT = 10
+TASK_TYPE_CACHE_KEY = "task_types_by_name"
+TASK_TYPE_CACHE_TTL = 300  # 5 минут
+
+# Пороги часов для приветствия (локальное время пользователя)
+_GREETING_MORNING_START = 5
+_GREETING_DAY_START = 12
+_GREETING_EVENING_START = 17
+_GREETING_NIGHT_START = 23
+
+
+def _dashboard_time_ranges(local_now: datetime) -> dict:
+    """Вычисляет временные рамки для категоризации задач на дашборде.
+
+    Возвращает словарь с today_start, tomorrow_start, week_range_*,
+    week_start, week_end. Важно: границы считаются по локальной TZ,
+    чтобы задачи с due_at = 23:59 UTC не проваливались в «завтра»
+    у пользователя в Екатеринбурге (UTC+5).
+    """
+    today_date = local_now.date()
     today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow_start = today_start + timedelta(days=1)
-    
-    # "Задачи на неделю" = ближайшие 7 дней, начиная с завтра (сегодня исключаем).
-    week_range_start = today_date + timedelta(days=1)
-    week_range_end = week_range_start + timedelta(days=6)
-    week_start = tomorrow_start
-    week_end = tomorrow_start + timedelta(days=7)
-    
-    contract_until_30 = today_date + timedelta(days=30)
+    # "На неделю" = 7 дней, начиная с завтра (сегодня исключаем).
+    return {
+        "today_date": today_date,
+        "today_start": today_start,
+        "tomorrow_start": tomorrow_start,
+        "week_range_start": today_date + timedelta(days=1),
+        "week_range_end": today_date + timedelta(days=7),
+        "week_start": tomorrow_start,
+        "week_end": tomorrow_start + timedelta(days=7),
+    }
 
 
-    # ОПТИМИЗАЦИЯ: один запрос на активные задачи, затем категоризация в Python
-    all_tasks = (
+def _build_greeting(hour: int) -> str:
+    """Выбирает приветствие по часу (локальное время).
+
+    5-11: утро, 12-16: день, 17-22: вечер, остальное: ночь.
+    """
+    if _GREETING_MORNING_START <= hour < _GREETING_DAY_START:
+        return "Доброе утро"
+    if _GREETING_DAY_START <= hour < _GREETING_EVENING_START:
+        return "Добрый день"
+    if _GREETING_EVENING_START <= hour < _GREETING_NIGHT_START:
+        return "Добрый вечер"
+    return "Доброй ночи"
+
+
+def _fetch_active_tasks(user: User):
+    """Queryset активных задач пользователя с нужными select_related/.only().
+
+    Один запрос — основа оптимизации. Категоризация (сегодня/просрочено/
+    неделя/новые) выполняется в Python, а не 4 отдельными SQL.
+    """
+    return (
         Task.objects.filter(assigned_to=user)
         .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
         .select_related("company", "created_by", "assigned_to", "type")
@@ -165,174 +282,196 @@ def _build_dashboard_context(request: HttpRequest) -> dict:
         )
     )
 
-    # Разделяем задачи по категориям в Python
-    tasks_today_list = []
-    overdue_list = []
-    tasks_week_list = []
-    tasks_new_all = []  # NEW (для блока "Новые задачи")
 
-    # Проходим по всем задачам и категоризируем их
-    for task in all_tasks:
-        # "Новые задачи" = только статус NEW
+def _split_active_tasks(tasks, ranges: dict) -> dict:
+    """Делит задачи по 4 бакетам: today/overdue/week/new.
+
+    Каждый бакет возвращает полный список (без лимита) — limit
+    применяется ниже, после сортировки, чтобы `*_count` были точными.
+    """
+    today_start = ranges["today_start"]
+    tomorrow_start = ranges["tomorrow_start"]
+    week_start = ranges["week_start"]
+    week_end = ranges["week_end"]
+
+    today_list: list = []
+    overdue_list: list = []
+    week_list: list = []
+    new_list: list = []
+
+    for task in tasks:
         if task.status == Task.Status.NEW:
-            tasks_new_all.append(task)
+            new_list.append(task)
 
         if task.due_at is None:
             continue
 
         task_due_local = timezone.localtime(task.due_at)
-
-        # Просроченные = дедлайн раньше начала сегодняшнего дня (не относительно текущего времени)
         if task_due_local < today_start:
             overdue_list.append(task)
-            continue
+        elif today_start <= task_due_local < tomorrow_start:
+            today_list.append(task)
+        elif week_start <= task_due_local < week_end:
+            week_list.append(task)
 
-        # На сегодня (в пределах календарного дня)
-        if today_start <= task_due_local < tomorrow_start:
-            tasks_today_list.append(task)
-            continue
+    # Сортируем — единый sentinel вместо вызова timezone.now() на каждом compare
+    _due_sentinel = timezone.now()
+    overdue_list.sort(key=lambda t: t.due_at or _due_sentinel)
+    today_list.sort(key=lambda t: t.due_at or _due_sentinel)
+    week_list.sort(key=lambda t: t.due_at or _due_sentinel)
+    _created_sentinel = timezone.now()
+    new_list.sort(key=lambda t: t.created_at or _created_sentinel, reverse=True)
 
-        # На неделю (ближайшие 7 дней начиная с завтра)
-        if week_start <= task_due_local < week_end:
-            tasks_week_list.append(task)
+    return {
+        "today_all": today_list,
+        "overdue_all": overdue_list,
+        "week_all": week_list,
+        "new_all": new_list,
+    }
 
-    # Сортируем:
-    # - Просроченные: по due_at (самые старые первыми)
-    # - На сегодня: по due_at (раньше первыми)
-    # - На неделю: по due_at (раньше первыми)
-    # - Новые: по created_at (новые первыми)
-    overdue_list.sort(key=lambda t: t.due_at or timezone.now())
-    tasks_today_list.sort(key=lambda t: t.due_at or timezone.now())
-    tasks_week_list.sort(key=lambda t: t.due_at or timezone.now())
-    tasks_new_all.sort(key=lambda t: t.created_at or timezone.now(), reverse=True)
-    
-    # Подсчитываем общие количества
-    overdue_count = len(overdue_list)
-    tasks_today_count = len(tasks_today_list)
-    tasks_week_count = len(tasks_week_list)
-    tasks_new_count = len(tasks_new_all)
-    
-    # Ограничиваем до 3 для отображения на dashboard
-    overdue_list = overdue_list[:3]  # 3 самых просроченных
-    tasks_today_list = tasks_today_list[:3]
-    tasks_week_list = tasks_week_list[:3]
-    tasks_new_list = tasks_new_all[:3]
 
-    # Договоры: для обычных - по сроку (<= 30 дней), для годовых - по сумме
-    # Обычные договоры по сроку
-    contracts_soon_qs = (
-        Company.objects.filter(responsible=user, contract_until__isnull=False)
-        .exclude(contract_type__is_annual=True)  # Исключаем годовые
-        .filter(contract_until__gte=today_date, contract_until__lte=contract_until_30)
-        .select_related("contract_type")
-        .only("id", "name", "contract_type", "contract_until")
-        .order_by("contract_until", "name")[:50]
-    )
-    contracts_soon = []
-    for c in contracts_soon_qs:
-        days_left = (c.contract_until - today_date).days if c.contract_until else None
-        if days_left is not None and c.contract_type:
-            # Используем настройки из ContractType
-            warning_days = c.contract_type.warning_days
-            danger_days = c.contract_type.danger_days
-            if days_left <= danger_days:
-                level = "danger"
-            elif days_left <= warning_days:
-                level = "warn"
-            else:
-                level = None  # Не показываем, если больше warning_days
-        else:
-            # Fallback на старую логику, если нет contract_type
-            level = "danger" if (days_left is not None and days_left < 14) else "warn" if days_left is not None else None
-        
-        if level:  # Добавляем только если есть предупреждение
-            contracts_soon.append({"company": c, "days_left": days_left, "level": level, "is_annual": False})
-    
-    # Годовые договоры: показываем все (с суммой и без), чтобы можно было ввести/редактировать
-    annual_contracts_qs = (
-        Company.objects.filter(responsible=user, contract_type__is_annual=True)
-        .select_related("contract_type")
-        .only("id", "name", "contract_type", "contract_amount")
-        .order_by("contract_amount", "name")[:50]
-    )
-    for c in annual_contracts_qs:
-        amount = c.contract_amount
-        # Нет суммы или меньше 25 000 — красный, меньше 70 000 — оранжевый, больше — не показываем в блоке предупреждений
-        if amount is None:
-            level = "warn"  # напомнить указать сумму
-        elif amount < 25000:
-            level = "danger"
-        elif amount < 70000:
-            level = "warn"
-        else:
-            level = None
-        if level:
-            contracts_soon.append({"company": c, "amount": amount, "level": level, "is_annual": True})
+def _get_task_types_by_name() -> dict:
+    """Читает справочник TaskType (кэш в Redis на 5 мин).
 
-    # Сопоставляем задачи без типа с TaskType по точному совпадению названия
-    task_types_by_name = {tt.name: tt for tt in TaskType.objects.all()}
-    
-    # Добавляем права доступа к задачам для модального окна
-    # Подготавливаем задачи с правами доступа и сопоставляем с TaskType
-    for task_list in [tasks_new_list, tasks_today_list, overdue_list, tasks_week_list]:
+    Инвалидация — в `tasksapp.signals._invalidate_task_type_widget_cache`
+    (post_save/post_delete TaskType).
+    """
+    from django.core.cache import cache
+    cached = cache.get(TASK_TYPE_CACHE_KEY)
+    if cached is None:
+        cached = {tt.name: tt for tt in TaskType.objects.all()}
+        cache.set(TASK_TYPE_CACHE_KEY, cached, TASK_TYPE_CACHE_TTL)
+    return cached
+
+
+def _annotate_task_permissions(task_lists: list, task_types_by_name: dict, user: User) -> None:
+    """Проставляет permission-флаги на задачах + резолвит TaskType по названию.
+
+    Ходит по всем 4 слайсам (each [:3]) — ~12 задач, дешёвая операция.
+    TaskType резолвится только в памяти: read-only запрос, никаких .save().
+    """
+    for task_list in task_lists:
         for task in task_list:
-            # Если у задачи нет типа, но есть title, подбираем TaskType в памяти
-            # (read-only: GET-запрос дашборда не должен писать в БД, иначе race +
-            # нагрузка на каждый рендер; backfill вынесен в одноразовую миграцию).
+            # Резолв TaskType по названию (legacy — старые задачи без type_id)
             if not task.type and task.title and task.title in task_types_by_name:
                 task_type = task_types_by_name[task.title]
                 task.type = task_type  # type: ignore[assignment]
                 task.type_id = task_type.id  # type: ignore[attr-defined]
-            
+
             task.can_manage_status = _can_manage_task_status_ui(user, task)  # type: ignore[attr-defined]
             task.can_edit_task = _can_edit_task_ui(user, task)  # type: ignore[attr-defined]
             task.can_delete_task = _can_delete_task_ui(user, task)  # type: ignore[attr-defined]
 
-    # Выполнено сегодня (отдельный запрос — активные задачи его не содержат)
-    tasks_done_today = Task.objects.filter(
-        assigned_to=user,
-        status=Task.Status.DONE,
-        updated_at__gte=today_start,
-        updated_at__lt=tomorrow_start,
-    ).count()
 
-    # Компании без активных задач (для виджета «зависшие компании»)
+def _get_stale_companies(user: User, limit: int = DASHBOARD_STALE_COMPANIES_LIMIT) -> tuple[list, int]:
+    """Компании без активных задач (ответственность user).
+
+    Оптимизация: fetch [:limit+1] + len вместо отдельного COUNT.
+    Точное число до `limit`, иначе «больше limit» (показываем как limit+).
+    """
     active_company_ids = (
         Task.objects.filter(assigned_to=user, company__isnull=False)
         .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
         .values_list("company_id", flat=True)
     )
-    stale_companies_qs = (
+    qs = (
         Company.objects.filter(responsible=user)
         .exclude(id__in=active_company_ids)
         .only("id", "name")
         .order_by("name")
     )
-    stale_companies_count = stale_companies_qs.count()
-    stale_companies = list(stale_companies_qs[:10])
+    fetched = list(qs[:limit + 1])
+    return fetched[:limit], len(fetched)
 
-    # Запросы на удаление компаний для РОП/директора
-    deletion_requests = []
-    deletion_requests_count = 0
-    if user.role in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR) and user.branch_id:
-        from companies.models import CompanyDeletionRequest
-        deletion_requests_qs = (
-            CompanyDeletionRequest.objects.filter(
-                status=CompanyDeletionRequest.Status.PENDING,
-                requested_by_branch_id=user.branch_id,
-            )
-            .select_related("requested_by", "company")
-            .order_by("-created_at")[:10]
-        )
-        deletion_requests = list(deletion_requests_qs)
-        deletion_requests_count = CompanyDeletionRequest.objects.filter(
+
+def _get_deletion_requests(user: User, limit: int = DASHBOARD_DELETION_REQUESTS_LIMIT) -> tuple[list, int]:
+    """Запросы на удаление компаний — видны только РОП/директору своего филиала."""
+    if user.role not in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR) or not user.branch_id:
+        return [], 0
+    qs = (
+        CompanyDeletionRequest.objects.filter(
             status=CompanyDeletionRequest.Status.PENDING,
             requested_by_branch_id=user.branch_id,
-        ).count()
+        )
+        .select_related("requested_by", "company")
+        .order_by("-created_at")[:limit + 1]
+    )
+    fetched = list(qs)
+    return fetched[:limit], len(fetched)
+
+
+def _count_tasks_done_today(user: User, ranges: dict) -> int:
+    """Число задач, выполненных пользователем сегодня.
+
+    Используется `updated_at` (не completed_at) — это известное ограничение:
+    если DONE-задача была отредактирована, счётчик увеличится. Для отображения
+    на дашборде это приемлемо.
+    """
+    return Task.objects.filter(
+        assigned_to=user,
+        status=Task.Status.DONE,
+        updated_at__gte=ranges["today_start"],
+        updated_at__lt=ranges["tomorrow_start"],
+    ).count()
+
+
+def _build_dashboard_context(request: HttpRequest) -> dict:
+    """Собирает весь context рабочего стола. Права уже проверены декоратором выше.
+
+    Чистая функция-оркестратор: все тяжёлые детали вынесены в
+    `_fetch_active_tasks`, `_split_active_tasks`, `_get_stale_companies`
+    и т.д. — так проще тестировать и переиспользовать в API/mobile.
+    """
+    from companies.services import get_dashboard_contracts
+
+    # Эффективный пользователь для отображения данных (режим «просмотр как»).
+    # Права не меняются — их проверяет @policy_required выше.
+    user: User = get_effective_user(request)
+    now = timezone.now()
+    local_now = timezone.localtime(now)
+    ranges = _dashboard_time_ranges(local_now)
+
+    # 1. Активные задачи: 1 SQL + Python-категоризация
+    active_tasks = _fetch_active_tasks(user)
+    buckets = _split_active_tasks(active_tasks, ranges)
+
+    # 2. Счётчики до обрезки
+    overdue_count = len(buckets["overdue_all"])
+    tasks_today_count = len(buckets["today_all"])
+    tasks_week_count = len(buckets["week_all"])
+    tasks_new_count = len(buckets["new_all"])
+
+    # 3. Слайсы для отображения
+    overdue_list = buckets["overdue_all"][:DASHBOARD_PREVIEW_LIMIT]
+    tasks_today_list = buckets["today_all"][:DASHBOARD_PREVIEW_LIMIT]
+    tasks_week_list = buckets["week_all"][:DASHBOARD_WEEK_PREVIEW_LIMIT]
+    tasks_new_list = buckets["new_all"][:DASHBOARD_PREVIEW_LIMIT]
+
+    # 4. Permissions для модалок + TaskType legacy-резолв
+    task_types_by_name = _get_task_types_by_name()
+    _annotate_task_permissions(
+        [tasks_new_list, tasks_today_list, overdue_list, tasks_week_list],
+        task_types_by_name,
+        user,
+    )
+
+    # 5. Остальные блоки дашборда
+    contracts_soon = get_dashboard_contracts(user, today=ranges["today_date"])
+    tasks_done_today = _count_tasks_done_today(user, ranges)
+    stale_companies, stale_companies_count = _get_stale_companies(user)
+    deletion_requests, deletion_requests_count = _get_deletion_requests(user)
+
+    # 6. Приветствие
+    greeting = _build_greeting(local_now.hour)
+
+    today_start = ranges["today_start"]
+    week_range_start = ranges["week_range_start"]
+    week_range_end = ranges["week_range_end"]
 
     context = {
         "now": now,
         "local_now": local_now,
+        "greeting": greeting,
         "today_start": today_start,
         "tasks_new": tasks_new_list,
         "tasks_today": tasks_today_list,
@@ -376,7 +515,16 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
     """
     Лёгкий AJAX polling: возвращает только {updated: true/false}.
     Клиент делает location.reload() при updated=true.
+
+    Оптимизации:
+    - ETag/304 Not Modified: если изменений нет с прошлого запроса,
+      возвращаем пустой 304 ответ (браузер не тратит трафик на JSON).
+    - 400 на битый `since` вместо `updated=true`: избегаем
+      бесконечного reload-цикла, клиент сбрасывает значение.
+    - `since` ограничен 7 днями назад — защита от full-scan по
+      устаревшему таймстампу (DoS vector через `since=0`).
     """
+    from datetime import timedelta
     user: User = get_effective_user(request)
     since = request.GET.get('since')
 
@@ -386,19 +534,43 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
     try:
         since_dt = datetime.fromtimestamp(int(since) / 1000, tz=timezone.UTC)
     except (ValueError, TypeError):
+        # Битый `since` → 400. Клиент сбросит свой lastPollTs.
         from core.request_id import get_request_id
         logger.warning(
             f"Некорректный параметр 'since' в dashboard_poll: {since}",
             extra={"user_id": user.id, "since": since, "request_id": get_request_id()},
         )
-        return JsonResponse({"updated": True, "timestamp": int(timezone.now().timestamp() * 1000)})
+        return JsonResponse(
+            {"error": "invalid_since", "detail": "since must be milliseconds timestamp"},
+            status=400,
+        )
+
+    # DoS-защита: if since слишком старый, сдвигаем на 7 дней назад.
+    # Старше этого дашборд всё равно не показывает, и full-scan не нужен.
+    now = timezone.now()
+    min_since = now - timedelta(days=7)
+    if since_dt < min_since:
+        since_dt = min_since
 
     has_changes = (
         Task.objects.filter(assigned_to=user, updated_at__gt=since_dt).exists()
         or Company.objects.filter(responsible=user, updated_at__gt=since_dt).exists()
     )
-    now = timezone.now()
-    return JsonResponse({"updated": has_changes, "timestamp": int(now.timestamp() * 1000)})
+
+    # ETag/304: если нет изменений — возвращаем 304 с пустым body.
+    # Клиент получит 304, не будет парсить JSON, сэкономит network + CPU.
+    etag = f'"{int(since_dt.timestamp() * 1000)}-{int(has_changes)}"'
+    if_none_match = request.META.get("HTTP_IF_NONE_MATCH", "")
+    if not has_changes and if_none_match == etag:
+        from django.http import HttpResponseNotModified
+        response = HttpResponseNotModified()
+        response["ETag"] = etag
+        return response
+
+    response = JsonResponse({"updated": has_changes, "timestamp": int(now.timestamp() * 1000)})
+    response["ETag"] = etag
+    response["Cache-Control"] = "private, no-cache"
+    return response
 
 
 
@@ -671,7 +843,7 @@ def preferences_mail(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-@policy_required(resource_type="page", resource="ui:preferences")
+@policy_required(resource_type="action", resource="ui:preferences")
 def preferences_profile(request: HttpRequest) -> HttpResponse:
     """
     AJAX/POST: сохранение профиля пользователя (имя, фамилия).
@@ -691,7 +863,7 @@ def preferences_profile(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-@policy_required(resource_type="page", resource="ui:preferences")
+@policy_required(resource_type="action", resource="ui:preferences")
 def preferences_password(request: HttpRequest) -> HttpResponse:
     """
     POST: смена пароля через Django PasswordChangeForm.
@@ -716,7 +888,7 @@ def preferences_password(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-@policy_required(resource_type="page", resource="ui:preferences")
+@policy_required(resource_type="action", resource="ui:preferences")
 def preferences_mail_signature(request: HttpRequest) -> HttpResponse:
     """
     POST: сохранение HTML-подписи в письмах.
@@ -737,7 +909,7 @@ def preferences_mail_signature(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-@policy_required(resource_type="page", resource="ui:preferences")
+@policy_required(resource_type="action", resource="ui:preferences")
 def preferences_avatar_upload(request: HttpRequest) -> HttpResponse:
     """
     POST: загрузка фото профиля. Ресайзит до 300×300 через Pillow, сохраняет как JPEG.
@@ -797,7 +969,7 @@ def preferences_avatar_upload(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-@policy_required(resource_type="page", resource="ui:preferences")
+@policy_required(resource_type="action", resource="ui:preferences")
 def preferences_avatar_delete(request: HttpRequest) -> HttpResponse:
     """
     POST: удаление фото профиля.

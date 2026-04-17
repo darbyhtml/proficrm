@@ -32,16 +32,33 @@ class RateLimitMiddleware(MiddlewareMixin):
     
     # Phone API (Android приложение) — более мягкий лимит, отдельный бакет
     PHONE_API_PATH = "/api/phone/"
-    
+
+    # Dashboard poll — per-user rate limit, чтобы 200 вкладок от одного
+    # юзера не создавали DoS на БД. Поллинг каждые 30 сек = 2 req/min
+    # в норме × 5 вкладок = 10 req/min. Лимит 120/min даёт большой запас.
+    DASHBOARD_POLL_PATH = "/api/dashboard/poll/"
+
     def process_request(self, request):
         # Пропускаем статические файлы
         path = request.path
         for exempt_path in self.EXEMPT_PATHS:
             if path.startswith(exempt_path):
                 return None
-        
+
         ip = get_client_ip(request)
-        
+
+        # Dashboard poll — per-user бакет (если авторизован).
+        # Иначе fallback на IP, чтобы защитить от неавторизованного мусора.
+        if path.startswith(self.DASHBOARD_POLL_PATH):
+            user_id = getattr(getattr(request, "user", None), "id", None)
+            bucket_key = f"user_{user_id}" if user_id else ip
+            if is_ip_rate_limited(bucket_key, "dash_poll", 120, 60):
+                return JsonResponse(
+                    {"detail": "Слишком частый polling. Попробуйте позже."},
+                    status=429,
+                )
+            return None
+
         # Проверяем Phone API отдельно (более мягкий лимит)
         if path.startswith(self.PHONE_API_PATH):
             # Для телефонного API используем более мягкий лимит (60 запросов в минуту)
