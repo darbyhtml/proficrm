@@ -1,5 +1,29 @@
 # Текущий спринт
 
+**[2026-04-17]** — Big Release 2026 F2 Карта взаимосвязей ✅
+
+Полный отчёт: `knowledge-base/audits/F2-interconnections-2026-04-17.md`.
+
+Свёл 6 аудитов + dashboard + F0d в единую карту конфликтов и паттернов. 6 разделов:
+1. Матрица переходов между страницами
+2. Cross-cutting конфликты (confirm/toast/TZ/роли/URL/справочники/CSS)
+3. Единые конвенции (JS-хелперы, подтверждения, CSP, ARIA, keyboard, rate-limit)
+4. Quick-wins F2 (закрыто в этом спринте)
+5. Открытые вопросы к user
+6. План на F3-F12
+
+**Quick-wins F2 (коммит `f76b1340`):**
+- `company_detail.html`: 22 места `window.alert()` → `_ctToast()` helper (с fallback на alert если V2Toast не подключён)
+- `core.timezone_utils.local_today_start()` + 3 функции — **единый источник правды** для фильтров «сегодня/просрочено/неделя» по всему проекту. В F3 заменит `timezone.now()` в Tasks и Company, устранит TZ-рассогласование с Dashboard
+
+**Ключевые cross-cutting находки (закрываются в F3-F9):**
+- TZ-рассогласование Dashboard vs Tasks/Company в `is_overdue` → F3
+- Mailer использует Django messages вместо V2Toast → F6
+- Chat operator-panel.js имеет свой showToast() (дубликат) → F5
+- URL: `/chat/` в UI vs `/messenger/` в API — выбор в F5
+- Разные модалки в Companies/Chat/Mail vs единый V2Modal → F4-F6
+- `require_admin` бинарный (нет read-only для РОП/Директора/Управляющего) → F8
+
 **[2026-04-17]** — Big Release 2026 F1 + F0d ✅
 
 **F0d Аудит Помощь/Настройки/Админка** (ux-researcher агент):
