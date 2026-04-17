@@ -54,18 +54,22 @@ def auto_assign_new_conversation(sender, instance: Conversation, created: bool, 
     from messenger import services as messenger_services
 
     try:
-        # Если branch не проставлен — делаем routing через MultiBranchRouter.
-        # Это покрывает сценарий создания Conversation через admin/API оператора,
-        # где routing мог не быть выполнен до save().
-        if not fresh.branch_id:
-            from messenger.assignment_services.region_router import MultiBranchRouter
-            branch = MultiBranchRouter().route(fresh)
-            if branch is not None:
-                Conversation.objects.filter(pk=fresh.pk).update(branch=branch)
-                fresh.refresh_from_db()
-                # Обновляем in-memory instance тоже — чтобы внешний код видел branch
-                instance.branch_id = fresh.branch_id
-                instance.branch = fresh.branch
+        # Routing по региону клиента: Conversation.save() авто-ставит branch
+        # из inbox.branch_id для non-global inbox. Но при client_region из
+        # другого подразделения (например inbox=ekb, client_region="Томская")
+        # routing должен переопределить branch на tmn. Поэтому вызываем
+        # MultiBranchRouter ВСЕГДА при create — он сам решит, оставить
+        # текущий branch или переопределить.
+        from messenger.assignment_services.region_router import MultiBranchRouter
+        routed_branch = MultiBranchRouter().route(fresh)
+        if routed_branch is not None and routed_branch.id != fresh.branch_id:
+            # Conversation.save() блокирует смену branch после create, поэтому
+            # используем queryset.update() для обхода инварианта.
+            Conversation.objects.filter(pk=fresh.pk).update(branch=routed_branch)
+            fresh.refresh_from_db()
+            # Обновляем in-memory instance тоже — чтобы внешний код видел branch
+            instance.branch_id = fresh.branch_id
+            instance.branch = fresh.branch
 
         # Единый путь назначения (Chatwoot-style).
         if fresh.branch_id:
