@@ -1,5 +1,39 @@
 # Текущий спринт
 
+**[2026-04-18]** — F6 Round 1: SMTP onboarding UI в `/admin/mail/setup/` ✅
+
+Коммит `3cc9ca19`. Закрывает P0 из mailer-audit: Fernet-разконсервация.
+
+**Проблема на проде (подтверждена 2026-04-17 read-only аудитом):**
+`MAILER_FERNET_KEY` в `.env` не совпадает с ключом, которым зашифрован SMTP-пароль в БД → `InvalidToken` → все рассылки FAILED молча. Раньше фикс — только через `/django-admin/` (требует знания Django).
+
+**Решение:** новая страница `/admin/mail/setup/` (только ADMIN/superuser):
+
+1. **Статус настройки:**
+   - `is_enabled` — v3-badge success/danger
+   - SMTP host/port/user, From, лимиты
+   - **Fernet-пароль** — Валиден / InvalidToken / Не задан + техническая причина при сбое
+
+2. **Пересохранение пароля:**
+   - `POST /admin/mail/setup/save-password/`
+   - `encrypt_str` текущим `MAILER_FERNET_KEY` → сохранение → `refresh_from_db` → проверка обратной расшифровки
+   - AUDIT в `ActivityEvent` (`session_impersonation`, `global_mail_account`)
+
+3. **Тест-письмо:**
+   - `POST /admin/mail/setup/test-send/`
+   - End-to-end через `smtp_sender.send_via_smtp` на email текущего user
+   - Кнопка disabled если: `is_enabled=False`, Fernet невалиден, email user не задан
+
+4. **Тайл «Почта (SMTP)»** в главном `/admin/` — точка входа.
+
+**После деплоя main на прод** Админ:
+1. Заходит в `/admin/mail/setup/` → видит badge «InvalidToken»
+2. Вводит текущий SMTP-пароль → сохраняется текущим ключом
+3. Жмёт «Отправить тест-письмо» → проверяет end-to-end
+4. Рассылки работают.
+
+**Staging:** HTTP 302, 3 URL резолвятся, **147 тестов зелёные**.
+
 **[2026-04-18]** — F8 quick-win: вкладка «Безопасность» в preferences.html ✅
 
 Коммит `04762e54`. Закрывает S-P0-1 из help-settings-admin-audit:
