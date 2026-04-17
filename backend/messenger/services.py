@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from django.conf import settings
 from django.core.cache import cache
@@ -19,6 +19,12 @@ from django.utils import timezone
 
 from accounts.models import User
 from .models import Conversation, Message, Contact
+
+if TYPE_CHECKING:
+    # Type-only импорты для forward references в сигнатурах функций.
+    # Не создают circular import при выполнении.
+    from accounts.models import Branch  # noqa: F401
+    from .models import Inbox  # noqa: F401
 from .integrations import notify_message
 from .reporting import record_first_response, record_reply_time
 
@@ -300,7 +306,13 @@ def auto_assign_conversation(conversation: Conversation) -> Optional[User]:
     except Inbox.DoesNotExist:
         return None
 
-    # Кандидаты: активные пользователи филиала, кроме ADMIN, только «онлайн»
+    # F5 UserAbsence: исключаем пользователей с активным отсутствием (отпуск/
+    # больничный/отгул). Даже если их CRM-вкладка открыта и AgentProfile=ONLINE,
+    # они НЕ должны получать новые диалоги.
+    today = timezone.localdate()
+
+    # Кандидаты: активные пользователи филиала, кроме ADMIN, только «онлайн»,
+    # без активного UserAbsence на сегодня
     # + число назначенных открытых/ожидающих диалогов (нагрузка)
     candidates_qs = (
         User.objects.filter(
@@ -313,6 +325,11 @@ def auto_assign_conversation(conversation: Conversation) -> Optional[User]:
             | Q(agent_profile__status=AgentProfile.Status.BUSY)
             | Q(agent_profile__status=AgentProfile.Status.OFFLINE)
         )
+        .exclude(
+            # Активное отсутствие (UserAbsence)
+            absences__start_date__lte=today,
+            absences__end_date__gte=today,
+        )
         .annotate(
             open_count=Count(
                 "assigned_conversations",
@@ -322,7 +339,7 @@ def auto_assign_conversation(conversation: Conversation) -> Optional[User]:
         )
         .order_by("open_count", "id")
     )
-    candidates = list(candidates_qs.values_list("id", flat=True))
+    candidates = list(candidates_qs.values_list("id", flat=True).distinct())
 
     if not candidates:
         return None
@@ -409,9 +426,9 @@ def has_online_operators_for_branch(branch_id: int, inbox_id: int) -> bool:
 
 
 def select_routing_rule(
-    inbox: "models.Inbox",
-    region: Optional["models.Region"] = None,
-) -> Optional["models.RoutingRule"]:
+    inbox: "Inbox",
+    region: "Optional[object]" = None,
+) -> "Optional[object]":
     """
     Выбрать правило маршрутизации для inbox и region.
     

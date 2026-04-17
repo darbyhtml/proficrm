@@ -84,6 +84,23 @@ class User(AbstractUser):
         """True для role=ADMIN или is_superuser. Использовать вместо is_staff в бизнес-логике."""
         return self.is_superuser or self.role == self.Role.ADMIN
 
+    def is_currently_absent(self, on_date=None) -> bool:
+        """True если на указанную дату (по умолчанию — сегодня) у сотрудника
+        есть активное отсутствие (UserAbsence).
+
+        Используется в messenger.services.auto_assign_conversation — не назначать
+        диалоги отсутствующим сотрудникам, даже если их CRM-вкладка открыта.
+        """
+        from django.utils import timezone
+        from accounts.models import UserAbsence
+        today = on_date or timezone.localdate()
+        # UserAbsence import здесь (не в топе) — модель определена ниже в этом файле.
+        return UserAbsence.objects.filter(
+            user_id=self.id,
+            start_date__lte=today,
+            end_date__gte=today,
+        ).exists()
+
 
 class MagicLinkToken(models.Model):
     """
@@ -168,3 +185,83 @@ class MagicLinkToken(models.Model):
 
 # Справочник регионов подразделений (в отдельном файле чтобы не раздувать models.py)
 from accounts.models_region import BranchRegion  # noqa: E402, F401
+
+
+class UserAbsence(models.Model):
+    """Учёт отсутствия сотрудника (отпуск / больничный / отгул).
+
+    F5: используется в messenger.services.auto_assign_conversation для
+    исключения отсутствующих менеджеров из кандидатов на диалог.
+    Ранее auto_assign мог назначить диалог на менеджера с открытой CRM-вкладкой,
+    но фактически находящегося в отпуске/отгуле.
+
+    Даты хранятся как DateField (не DateTime) — точность до дня достаточна:
+    менеджер в отпуск уходит целиком на день, а не на полчаса.
+
+    Для активного периода (end_date >= today) диалоги на пользователя
+    назначаться не будут.
+    """
+
+    class Type(models.TextChoices):
+        VACATION = "vacation", "Отпуск"
+        SICK = "sick", "Больничный"
+        DAYOFF = "dayoff", "Отгул"
+        OTHER = "other", "Другое"
+
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="absences",
+        verbose_name="Сотрудник",
+    )
+    start_date = models.DateField("Начало (включительно)")
+    end_date = models.DateField(
+        "Окончание (включительно)",
+        help_text="День возвращения — последний день отсутствия, не первый день работы.",
+    )
+    type = models.CharField(
+        "Тип",
+        max_length=16,
+        choices=Type.choices,
+        default=Type.VACATION,
+    )
+    note = models.CharField(
+        "Комментарий",
+        max_length=255,
+        blank=True,
+        default="",
+    )
+    created_at = models.DateTimeField("Создано", auto_now_add=True)
+    created_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_absences",
+        verbose_name="Кто создал",
+    )
+
+    class Meta:
+        verbose_name = "Отсутствие сотрудника"
+        verbose_name_plural = "Отсутствия сотрудников"
+        ordering = ["-start_date"]
+        indexes = [
+            # Для быстрой проверки is_currently_absent: фильтр по user + end_date
+            models.Index(
+                fields=["user", "end_date"],
+                name="user_absence_user_end_idx",
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(end_date__gte=models.F("start_date")),
+                name="user_absence_end_after_start",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user}: {self.get_type_display()} {self.start_date}..{self.end_date}"
+
+    def is_active_on(self, date) -> bool:
+        """Проверяет, покрывает ли период указанную дату."""
+        return self.start_date <= date <= self.end_date
