@@ -1,5 +1,18 @@
 # Текущий спринт
 
+**[2026-04-17]** — Big Release 2026 F3 Round 2 (Задачи — завершено) ✅
+
+Коммит `0d0dfaed`. Закрыты оставшиеся 4 задачи F3:
+
+- **P1-1 + P1-2 Performance**: `.only()` с 18 явными полями в `task_list` queryset перед пагинацией. Убраны N+1-риски на `company.address`/`work_timezone`.
+- **Pre-existing F811 cleanup**: удалены 100 строк локальных дублей 3 функций (`_can_manage_task_status_ui`, `_can_edit_task_ui`, `_can_delete_task_ui`) — идентичны импортам из `_base.py`. `ruff check` теперь clean на tasks.py.
+- **P1-4 Bulk-reassign confirm**: при >5 задачах требуется двойной клик по «Применить» — смена надписи «Подтвердить: N задач?» + красный стиль, 3с timeout. Для ≤5 — без confirm. Plus: последний `alert()` в rescheduleForm → V2Toast fallback.
+- **P2-2 Focus trap popover фильтров**: `aria-haspopup`/`aria-expanded`, focus на первый focusable при open, Tab cycle (Shift+Tab), Escape close + возврат фокуса триггеру. Keyboard-only юзер больше не теряется.
+
+**Результат на staging:** HTTP 302, **134 теста зелёные** (Dashboard + Tasks + Companies + inline/detail).
+
+**F3 полностью закрыт.** Переход к F4 (Компании).
+
 **[2026-04-17]** — Big Release 2026 F3 Round 1 (Задачи) ✅
 
 По результатам `tasks-audit-2026-04-17.md` закрыто 5 приоритетных находок
