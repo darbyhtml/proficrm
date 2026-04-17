@@ -59,18 +59,23 @@ class ManagerDashboardServiceTests(TestCase):
         return t
 
     def test_tasks_counters_today_week_month(self):
-        # 1 сегодня, 3 за неделю (в т.ч. сегодня), 5 за месяц.
+        # Все дельты < текущего дня месяца, чтобы гарантированно попасть
+        # в текущий месяц независимо от даты запуска теста.
+        # Для today: 0 дней назад. Для week: 0/2/3. Для month: все.
+        today_day = timezone.localdate().day
+        # Cap на 2/3 — точно в неделе, если сегодня вторник+.
+        safe_month_delta = max(1, min(today_day - 1, 25))
+
         self._make_task(updated_delta_days=0)
         self._make_task(updated_delta_days=2)
         self._make_task(updated_delta_days=3)
-        self._make_task(updated_delta_days=10)
-        self._make_task(updated_delta_days=20)
+        self._make_task(updated_delta_days=safe_month_delta)
 
         data = get_manager_dashboard(self.mgr)
-        # today: 1 (тот что 0 дней назад)
+        # today: минимум 1 (тот что 0 дней назад)
         self.assertGreaterEqual(data["tasks"]["today"], 1)
-        # month: все 5
-        self.assertEqual(data["tasks"]["month"], 5)
+        # month: ровно 4 (все попали в этот месяц при safe_month_delta).
+        self.assertEqual(data["tasks"]["month"], 4)
         # week: не больше чем month
         self.assertLessEqual(data["tasks"]["week"], data["tasks"]["month"])
 
