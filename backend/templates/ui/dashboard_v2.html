@@ -60,9 +60,10 @@
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <div class="text-sm" style="color:rgba(255,255,255,0.92)">{{ local_now|ru_date }}</div>
         <a href="#" class="v2-btn v2-btn--ghost v2-btn--sm"
+           id="v2DashNewTaskBtn"
+           data-v2-new-task-url="{% url 'ui_v2_task_create_partial' %}"
            style="background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff"
-           title="Создать новую задачу"
-           onclick="event.preventDefault();V2Modal.open({url:'{% url 'ui_v2_task_create_partial' %}',title:'Новая задача'})">
+           title="Создать новую задачу">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
@@ -481,7 +482,7 @@
 
 {% include "ui/_v2/v2_modal.html" %}
 
-<script>
+<script nonce="{{ csp_nonce }}">
 // Dashboard v2 — polling, refresh, inline task quick actions
 
 // WCAG 1.3.1: помечаем декоративные SVG как aria-hidden, чтобы screen reader
@@ -494,6 +495,20 @@ document.querySelectorAll('.v2 svg:not([aria-hidden]):not([aria-label]):not([rol
 
 // После сохранения задачи/компании в v2-модалке — перезагрузить дашборд
 window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.location.reload(), 250); });
+
+// CSP nonce: inline onclick не работает на проде (strict-src),
+// поэтому все handlers привязываем через addEventListener.
+(function(){
+  const newTaskBtn = document.getElementById('v2DashNewTaskBtn');
+  if(newTaskBtn){
+    newTaskBtn.addEventListener('click', function(e){
+      e.preventDefault();
+      if(window.V2Modal){
+        V2Modal.open({url: newTaskBtn.dataset.v2NewTaskUrl, title: 'Новая задача'});
+      }
+    });
+  }
+})();
 
 (function(){
   const csrf = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
