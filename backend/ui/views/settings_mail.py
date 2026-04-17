@@ -1,4 +1,10 @@
-"""F6 Round 1: SMTP onboarding wizard + Fernet re-save UI.
+"""F6 Round 1 + Round 2: SMTP onboarding wizard + Fernet re-save UI +
+полноценное редактирование SMTP-конфига.
+
+R2 (2026-04-18): добавлены endpoints для редактирования всех полей
+GlobalMailAccount кроме пароля (host/port/username/from_email/from_name/
+use_starttls + лимиты rate_per_minute/day/per_user), toggle is_enabled,
+и UI-форма.
 
 Закрывает P0 из mailer-audit-2026-04-17.md: на проде `MAILER_FERNET_KEY`
 в `.env` не совпадает с ключом, которым зашифрован SMTP-пароль в
@@ -208,4 +214,129 @@ def settings_mail_test_send(request: HttpRequest) -> HttpResponse:
         )
     except Exception:
         logger.exception("Failed to write audit for test send")
+    return redirect("settings_mail_setup")
+
+
+# ──────────────────────────────────────────────────────────────────
+# F6 R2 (2026-04-18): расширенный onboarding — редактирование конфига.
+# ──────────────────────────────────────────────────────────────────
+
+# Целочисленные поля GlobalMailAccount с безопасными границами.
+_INT_FIELDS = {
+    "smtp_port": (1, 65535),
+    "rate_per_minute": (1, 1000),
+    "rate_per_day": (1, 1_000_000),
+    "per_user_daily_limit": (1, 100_000),
+}
+# Текстовые поля (max_length проверяется моделью; валидатор просто strip).
+_STR_FIELDS = ("smtp_host", "smtp_username", "from_email", "from_name")
+
+
+@login_required
+@require_POST
+def settings_mail_save_config(request: HttpRequest) -> HttpResponse:
+    """Сохранить host/port/username/from_email/from_name/STARTTLS и лимиты.
+
+    Пароль не трогаем (для него — отдельный endpoint save_password).
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    account = GlobalMailAccount.load()
+
+    # Строковые поля: strip + присваивание.
+    for field in _STR_FIELDS:
+        val = (request.POST.get(field) or "").strip()
+        setattr(account, field, val)
+
+    # use_starttls: checkbox может отсутствовать в POST, если unchecked.
+    account.use_starttls = request.POST.get("use_starttls") == "on"
+
+    # Целочисленные: валидация диапазона.
+    for field, (lo, hi) in _INT_FIELDS.items():
+        raw = (request.POST.get(field) or "").strip()
+        if not raw:
+            continue
+        try:
+            val = int(raw)
+        except ValueError:
+            messages.error(request, f"Поле «{field}»: ожидается целое число.")
+            return redirect("settings_mail_setup")
+        if val < lo or val > hi:
+            messages.error(
+                request,
+                f"Поле «{field}»: диапазон [{lo}, {hi}], получено {val}.",
+            )
+            return redirect("settings_mail_setup")
+        setattr(account, field, val)
+
+    # Валидация from_email через Django EmailField.
+    try:
+        account.full_clean(exclude=["smtp_password_enc", "smtp_bz_api_key_enc"])
+    except Exception as exc:
+        messages.error(request, f"Ошибка валидации: {exc}")
+        return redirect("settings_mail_setup")
+
+    try:
+        account.save()
+    except Exception as exc:
+        logger.exception("Failed to save mail config")
+        messages.error(request, f"Не удалось сохранить: {exc}")
+        return redirect("settings_mail_setup")
+
+    try:
+        log_event(
+            actor=request.user,
+            verb=ActivityEvent.Verb.UPDATE,
+            entity_type="global_mail_account",
+            entity_id=str(account.id),
+            message="SMTP-конфиг обновлён (host/port/username/from/лимиты)",
+            meta={"user_ip": request.META.get("REMOTE_ADDR", "")},
+        )
+    except Exception:
+        logger.exception("Failed to write audit event for config update")
+
+    messages.success(request, "Настройки SMTP сохранены.")
+    return redirect("settings_mail_setup")
+
+
+@login_required
+@require_POST
+def settings_mail_toggle_enabled(request: HttpRequest) -> HttpResponse:
+    """Включить/отключить массовую отправку через is_enabled."""
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    account = GlobalMailAccount.load()
+    new_state = not account.is_enabled
+
+    # Если пытаемся включить — обязаны иметь рабочий Fernet-пароль.
+    if new_state:
+        status = _fernet_status(account)
+        if not status["valid"]:
+            messages.error(
+                request,
+                "Нельзя включить отправку: SMTP-пароль не расшифровывается "
+                "текущим MAILER_FERNET_KEY. Сначала сохраните пароль заново.",
+            )
+            return redirect("settings_mail_setup")
+
+    account.is_enabled = new_state
+    account.save(update_fields=["is_enabled", "updated_at"])
+
+    verb = "включена" if new_state else "выключена"
+    try:
+        log_event(
+            actor=request.user,
+            verb=ActivityEvent.Verb.UPDATE,
+            entity_type="global_mail_account",
+            entity_id=str(account.id),
+            message=f"Массовая отправка {verb}",
+        )
+    except Exception:
+        logger.exception("Failed to write audit event for toggle_enabled")
+
+    messages.success(request, f"Массовая отправка {verb}.")
     return redirect("settings_mail_setup")

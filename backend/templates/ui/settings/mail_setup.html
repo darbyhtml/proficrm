@@ -141,6 +141,104 @@
     </div>
   </section>
 
+  {# ── F6 R2: Редактирование SMTP-конфига ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">SMTP сервер и отправитель</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px">
+      <form method="post" action="/admin/mail/setup/save-config/" class="space-y-4">
+        {% csrf_token %}
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label for="id_smtp_host" class="v3-label">Host</label>
+            <input type="text" name="smtp_host" id="id_smtp_host" class="v2-input"
+                   value="{{ account.smtp_host }}" required maxlength="255" />
+          </div>
+          <div>
+            <label for="id_smtp_port" class="v3-label">Port</label>
+            <input type="number" name="smtp_port" id="id_smtp_port" class="v2-input"
+                   value="{{ account.smtp_port }}" min="1" max="65535" required />
+          </div>
+        </div>
+
+        <div>
+          <label for="id_smtp_username" class="v3-label">Логин SMTP</label>
+          <input type="text" name="smtp_username" id="id_smtp_username" class="v2-input"
+                 value="{{ account.smtp_username }}" maxlength="255" autocomplete="off" />
+        </div>
+
+        <div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer">
+            <input type="checkbox" name="use_starttls" {% if account.use_starttls %}checked{% endif %} />
+            <span>Использовать STARTTLS (рекомендуется для порта 587)</span>
+          </label>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label for="id_from_email" class="v3-label">From (email отправителя)</label>
+            <input type="email" name="from_email" id="id_from_email" class="v2-input"
+                   value="{{ account.from_email }}" />
+          </div>
+          <div>
+            <label for="id_from_name" class="v3-label">From name (имя)</label>
+            <input type="text" name="from_name" id="id_from_name" class="v2-input"
+                   value="{{ account.from_name }}" maxlength="120" />
+          </div>
+        </div>
+
+        <hr style="margin:12px 0;border:none;border-top:1px solid var(--v3-border)">
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          <div>
+            <label for="id_rate_per_minute" class="v3-label">Лимит/минута</label>
+            <input type="number" name="rate_per_minute" id="id_rate_per_minute" class="v2-input"
+                   value="{{ account.rate_per_minute }}" min="1" max="1000" />
+          </div>
+          <div>
+            <label for="id_rate_per_day" class="v3-label">Лимит/день</label>
+            <input type="number" name="rate_per_day" id="id_rate_per_day" class="v2-input"
+                   value="{{ account.rate_per_day }}" min="1" max="1000000" />
+          </div>
+          <div>
+            <label for="id_per_user_daily_limit" class="v3-label">Лимит/менеджер/день</label>
+            <input type="number" name="per_user_daily_limit" id="id_per_user_daily_limit" class="v2-input"
+                   value="{{ account.per_user_daily_limit }}" min="1" max="100000" />
+          </div>
+        </div>
+
+        <div>
+          <button type="submit" class="v2-btn">Сохранить настройки</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  {# ── F6 R2: Toggle включения ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Массовая отправка</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px">
+      <p class="v2-muted" style="margin:0 0 12px 0;font-size:13px;line-height:1.5">
+        {% if account.is_enabled %}
+          Массовая отправка <strong>включена</strong>. Кампании и автоматические письма будут отправляться.
+        {% else %}
+          Массовая отправка <strong>выключена</strong>. Пока флаг не установлен, рассылки не идут — даже созданные кампании.
+        {% endif %}
+      </p>
+      <form method="post" action="/admin/mail/setup/toggle-enabled/">
+        {% csrf_token %}
+        <button type="submit" class="v2-btn {% if account.is_enabled %}v2-btn--ghost{% endif %}"
+                {% if not account.is_enabled and not fernet_status.valid %}disabled title="Сначала сохраните пароль SMTP"{% endif %}>
+          {% if account.is_enabled %}Выключить отправку{% else %}Включить отправку{% endif %}
+        </button>
+      </form>
+    </div>
+  </section>
+
   {# ── Блок 4: дополнительно ── #}
   <section class="v2-card">
     <div class="v2-card__head">
@@ -148,7 +246,7 @@
     </div>
     <div class="v2-card__body" style="padding:12px 20px 16px;font-size:13px;line-height:1.6">
       <ul style="margin:0;padding-left:20px">
-        <li>Детальные настройки (host, port, rate limit, API ключ smtp.bz) — пока через <a href="/django-admin/mailer/globalmailaccount/" class="link">Django Admin</a>. Это временно, до F8 R2 полного редизайна Админки.</li>
+        <li>API ключ smtp.bz для мониторинга квоты — пока через <a href="/django-admin/mailer/globalmailaccount/" class="link">Django Admin</a>. Будет перенесён в R3.</li>
         <li>Раздел <a href="/mail/campaigns/" class="link">Почта → Кампании</a> — создание и запуск рассылок. Работает только при валидном Fernet и включённом SMTP.</li>
         <li>При массовых ошибках отправки — <a href="/admin/error-log/" class="link">Журнал ошибок</a>.</li>
       </ul>

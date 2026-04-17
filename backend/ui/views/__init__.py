@@ -89,9 +89,13 @@ from ui.views.settings_integrations import (
     settings_mobile_device_detail,
     settings_calls_stats, settings_calls_manager_detail,
 )  # noqa: F401
-# F6 R1: SMTP onboarding / Fernet re-save UI
+# F6 R1+R2: SMTP onboarding / Fernet re-save UI + расширенная конфигурация
 from ui.views.settings_mail import (
-    settings_mail_setup, settings_mail_save_password, settings_mail_test_send,
+    settings_mail_setup,
+    settings_mail_save_password,
+    settings_mail_test_send,
+    settings_mail_save_config,
+    settings_mail_toggle_enabled,
 )  # noqa: F401
 from ui.views.mobile import (
     mobile_app_page, mobile_app_download, mobile_app_qr_image,

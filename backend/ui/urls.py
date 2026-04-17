@@ -94,9 +94,11 @@ urlpatterns = [
     path("admin/announcements/", views.settings_announcements, name="settings_announcements"),
     path("admin/access/", views.settings_access, name="settings_access"),
     path("admin/access/roles/<str:role>/", views.settings_access_role, name="settings_access_role"),
-    # F6 R1: SMTP onboarding wizard + Fernet re-save UI
+    # F6 R1+R2: SMTP onboarding wizard + Fernet re-save UI + config edit
     path("admin/mail/setup/", views.settings_mail_setup, name="settings_mail_setup"),
     path("admin/mail/setup/save-password/", views.settings_mail_save_password, name="settings_mail_save_password"),
+    path("admin/mail/setup/save-config/", views.settings_mail_save_config, name="settings_mail_save_config"),
+    path("admin/mail/setup/toggle-enabled/", views.settings_mail_toggle_enabled, name="settings_mail_toggle_enabled"),
     path("admin/mail/setup/test-send/", views.settings_mail_test_send, name="settings_mail_test_send"),
     # Режим "просмотр как" (админ может визуально переключаться под роль/филиал)
     path("admin/view-as/", views.view_as_update, name="view_as_update"),
