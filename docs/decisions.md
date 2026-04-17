@@ -112,8 +112,10 @@ GlobalMailAccount.get_password() → cryptography.fernet.InvalidToken
 
 ### Open items (к будущим фазам, не блокируют)
 
-- Ротация Fernet-ключа на проде — нужно решение user: знает ли он старый ключ, или пересохранить пароль заново
-- FCM project — нужно создать Firebase-проект, передать credentials
+- **Fernet old-key неизвестен** (подтверждено 2026-04-17). Решение: при прод-деплое main Админ заходит в `/admin/` (появится новый mailer-интерфейс), удаляет старый SMTP-пароль, вводит заново — пересохранится текущим `MAILER_FERNET_KEY`. 5 минут работы.
+- **FCM не настроен** — user подтвердил, Firebase-проекта нет. План на F9: создать проект в console.firebase.google.com, получить service account key, добавить `FCM_CREDENTIALS` в прод `.env`. Делаю инструкцию в F9.
+- **messenger-модуль на проде НЕ УСТАНОВЛЕН** (подтверждено 2026-04-17, `ModuleNotFoundError`). Прод на `f015efb`, до мержа live-chat в main (2026-04-02). Появится автоматически при деплое main, добавить env при деплое: `MESSENGER_ENABLED=1`, `MESSENGER_DEFAULT_BRANCH_ID=<ekb.id>`, `MESSENGER_WIDGET_STRICT_ORIGIN=1`, `JWT_SECRET_KEY=<generate>`.
+- **Прод сейчас (факты 2026-04-17):** 25 активных менеджеров (ЕКБ 9, Тюмень 9, Краснодар 7), 39 QR-токенов Android, 7 PhoneDevice, 0 MobileAppBuild (релизов APK нет), 9.5M audit_activityevent, 45k компаний, 18k задач. Чат, FCM, analytics-2026 — не установлены на текущем HEAD.
 
 
 ## [2026-04-16] Claude Code хуки: 4 узких операционных защиты, НЕ skill-auto-routing
