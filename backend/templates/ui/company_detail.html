@@ -1946,6 +1946,19 @@
     {% endif %}
 
     <script nonce="{{ csp_nonce }}">
+      // F2 cross-cutting: унифицированный helper для ошибок/успехов.
+      // Использует V2Toast если подключён v2_modal.html, иначе fallback на alert.
+      // F4 план: после полного редизайна страницы v2_modal будет подключён и
+      // fallback удалится.
+      window._ctToast = window._ctToast || function(msg, type){
+        try {
+          if (window.V2Toast && typeof window.V2Toast.show === 'function') {
+            window.V2Toast.show(String(msg), { type: type || 'err' });
+            return;
+          }
+        } catch(_){}
+        alert(String(msg));
+      };
       (function(){
         function getCookie(name) {
           const value = `; ${document.cookie}`;
@@ -1953,7 +1966,7 @@
           if (parts.length === 2) return parts.pop().split(';').shift();
           return '';
         }
-        
+
         const contractModal = document.getElementById('contractModal');
         const openContract = document.getElementById('openContractModal');
         if (contractModal && openContract) {
@@ -2033,9 +2046,9 @@
               if (window.DEBUG) { console.log('[toast]', text, type); }
               // Простой fallback: показываем alert, если uiToast не загружена
               if (type === 'error') {
-                alert('Ошибка: ' + text);
+                _ctToast('Ошибка: ' + text);
               } else {
-                alert(text);
+                _ctToast(text);
               }
             } catch(_e) {}
           };
@@ -4986,7 +4999,7 @@
                 }, { once: true });
               }
             } catch (err) {
-              alert('Ошибка загрузки формы: ' + err.message);
+              _ctToast('Ошибка загрузки формы: ' + err.message);
             }
           });
         });
@@ -5058,15 +5071,15 @@
                     closeModal();
                     location.reload();
                   } else {
-                    alert('Ошибка: ' + (data.error || 'Не удалось сохранить'));
+                    _ctToast('Ошибка: ' + (data.error || 'Не удалось сохранить'));
                   }
                 } catch (err) {
-                  alert('Ошибка при сохранении: ' + err.message);
+                  _ctToast('Ошибка при сохранении: ' + err.message);
                 }
               }, { once: true });
             }
           } catch (err) {
-            alert('Ошибка загрузки формы: ' + err.message);
+            _ctToast('Ошибка загрузки формы: ' + err.message);
           }
         });
       });
@@ -5438,11 +5451,11 @@
           if (data.success) {
             window.location.reload();
           } else {
-            alert(data.error || 'Ошибка при удалении задачи');
+            _ctToast(data.error || 'Ошибка при удалении задачи');
           }
         })
         .catch(err => {
-          alert('Ошибка: ' + err.message);
+          _ctToast('Ошибка: ' + err.message);
         });
       });
 
@@ -5462,11 +5475,11 @@
           if (data.success) {
             window.location.reload();
           } else {
-            alert(data.error || 'Ошибка при удалении задачи');
+            _ctToast(data.error || 'Ошибка при удалении задачи');
           }
         })
         .catch(err => {
-          alert('Ошибка: ' + err.message);
+          _ctToast('Ошибка: ' + err.message);
         });
       });
 
@@ -5513,11 +5526,11 @@
           if (data.success) {
             window.location.reload();
           } else {
-            alert(data.error || 'Ошибка при изменении статуса задачи');
+            _ctToast(data.error || 'Ошибка при изменении статуса задачи');
           }
         })
         .catch(err => {
-          alert('Ошибка: ' + err.message);
+          _ctToast('Ошибка: ' + err.message);
         });
       });
 
@@ -5538,11 +5551,11 @@
           if (data.success) {
             window.location.reload();
           } else {
-            alert(data.error || 'Ошибка при изменении статуса задачи');
+            _ctToast(data.error || 'Ошибка при изменении статуса задачи');
           }
         })
         .catch(err => {
-          alert('Ошибка: ' + err.message);
+          _ctToast('Ошибка: ' + err.message);
         });
       });
     })();
@@ -5620,11 +5633,11 @@
               edit.classList.add('hidden');
             }
           } else {
-            alert(data.error || 'Ошибка при сохранении комментария');
+            _ctToast(data.error || 'Ошибка при сохранении комментария');
           }
         })
         .catch(err => {
-          alert('Ошибка: ' + err.message);
+          _ctToast('Ошибка: ' + err.message);
         });
       });
 
@@ -6021,7 +6034,7 @@
             try {
               await loadCampaigns();
             } catch (err) {
-              alert('Ошибка: ' + err.message);
+              _ctToast('Ошибка: ' + err.message);
               closeModal();
             }
             return;
@@ -6034,7 +6047,7 @@
         confirmBtn.addEventListener('click', async () => {
           const campaignId = select.value;
           if (!campaignId) {
-            alert('Выберите кампанию');
+            _ctToast('Выберите кампанию');
             return;
           }
           const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
@@ -6048,13 +6061,13 @@
             const res = await fetch('/mail/campaigns/add-email/', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             const data = await res.json();
             if (!data.ok) {
-              alert(data.error || 'Не удалось добавить email');
+              _ctToast(data.error || 'Не удалось добавить email');
               return;
             }
-            alert(data.message || 'Email добавлен');
+            _ctToast(data.message || 'Email добавлен');
             closeModal();
           } catch (err) {
-            alert('Ошибка: ' + err.message);
+            _ctToast('Ошибка: ' + err.message);
           }
         });
       })();
@@ -7090,7 +7103,7 @@
           if (window.uiToast) {
             window.uiToast('Ошибка сохранения: ' + error.message, 'error');
           } else {
-            alert('Ошибка сохранения: ' + error.message);
+            _ctToast('Ошибка сохранения: ' + error.message);
           }
         } finally {
           if (submitBtn) {

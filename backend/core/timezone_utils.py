@@ -1,4 +1,5 @@
 import re
+from datetime import datetime, timedelta
 
 
 RUS_TZ_CHOICES: list[tuple[str, str]] = [
@@ -56,4 +57,39 @@ def guess_ru_timezone_from_address(address: str) -> str:
     if has_cyrillic:
         return "Europe/Moscow"
     return ""
+
+
+# ---------------------------------------------------------------------------
+# F2 cross-cutting: единый источник правды для «сегодня/завтра» в локальной TZ.
+# Использовать ВМЕСТО timezone.now() для фильтров «просрочено/сегодня/неделя» —
+# это устраняет TZ-рассогласование между Dashboard (локальное) и Tasks/Company
+# (было UTC). См. F2-interconnections-2026-04-17.md раздел 2.3.
+# ---------------------------------------------------------------------------
+
+def local_today_start() -> datetime:
+    """Начало текущего дня в локальной TZ пользователя.
+
+    Возвращает tz-aware datetime (astimezone в активной TZ через Django).
+    Эквивалент `timezone.localtime(timezone.now()).replace(hour=0, ...)`.
+
+    Используется для фильтров `due_at < today_start` = "просрочено".
+    """
+    from django.utils import timezone as dj_tz
+    local_now = dj_tz.localtime(dj_tz.now())
+    return local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def local_tomorrow_start() -> datetime:
+    """Начало завтрашнего дня в локальной TZ. Для фильтра «сегодня» (< tomorrow_start)."""
+    return local_today_start() + timedelta(days=1)
+
+
+def local_week_range_start() -> datetime:
+    """Начало 7-дневного диапазона «на неделю» — завтра 00:00."""
+    return local_tomorrow_start()
+
+
+def local_week_range_end() -> datetime:
+    """Конец 7-дневного диапазона «на неделю» — через 7 дней после завтра."""
+    return local_tomorrow_start() + timedelta(days=7)
 
