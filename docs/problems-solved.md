@@ -1,5 +1,48 @@
 # Решённые проблемы
 
+## [2026-04-18] F5 Weekly Rotation: два исторических кода Тюмени "tym" и "tmn"
+
+**Симптом:** Новая логика `MultiBranchRouter._pick_common_pool_branch` (понедельная
+ротация общих регионов) должна была ставить Тюмень на 3-й слот ротации (`W3 → tym`).
+Но в проекте сосуществуют два кода Тюмени: в фикстуре `branch_regions_2025_2026.json`
+— `"tym"`, в `seed_demo.py` и старых тестах `test_auto_assign.py` / `test_visibility.py`
+— `"tmn"`. Использование `COMMON_POOL_ROTATION_ORDER = ("ekb", "krd", "tym")`
+давало тонкое расхождение: на проде ротация шла по tym, в dev-seed — tmn уходил в
+fallback-бакет и порядок зависел от id.
+
+**Фикс** (`061432ae`): ротация перестроена на слоты-синонимы через
+`COMMON_POOL_ROTATION_SLOTS = (("ekb",), ("krd",), ("tym", "tmn"))`. Код в каждом
+слоте — синоним, маппится на один и тот же индекс ротации. Одинаковый порядок в
+любом окружении. Тесты обновлены: убран `test_common_pool_picks_round_robin_branch`
+(per-visit RR устарел), добавлены `test_common_pool_same_branch_within_same_week`
+и `test_common_pool_weekly_rotation_cycles_branches` (W1-W4).
+
+**Урок:** При введении списков-констант из «бизнес-правила» — всегда проверять
+существующие БД-состояния (seed, фикстуры, старые тесты). Если кодов-синонимов
+больше одного, использовать слоты, а не линейный порядок.
+
+## [2026-04-18] Staging test env: SECURE_SSL_REDIRECT=True ломает widget-тесты
+
+**Симптом:** Прогон `manage.py test messenger` на staging даёт 59 failures + 19 errors,
+большинство — `AttributeError: 'HttpResponsePermanentRedirect' object has no attribute 'data'`
+или `AssertionError: 301 != 403` в `test_widget_api.py`, `test_api_security.py`,
+`test_widget_security_features.py`. После F5 weekly rotation commit — auto_assign
+14/14 прошли, но широкие падения маскируют истинный статус регрессии.
+
+**Причина:** В `settings_staging.py` установлено `SECURE_SSL_REDIRECT = True`.
+Тесты делают `self.client.post(...)` без `secure=True` — middleware возвращает 301
+редирект на https. Ответ не имеет `.data`, assertions на status code тоже падают.
+
+**Решение (отложено в F11):** Создать `crm/settings_test.py`, наследующий от
+`settings_staging.py`, с переопределением `SECURE_SSL_REDIRECT = False`,
+`SECURE_HSTS_SECONDS = 0`, `SESSION_COOKIE_SECURE = False`. Прогон через
+`DJANGO_SETTINGS_MODULE=crm.settings_test python manage.py test`. Локально через
+`scripts/test.sh` проблема отсутствует (settings_dev). Зафиксировано как отдельная
+задача в F11 (CI/CD + security hardening).
+
+**Урок:** Прогон регрессии на staging должен использовать изолированные test-settings,
+а не реальный staging-config — security middleware rewrites ломают HTTP-клиент DRF.
+
 ## [2026-04-16] Migration: дубль _like индекса при AddField + AlterField(unique=True)
 
 **Симптом:** На staging при `migrate` — `ProgrammingError: relation "phonebridge_mobileappqrtoken_token_hash_8a962ef6_like" already exists`. Миграция `phonebridge.0010_qr_token_hash` падала на шаге 3 (AlterField с `unique=True`).

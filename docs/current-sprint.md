@@ -1,5 +1,30 @@
 # Текущий спринт
 
+**[2026-04-18]** — F5: Понедельная ротация общих регионов ✅
+
+Коммит `061432ae`. Q8 из roadmap: Москва/МО, СПб/ЛО, Новгородская обл., Псковская обл. —
+общий пул. Неделя 1 → ЕКБ, неделя 2 → Краснодар, неделя 3 → Тюмень, цикл.
+
+**MultiBranchRouter._pick_common_pool_branch:**
+- Было: per-visit round-robin через Redis counter. Все клиенты одной сессии ротировались
+  между филиалами.
+- Стало: `(iso_week - 1) % len(pool_sorted)`. На одной неделе — один филиал, следующей —
+  следующий из слотов.
+- `COMMON_POOL_ROTATION_SLOTS = (("ekb",), ("krd",), ("tym", "tmn"))` — слоты, а не
+  линейный порядок. `tym` и `tmn` — синонимы одного слота (исторические коды Тюмени
+  в фикстурах + seed_demo расходятся, см. problems-solved).
+
+**Тесты auto_assign:** 14/14 зелёные на staging.
+- `test_common_pool_same_branch_within_same_week`: 5 визитов за неделю → один филиал.
+- `test_common_pool_weekly_rotation_cycles_branches`: W1→ekb, W2→krd, W3→tmn, W4→ekb.
+- Убран устаревший `test_common_pool_picks_round_robin_branch`.
+
+**⚠️ Широкая регрессия messenger/tests:** 59 fail + 19 err (301 redirect от
+`SECURE_SSL_REDIRECT=True` в staging settings). Не регрессия от ротации — предсуществующая
+проблема test env. Зафиксировано в problems-solved, отложено в F11.
+
+---
+
 **[2026-04-18]** — F5: UserAbsence backend + UI ✅
 
 Коммиты `4ad10d0e` (backend) + `29a0e952` (UI).
