@@ -1,5 +1,33 @@
 # Текущий спринт
 
+**[2026-04-18]** — F7 R1+R2: Ролевая аналитика v2 ✅ (все 5 ролей)
+
+Коммиты `c7ccbaae` (R1 MANAGER) + `49a89797` (test fix) + `4ee7295e` (R2 остальные 4 роли).
+
+**Роли и дашборды:**
+- MANAGER → `/analytics/v2/` manager.html — 6 метрик (задачи день/неделя/
+  месяц, % в срок, workload, cold calls, истекающие договоры).
+- SALES_HEAD — рейтинг менеджеров своего подразделения + overdue +
+  онлайн-статус + воронка диалогов.
+- BRANCH_DIRECTOR — KPI подразделения + рейтинг всех подразделений
+  (своё помечено is_mine).
+- GROUP_MANAGER — executive: totals по группе + Chart.js bar-chart
+  сравнения подразделений + топ-10 менеджеров.
+- TENDERIST — read-only KPI (компании, договоры).
+
+**Сервисный слой** `backend/ui/analytics_service.py` — чистые функции
+`get_*_dashboard()`, тестируются изолированно. Хелперы:
+`_managers_leaderboard`, `_overdue_by_manager`, `_online_count`,
+`_conversations_funnel`, `_branch_companies_growth`.
+
+**Chart.js 4.4.7** через CDN с CSP nonce. Пока только 1 график (sales по
+подразделениям в GROUP_MANAGER).
+
+**Тесты (staging):** 20/20 pass. Smoke-render всех 5 ролей: 4/5 успешно
+(TENDERIST user на staging отсутствует — ожидаемо).
+
+---
+
 **[2026-04-18]** — F6 R2: Расширенный SMTP onboarding ✅
 
 Коммит `bdcc8ec2`. R1 закрыл только Fernet re-save + тест-письмо.
