@@ -34,13 +34,14 @@ def auto_assign_new_conversation(sender, instance: Conversation, created: bool, 
     if instance.status != Conversation.Status.OPEN:
         return
 
-    # Защита от race: прочитаем актуальное состояние из БД. widget_api
-    # может в той же транзакции уже назначить assignee через services.auto_assign —
+    # Защита от race: refresh_from_db на копии объекта. widget_api в той же
+    # транзакции может уже назначить assignee через services.auto_assign —
     # тогда сигнал пропускает работу.
+    # ВАЖНО: не используем .only(...) здесь — MultiBranchRouter читает полный
+    # объект (client_region, region, branch), частичная загрузка полей вызовет
+    # extra-queries или несогласованность.
     try:
-        fresh = Conversation.objects.filter(pk=instance.pk).only(
-            "id", "assignee_id", "branch_id", "status", "inbox_id", "client_region"
-        ).first()
+        fresh = Conversation.objects.filter(pk=instance.pk).first()
     except Exception:
         fresh = None
     if fresh is None:
@@ -61,11 +62,18 @@ def auto_assign_new_conversation(sender, instance: Conversation, created: bool, 
             branch = MultiBranchRouter().route(fresh)
             if branch is not None:
                 Conversation.objects.filter(pk=fresh.pk).update(branch=branch)
-                fresh.branch_id = branch.id
+                fresh.refresh_from_db()
+                # Обновляем in-memory instance тоже — чтобы внешний код видел branch
+                instance.branch_id = fresh.branch_id
+                instance.branch = fresh.branch
 
         # Единый путь назначения (Chatwoot-style).
         if fresh.branch_id:
-            messenger_services.auto_assign_conversation(fresh)
+            assigned_user = messenger_services.auto_assign_conversation(fresh)
+            if assigned_user is not None:
+                # Обновим in-memory instance для consumer'а сигнала (тесты и т.п.)
+                instance.assignee_id = assigned_user.id
+                instance.assignee = assigned_user
     except Exception:
         logger.exception("auto_assign failed for conversation %s", instance.pk)
 
