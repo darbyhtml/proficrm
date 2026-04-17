@@ -14,22 +14,58 @@ logger = logging.getLogger("messenger.auto_assign")
 def auto_assign_new_conversation(sender, instance: Conversation, created: bool, **kwargs):
     """Автоназначение только что созданного диалога на менеджера филиала.
 
-    Срабатывает лишь на create и только если у диалога нет явного assignee
-    и статус — OPEN. Используется queryset.update() внутри оркестратора,
-    поэтому рекурсии сигнала не возникает.
+    F5 Round 1 (unify): единый путь назначения через services.auto_assign_conversation
+    (Chatwoot-style round-robin + rate-limiter + select_for_update). Раньше были две
+    параллельные реализации (assignment_services/auto_assign.py делал own routing
+    через MultiBranchRouter + BranchLoadBalancer), что создавало race condition:
+    widget_api сначала делал routing+save, затем сигнал перезаписывал назначение.
+
+    Новое поведение:
+    1. Срабатывает только на create + status=OPEN.
+    2. refresh_from_db() — видим актуальное состояние, созданное в transaction widget_api.
+    3. Skip если assignee_id уже проставлен (widget_api уже назначил).
+    4. Если branch_id не задан — вызываем routing MultiBranchRouter (Conversation создан
+       через admin/ручную операцию без geo-routing).
+    5. Вызываем services.auto_assign_conversation — он сам делает select_for_update,
+       round-robin по inbox, rate-limiter, idempotent.
     """
     if not created:
-        return
-    if instance.assignee_id:
         return
     if instance.status != Conversation.Status.OPEN:
         return
 
-    # Ленивый импорт — чтобы избежать circular import при старте приложения.
-    from messenger.assignment_services.auto_assign import auto_assign_conversation
+    # Защита от race: прочитаем актуальное состояние из БД. widget_api
+    # может в той же транзакции уже назначить assignee через services.auto_assign —
+    # тогда сигнал пропускает работу.
+    try:
+        fresh = Conversation.objects.filter(pk=instance.pk).only(
+            "id", "assignee_id", "branch_id", "status", "inbox_id", "client_region"
+        ).first()
+    except Exception:
+        fresh = None
+    if fresh is None:
+        return
+    if fresh.assignee_id:
+        # Уже назначен — в том числе через widget_api.services.auto_assign_conversation
+        return
+
+    # Ленивые импорты — избегаем circular при старте приложения.
+    from messenger import services as messenger_services
 
     try:
-        auto_assign_conversation(instance)
+        # Если branch не проставлен — делаем routing через MultiBranchRouter.
+        # Это покрывает сценарий создания Conversation через admin/API оператора,
+        # где routing мог не быть выполнен до save().
+        if not fresh.branch_id:
+            from messenger.assignment_services.region_router import MultiBranchRouter
+            branch = MultiBranchRouter().route(fresh)
+            if branch is not None:
+                Conversation.objects.filter(pk=fresh.pk).update(branch=branch)
+                fresh.branch_id = branch.id
+
+        # Единый путь назначения (Chatwoot-style).
+        if fresh.branch_id:
+            messenger_services.auto_assign_conversation(fresh)
     except Exception:
         logger.exception("auto_assign failed for conversation %s", instance.pk)
 
