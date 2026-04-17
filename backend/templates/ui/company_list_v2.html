@@ -332,9 +332,11 @@
         <div>Стр. {{ page.number }} из {{ page.paginator.num_pages }} · всего {{ companies_filtered|default:companies_total }}</div>
         <div style="display:flex;gap:10px;align-items:center">
           <form method="get" style="display:inline-flex;align-items:center;gap:6px">
-            {% for k, v in request.GET.items %}{% if k != 'per_page' and k != 'page' %}<input type="hidden" name="{{ k }}" value="{{ v }}" />{% endif %}{% endfor %}
+            {# F4 P1-5: .lists() вместо .items() — сохраняем multi-value параметры
+               (status=1&status=2&region=3 при пагинации и смене per_page). #}
+            {% for k, vals in request.GET.lists %}{% if k != 'per_page' and k != 'page' %}{% for v in vals %}<input type="hidden" name="{{ k }}" value="{{ v }}" />{% endfor %}{% endif %}{% endfor %}
             <label style="font-size:12px">На странице</label>
-            <select name="per_page" class="v2-input v2-input--sm" style="width:auto" onchange="this.form.submit()">
+            <select name="per_page" class="v2-input v2-input--sm v2-autosubmit" style="width:auto">
               <option value="25"{% if per_page == 25 %} selected{% endif %}>25</option>
               <option value="50"{% if per_page == 50 %} selected{% endif %}>50</option>
               <option value="100"{% if per_page == 100 %} selected{% endif %}>100</option>
@@ -371,6 +373,11 @@ document.querySelectorAll('.v2-company-row').forEach(function(row){
 // Защита от всплытия клика из bulk-ячейки — чтобы не триггерить переход.
 document.querySelectorAll('.v2-bulk-cell').forEach(function(cell){
   cell.addEventListener('click', function(e){ e.stopPropagation(); });
+});
+
+// F4 CSP-safe: auto-submit при смене per_page (ранее был onchange inline).
+document.querySelectorAll('.v2-autosubmit').forEach(function(sel){
+  sel.addEventListener('change', function(){ if(sel.form) sel.form.submit(); });
 });
 
 // Bulk selection + preview modal

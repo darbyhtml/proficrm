@@ -64,8 +64,8 @@ def company_list(request: HttpRequest) -> HttpResponse:
     effective_user: User = get_effective_user(request)
     now = timezone.now()
     # Просмотр компаний: всем доступна вся база (без ограничения по филиалу/scope).
-    # Кэшируем общее количество компаний (TTL 10 минут)
-    from django.core.cache import cache
+    # Кэшируем общее количество компаний (TTL 10 минут).
+    # cache импортируется из ui.views._base (строка 34).
 
     # Кэш-ключ должен учитывать пользователя и режим view_as (только если режим включён)
     view_as_user = get_view_as_user(request)
@@ -132,6 +132,9 @@ def company_list(request: HttpRequest) -> HttpResponse:
         "responsible": "responsible__last_name",
         "branch": "branch__name",
         "region": "region__name",
+        # F4 P1-3: сортировка по сроку договора — важно для менеджера,
+        # «чей договор ближе к окончанию». Null'ы всегда в конце (постфильтр).
+        "contract_until": "contract_until",
     }
     sort_field = sort_map.get(sort, "updated_at")
     if sort == "responsible":
@@ -311,10 +314,10 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
     """
     user: User = request.user
     now = timezone.now()
-    
-    # Используем ту же логику, что и в company_list
-    from django.core.cache import cache
-    
+
+    # Используем ту же логику, что и в company_list.
+    # cache импортируется из ui.views._base (строка 34).
+
     # Кэш-ключ должен учитывать пользователя и режим view_as (только если режим включён)
     view_as_user = get_view_as_user(request)
     effective_user_id = view_as_user.id if view_as_user else user.id
@@ -392,6 +395,9 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
         "responsible": "responsible__last_name",
         "branch": "branch__name",
         "region": "region__name",
+        # F4 P1-3: сортировка по сроку договора — важно для менеджера,
+        # «чей договор ближе к окончанию». Null'ы всегда в конце (постфильтр).
+        "contract_until": "contract_until",
     }
     sort_field = sort_map.get(sort, "updated_at")
     if sort == "responsible":
@@ -1090,7 +1096,7 @@ def company_export(request: HttpRequest) -> HttpResponse:
             "Да" if getattr(company, "has_overdue", False) else "Нет",
         ]
 
-    import uuid
+    # uuid импортируется из ui.views._base (строка 52).
     export_id = str(uuid.uuid4())
 
     def stream():
@@ -1218,7 +1224,7 @@ def company_create(request: HttpRequest) -> HttpResponse:
                 if normalized_main:
                     all_phones.append(normalized_main)
             
-            for order, phone_value in new_company_phones:
+            for _order, phone_value in new_company_phones:
                 normalized = _normalize_phone(phone_value)
                 if normalized:
                     all_phones.append(normalized)
