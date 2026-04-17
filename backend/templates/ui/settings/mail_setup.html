@@ -1,0 +1,159 @@
+{% extends "ui/base.html" %}
+{% block title %}Настройка почты — CRM ПРОФИ{% endblock %}
+
+{% block extra_head %}
+  {% include "ui/_v2/v2_styles.html" %}
+  {% include "ui/_v2/v3_styles.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="v2 space-y-4">
+
+  <nav class="text-xs text-brand-dark/50 mb-1" aria-label="Хлебные крошки">
+    <a href="/admin/" class="hover:text-brand-teal transition">Настройки</a>
+    <span class="mx-1" aria-hidden="true">›</span>
+    <span>Почта (SMTP)</span>
+  </nav>
+
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h1 class="v2-h1" style="margin:0">Настройка почты (SMTP)</h1>
+      <div class="v2-muted">Разовая настройка для отправки массовых рассылок.</div>
+    </div>
+  </div>
+
+  {% if messages %}
+    <div class="space-y-2">
+      {% for m in messages %}
+        <div class="rounded-xl px-4 py-3 text-sm
+          {% if 'success' in m.tags %}bg-emerald-50 border border-emerald-200 text-emerald-800
+          {% elif 'error' in m.tags %}bg-red-50 border border-red-200 text-red-800
+          {% else %}bg-brand-soft/30 border border-brand-soft text-brand-dark{% endif %}">
+          {{ m }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {# ── Блок 1: статус настройки ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Текущее состояние</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px">
+      <dl style="display:grid;grid-template-columns:200px 1fr;gap:8px 16px;font-size:14px;line-height:1.5">
+        <dt class="v2-muted">Включено</dt>
+        <dd>
+          {% if account.is_enabled %}
+            <span class="v3-badge v3-badge--success">Да</span>
+          {% else %}
+            <span class="v3-badge v3-badge--danger">Нет</span>
+            <span class="v2-muted" style="margin-left:6px;font-size:13px">— без этого рассылка не стартует</span>
+          {% endif %}
+        </dd>
+
+        <dt class="v2-muted">SMTP сервер</dt>
+        <dd>{{ account.smtp_host }}:{{ account.smtp_port }}{% if account.use_starttls %} (STARTTLS){% endif %}</dd>
+
+        <dt class="v2-muted">Логин</dt>
+        <dd>{{ account.smtp_username|default:"—" }}</dd>
+
+        <dt class="v2-muted">From</dt>
+        <dd>{{ account.from_name }} &lt;{{ account.from_email }}&gt;</dd>
+
+        <dt class="v2-muted">Лимит/минута</dt>
+        <dd>{{ account.rate_per_minute }} писем · {{ account.rate_per_day }}/день · {{ account.per_user_daily_limit }}/менеджер/день</dd>
+
+        <dt class="v2-muted">Пароль (Fernet)</dt>
+        <dd>
+          {% if fernet_status.valid %}
+            <span class="v3-badge v3-badge--success">Валиден</span>
+            <span class="v2-muted" style="margin-left:6px;font-size:13px">— расшифровка проходит</span>
+          {% elif fernet_status.has_password %}
+            <span class="v3-badge v3-badge--danger">InvalidToken</span>
+            <div class="v2-muted" style="margin-top:6px;font-size:13px;line-height:1.5">
+              Пароль зашифрован, но не расшифровывается текущим <code>MAILER_FERNET_KEY</code>
+              в <code>.env</code>. Чаще всего — ключ был заменён после первоначальной настройки.
+              {% if fernet_status.error %}<br><span style="color:#c62828">Тех. детали: {{ fernet_status.error }}</span>{% endif %}
+              <div style="margin-top:8px"><strong>Исправление:</strong> просто введите пароль SMTP ниже — он зашифруется текущим ключом.</div>
+            </div>
+          {% else %}
+            <span class="v3-badge v3-badge--warn">Не задан</span>
+            <span class="v2-muted" style="margin-left:6px;font-size:13px">— введите пароль ниже, чтобы начать отправку</span>
+          {% endif %}
+        </dd>
+      </dl>
+    </div>
+  </section>
+
+  {# ── Блок 2: пересохранить пароль ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Пересохранить пароль SMTP</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px">
+      <p class="v2-muted" style="margin:0 0 12px 0;font-size:13px;line-height:1.5">
+        Введите действующий пароль вашей учётки SMTP (smtp.bz / Яндекс / другой провайдер).
+        Он будет зашифрован текущим <code>MAILER_FERNET_KEY</code> и сохранён в БД.
+        Приёмник и сервер не трогаем — только пароль.
+      </p>
+
+      <form method="post" action="/admin/mail/setup/save-password/" class="space-y-3" id="smtpPasswordForm">
+        {% csrf_token %}
+        <div>
+          <label for="id_new_password" class="v3-label">Пароль SMTP</label>
+          <input type="password" name="new_password" id="id_new_password"
+                 class="v2-input" style="max-width:420px" autocomplete="off" required />
+        </div>
+        <div>
+          <button type="submit" class="v2-btn">Сохранить и проверить расшифровку</button>
+        </div>
+      </form>
+
+      <div class="rounded-xl bg-brand-soft/30 border border-brand-soft px-4 py-3 text-sm mt-4" style="font-size:13px;line-height:1.5">
+        <strong>Что произойдёт после сохранения:</strong>
+        <ol style="margin:6px 0 0 20px;padding:0">
+          <li>Пароль зашифрован Fernet и записан в <code>GlobalMailAccount.smtp_password_enc</code>.</li>
+          <li>Сразу проверим обратную расшифровку — результат должен совпасть с введённым.</li>
+          <li>Событие записывается в журнал действий (audit) для compliance.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  {# ── Блок 3: тест-письмо ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Тестовое письмо</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px">
+      <p class="v2-muted" style="margin:0 0 12px 0;font-size:13px;line-height:1.5">
+        Отправит тест на email вашей учётки ({% if request.user.email %}<code>{{ request.user.email }}</code>{% else %}<span style="color:#c62828">email не задан</span>{% endif %}).
+        Полный end-to-end: расшифровка пароля → SMTP handshake → отправка.
+      </p>
+      <form method="post" action="/admin/mail/setup/test-send/">
+        {% csrf_token %}
+        <button type="submit" class="v2-btn v2-btn--ghost"
+                {% if not account.is_enabled or not fernet_status.valid or not request.user.email %}disabled title="Отключено: требуется включённый аккаунт, валидный Fernet-пароль и email пользователя"{% endif %}>
+          Отправить тест-письмо
+        </button>
+      </form>
+    </div>
+  </section>
+
+  {# ── Блок 4: дополнительно ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Что дальше</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px;font-size:13px;line-height:1.6">
+      <ul style="margin:0;padding-left:20px">
+        <li>Детальные настройки (host, port, rate limit, API ключ smtp.bz) — пока через <a href="/django-admin/mailer/globalmailaccount/" class="link">Django Admin</a>. Это временно, до F8 R2 полного редизайна Админки.</li>
+        <li>Раздел <a href="/mail/campaigns/" class="link">Почта → Кампании</a> — создание и запуск рассылок. Работает только при валидном Fernet и включённом SMTP.</li>
+        <li>При массовых ошибках отправки — <a href="/admin/error-log/" class="link">Журнал ошибок</a>.</li>
+      </ul>
+    </div>
+  </section>
+
+</div>
+{% endblock %}
