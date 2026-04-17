@@ -64,10 +64,11 @@
           >
             <option value="" {% if not role_filter %}selected{% endif %}>Все</option>
             <option value="admin" {% if role_filter == 'admin' %}selected{% endif %}>Администраторы</option>
-            <option value="manager" {% if role_filter == 'manager' %}selected{% endif %}>Менеджеры</option>
+            <option value="group_manager" {% if role_filter == 'group_manager' %}selected{% endif %}>Управляющие группой компаний</option>
             <option value="branch_director" {% if role_filter == 'branch_director' %}selected{% endif %}>Директоры подразделений</option>
-            <option value="sales_head" {% if role_filter == 'sales_head' %}selected{% endif %}>Руководители отдела продаж</option>
-            <option value="group_manager" {% if role_filter == 'group_manager' %}selected{% endif %}>Управляющие группой</option>
+            <option value="sales_head" {% if role_filter == 'sales_head' %}selected{% endif %}>РОП</option>
+            <option value="manager" {% if role_filter == 'manager' %}selected{% endif %}>Менеджеры</option>
+            <option value="tenderist" {% if role_filter == 'tenderist' %}selected{% endif %}>Тендеристы</option>
           </select>
         </div>
         <div class="min-w-[140px]">

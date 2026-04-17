@@ -4,11 +4,11 @@
 {% block content %}
   <div class="space-y-4">
     <div>
-      <div class="text-sm muted">
-        <a class="link" href="/admin/">Настройки</a> /
-        <a class="link" href="/admin/mobile/devices/">Мобильное приложение</a> /
-      </div>
-      <div class="text-sm text-brand-dark/70"><a class="underline" href="/admin/">Настройки</a> /</div>
+      <nav class="text-sm muted" aria-label="Хлебные крошки">
+        <a class="link" href="/admin/">Настройки</a>
+        <span aria-hidden="true">/</span>
+        <a class="link" href="/admin/mobile/devices/">Мобильное приложение</a>
+      </nav>
       <h1 class="text-2xl font-semibold">Мобильное приложение — обзор</h1>
       <div class="text-sm text-brand-dark/70">
         Dashboard с метриками и алертами за последние 24 часа

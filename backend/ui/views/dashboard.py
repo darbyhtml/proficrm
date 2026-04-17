@@ -879,12 +879,14 @@ def preferences_password(request: HttpRequest) -> HttpResponse:
         user = form.save()
         update_session_auth_hash(request, user)
         messages.success(request, "Пароль успешно изменён.")
-        return redirect("/settings/#security")
+        # Редирект на существующий tab (profile). Вкладка «Безопасность»
+        # будет создана в F8 — тогда можно будет вернуть #security.
+        return redirect("/settings/#profile")
     else:
         for field_errors in form.errors.values():
             for err in field_errors:
                 messages.error(request, err)
-        return redirect("/settings/#security")
+        return redirect("/settings/#profile")
 
 
 @login_required

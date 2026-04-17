@@ -3,6 +3,7 @@
 
 {% block extra_head %}
   {% include "ui/_v2/v2_styles.html" %}
+  {% include "ui/_v2/v3_styles.html" %}
   <style>
     .v2-tile {
       display: flex; align-items: flex-start; gap: 14px;
@@ -53,45 +54,10 @@
     }
     .v2-tile__hint--ok { color: #15803d; }
     .v2-tile__hint--warn { color: #b45309; }
-
-    /* Пресеты масштаба интерфейса */
-    .v2-scale-picker {
-      display: flex; flex-wrap: wrap; gap: 10px;
-      padding: 14px 16px;
-      background: var(--v2-bg);
-      border: 1px solid var(--v2-border);
-      border-radius: var(--v2-radius-lg);
-      box-shadow: var(--v2-shadow-sm);
-    }
-    .v2-scale-picker__label {
-      font-size: 13px; font-weight: 500; color: var(--v2-text-soft);
-      display: flex; align-items: center; margin-right: 6px;
-    }
-    .v2-scale-btn {
-      display: inline-flex; flex-direction: column; align-items: center;
-      min-width: 74px; padding: 8px 12px;
-      background: var(--v2-bg-soft);
-      border: 1px solid var(--v2-border-strong);
-      border-radius: var(--v2-radius-sm);
-      cursor: pointer;
-      font-family: inherit;
-      transition: all .15s ease;
-    }
-    .v2-scale-btn:hover {
-      border-color: var(--v2-primary);
-      background: var(--v2-primary-50);
-    }
-    .v2-scale-btn--active {
-      background: var(--v2-primary);
-      border-color: var(--v2-primary);
-      color: #ffffff;
-    }
-    .v2-scale-btn--active:hover {
-      background: var(--v2-primary-dark);
-      border-color: var(--v2-primary-dark);
-    }
-    .v2-scale-btn__pct { font-size: 14px; font-weight: 700; line-height: 1.2; }
-    .v2-scale-btn__label { font-size: 11px; margin-top: 2px; opacity: .85; }
+    /* Пресеты масштаба интерфейса — CSS классы были здесь, но разметка
+       scale-picker живёт только в preferences_ui.html. Dead CSS удалён
+       в F0d quick-win 2026-04-17. Если scale-picker нужен на этой
+       странице — добавить разметку И повторить CSS. */
   </style>
 {% endblock %}
 
@@ -285,35 +251,6 @@
 
 </div>
 
-<script>
-(function(){
-  const picker = document.querySelector('[data-v2-scale-picker]');
-  if(!picker) return;
-  const htmlEl = document.documentElement;
-  const csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
-
-  picker.querySelectorAll('.v2-scale-btn').forEach(function(btn){
-    btn.addEventListener('click', async function(){
-      const scale = btn.getAttribute('data-scale');
-      if(!scale) return;
-      // Мгновенное применение: меняем CSS-переменную на <html> (её читает .v2 { zoom: ... }).
-      htmlEl.style.setProperty('--ui-font-scale', scale);
-      // Визуальная подсветка
-      picker.querySelectorAll('.v2-scale-btn').forEach(function(b){ b.classList.remove('v2-scale-btn--active'); });
-      btn.classList.add('v2-scale-btn--active');
-      // Сохранение в профиль (fire-and-forget, но с обработкой ошибок)
-      try{
-        const fd = new FormData();
-        fd.append('csrfmiddlewaretoken', csrf);
-        fd.append('scale', scale);
-        const res = await fetch('/settings/ui/v2-scale/', {
-          method:'POST', body:fd, credentials:'same-origin',
-          headers:{'X-Requested-With':'XMLHttpRequest'}
-        });
-        if(!res.ok){ console.warn('v2-scale save failed', res.status); }
-      }catch(err){ console.warn('v2-scale save error', err); }
-    });
-  });
-})();
-</script>
+{# Dead scale-picker JS удалён в F0d quick-win 2026-04-17.
+   Разметка picker живёт только в preferences_ui.html, там же свой JS. #}
 {% endblock %}
