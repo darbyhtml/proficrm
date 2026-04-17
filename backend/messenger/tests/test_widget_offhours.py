@@ -12,7 +12,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db.models.signals import post_save
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -29,6 +29,11 @@ from messenger.utils import create_widget_session
 User = get_user_model()
 
 
+@override_settings(
+    SECURE_SSL_REDIRECT=False,
+    SECURE_HSTS_SECONDS=0,
+    SESSION_COOKIE_SECURE=False,
+)
 class WidgetOffHoursRequestTests(TestCase):
     def setUp(self):
         # Сигнал не нужен — тесты проверяют широкий state вручную.
@@ -137,6 +142,11 @@ class WidgetOffHoursRequestTests(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
+@override_settings(
+    SECURE_SSL_REDIRECT=False,
+    SECURE_HSTS_SECONDS=0,
+    SESSION_COOKIE_SECURE=False,
+)
 class ContactedBackActionTests(TestCase):
     def setUp(self):
         post_save.disconnect(auto_assign_new_conversation, sender=Conversation)
