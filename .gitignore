@@ -131,3 +131,4 @@ knowledge-base/
 
 # graphify knowledge graph (local tool, not committed)
 graphify-out/
+.claude/.prod-readonly-allowed
