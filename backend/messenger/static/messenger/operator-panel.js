@@ -971,6 +971,7 @@ class MessengerOperatorPanel {
     let statusBadge = '';
     if (status === 'open') statusBadge = '<span class="badge badge-new badge-xs">Открыт</span>';
     else if (status === 'pending') statusBadge = '<span class="badge badge-progress badge-xs">Ожидание</span>';
+    else if (status === 'waiting_offline') statusBadge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-800 border border-amber-300" title="Заявка вне рабочих часов"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>Ждёт связи</span>';
     else if (status === 'resolved') statusBadge = '<span class="badge badge-done badge-xs">Решён</span>';
     else if (status === 'closed') statusBadge = '<span class="badge badge-cancel badge-xs">Закрыт</span>';
 
@@ -3046,6 +3047,7 @@ class MessengerOperatorPanel {
           </svg>
         </button>
         <div id="headerMenuDropdown" class="hidden absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-brand-soft/40 z-50 py-1 text-sm">
+          ${conversation.status === 'waiting_offline' ? '<button type="button" data-action="contacted-back" class="w-full text-left px-3 py-2 hover:bg-emerald-50 text-emerald-700 font-medium">✓ Я связался</button>' : ''}
           <button type="button" data-action="transfer" class="w-full text-left px-3 py-2 hover:bg-brand-soft/30 text-brand-dark">Передать оператору</button>
           <button type="button" data-action="needs-help" class="w-full text-left px-3 py-2 hover:bg-brand-soft/30 text-brand-dark">Позвать старшего</button>
           <button type="button" data-action="unassign" class="w-full text-left px-3 py-2 hover:bg-brand-soft/30 text-brand-dark">Вернуть в очередь</button>
@@ -3142,6 +3144,37 @@ class MessengerOperatorPanel {
     if (action === 'unassign') {
       this.patchConversation(conversationId, { assignee: null });
       return;
+    }
+    if (action === 'contacted-back') {
+      this.handleContactedBack(conversationId);
+      return;
+    }
+  }
+
+  async handleContactedBack(conversationId) {
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}/contacted-back/`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+          'X-CSRFToken': this.getCsrfToken(),
+        },
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || 'Ошибка запроса');
+      }
+      this.showToast('Диалог взят в работу', 'success');
+      // Перезагрузим конверсацию, чтобы статус/assignee обновились в UI.
+      if (typeof this.reloadCurrentConversation === 'function') {
+        this.reloadCurrentConversation();
+      } else {
+        window.location.reload();
+      }
+    } catch (e) {
+      console.error('handleContactedBack failed:', e);
+      this.showToast('Не удалось отметить связь: ' + (e.message || e), 'error');
     }
   }
 
