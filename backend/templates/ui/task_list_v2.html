@@ -577,15 +577,37 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
   injectFiltersAndIds(reassignForm);
   injectFiltersAndIds(rescheduleForm);
 
-  // Валидация даты для перенос
+  // Валидация даты для переноса
   if(rescheduleForm){
     rescheduleForm.addEventListener('submit', function(e){
       const dt = rescheduleForm.querySelector('input[name="due_at"]');
       if(!dt || !dt.value){
         e.preventDefault();
-        alert('Укажи новый срок (дата и время)');
+        if(window.V2Toast) V2Toast.show('Укажи новый срок (дата и время)', {type:'err'});
+        else alert('Укажи новый срок (дата и время)');
         return false;
       }
+    });
+  }
+
+  // F3 P1-4: confirm для bulk-reassign при >5 задачах (предотвращает массовое
+  // случайное переназначение). Двойной клик по кнопке «Применить» с бейджем
+  // «Подтвердите: N задач будет переназначено». Для ≤5 — без confirm.
+  if(reassignForm && apply){
+    reassignForm.addEventListener('submit', function(e){
+      const n = document.querySelectorAll('.v2-bulk-row:checked').length;
+      if(n <= 5) return;  // малое количество — без confirm
+      if(apply.dataset.bulkConfirmed === '1') return;  // второй submit
+      e.preventDefault();
+      apply.dataset.bulkConfirmed = '1';
+      const orig = apply.textContent;
+      apply.textContent = `Подтвердить: ${n} задач?`;
+      apply.classList.add('v2-btn--danger');
+      apply._confirmTimer = setTimeout(function(){
+        apply.dataset.bulkConfirmed = '';
+        apply.textContent = orig;
+        apply.classList.remove('v2-btn--danger');
+      }, 3000);
     });
   }
 
@@ -661,18 +683,65 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
   }
   updateBadge();
 
+  // F3 P2-2: focus trap для popover фильтров (WCAG 2.4.3).
+  // Раньше Tab уводил за пределы popover — keyboard-only юзер терялся.
+  // Паттерн совпадает с v2_modal focus trap.
+  let _popTrigger = null;
+  function _getFocusable(){
+    return Array.prototype.slice.call(
+      pop.querySelectorAll(
+        'a[href], button:not([disabled]), textarea, input:not([disabled]), select, [tabindex]:not([tabindex="-1"])'
+      )
+    );
+  }
+  function _openPop(){
+    _popTrigger = document.activeElement;
+    pop.hidden = false;
+    toggle.setAttribute('aria-expanded', 'true');
+    // Перемещаем фокус на первый focusable внутри
+    const els = _getFocusable();
+    if(els.length) els[0].focus();
+  }
+  function _closePop(){
+    pop.hidden = true;
+    toggle.setAttribute('aria-expanded', 'false');
+    // Возвращаем фокус триггеру (но не если фокус уже вне popover)
+    if(_popTrigger && typeof _popTrigger.focus === 'function' &&
+       !pop.contains(document.activeElement)){
+      _popTrigger.focus();
+    }
+    _popTrigger = null;
+  }
+  // WCAG: toggle как настоящая кнопка с ARIA
+  toggle.setAttribute('aria-expanded', pop.hidden ? 'false' : 'true');
+  toggle.setAttribute('aria-haspopup', 'dialog');
+
   toggle.addEventListener('click', function(e){
     e.stopPropagation();
-    pop.hidden = !pop.hidden;
+    if(pop.hidden) _openPop(); else _closePop();
   });
-  closeBtn?.addEventListener('click', function(){ pop.hidden = true; });
+  closeBtn?.addEventListener('click', function(){ _closePop(); });
   document.addEventListener('click', function(e){
     if(pop.hidden) return;
     if(pop.contains(e.target) || toggle.contains(e.target)) return;
-    pop.hidden = true;
+    _closePop();
   });
   document.addEventListener('keydown', function(e){
-    if(e.key === 'Escape' && !pop.hidden){ pop.hidden = true; }
+    if(pop.hidden) return;
+    if(e.key === 'Escape'){ _closePop(); return; }
+    // Focus trap на Tab внутри popover
+    if(e.key === 'Tab'){
+      const els = _getFocusable();
+      if(!els.length) return;
+      const first = els[0], last = els[els.length - 1];
+      // Проверяем, что фокус сейчас внутри popover
+      if(!pop.contains(document.activeElement)) return;
+      if(e.shiftKey && document.activeElement === first){
+        e.preventDefault(); last.focus();
+      } else if(!e.shiftKey && document.activeElement === last){
+        e.preventDefault(); first.focus();
+      }
+    }
   });
 
   // Поиск в верхней строке: Enter → submit формы

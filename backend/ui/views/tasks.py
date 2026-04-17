@@ -269,6 +269,21 @@ def task_list(request: HttpRequest) -> HttpResponse:
         except (ValueError, TypeError):
             pass
 
+    # F3 perf: .only() для списка. Загружаем только поля, использующиеся в
+    # task_list_v2.html (title, status, due_at, description, is_urgent,
+    # type + assignee/company для display-name/адреса, work_timezone для
+    # v2-tz-badge). Ранее грузились все поля компании — N+1-риск на
+    # address/work_timezone.
+    qs = qs.only(
+        "id", "title", "description", "status", "due_at", "created_at",
+        "updated_at", "completed_at", "is_urgent", "type_id",
+        "assigned_to__id", "assigned_to__first_name", "assigned_to__last_name",
+        "assigned_to__branch_id",
+        "company__id", "company__name", "company__address", "company__work_timezone",
+        "created_by__id", "created_by__first_name", "created_by__last_name",
+        "type__id", "type__name", "type__color", "type__icon",
+    )
+
     paginator = Paginator(qs, per_page)
     page = paginator.get_page(request.GET.get("page"))
     # Формируем query string без параметров page, sort, dir (sort и dir добавляются в ссылках заголовков)
@@ -843,107 +858,9 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: int 
     form.fields["assigned_to"].queryset = queryset
 
 
-def _can_manage_task_status_ui(user: User, task: Task) -> bool:
-    if not user or not user.is_authenticated or not user.is_active:
-        return False
-    if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
-        return True
-    # Создатель всегда может менять статус своей задачи (проверяем ПЕРВЫМ)
-    if task.created_by_id and task.created_by_id == user.id:
-        return True
-    # Исполнитель может менять статус назначенной ему задачи
-    if task.assigned_to_id and task.assigned_to_id == user.id:
-        return True
-    # Ответственный за компанию может менять статус задач по своей компании
-    if task.company_id:
-        try:
-            company = getattr(task, "company", None)
-            if company and company.responsible_id == user.id:
-                return True
-        except Exception:
-            pass
-    if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
-        branch_id = None
-        if task.company_id and getattr(task, "company", None):
-            branch_id = getattr(task.company, "branch_id", None)
-        if not branch_id and getattr(task, "assigned_to", None):
-            branch_id = getattr(task.assigned_to, "branch_id", None)
-        return bool(branch_id and branch_id == user.branch_id)
-    return False
-
-
-def _can_edit_task_ui(user: User, task: Task) -> bool:
-    """
-    Право на редактирование задачи:
-    - Создатель всегда может редактировать свою задачу
-    - Исполнитель (assigned_to) может редактировать назначенную ему задачу
-    - Администратор / управляющий — любые задачи
-    - Ответственный за карточку компании (company.responsible)
-    - Директор филиала / РОП — задачи своего филиала
-    """
-    # Создатель всегда может редактировать свою задачу (проверяем ПЕРВЫМ)
-    if task.created_by_id and task.created_by_id == user.id:
-        return True
-    # Исполнитель может редактировать назначенную ему задачу
-    if task.assigned_to_id and task.assigned_to_id == user.id:
-        return True
-    # Админ/управляющий — любые задачи
-    if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
-        return True
-    # Ответственный за компанию
-    if task.company_id:
-        try:
-            company = getattr(task, "company", None)
-            if company and company.responsible_id == user.id:
-                return True
-        except Exception:
-            pass
-    # РОП/директор — задачи своего филиала
-    if user.role in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR) and user.branch_id and task.company_id:
-        try:
-            if getattr(task.company, "branch_id", None) == user.branch_id:
-                return True
-        except Exception:
-            pass
-    return False
-
-
-def _can_delete_task_ui(user: User, task: Task) -> bool:
-    """
-    Право на удаление задачи:
-    - Администратор / управляющий — любые задачи;
-    - Создатель может удалять свои задачи;
-    - Исполнитель может удалять назначенные ему задачи;
-    - Ответственный за карточку компании (company.responsible);
-    - Директор филиала / РОП — задачи своего филиала.
-    """
-    if not user or not user.is_authenticated or not user.is_active:
-        return False
-    if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
-        return True
-    # Создатель всегда может удалять свою задачу (проверяем ПЕРВЫМ)
-    if task.created_by_id and task.created_by_id == user.id:
-        return True
-    # Исполнитель может удалять назначенную ему задачу
-    if task.assigned_to_id and task.assigned_to_id == user.id:
-        return True
-    # Ответственный за компанию
-    if task.company_id and getattr(task, "company", None):
-        try:
-            if getattr(task.company, "responsible_id", None) == user.id:
-                return True
-        except Exception:
-            pass
-    # Директор филиала / РОП — внутри своего филиала
-    if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
-        branch_id = None
-        if task.company_id and getattr(task, "company", None):
-            branch_id = getattr(task.company, "branch_id", None)
-        if not branch_id and getattr(task, "assigned_to", None):
-            branch_id = getattr(task.assigned_to, "branch_id", None)
-        if branch_id and branch_id == user.branch_id:
-            return True
-    return False
+# F3 R2 cleanup: локальные дубли _can_manage_task_status_ui / _can_edit_task_ui /
+# _can_delete_task_ui удалены — используются импортированные версии из ui.views._base
+# (строки импорта 24-27). Логика идентична, type hints теперь только в _base.py.
 
 
 def _create_note_from_task(task: Task, user: User) -> CompanyNote:
