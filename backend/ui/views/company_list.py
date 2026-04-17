@@ -251,6 +251,13 @@ def company_list(request: HttpRequest) -> HttpResponse:
     has_companies_without_responsible = Company.objects.filter(responsible__isnull=True).exists()
 
     is_admin = require_admin(user)
+    # Bulk-transfer UI доступен ADMIN, GROUP_MANAGER, SALES_HEAD, BRANCH_DIRECTOR.
+    # policy/engine и companies.permissions уже разрешают bulk_transfer этим ролям,
+    # но шаблон раньше проверял только is_admin → UI был недоступен РОПу и Директору.
+    can_bulk_transfer = bool(
+        is_admin
+        or (user.role in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR, User.Role.GROUP_MANAGER))
+    )
 
     return render(
         request,

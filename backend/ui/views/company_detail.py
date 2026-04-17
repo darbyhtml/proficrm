@@ -171,22 +171,28 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     # Индикатор: можно ли звонить (рабочее время компании + часовой пояс)
     from companies.services import get_worktime_status
     worktime = get_worktime_status(company)
-    tasks = (
-        Task.objects.filter(company=company)
-        .exclude(status=Task.Status.DONE)  # Исключаем выполненные задачи
-        .select_related("assigned_to", "type", "created_by")
-        .annotate(
-            is_overdue=models.Case(
-                models.When(
-                    models.Q(due_at__lt=now) & ~models.Q(status__in=[Task.Status.DONE, Task.Status.CANCELLED]),
-                    then=models.Value(1)
-                ),
-                default=models.Value(0),
-                output_field=models.IntegerField()
+
+    # ROLE: Тендерист не работает с задачами — только заметки.
+    # Раньше задачи по компании ему показывались в карточке (баг из аудита).
+    if user.role == User.Role.TENDERIST:
+        tasks = Task.objects.none()
+    else:
+        tasks = (
+            Task.objects.filter(company=company)
+            .exclude(status=Task.Status.DONE)  # Исключаем выполненные задачи
+            .select_related("assigned_to", "type", "created_by")
+            .annotate(
+                is_overdue=models.Case(
+                    models.When(
+                        models.Q(due_at__lt=now) & ~models.Q(status__in=[Task.Status.DONE, Task.Status.CANCELLED]),
+                        then=models.Value(1)
+                    ),
+                    default=models.Value(0),
+                    output_field=models.IntegerField()
+                )
             )
+            .order_by("-is_overdue", "due_at", "-created_at")[:25]
         )
-        .order_by("-is_overdue", "due_at", "-created_at")[:25]
-    )
     for t in tasks:
         t.can_manage_status = _can_manage_task_status_ui(user, t)  # type: ignore[attr-defined]
         t.can_edit_task = _can_edit_task_ui(user, t)  # type: ignore[attr-defined]
@@ -269,14 +275,13 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     from companies.services import get_contract_alert
     contract_alert, contract_days_left = get_contract_alert(company)
 
-    # Принудительно загружаем телефоны, чтобы убедиться, что prefetch работает
-    # Это гарантирует, что телефоны будут доступны в шаблоне
+    # Принудительно загружаем телефоны, чтобы убедиться, что prefetch работает.
+    # Это гарантирует, что телефоны будут доступны в шаблоне.
+    # SECURITY: ранее здесь были logger.info/warning с UUID компании и количеством
+    # телефонов — это попадало в production-логи как INFO/WARNING и создавало
+    # PII-утечку для audit системы. Убрано. Если нужно диагностировать —
+    # установить LEVEL=DEBUG в settings для этого логгера.
     company_phones_list = list(company.phones.all())
-    # Отладочная информация: логируем количество загруженных телефонов
-    if company_phones_list:
-        logger.info(f"Company {company.id} has {len(company_phones_list)} phones loaded")
-    else:
-        logger.warning(f"Company {company.id} has no phones loaded (check if phones exist in DB)")
     
     # Получаем режим просмотра карточки: из GET параметра, session или preferences (по умолчанию classic)
     detail_view_mode = request.GET.get("view", "").strip().lower()

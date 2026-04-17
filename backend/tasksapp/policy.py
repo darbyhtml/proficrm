@@ -19,6 +19,8 @@ def visible_tasks_qs(user: User) -> QuerySet[Task]:
     Базовый queryset задач, видимых пользователю.
 
     Логика синхронизирована с UI (task_list) и API (TaskViewSet.get_queryset):
+    - тендерист: только свои задачи (если есть — read-only работает с заметками,
+      задач быть не должно, но на всякий случай фильтруем по assigned_to),
     - менеджер: только свои задачи (исполнитель),
     - директор/РОП: задачи своего филиала + свои,
     - админ/управляющий: все активные задачи.
@@ -28,7 +30,12 @@ def visible_tasks_qs(user: User) -> QuerySet[Task]:
     if not user or not user.is_authenticated or not user.is_active:
         return qs.none()
 
-    if user.role == User.Role.MANAGER:
+    if user.role == User.Role.TENDERIST:
+        # SECURITY: раньше TENDERIST попадал в default-ветку ниже и видел
+        # задачи всех подразделений. По бизнес-правилу он не имеет задач вообще
+        # (только заметки), но если они случайно созданы — видит только свои.
+        qs = qs.filter(assigned_to=user)
+    elif user.role == User.Role.MANAGER:
         qs = qs.filter(assigned_to=user)
     elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
         qs = qs.filter(

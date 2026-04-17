@@ -78,9 +78,14 @@ def get_contract_alert(company: Company) -> tuple[str, int | None]:
     return "", days_left
 
 
-def _get_annual_contract_alert(amount) -> str | None:
+def _get_annual_contract_alert(amount, contract_type=None) -> str | None:
     """
     Определяет уровень алерта для годового договора по сумме.
+
+    Пороги берутся из `contract_type.amount_danger_threshold` и
+    `amount_warn_threshold` (настраиваются через админку). Если contract_type
+    не передан или пороги не заданы — fallback на модульные константы
+    (исторические 25 000 / 70 000).
 
     Returns:
         "danger" | "warn" | None
@@ -88,9 +93,18 @@ def _get_annual_contract_alert(amount) -> str | None:
     if amount is None:
         # Нет суммы → напомнить заполнить
         return "warn"
-    if amount < ANNUAL_CONTRACT_DANGER_AMOUNT:
+
+    danger_limit = ANNUAL_CONTRACT_DANGER_AMOUNT
+    warn_limit = ANNUAL_CONTRACT_WARN_AMOUNT
+    if contract_type is not None:
+        if getattr(contract_type, "amount_danger_threshold", None) is not None:
+            danger_limit = contract_type.amount_danger_threshold
+        if getattr(contract_type, "amount_warn_threshold", None) is not None:
+            warn_limit = contract_type.amount_warn_threshold
+
+    if amount < danger_limit:
         return "danger"
-    if amount < ANNUAL_CONTRACT_WARN_AMOUNT:
+    if amount < warn_limit:
         return "warn"
     return None
 
@@ -163,11 +177,16 @@ def get_dashboard_contracts(user, today=None, limit: int = DASHBOARD_CONTRACTS_L
     annual_qs = (
         Company.objects.filter(responsible=user, contract_type__is_annual=True)
         .select_related("contract_type")
-        .only("id", "name", "contract_type", "contract_amount")
+        .only(
+            "id", "name", "contract_type", "contract_amount",
+            # подтягиваем пороги типа договора чтобы избежать N+1
+            "contract_type__id", "contract_type__amount_danger_threshold",
+            "contract_type__amount_warn_threshold",
+        )
         .order_by("contract_amount", "name")[:limit]
     )
     for c in annual_qs:
-        level = _get_annual_contract_alert(c.contract_amount)
+        level = _get_annual_contract_alert(c.contract_amount, contract_type=c.contract_type)
         if level:
             result.append({
                 "company": c,

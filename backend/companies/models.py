@@ -71,6 +71,21 @@ class ContractType(models.Model):
         default=7,
         help_text="За сколько дней до окончания договора показывать красное предупреждение"
     )
+    # Пороговые суммы для годовых договоров (is_annual=True).
+    # Были захардкожены в шаблонах и services.py как 25 000 / 70 000.
+    # Теперь настраиваются через админку для каждого типа договора.
+    amount_danger_threshold = models.DecimalField(
+        "Красный порог суммы (₽)",
+        max_digits=12, decimal_places=2,
+        null=True, blank=True, default=25000,
+        help_text="Если сумма годового договора МЕНЬШЕ этой — показываем красный алерт. Только для годовых."
+    )
+    amount_warn_threshold = models.DecimalField(
+        "Жёлтый порог суммы (₽)",
+        max_digits=12, decimal_places=2,
+        null=True, blank=True, default=70000,
+        help_text="Если сумма МЕНЬШЕ этой (но БОЛЬШЕ красного порога) — показываем жёлтый алерт. Только для годовых."
+    )
     order = models.IntegerField("Порядок сортировки", default=0, db_index=True)
 
     class Meta:

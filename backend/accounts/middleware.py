@@ -38,6 +38,14 @@ class RateLimitMiddleware(MiddlewareMixin):
     # в норме × 5 вкладок = 10 req/min. Лимит 120/min даёт большой запас.
     DASHBOARD_POLL_PATH = "/api/dashboard/poll/"
 
+    # Task mutations — per-user rate limit. Каждый POST меняет статус
+    # одной задачи, обычный паттерн: 1-3 req/min. Лимит 60 req/min защищает
+    # от бот-перебора или скрипт-автоматизации без блокировки легитимных
+    # bulk-операций (bulk идут через отдельные эндпоинты).
+    TASK_MUTATION_PATTERNS = (
+        "/tasks/",  # будет сужено до POST-методов и нужных путей ниже
+    )
+
     def process_request(self, request):
         # Пропускаем статические файлы
         path = request.path
@@ -55,6 +63,29 @@ class RateLimitMiddleware(MiddlewareMixin):
             if is_ip_rate_limited(bucket_key, "dash_poll", 120, 60):
                 return JsonResponse(
                     {"detail": "Слишком частый polling. Попробуйте позже."},
+                    status=429,
+                )
+            return None
+
+        # Task mutations (status/comment) — per-user, только для POST.
+        # Защита от DoS и bulk-scraping. Paths: /tasks/<uuid>/status/,
+        # /tasks/<uuid>/comment/add/, /tasks/<uuid>/delete/.
+        # bulk-reassign и bulk-reschedule через отдельные endpoint'ы и
+        # не попадают под этот паттерн.
+        if (
+            request.method == "POST"
+            and path.startswith("/tasks/")
+            and (
+                path.endswith("/status/")
+                or path.endswith("/comment/add/")
+                or path.endswith("/delete/")
+            )
+        ):
+            user_id = getattr(getattr(request, "user", None), "id", None)
+            bucket_key = f"user_{user_id}" if user_id else ip
+            if is_ip_rate_limited(bucket_key, "task_mut", 60, 60):
+                return JsonResponse(
+                    {"detail": "Слишком много изменений задач. Подождите минуту."},
                     status=429,
                 )
             return None
