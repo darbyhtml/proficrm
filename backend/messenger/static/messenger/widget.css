@@ -225,6 +225,105 @@
   display: none;
 }
 
+/* F5 off-hours form (2026-04-18) — форма связи вне рабочих часов */
+.messenger-widget-offhours {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  margin: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.messenger-widget-offhours-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+}
+.messenger-widget-offhours-subtitle {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.4;
+}
+.messenger-widget-offhours-channels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 4px;
+}
+.messenger-widget-offhours-channel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #334155;
+  cursor: pointer;
+  background: #fff;
+  transition: border-color 0.15s, background 0.15s;
+}
+.messenger-widget-offhours-channel:has(input:checked) {
+  border-color: #01948E;
+  background: #f0fdf9;
+}
+.messenger-widget-offhours-channel input[type="radio"] {
+  margin: 0;
+}
+.messenger-widget-offhours-input,
+.messenger-widget-offhours-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+.messenger-widget-offhours-input:focus,
+.messenger-widget-offhours-textarea:focus {
+  outline: none;
+  border-color: #01948E;
+}
+.messenger-widget-offhours-textarea {
+  resize: vertical;
+  min-height: 48px;
+}
+.messenger-widget-offhours-error {
+  font-size: 12px;
+  color: #dc2626;
+  padding: 4px 0;
+}
+.messenger-widget-offhours-submit {
+  padding: 10px 14px;
+  background: #01948E;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.messenger-widget-offhours-submit:hover:not(:disabled) {
+  background: #017a74;
+}
+.messenger-widget-offhours-submit:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+.messenger-widget-offhours-success {
+  padding: 12px;
+  text-align: center;
+  font-size: 14px;
+  color: #059669;
+  background: #ecfdf5;
+  border-radius: 6px;
+}
+
 .messenger-widget-rating {
   padding: 10px 12px;
   border-top: 1px solid #e5e7eb;

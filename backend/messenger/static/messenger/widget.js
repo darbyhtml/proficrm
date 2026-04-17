@@ -70,6 +70,11 @@
       this.typingSendTimer = null;
       this.offlineMode = false;
       this.offlineMessage = '';
+      // F5 off-hours form (2026-04-18): форма связи вне рабочих часов.
+      this.offHoursFormEnabled = false;
+      this.offHoursFormTitle = 'Сейчас нерабочее время';
+      this.offHoursFormSubtitle = 'Наши менеджеры свяжутся с вами в рабочее время. Как удобнее связаться?';
+      this.offHoursSubmitted = false;
       this.initialMessages = [];
       this.ratingRequested = false;
       this.ratingType = 'stars';
@@ -324,6 +329,9 @@
         // this.sinceId остается из loadFromStorage() или null если первый раз
         this.offlineMode = data.offline_mode === true;
         this.offlineMessage = data.offline_message || '';
+        this.offHoursFormEnabled = data.off_hours_form_enabled === true;
+        if (data.off_hours_form_title) this.offHoursFormTitle = data.off_hours_form_title;
+        if (data.off_hours_form_subtitle) this.offHoursFormSubtitle = data.off_hours_form_subtitle;
         this.workingHoursDisplay = data.working_hours_display || '';
         this.title = data.title || 'Чат с поддержкой';
         this.greeting = data.greeting || '';
@@ -369,6 +377,165 @@
       } catch (error) {
         console.error('[MessengerWidget] Bootstrap error:', error);
         return false;
+      }
+    }
+
+    /**
+     * F5 (2026-04-18): off-hours form — создание DOM формы выбора связи.
+     * Показывается при outside_working_hours + off_hours_form_enabled.
+     */
+    _buildOffHoursForm() {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'messenger-widget-offhours';
+      wrapper.style.display = 'none';
+
+      const title = document.createElement('div');
+      title.className = 'messenger-widget-offhours-title';
+      title.textContent = this.offHoursFormTitle;
+      wrapper.appendChild(title);
+
+      const subtitle = document.createElement('div');
+      subtitle.className = 'messenger-widget-offhours-subtitle';
+      subtitle.textContent = this.offHoursFormSubtitle;
+      wrapper.appendChild(subtitle);
+
+      // Выбор канала (radio-кнопки).
+      const channelsWrap = document.createElement('div');
+      channelsWrap.className = 'messenger-widget-offhours-channels';
+      const channels = [
+        { value: 'call', label: 'Звонок', icon: '📞' },
+        { value: 'messenger', label: 'Мессенджер', icon: '💬' },
+        { value: 'email', label: 'Email', icon: '✉️' },
+        { value: 'other', label: 'Другое', icon: '❓' },
+      ];
+      channels.forEach((ch, idx) => {
+        const label = document.createElement('label');
+        label.className = 'messenger-widget-offhours-channel';
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = 'offhours_channel';
+        input.value = ch.value;
+        if (idx === 0) input.checked = true;
+        label.appendChild(input);
+        const text = document.createElement('span');
+        text.textContent = ch.icon + ' ' + ch.label;
+        label.appendChild(text);
+        channelsWrap.appendChild(label);
+      });
+      wrapper.appendChild(channelsWrap);
+
+      // Поле «Имя».
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.className = 'messenger-widget-offhours-input';
+      nameInput.placeholder = 'Ваше имя (необязательно)';
+      nameInput.maxLength = 100;
+      this._offHoursNameInput = nameInput;
+      wrapper.appendChild(nameInput);
+
+      // Поле контакта.
+      const contactInput = document.createElement('input');
+      contactInput.type = 'text';
+      contactInput.className = 'messenger-widget-offhours-input';
+      contactInput.placeholder = 'Телефон или email';
+      contactInput.maxLength = 255;
+      this._offHoursContactInput = contactInput;
+      wrapper.appendChild(contactInput);
+
+      // Комментарий.
+      const noteInput = document.createElement('textarea');
+      noteInput.className = 'messenger-widget-offhours-textarea';
+      noteInput.placeholder = 'Сообщение (необязательно)';
+      noteInput.maxLength = 2000;
+      noteInput.rows = 2;
+      this._offHoursNoteInput = noteInput;
+      wrapper.appendChild(noteInput);
+
+      // Ошибка.
+      const error = document.createElement('div');
+      error.className = 'messenger-widget-offhours-error';
+      error.style.display = 'none';
+      this._offHoursError = error;
+      wrapper.appendChild(error);
+
+      // Кнопка submit.
+      const submitBtn = document.createElement('button');
+      submitBtn.type = 'button';
+      submitBtn.className = 'messenger-widget-offhours-submit';
+      submitBtn.textContent = 'Отправить заявку';
+      submitBtn.addEventListener('click', () => this._submitOffHoursForm());
+      this._offHoursSubmitBtn = submitBtn;
+      wrapper.appendChild(submitBtn);
+
+      // Success-состояние.
+      const success = document.createElement('div');
+      success.className = 'messenger-widget-offhours-success';
+      success.style.display = 'none';
+      success.textContent = 'Спасибо! Мы свяжемся с вами в рабочее время.';
+      this._offHoursSuccess = success;
+      wrapper.appendChild(success);
+
+      return wrapper;
+    }
+
+    _updateOffHoursFormVisibility() {
+      if (!this.offHoursForm) return;
+      const show = this.offHoursFormEnabled && !this.offHoursSubmitted;
+      this.offHoursForm.style.display = show ? 'flex' : 'none';
+    }
+
+    async _submitOffHoursForm() {
+      if (!this._offHoursSubmitBtn) return;
+      this._offHoursError.style.display = 'none';
+      const channelEl = this.offHoursForm.querySelector('input[name="offhours_channel"]:checked');
+      const preferred = channelEl ? channelEl.value : 'call';
+      const contact = (this._offHoursContactInput.value || '').trim();
+      const name = (this._offHoursNameInput.value || '').trim();
+      const note = (this._offHoursNoteInput.value || '').trim();
+
+      if (!contact) {
+        this._offHoursError.textContent = 'Укажите телефон или email для связи.';
+        this._offHoursError.style.display = 'block';
+        return;
+      }
+
+      this._offHoursSubmitBtn.disabled = true;
+      this._offHoursSubmitBtn.textContent = 'Отправляю…';
+      try {
+        const response = await fetch(CONFIG.API_BASE_URL + '/api/widget/offhours-request/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            widget_token: this.widgetToken,
+            widget_session_token: this.sessionToken,
+            preferred_channel: preferred,
+            contact_value: contact,
+            name: name || undefined,
+            note: note || undefined,
+          }),
+        });
+        if (!response.ok) {
+          let msg = 'Не удалось отправить заявку. Попробуйте позже.';
+          try { const data = await response.json(); if (data && data.detail) msg = data.detail; } catch (_) {}
+          this._offHoursError.textContent = msg;
+          this._offHoursError.style.display = 'block';
+          this._offHoursSubmitBtn.disabled = false;
+          this._offHoursSubmitBtn.textContent = 'Отправить заявку';
+          return;
+        }
+        // Успех — прячем форму, показываем success.
+        this.offHoursSubmitted = true;
+        this._offHoursSubmitBtn.style.display = 'none';
+        this._offHoursNameInput.style.display = 'none';
+        this._offHoursContactInput.style.display = 'none';
+        this._offHoursNoteInput.style.display = 'none';
+        this.offHoursForm.querySelector('.messenger-widget-offhours-channels').style.display = 'none';
+        this._offHoursSuccess.style.display = 'block';
+      } catch (err) {
+        this._offHoursError.textContent = 'Ошибка сети. Попробуйте ещё раз.';
+        this._offHoursError.style.display = 'block';
+        this._offHoursSubmitBtn.disabled = false;
+        this._offHoursSubmitBtn.textContent = 'Отправить заявку';
       }
     }
 
@@ -1599,6 +1766,12 @@
         this.offlineBanner.classList.add('messenger-widget-offline-hidden');
       }
       this.chatBody.appendChild(this.offlineBanner);
+
+      // F5 off-hours form: форма связи вне рабочих часов.
+      // Показывается поверх сообщений, блокирует ввод до submit.
+      this.offHoursForm = this._buildOffHoursForm();
+      this.chatBody.appendChild(this.offHoursForm);
+      this._updateOffHoursFormVisibility();
 
       // Загрузить сохраненные сообщения из localStorage (если есть)
       // Важно: загружать ДО initialMessages, чтобы не дублировать
