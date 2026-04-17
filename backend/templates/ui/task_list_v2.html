@@ -202,44 +202,44 @@
           {% if show_task_checkboxes %}<div><input type="checkbox" id="v2BulkAll" class="v2-chk" /></div>{% endif %}
           <div></div>
           <div>
-            <a class="v2-sort {% if sort_field == 'title' %}v2-sort--active{% endif %}"
+            <a class="v2-sort {% if sort_field == 'title' %}v2-sort--active{% endif %}" aria-sort="{% if sort_field == 'title' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}"
                href="?{% if qs %}{{ qs }}&{% endif %}sort=title&dir={% if sort_field == 'title' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
               Задача{% if sort_field == 'title' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
             </a>
           </div>
           <div>
-            <a class="v2-sort {% if sort_field == 'company' %}v2-sort--active{% endif %}"
+            <a class="v2-sort {% if sort_field == 'company' %}v2-sort--active{% endif %}" aria-sort="{% if sort_field == 'company' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}"
                href="?{% if qs %}{{ qs }}&{% endif %}sort=company&dir={% if sort_field == 'company' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
               Компания{% if sort_field == 'company' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
             </a>
           </div>
           <div>
-            <a class="v2-sort {% if sort_field == 'due_at' %}v2-sort--active{% endif %}"
+            <a class="v2-sort {% if sort_field == 'due_at' %}v2-sort--active{% endif %}" aria-sort="{% if sort_field == 'due_at' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}"
                href="?{% if qs %}{{ qs }}&{% endif %}sort=due_at&dir={% if sort_field == 'due_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
               Срок{% if sort_field == 'due_at' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
             </a>
           </div>
           <div>
-            <a class="v2-sort {% if sort_field == 'status' %}v2-sort--active{% endif %}"
+            <a class="v2-sort {% if sort_field == 'status' %}v2-sort--active{% endif %}" aria-sort="{% if sort_field == 'status' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}"
                href="?{% if qs %}{{ qs }}&{% endif %}sort=status&dir={% if sort_field == 'status' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
               Статус{% if sort_field == 'status' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
             </a>
           </div>
           <div>
-            <a class="v2-sort {% if sort_field == 'assignee' %}v2-sort--active{% endif %}"
+            <a class="v2-sort {% if sort_field == 'assignee' %}v2-sort--active{% endif %}" aria-sort="{% if sort_field == 'assignee' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}"
                href="?{% if qs %}{{ qs }}&{% endif %}sort=assignee&dir={% if sort_field == 'assignee' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
               Исполнитель{% if sort_field == 'assignee' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
             </a>
           </div>
           <div>
-            <a class="v2-sort {% if sort_field == 'created_by' %}v2-sort--active{% endif %}"
+            <a class="v2-sort {% if sort_field == 'created_by' %}v2-sort--active{% endif %}" aria-sort="{% if sort_field == 'created_by' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}"
                href="?{% if qs %}{{ qs }}&{% endif %}sort=created_by&dir={% if sort_field == 'created_by' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
                title="Постановщик">
               Постановщик{% if sort_field == 'created_by' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
             </a>
           </div>
           <div>
-            <a class="v2-sort {% if sort_field == 'created_at' %}v2-sort--active{% endif %}"
+            <a class="v2-sort {% if sort_field == 'created_at' %}v2-sort--active{% endif %}" aria-sort="{% if sort_field == 'created_at' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}"
                href="?{% if qs %}{{ qs }}&{% endif %}sort=created_at&dir={% if sort_field == 'created_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}">
               Создана{% if sort_field == 'created_at' %}<span class="v2-sort__arrow">{% if sort_dir == 'asc' %}▲{% else %}▼{% endif %}</span>{% endif %}
             </a>
@@ -354,12 +354,21 @@
           </div>
         </div>
         {% empty %}
-        <div class="v2-card__empty">
-          <svg width="48" height="48" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd" style="color:var(--v2-text-muted);margin-bottom:8px">
+        <div class="v2-card__empty" style="padding:40px 20px;text-align:center">
+          <svg width="48" height="48" fill="currentColor" viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd" style="color:var(--v2-text-muted);margin-bottom:12px" aria-hidden="true">
             <path d="M11.25 4.533A9.707 9.707 0 006 3a9.735 9.735 0 00-3.25.555.75.75 0 00-.5.707v14.25a.75.75 0 001 .707A8.237 8.237 0 016 18.75c1.995 0 3.823.707 5.25 1.886V4.533zM12.75 20.636A8.214 8.214 0 0118 18.75c.966 0 1.89.166 2.75.47a.75.75 0 001-.708V4.262a.75.75 0 00-.5-.707A9.735 9.735 0 0018 3a9.707 9.707 0 00-5.25 1.533v16.103z"/>
           </svg>
-          <div style="font-size:15px;color:var(--v2-text)">Задач не найдено</div>
-          <div class="v2-item__meta" style="margin-top:4px">Попробуй сменить фильтры или поисковый запрос</div>
+          {% if filter_active or q %}
+            {# Empty state при активных фильтрах — меняем поиск #}
+            <div style="font-size:16px;font-weight:600;color:var(--v2-text)">Ничего не найдено</div>
+            <div class="v2-item__meta" style="margin-top:6px;max-width:340px;margin-left:auto;margin-right:auto">По текущим фильтрам задач нет. Попробуйте сменить критерии или сбросить поиск.</div>
+            <a href="{% url 'task_list' %}" class="v2-btn v2-btn--ghost v2-btn--sm" style="margin-top:14px">Сбросить фильтры</a>
+          {% else %}
+            {# Empty state для нового пользователя — направляющий CTA #}
+            <div style="font-size:16px;font-weight:600;color:var(--v2-text)">Задач пока нет</div>
+            <div class="v2-item__meta" style="margin-top:6px;max-width:340px;margin-left:auto;margin-right:auto">Создайте первую — и она появится в вашем рабочем столе и списке задач.</div>
+            <a href="#" class="v2-btn" style="margin-top:14px" data-v2-modal-open="{% url 'ui_v2_task_create_partial' %}" data-v2-modal-title="Новая задача">+ Создать задачу</a>
+          {% endif %}
         </div>
         {% endfor %}
       </div>
@@ -580,22 +589,44 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
     });
   }
 
-  // Подтверждения для inline-действий
-  document.querySelectorAll('form.v2-task-delete').forEach(f => {
-    f.addEventListener('submit', function(e){
-      const title = f.getAttribute('data-task-title') || '';
-      if(!confirm('Удалить задачу «'+title+'»? Действие необратимо.')){
-        e.preventDefault();
+  // Подтверждения для inline-действий.
+  // F3: browser confirm() заменён на двойной клик по submit-кнопке с visual badge.
+  // Паттерн единый с .v2-done-check на Dashboard/Tasks row. Доступен с keyboard
+  // (Enter дважды), читается screen reader через aria-label.
+  function _attachDoubleSubmit(form, actionLabel){
+    const btn = form.querySelector('button[type="submit"]');
+    if(!btn) return;
+    form.addEventListener('submit', function(e){
+      if(btn.dataset.confirmed === '1'){
+        // Второй submit — пропускаем нативно
+        return;
       }
+      e.preventDefault();
+      btn.dataset.confirmed = '1';
+      const origLabel = btn.getAttribute('aria-label') || btn.textContent.trim();
+      btn.setAttribute('aria-label', 'Подтвердите: нажмите ещё раз — ' + actionLabel);
+      btn.classList.add('v2-btn--confirming');
+      if(!btn._confirmBadge){
+        const badge = document.createElement('span');
+        badge.textContent = 'Нажмите ещё раз';
+        badge.setAttribute('role', 'status');
+        badge.style.cssText = 'margin-left:6px;font-size:10px;padding:2px 6px;background:var(--v2-primary,#01948E);color:#fff;border-radius:6px;white-space:nowrap';
+        btn.appendChild(badge);
+        btn._confirmBadge = badge;
+      }
+      btn._confirmTimer = setTimeout(function(){
+        btn.dataset.confirmed = '';
+        btn.setAttribute('aria-label', origLabel);
+        btn.classList.remove('v2-btn--confirming');
+        if(btn._confirmBadge){ btn._confirmBadge.remove(); btn._confirmBadge = null; }
+      }, 2500);
     });
+  }
+  document.querySelectorAll('form.v2-task-delete').forEach(f => {
+    _attachDoubleSubmit(f, 'удалить задачу');
   });
   document.querySelectorAll('form.v2-task-complete').forEach(f => {
-    f.addEventListener('submit', function(e){
-      const title = f.getAttribute('data-task-title') || '';
-      if(!confirm('Отметить задачу «'+title+'» как выполненную?')){
-        e.preventDefault();
-      }
-    });
+    _attachDoubleSubmit(f, 'отметить выполненной');
   });
 
   update();

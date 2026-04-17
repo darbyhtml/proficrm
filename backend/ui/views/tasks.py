@@ -141,7 +141,12 @@ def task_list(request: HttpRequest) -> HttpResponse:
 
     overdue = (request.GET.get("overdue") or "").strip()
     if overdue == "1":
-        qs = qs.filter(due_at__lt=now)
+        # F2 TZ fix: граница «просрочено» = начало сегодняшнего дня в локальной TZ.
+        # Ранее использовалось `now` (UTC) — создавало конфликт с Dashboard
+        # `_split_active_tasks`, где `today_start` = локальное. Теперь один
+        # источник правды (core.timezone_utils). См. tasks-audit-2026-04-17.md
+        # конфликт #2 с Dashboard.
+        qs = qs.filter(due_at__lt=today_start)
         if show_done != "1":
             qs = qs.exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
 
@@ -1295,7 +1300,9 @@ def _apply_task_filters_for_bulk_ui(qs, user: User, data):
     # Просрочено / сегодня (при show_done=1 не исключаем DONE, чтобы видеть выполненные по периоду)
     overdue = (data.get("overdue") or "").strip()
     if overdue == "1":
-        qs = qs.filter(due_at__lt=now)
+        # F2 TZ fix: граница «просрочено» = начало сегодняшнего дня в локальной TZ.
+        # Синхронизирует логику с Dashboard `_split_active_tasks`.
+        qs = qs.filter(due_at__lt=today_start)
         if show_done != "1":
             qs = qs.exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
         filters_summary.append("Только просроченные")
@@ -1835,9 +1842,14 @@ def task_add_comment(request: HttpRequest, task_id) -> HttpResponse:
         return JsonResponse({"error": "Метод не поддерживается."}, status=405)
 
     user: User = request.user
-    task = get_object_or_404(Task, id=task_id)
+    # SECURITY (F3 IDOR-fix): сначала фильтруем по visible_tasks_qs — если задача
+    # не видна пользователю (чужое подразделение, и т.п.), возвращаем 404 вместо
+    # 403. Это ранее было P1-7 из tasks-audit-2026-04-17.md.
+    task = visible_tasks_qs(user).filter(id=task_id).first()
+    if task is None:
+        return JsonResponse({"error": "Задача не найдена."}, status=404)
 
-    # Проверяем, что пользователь имеет доступ к задаче
+    # Дополнительная проверка: доступ на редактирование/управление статусом
     if not (_can_manage_task_status_ui(user, task) or _can_edit_task_ui(user, task)):
         return JsonResponse({"error": "Нет доступа к этой задаче."}, status=403)
 
