@@ -333,11 +333,23 @@ def widget_bootstrap(request):
             initial_messages.append(payload)
 
         settings_cfg = inbox.settings or {}
+        # F5 (2026-04-18): off-hours форма включается в inbox.settings.off_hours_form.enabled.
+        # По умолчанию — включена (True) когда текущее время вне рабочих часов.
+        # Можно отключить через inbox.settings["off_hours_form"] = {"enabled": False}.
+        off_hours_form_cfg = (inbox.settings or {}).get("off_hours_form") or {}
+        off_hours_form_enabled = (
+            outside_working_hours and off_hours_form_cfg.get("enabled", True)
+        )
         response_data = {
             "widget_session_token": session.token,
             "conversation_id": conversation.id,
             "initial_messages": initial_messages,
             "outside_working_hours": outside_working_hours,
+            "off_hours_form_enabled": off_hours_form_enabled,
+            "off_hours_form_title": off_hours_form_cfg.get("title")
+                or "Сейчас нерабочее время",
+            "off_hours_form_subtitle": off_hours_form_cfg.get("subtitle")
+                or "Наши менеджеры свяжутся с вами в рабочее время. Как удобнее связаться?",
             "working_hours_message": working_hours_message,
             "working_hours_display": compact_working_hours_display(
                 _get_working_hours_enabled(inbox),
@@ -506,6 +518,189 @@ def widget_contact_update(request):
     )
 
     resp = Response({"status": "ok"}, status=status.HTTP_200_OK)
+    return _add_widget_cors_headers(request, resp)
+
+
+# Допустимые каналы off-hours-заявки (синхронизировано с Conversation.OffHoursChannel).
+_OFF_HOURS_CHANNELS = {"call", "messenger", "email", "other"}
+_OFF_HOURS_MAX_NOTE_LEN = 2000
+_OFF_HOURS_MAX_CONTACT_LEN = 255
+
+
+@api_view(["POST", "OPTIONS"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def widget_offhours_request(request):
+    """
+    POST /api/widget/offhours-request/
+
+    F5 (2026-04-18): клиент оставляет заявку на обратную связь
+    вне рабочих часов. Требует widget_session_token (т.е. bootstrap
+    уже создал сессию и диалог).
+
+    Payload:
+    - widget_token (str)
+    - widget_session_token (str)
+    - name (str, optional) — обновить имя контакта
+    - preferred_channel (str) — one of: call/messenger/email/other
+    - contact_value (str) — телефон/email/никнейм для связи
+    - note (str, optional) — комментарий клиента
+
+    Диалог переходит в статус WAITING_OFFLINE, назначение оператора
+    не трогается (утром менеджер сам возьмёт через «Я связался»).
+
+    Добавляется служебное Message (INTERNAL) с детализацией заявки.
+    """
+    if request.method == "OPTIONS":
+        preflight_resp = Response(status=status.HTTP_200_OK)
+        return _add_widget_cors_headers(request, preflight_resp)
+
+    ensure_messenger_enabled_api()
+
+    try:
+        data = request.data if request.data else {}
+    except Exception:
+        data = {}
+
+    widget_token = (data.get("widget_token") or "").strip()
+    widget_session_token = (data.get("widget_session_token") or "").strip()
+    if not widget_token or not widget_session_token:
+        resp = Response(
+            {"detail": "widget_token and widget_session_token are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+        return _add_widget_cors_headers(request, resp)
+
+    preferred_channel = (data.get("preferred_channel") or "").strip().lower()
+    contact_value = (data.get("contact_value") or "").strip()
+    note = (data.get("note") or "").strip()
+    name = (data.get("name") or "").strip() or None
+
+    if preferred_channel not in _OFF_HOURS_CHANNELS:
+        resp = Response(
+            {"detail": "preferred_channel must be one of: call, messenger, email, other."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+        return _add_widget_cors_headers(request, resp)
+
+    if not contact_value:
+        resp = Response(
+            {"detail": "contact_value is required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+        return _add_widget_cors_headers(request, resp)
+
+    if len(contact_value) > _OFF_HOURS_MAX_CONTACT_LEN:
+        contact_value = contact_value[:_OFF_HOURS_MAX_CONTACT_LEN]
+    if len(note) > _OFF_HOURS_MAX_NOTE_LEN:
+        note = note[:_OFF_HOURS_MAX_NOTE_LEN]
+
+    inbox = _get_inbox_by_widget_token(widget_token)
+    if not inbox:
+        resp = Response(
+            {"detail": "Invalid widget_token or inactive inbox."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+        return _add_widget_cors_headers(request, resp)
+
+    session = get_widget_session(widget_session_token, client_ip=get_client_ip(request))
+    if not session:
+        resp = Response(
+            {"detail": "Invalid or expired widget_session_token."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+        return _add_widget_cors_headers(request, resp)
+
+    if session.inbox_id != inbox.id:
+        resp = Response(
+            {"detail": "Widget session token does not match widget_token."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+        return _add_widget_cors_headers(request, resp)
+
+    try:
+        conversation = models.Conversation.objects.select_related("contact").get(
+            id=session.conversation_id
+        )
+    except models.Conversation.DoesNotExist:
+        resp = Response(
+            {"detail": "Conversation not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+        return _add_widget_cors_headers(request, resp)
+
+    # Опционально обновляем имя/контакт (email/phone) контакта — если канал
+    # email или call, сохраняем значение в Contact для будущего связывания с
+    # Company. Для messenger/other — только в off_hours_contact.
+    contact = conversation.contact
+    email_for_contact = contact_value if preferred_channel == "email" else None
+    phone_for_contact = contact_value if preferred_channel == "call" else None
+    try:
+        services.create_or_get_contact(
+            external_id=contact.external_id,
+            name=name,
+            email=email_for_contact,
+            phone=phone_for_contact,
+            update_if_exists=True,
+        )
+    except Exception:
+        widget_logger.warning(
+            "offhours: create_or_get_contact failed", exc_info=True
+        )
+
+    # Сохраняем off-hours поля + переводим диалог в WAITING_OFFLINE.
+    # assignee НЕ трогаем — утром менеджер заберёт через «Я связался».
+    now_ts = django_timezone.now()
+    conversation.status = models.Conversation.Status.WAITING_OFFLINE
+    conversation.off_hours_channel = preferred_channel
+    conversation.off_hours_contact = contact_value
+    conversation.off_hours_note = note
+    conversation.off_hours_requested_at = now_ts
+    conversation.save(
+        update_fields=[
+            "status",
+            "off_hours_channel",
+            "off_hours_contact",
+            "off_hours_note",
+            "off_hours_requested_at",
+            "updated_at",
+        ]
+    )
+
+    # Служебное сообщение в диалог: менеджер увидит в утренней ленте.
+    channel_label = {
+        "call": "📞 Звонок",
+        "messenger": "💬 Мессенджер",
+        "email": "✉️ Email",
+        "other": "❓ Другое",
+    }.get(preferred_channel, preferred_channel)
+    internal_body_parts = [
+        "🕒 Заявка вне рабочих часов",
+        f"Канал: {channel_label}",
+        f"Контакт: {contact_value}",
+    ]
+    if note:
+        internal_body_parts.append(f"Комментарий клиента: {note}")
+
+    try:
+        models.Message.objects.create(
+            conversation=conversation,
+            direction=models.Message.Direction.INTERNAL,
+            body="\n".join(internal_body_parts),
+            is_private=True,
+        )
+    except Exception:
+        widget_logger.warning(
+            "offhours: failed to append internal message", exc_info=True
+        )
+
+    resp = Response(
+        {
+            "status": "ok",
+            "message": "Спасибо, мы свяжемся с вами в рабочее время.",
+        },
+        status=status.HTTP_200_OK,
+    )
     return _add_widget_cors_headers(request, resp)
 
 

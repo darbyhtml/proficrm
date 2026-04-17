@@ -52,6 +52,7 @@ from messenger.widget_api import (
     widget_bootstrap,
     widget_contact_update,
     widget_mark_read,
+    widget_offhours_request,
     widget_poll,
     widget_campaigns,
     widget_rate,
@@ -144,6 +145,7 @@ urlpatterns = [
     # Widget API (публичный, без аутентификации)
     path("api/widget/bootstrap/", widget_bootstrap, name="widget-bootstrap"),
     path("api/widget/contact/", widget_contact_update, name="widget-contact"),
+    path("api/widget/offhours-request/", widget_offhours_request, name="widget-offhours-request"),
     path("api/widget/send/", widget_send, name="widget-send"),
     path("api/widget/poll/", widget_poll, name="widget-poll"),
     path("api/widget/stream/", widget_stream, name="widget-stream"),

@@ -50,6 +50,10 @@ class ConversationSerializer(serializers.ModelSerializer):
             "snoozed_until", "contact_last_seen_at", "agent_last_seen_at",
             "needs_help", "needs_help_at",
             "resolution", "escalation_level", "last_escalated_at",
+            # F5: off-hours request (заявка вне рабочих часов).
+            "off_hours_channel", "off_hours_contact", "off_hours_note",
+            "off_hours_requested_at",
+            "contacted_back_at", "contacted_back_by",
             # annotated / computed
             "contact_name", "contact_email", "contact_phone",
             "branch_name", "region_name", "assignee_name",
@@ -62,6 +66,11 @@ class ConversationSerializer(serializers.ModelSerializer):
             "first_reply_created_at", "contact_last_seen_at", "agent_last_seen_at",
             "needs_help", "needs_help_at",
             "escalation_level", "last_escalated_at",
+            # off-hours поля управляются только через widget_offhours_request
+            # и action contacted-back, через обычный PATCH не редактируются.
+            "off_hours_channel", "off_hours_contact", "off_hours_note",
+            "off_hours_requested_at",
+            "contacted_back_at", "contacted_back_by",
         )
 
     def update(self, instance: models.Conversation, validated_data: dict) -> models.Conversation:

@@ -117,7 +117,7 @@ class ConversationViewSet(
         qs = qs.annotate(last_message_body=Subquery(last_message))
         
         # Аннотируем last_activity_at_fallback (fallback на created_at как в Chatwoot)
-        from django.db.models import Case, When, F, DateTimeField
+        from django.db.models import Case, When, DateTimeField
         qs = qs.annotate(
             last_activity_at_fallback=Case(
                 When(last_activity_at__isnull=False, then=F('last_activity_at')),
@@ -368,6 +368,79 @@ class ConversationViewSet(
             needs_help=True,
             needs_help_at=timezone.now(),
         )
+        conv.refresh_from_db()
+        return Response(self.get_serializer(conv).data)
+
+    @action(detail=True, methods=["post"], url_path="contacted-back")
+    def contacted_back(self, request, pk=None):
+        """POST /api/conversations/{id}/contacted-back/ —
+        менеджер отмечает «Я связался» по off-hours заявке.
+
+        Права: assignee, либо менеджер этого же подразделения, либо
+        ADMIN / BRANCH_DIRECTOR / SALES_HEAD / суперпользователь.
+
+        Переводит статус WAITING_OFFLINE → OPEN, проставляет
+        contacted_back_at / contacted_back_by и, если assignee не
+        назначен, пытается назначить текущего пользователя-менеджера
+        (чтобы диалог попал в «его работу»).
+
+        Обновление через queryset.update(), чтобы обойти инвариант save.
+        """
+        conv = self.get_object()
+        user = request.user
+
+        if conv.status != models.Conversation.Status.WAITING_OFFLINE:
+            return Response(
+                {"detail": "Диалог не в статусе «Ждёт связи (вне часов)»."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        is_assignee = conv.assignee_id == user.id
+        is_same_branch = (
+            getattr(user, "branch_id", None) is not None
+            and user.branch_id == conv.branch_id
+        )
+        elevated_roles = {
+            User.Role.ADMIN,
+            User.Role.BRANCH_DIRECTOR,
+            User.Role.SALES_HEAD,
+        }
+        is_elevated = (
+            user.is_superuser or getattr(user, "role", None) in elevated_roles
+        )
+        if not (is_assignee or is_same_branch or is_elevated):
+            return Response(
+                {"detail": "Нет прав на это действие."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        now_ts = timezone.now()
+        update_fields = {
+            "status": models.Conversation.Status.OPEN,
+            "contacted_back_at": now_ts,
+            "contacted_back_by": user,
+        }
+        # Если assignee пуст и текущий пользователь — менеджер этого подразделения,
+        # берём диалог на себя автоматически.
+        if not conv.assignee_id and getattr(user, "role", None) == User.Role.MANAGER and is_same_branch:
+            update_fields["assignee"] = user
+            update_fields["assignee_assigned_at"] = now_ts
+
+        models.Conversation.objects.filter(pk=conv.pk).update(**update_fields)
+
+        # Служебная запись в диалог: кто и когда нажал «Я связался».
+        try:
+            models.Message.objects.create(
+                conversation=conv,
+                direction=models.Message.Direction.INTERNAL,
+                body=f"✅ Менеджер {user.get_full_name() or user.username} "
+                     f"отметил «Я связался» по off-hours заявке.",
+                sender_user=user,
+                is_private=True,
+            )
+        except Exception:
+            pass
+
         conv.refresh_from_db()
         return Response(self.get_serializer(conv).data)
 

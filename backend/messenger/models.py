@@ -184,8 +184,17 @@ class Conversation(models.Model):
     class Status(models.TextChoices):
         OPEN = "open", "Открыт"
         PENDING = "pending", "В ожидании"
+        # F5 (2026-04-18): клиент оставил заявку вне рабочих часов.
+        # Диалог закреплён за подразделением, ждёт утреннего обратного звонка.
+        WAITING_OFFLINE = "waiting_offline", "Ждёт связи (вне часов)"
         RESOLVED = "resolved", "Решён"
         CLOSED = "closed", "Закрыт"
+
+    class OffHoursChannel(models.TextChoices):
+        CALL = "call", "Звонок"
+        MESSENGER = "messenger", "Мессенджер"
+        EMAIL = "email", "Email"
+        OTHER = "other", "Другое"
 
     class Priority(models.IntegerChoices):
         LOW = 10, "Низкий"
@@ -375,6 +384,49 @@ class Conversation(models.Model):
         "Когда агент последний раз видел диалог",
         null=True,
         blank=True,
+    )
+    # F5 (2026-04-18): off-hours request — заявка из виджета вне рабочих часов.
+    # Клиент заполняет форму (канал + контакт + сообщение), диалог уходит
+    # в статус WAITING_OFFLINE. Менеджер утром связывается и нажимает
+    # «Я связался» → диалог возвращается в OPEN.
+    off_hours_channel = models.CharField(
+        "Предпочтительный канал связи",
+        max_length=16,
+        choices=OffHoursChannel.choices,
+        blank=True,
+        default="",
+        help_text="Выбранный клиентом способ связи: звонок/мессенджер/email/другое",
+    )
+    off_hours_contact = models.CharField(
+        "Контакт для связи",
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Телефон/email/никнейм — как клиент хочет, чтобы связались",
+    )
+    off_hours_note = models.TextField(
+        "Комментарий клиента",
+        blank=True,
+        default="",
+    )
+    off_hours_requested_at = models.DateTimeField(
+        "Когда оставлена off-hours заявка",
+        null=True,
+        blank=True,
+        db_index=True,
+    )
+    contacted_back_at = models.DateTimeField(
+        "Когда менеджер отметил «Я связался»",
+        null=True,
+        blank=True,
+    )
+    contacted_back_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Кто нажал «Я связался»",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="contacted_back_conversations",
     )
     snoozed_until = models.DateTimeField(
         "Отложен до",
