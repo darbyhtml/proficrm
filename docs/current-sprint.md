@@ -1,5 +1,38 @@
 # Текущий спринт
 
+**[2026-04-18]** — F8 quick-win: вкладка «Безопасность» в preferences.html ✅
+
+Коммит `04762e54`. Закрывает S-P0-1 из help-settings-admin-audit:
+
+- Новая вкладка «Безопасность» (иконка-замок) в sidebar preferences.
+- Секция `data-section="security"` с формой смены пароля (old/new/repeat, autocomplete-атрибуты, minlength=8) — только для ADMIN/superuser. Остальные роли видят объяснение «вход по magic link».
+- Блок «Активные сессии» с кнопкой выхода.
+- ARIA: `aria-labelledby` на section.
+- `preferences_password` redirect вернулся на `/settings/#security` (tab теперь существует).
+
+**Staging:** HTTP 302, **147 тестов зелёные** (Dashboard + Tasks + Companies + Companies inline/detail + messenger auto_assign).
+
+**[2026-04-18]** — F5 Round 1 попытка unify auto_assign — ОТКАТ (требует Round 2)
+
+Коммиты `364b7ad6 + 48e39bda + c53aa520` (unify) откачены в `441ccb70`.
+Состояние messenger — стабильное (13 тестов auto_assign + dashboard OK).
+
+**Что пробовал:**
+- Сигнал `auto_assign_new_conversation` делегирует в `services.auto_assign_conversation` (Chatwoot-style), а не в `assignment_services/auto_assign.py` (legacy).
+- `refresh_from_db()` перед проверкой assignee — защита от race с widget_api.
+- MultiBranchRouter переопределяет conversation.branch если client_region указывает на другой подразд.
+
+**Почему откачено:**
+Глубже, чем казалось. `InboxRoundRobinService` использует `inbox.branch_id`, а routing меняет `conversation.branch_id`. Например: `inbox=ekb`, `client_region="Томская область"` → routing ставит `conv.branch=tmn`, но RR-queue остаётся по inbox=ekb → никого из tmn в queue нет → assignee=None.
+
+**План F5 Round 2** (архитектурное решение):
+1. Аудит: выбрать ОДИН путь — RR (Chatwoot-style) ИЛИ LoadBalancer (legacy). Вероятно RR, но переделать queue под (inbox_id × target_branch_id).
+2. Миграция: widget_api + signals вызывают ТОЛЬКО services.auto_assign_conversation.
+3. Удалить BranchLoadBalancer / assignment_services/auto_assign.py после миграции.
+4. Специальные тесты на race (двойной вызов, inbox с branch != routing target).
+
+При текущем sizing (1-2 оператора на филиал, Q27) race condition крайне маловероятен — приемлемо оставить как P0-known до F5 Round 2 с предварительным дизайном.
+
 **[2026-04-17]** — Big Release 2026 F4 Round 1 (Компании — частично) ✅
 
 Коммит `ab29f26f`. Закрыты 3 P1 + 4 pre-existing линтер:
