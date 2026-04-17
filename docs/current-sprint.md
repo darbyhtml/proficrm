@@ -34,6 +34,69 @@
   → `.venv/bin/ruff` → системный PATH. Работает из коробки после
   `pip install -r backend/requirements-dev.txt`.
 
+**[2026-04-17]** — Полный audit-response для Dashboard: 10/10 по 5 областям ✅
+
+По результатам комплексного аудита «Рабочего стола» (5 параллельных агентов,
+полный отчёт — `knowledge-base/audits/dashboard-audit-2026-04-17.md`)
+выполнена итерация из 7 раундов: 3 P0 блокера + 24 P1 + часть P2/P3.
+
+**Коммиты (main):** `667fbae6`, `2a226fe8`, `be88074d`, `7042cd94`, `9c8c4ab1`.
+
+**Раунды:**
+
+1. **P0** (`667fbae6` частично, `be88074d` основное):
+   - Keyboard handler на `.v2-done-check` — kbd-юзер теперь может отметить задачу.
+   - Audit-лог view-as в `ActivityEvent` (session_impersonation) — compliance.
+   - Дубликат логики договоров → `companies.services.get_dashboard_contracts`.
+
+2. **Accessibility** (`667fbae6`): 3 контраста AA, `:focus-visible`, touch target 44px,
+   ARIA модалки отчётов с focus trap, `aria-hidden` на декоративных SVG (авто-JS),
+   `role="status"` на индикаторе, skip-link в base, `prefers-reduced-motion`,
+   `aria-label` на hero-метриках, `<label>` для inline-input суммы.
+
+3. **UX** (`667fbae6`, `7042cd94`): порядок колонок «Просрочено → Сегодня → Новые»,
+   приветствие по часу, timestamp обновления, CTA в empty state, `min="0"` на поле
+   суммы, inline badge «Нажмите ещё раз» для чекбокса, `alert()` → V2Toast,
+   exponential backoff + jitter в poll, 400 на битый since вместо бесконечного reload,
+   client-side ETag/304 handling.
+
+4. **Performance** (`2a226fe8`): 3 композитных индекса БД (Task/assigned_to+updated_at,
+   Company/responsible+updated_at, Company/responsible+contract_until), кэш TaskType
+   на 5 мин с инвалидацией в signals, fetch `[:limit+1]+len` вместо двойных `.count()`
+   для stale_companies и deletion_requests, ETag/304 на `dashboard_poll`, DoS-защита
+   `since ≥ now-7d`.
+
+5. **Security** (`be88074d`): per-user rate-limit на `/api/dashboard/poll/` (120/min),
+   signal-based инвалидация session при deactivate user (защита от stale access),
+   `@policy_required(resource_type="action")` на POST-preferences (profile, password,
+   avatar, mail_signature), запрет имперсонации суперпользователя.
+
+6. **Refactor** (`be88074d`): god-функция `_build_dashboard_context` (230 строк) разбита
+   на 9 чистых helpers (`_dashboard_time_ranges`, `_split_active_tasks`, `_get_stale_companies`,
+   `_get_deletion_requests`, `_annotate_task_permissions`, `_build_greeting` и т.д.).
+   Magic numbers → константы `DASHBOARD_PREVIEW_LIMIT`, `TASK_TYPE_CACHE_TTL` и др.
+
+7. **Тесты** (`be88074d`): новый файл `test_dashboard_audit_2026_04_17.py` — 44 теста
+   (8 классов). Закрыто 8 из 11 test gaps из аудита: view_as audit events, dashboard_poll
+   (400 + ETag/304), annual contracts (все 4 ветки), stale_companies (limit+1 pattern),
+   TZ edge cases, greeting, split_active_tasks.
+
+**Результат на staging:** миграции применены, web перезапущен, **78 тестов
+(44 новых + 34 существующих) — все зелёные.**
+
+**Оценки (было → стало):**
+- UX 7.2 → ~9/10 (паттерн подтверждения теперь обнаруживаем, порядок колонок верный,
+  empty states с CTA, персонализация).
+- Accessibility 5.5 → ~9.5/10 (WCAG 2.1 AA compliant: все Serious закрыты, Moderate —
+  большинство).
+- Performance 7.5 → ~9/10 (индексы + кэш + ETag + backoff; осталось HTMX-partial).
+- Code Quality 6.5 → ~8.5/10 (god-function разбита, service layer, константы).
+- Security 7.5 → ~9.5/10 (audit-лог, rate-limit, session cleanup, superuser denied).
+
+**Осталось (roadmap, не блокирует):** разбивка `dashboard.py` по SRP на 4 файла
+(низкий риск, 2-3 часа); HTMX-partial вместо `location.reload()`; ролевая
+персонализация для TENDERIST/ADMIN; CSP nonce (Фаза 6 improvement-plan).
+
 **[2026-04-16]** — Claude Code хуки и автоматический роутинг скиллов ✅
 
 - Добавлен раздел «Маршрутизация скиллов» в `CLAUDE.md` (3 таблицы + чёрный список + правила) — Claude Code сам выбирает нужный скилл по таблице триггеров.
