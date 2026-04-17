@@ -663,7 +663,6 @@ def widget_offhours_request(request):
             "off_hours_contact",
             "off_hours_note",
             "off_hours_requested_at",
-            "updated_at",
         ]
     )
 

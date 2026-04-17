@@ -188,6 +188,9 @@ class ContactedBackActionTests(TestCase):
         self.assertEqual(self.conv.assignee, self.manager)
 
     def test_contacted_back_rejects_foreign_manager(self):
+        # Менеджер чужого подразделения не видит диалог вовсе — ConversationViewSet
+        # фильтрует queryset по scope (см. accounts.scope / visibility). Ожидаем 404
+        # (Not Found), что is-a security win: даже факт существования диалога скрыт.
         other_branch = Branch.objects.create(code="other", name="Other")
         other_mgr = User.objects.create_user(
             username="other_mgr",
@@ -198,7 +201,7 @@ class ContactedBackActionTests(TestCase):
         client = APIClient()
         client.force_authenticate(user=other_mgr)
         resp = client.post(f"/api/conversations/{self.conv.id}/contacted-back/")
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_contacted_back_rejects_wrong_status(self):
         self.conv.status = Conversation.Status.OPEN
