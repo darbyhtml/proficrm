@@ -83,6 +83,8 @@ class Task(models.Model):
             models.Index(fields=["assigned_to", "status", "due_at"], name="task_assignee_status_due_idx"),
             models.Index(fields=["company", "status"], name="task_company_status_idx"),
             models.Index(fields=["status", "due_at"], name="task_status_due_idx"),
+            # Для dashboard_poll: EXISTS(assigned_to=user, updated_at>since)
+            models.Index(fields=["assigned_to", "updated_at"], name="task_assignee_updated_idx"),
         ]
         constraints = [
             # Защита от race в generate_recurring_tasks: параллельные воркеры

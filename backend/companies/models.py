@@ -191,6 +191,10 @@ class Company(models.Model):
         indexes = [
             models.Index(fields=["inn"]),
             models.Index(fields=["name"]),
+            # Composite для dashboard_poll: EXISTS(responsible=user, updated_at>since)
+            models.Index(fields=["responsible", "updated_at"], name="cmp_resp_updated_idx"),
+            # Composite для блока «договоры»: responsible + диапазон contract_until
+            models.Index(fields=["responsible", "contract_until"], name="cmp_resp_contract_until_idx"),
             # Trigram GIN indexes for fast case-insensitive search (see migration 0033_add_search_indexes).
             # NOTE: keep index names <= 30 chars (Django system check).
             GinIndex(OpClass(Upper("name"), name="gin_trgm_ops"), name="cmp_name_trgm_gin_idx"),

@@ -15,9 +15,14 @@ from accounts.models import User
 @receiver(post_save, sender=TaskType)
 @receiver(post_delete, sender=TaskType)
 def _invalidate_task_type_widget_cache(sender, **kwargs):
-    """Инвалидация кэша TaskTypeSelectWidget при изменении справочника типов."""
+    """Инвалидация всех кэшей справочника TaskType.
+
+    Ключи:
+    - `task_types_all_dict` — для TaskTypeSelectWidget (формы задач)
+    - `task_types_by_name` — для dashboard (_build_dashboard_context)
+    """
     try:
-        cache.delete("task_types_all_dict")
+        cache.delete_many(["task_types_all_dict", "task_types_by_name"])
     except Exception:
         pass
 
