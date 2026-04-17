@@ -1,5 +1,34 @@
 # Текущий спринт
 
+**[2026-04-18]** — F5: UserAbsence backend + UI ✅
+
+Коммиты `4ad10d0e` (backend) + `29a0e952` (UI).
+
+**Модель `UserAbsence`** (accounts.models + миграция 0015):
+- `user` FK, `start_date` / `end_date` (DateField, CheckConstraint end>=start)
+- `type`: VACATION / SICK / DAYOFF / OTHER
+- `note` (255), `created_at` / `created_by`
+- Индекс (user, end_date) для быстрого `is_currently_absent()`
+
+**`User.is_currently_absent(on_date=None)`** — property, True при активной записи на дату.
+
+**Интеграция в auto_assign_conversation:** к существующим `.exclude()`-фильтрам кандидатов (ADMIN, AgentProfile AWAY/BUSY/OFFLINE) добавлен `.exclude(absences__start_date__lte=today, absences__end_date__gte=today)`. Менеджер в отпуске больше не получит диалог, даже если CRM-вкладка открыта. `timezone.localdate()` как единый источник «сегодня» (согласовано с F2 core).
+
+**F821 cleanup pre-existing в services.py:** `TYPE_CHECKING` импорт для forward references (Branch, Inbox). Ранее `"models.Inbox"` / `"models.Region"` были сломаны. Ruff check services.py — clean.
+
+**UI (preferences.html):**
+- Вкладка «Отсутствие» в sidebar (иконка-календарь). Badge «сейчас» при активном периоде.
+- Форма: `type` / `note` / `start_date` / `end_date` (native `<input type=date>`).
+- Список последних 20 периодов со статусами «сейчас» / «запланировано» / «завершено». Кнопка удаления с confirm.
+- Владелец удаляет свою запись; админ — любую.
+- Защита от ретро-записей >7 дней назад (через админа).
+
+**Views:** `preferences_absence_create` / `preferences_absence_delete`. URLs `/settings/absence/create/` и `/settings/absence/<id>/delete/`. Экспорт в `ui/views/__init__.py`.
+
+**Staging:** миграция `accounts.0015_user_absence` применена, **147 тестов зелёные**, 2 новых URL резолвятся.
+
+**Админский UI** (редактирование чужих отсутствий через `/admin/users/<id>/edit/`) — отдельным коммитом в F8 R2 (после редизайна админки).
+
 **[2026-04-18]** — F6 Round 1: SMTP onboarding UI в `/admin/mail/setup/` ✅
 
 Коммит `3cc9ca19`. Закрывает P0 из mailer-audit: Fernet-разконсервация.
