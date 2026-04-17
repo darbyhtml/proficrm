@@ -1,5 +1,25 @@
 # Текущий спринт
 
+**[2026-04-17]** — Big Release 2026 F4 Round 1 (Компании — частично) ✅
+
+Коммит `ab29f26f`. Закрыты 3 P1 + 4 pre-existing линтер:
+
+- **P1-5 Multi-value pagination**: `{% for k, v in request.GET.items %}` теряло `status=1&status=2` при смене per_page. Заменено на `.lists()` с вложенным циклом.
+- **P1-3 Сортировка по contract_until**: добавлено в `sort_map` — «кому продлевать скорее всего».
+- **CSP-safe**: `onchange="this.form.submit()"` на per_page → `.v2-autosubmit` class + единый JS (паттерн с Tasks).
+- **F811 cleanup**: удалены 2 локальных `import cache` + 1 локальный `import uuid` (все есть в `_base.py`).
+- **B007**: `for order, ...` → `for _order, ...` (order не использовался в теле).
+- Ruff check на company_list.py: **clean**.
+
+**Осталось в F4 (следующие Round'ы):**
+- P1-1 Фильтр «Договор» multi-select
+- P1-2 Пресет «Только мои компании»
+- P1 Classic/Modern режим карточки — удалить оба, сделать один
+- **P1 Карточка `company_detail.html` (7000+ строк)** — глобальный редизайн v1→v2/v3 + timeline пагинация 3500+ объектов. Большой блок, в отдельных сессиях.
+- P2 Helper `_resolve_transfer_ids()` для дубликата bulk_transfer_preview/bulk_transfer.
+
+**134 теста зелёные** на staging.
+
 **[2026-04-17]** — Big Release 2026 F3 Round 2 (Задачи — завершено) ✅
 
 Коммит `0d0dfaed`. Закрыты оставшиеся 4 задачи F3:
