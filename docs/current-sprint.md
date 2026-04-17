@@ -1,5 +1,33 @@
 # Текущий спринт
 
+**[2026-04-17]** — Big Release 2026 Трек A — 7 P0-фиксов ✅
+
+По результатам 6 параллельных аудитов (`knowledge-base/audits/_summary-2026-04-17.md`) закрыты 7 P0-блокеров подготовки к Big Release. Все правки — не breaking, applied на staging.
+
+**Коммиты (main):** `2869533e`, `479e7fae`.
+
+1. **A1 TENDERIST visible_tasks_qs** — раньше роль видела задачи всех подразделений (security-утечка). Теперь только свои (fallback fix в `tasksapp/policy.py`).
+2. **A2 PII cleanup** — убраны 2 строки `logger.info/warning` с UUID компании в `company_detail.py`.
+3. **A3 Rate-limit** на POST `/tasks/<id>/status/`, `.../comment/add/`, `.../delete/` — per-user 60 req/min (`accounts/middleware.py`).
+4. **A4 CSP-safe task_list_v2** — убраны все inline `onclick`/`onchange`, добавлен keyboard handler, `confirm()` → двойной клик с badge (как на Dashboard), `alert()` → V2Toast.
+5. **A5 Bulk transfer UI для РОП/Директора** — `can_bulk_transfer` вместо `is_admin` в шаблоне (`company_list_v2.html`). Экспорт CSV остался только для Админа.
+6. **A6 Magic numbers 25k/70k** → `ContractType.amount_danger_threshold` и `.amount_warn_threshold` (DecimalField). Миграция `companies.0054`. Админ настраивает через admin UI.
+7. **A7 Тендерист не видит задач компании** — `Task.objects.none()` для TENDERIST в `company_detail.py`.
+
+**Результат на staging:**
+- Миграция `0054_contract_type_amount_thresholds` применена OK
+- Web рестартован, HTTP 302 (login redirect) ✓
+- **Dashboard: 78 тестов — все зелёные** (44 новых + 34 существующих, 60 сек)
+- Django check: 0 issues
+
+**Известные pre-existing failures** (не мои, существовали до 2869533e; в roadmap F10 QA):
+- `accounts.tests.PasswordLoginSmokeTest` (3) — login-form не авторизует в smoke (может быть связано с cache/rate-limit или изменениями в views.py ранее)
+- `accounts.tests.JwtLoginSmokeTest` (4) — аналогично JWT endpoint
+- `accounts.tests.AccessKeyLoginSmokeTest` (3) — access-key login
+- `tasksapp.tests_recurrence` (7) — RRULE тесты — вероятно зависят от настроек timezone/celery
+
+Эти failures **не касаются моих правок** — я менял `policy.py`, `company_detail.py`, `middleware.py` (добавил новые bucket без изменения auth-блока), шаблоны, модель ContractType. Detailed investigation — отдельная задача F10.
+
 ## Текущая задача
 
 Комплексное улучшение проекта по мастер-плану `docs/improvement-plan.md` (8 фаз, ~215 находок).
