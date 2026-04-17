@@ -1,5 +1,37 @@
 # Архитектурные решения
 
+## [2026-04-18] F5 R2: Round-Robin per-branch вместо per-inbox
+
+**Контекст.** `MultiBranchRouter.route()` может менять `conversation.branch`
+относительно `inbox.branch` (например, глобальный inbox=ekb, клиент из
+Томской области → диалог уходит в tmn). При этом `InboxRoundRobinService(inbox)`
+строит очередь по `inbox.branch_id`, а `services.auto_assign_conversation`
+берёт кандидатов по `conversation.branch_id`. Пересечение `queue_ekb ∩
+candidates_tmn` — пустое → RR возвращает `None` → диалог остаётся без
+assignee, несмотря на наличие онлайн-менеджеров в tmn.
+
+**Альтернативы.**
+1. Передавать `conversation.branch` в `InboxRoundRobinService` как override —
+   отвергнуто, семантически класс перестаёт быть «per-inbox» и деградирует
+   в адаптер.
+2. Хранить очередь в `conversation.branch` при создании — отвергнуто, это
+   не решает кейс, когда inbox глобальный и branch определяется роутером.
+3. **Выбрано:** `BranchRoundRobinService(branch)` с ключом
+   `messenger:rr:branch:<branch_id>`. Очередь хранит ID менеджеров именно
+   того филиала, куда роутер направил диалог.
+
+**Последствия.**
+- `InboxRoundRobinService` остаётся в коде (использовался ранее в UI/admin
+  для ручных операций — не трогаем до полного аудита). Новая логика
+  `auto_assign_conversation` и `reassign_conversation_auto` использует только
+  `BranchRoundRobinService`.
+- Старые Redis-ключи `messenger:rr:queue:<inbox_id>` становятся мёртвыми,
+  TTL 7 дней их очистит естественно. Prod-cleanup не требуется.
+- Коммит `<pending>`. Regression-тест
+  `AutoAssignIntegrationTests.test_cross_branch_routing_uses_target_branch_rr`
+  специально создаёт op_ekb и op_tmn, проверяет что при маршрутизации
+  ekb→tmn назначается именно op_tmn.
+
 ## [2026-04-17] Big Release 2026 — зафиксированные решения после Q&A с user
 
 Сводные ответы на 29 вопросов + аудит прода (read-only) определили следующие архитектурные направления. Детали — в `knowledge-base/audits/_summary-2026-04-17.md` и `docs/roadmap-2026-spring.md`.

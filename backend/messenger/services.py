@@ -292,18 +292,21 @@ def auto_assign_conversation(conversation: Conversation) -> Optional[User]:
         Защищено от race condition через select_for_update.
     """
     from django.db.models import Q, Count
-    from .models import AgentProfile, Inbox
-    from messenger.assignment_services.round_robin import InboxRoundRobinService
+    from accounts.models import Branch
+    from .models import AgentProfile
+    from messenger.assignment_services.round_robin import BranchRoundRobinService
     from messenger.assignment_services.rate_limiter import default_rate_limiter
 
     branch_id = conversation.branch_id
-    inbox_id = conversation.inbox_id
     open_statuses = [Conversation.Status.OPEN, Conversation.Status.PENDING]
 
-    # Получаем inbox для Round-Robin сервиса
+    # F5 R2: Round-Robin теперь привязан к BRANCH диалога, а не к inbox.
+    # Это исправляет баг cross-branch-роутинга: глобальный inbox может
+    # принадлежать ekb, но роутер отправит диалог в tmn — RR очередь должна
+    # сдвигаться у tmn-менеджеров, а не у ekb.
     try:
-        inbox = Inbox.objects.get(id=inbox_id)
-    except Inbox.DoesNotExist:
+        branch = Branch.objects.get(id=branch_id)
+    except Branch.DoesNotExist:
         return None
 
     # F5 UserAbsence: исключаем пользователей с активным отсутствием (отпуск/
@@ -344,28 +347,28 @@ def auto_assign_conversation(conversation: Conversation) -> Optional[User]:
     if not candidates:
         return None
 
-    # Round-Robin сервис (по образцу Chatwoot)
-    round_robin_service = InboxRoundRobinService(inbox)
-    
+    # F5 R2: Round-Robin per-branch (по образцу Chatwoot, но привязан к Branch).
+    round_robin_service = BranchRoundRobinService(branch)
+
     # Фильтруем кандидатов по Rate Limiter (по образцу Chatwoot)
     allowed_agent_ids = [
         user_id for user_id in candidates
         if default_rate_limiter.check_limit(user_id)
     ]
-    
+
     # Если все операторы превысили лимит, используем всех кандидатов
     if not allowed_agent_ids:
         allowed_agent_ids = candidates
-    
+
     # Получаем следующего оператора из Round-Robin очереди
     assignee = round_robin_service.available_agent(allowed_agent_ids)
-    
+
     if not assignee:
         return None
-    
+
     # Увеличиваем счётчик Rate Limiter (по образцу Chatwoot)
     default_rate_limiter.increment(assignee.id)
-    
+
     # Назначаем диалог с защитой от race condition (по образцу Chatwoot)
     from django.db import transaction
     
@@ -560,19 +563,19 @@ def escalate_conversation(conversation: Conversation) -> Optional[User]:
         Защищено от race condition через select_for_update.
     """
     from django.db.models import Q, Count
-    from .models import AgentProfile, Inbox
-    from messenger.assignment_services.round_robin import InboxRoundRobinService
+    from accounts.models import Branch
+    from .models import AgentProfile
+    from messenger.assignment_services.round_robin import BranchRoundRobinService
     from messenger.assignment_services.rate_limiter import default_rate_limiter
 
     branch_id = conversation.branch_id
-    inbox_id = conversation.inbox_id
     current_assignee_id = conversation.assignee_id
     open_statuses = [Conversation.Status.OPEN, Conversation.Status.PENDING]
 
-    # Получаем inbox для Round-Robin сервиса
+    # F5 R2: Round-Robin per-branch (см. комментарий в auto_assign_conversation).
     try:
-        inbox = Inbox.objects.get(id=inbox_id)
-    except Inbox.DoesNotExist:
+        branch = Branch.objects.get(id=branch_id)
+    except Branch.DoesNotExist:
         return None
 
     candidates_qs = (
@@ -601,28 +604,28 @@ def escalate_conversation(conversation: Conversation) -> Optional[User]:
     if not candidates:
         return None
 
-    # Round-Robin сервис (по образцу Chatwoot)
-    round_robin_service = InboxRoundRobinService(inbox)
-    
+    # F5 R2: Round-Robin per-branch.
+    round_robin_service = BranchRoundRobinService(branch)
+
     # Фильтруем кандидатов по Rate Limiter (по образцу Chatwoot)
     allowed_agent_ids = [
         user_id for user_id in candidates
         if default_rate_limiter.check_limit(user_id)
     ]
-    
+
     # Если все операторы превысили лимит, используем всех кандидатов
     if not allowed_agent_ids:
         allowed_agent_ids = candidates
-    
+
     # Получаем следующего оператора из Round-Robin очереди
     assignee = round_robin_service.available_agent(allowed_agent_ids)
-    
+
     if not assignee:
         return None
-    
+
     # Увеличиваем счётчик Rate Limiter (по образцу Chatwoot)
     default_rate_limiter.increment(assignee.id)
-    
+
     # Переназначаем диалог с защитой от race condition (по образцу Chatwoot)
     from django.db import transaction
     

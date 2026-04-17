@@ -298,3 +298,107 @@ class AutoAssignIntegrationTests(TestCase):
         conv.refresh_from_db()
         self.assertEqual(conv.assignee, self.op_tmn)
         self.assertEqual(conv.branch, self.tmn)
+
+    def test_cross_branch_routing_uses_target_branch_rr(self):
+        """F5 R2 regression: RR очередь ДОЛЖНА считать менеджеров
+        ЦЕЛЕВОГО филиала (tmn), а не филиала inbox (ekb).
+
+        Сценарий: inbox принадлежит ekb, в ekb есть op_ekb (online),
+        в tmn — op_tmn. Клиент из Томской области → диалог уходит в tmn.
+        Ранее (InboxRoundRobinService) очередь строилась по inbox.branch=ekb,
+        пересечение с candidates=[op_tmn] давало пусто → None.
+        Теперь (BranchRoundRobinService) очередь строится по
+        conversation.branch=tmn, op_tmn попадает в очередь и назначается.
+        """
+        # op_ekb уже есть из setUp — специально, чтобы RR-очередь ekb
+        # не была пустой и старый баг бы проявился.
+        self.assertTrue(
+            User.objects.filter(branch=self.ekb, messenger_online=True).exists()
+        )
+
+        conv = Conversation.objects.create(
+            inbox=self.inbox,  # inbox=ekb
+            contact=self.contact,
+            client_region="Томская область",  # маршрутизируется в tmn
+        )
+        conv.refresh_from_db()
+        self.assertEqual(conv.branch, self.tmn)
+        # Назначен ИМЕННО менеджер tmn, а не ekb.
+        self.assertEqual(conv.assignee, self.op_tmn)
+
+
+class BranchRoundRobinServiceTests(TestCase):
+    """F5 R2 (2026-04-18): очередь Round-Robin per-branch."""
+
+    def setUp(self):
+        cache.clear()
+        self.branch = Branch.objects.create(name="RR Branch", code="rr")
+        self.u1 = User.objects.create_user(
+            username="rr_u1",
+            role=User.Role.MANAGER,
+            branch=self.branch,
+            is_active=True,
+        )
+        self.u2 = User.objects.create_user(
+            username="rr_u2",
+            role=User.Role.MANAGER,
+            branch=self.branch,
+            is_active=True,
+        )
+        self.u3 = User.objects.create_user(
+            username="rr_u3",
+            role=User.Role.MANAGER,
+            branch=self.branch,
+            is_active=True,
+        )
+        # ADMIN и TENDERIST должны быть ИСКЛЮЧЕНЫ из очереди.
+        User.objects.create_user(
+            username="rr_admin",
+            role=User.Role.ADMIN,
+            branch=self.branch,
+        )
+        User.objects.create_user(
+            username="rr_tend",
+            role=User.Role.TENDERIST,
+            branch=self.branch,
+        )
+
+    def _svc(self):
+        from messenger.assignment_services.round_robin import BranchRoundRobinService
+        return BranchRoundRobinService(self.branch)
+
+    def test_round_robin_cycles_through_members(self):
+        svc = self._svc()
+        allowed = [self.u1.id, self.u2.id, self.u3.id]
+        picks = [svc.available_agent(allowed) for _ in range(6)]
+        # Три менеджера, 6 вызовов → каждый получит по 2 диалога,
+        # порядок сохраняется циклически.
+        self.assertEqual({u.id for u in picks}, set(allowed))
+        first_three = [u.id for u in picks[:3]]
+        last_three = [u.id for u in picks[3:]]
+        self.assertEqual(first_three, last_three)  # ровный цикл
+
+    def test_admin_and_tenderist_never_picked(self):
+        svc = self._svc()
+        allowed_any = list(
+            User.objects.filter(branch=self.branch).values_list("id", flat=True)
+        )
+        # RR сам отфильтрует ADMIN/TENDERIST через _get_current_member_ids.
+        picks = {svc.available_agent(allowed_any).id for _ in range(6)}
+        self.assertEqual(picks, {self.u1.id, self.u2.id, self.u3.id})
+
+    def test_queue_resets_when_members_change(self):
+        svc = self._svc()
+        # Инициируем очередь.
+        svc.available_agent([self.u1.id, self.u2.id, self.u3.id])
+        # Удаляем одного менеджера — очередь должна пересоздаться.
+        self.u3.is_active = False
+        self.u3.save(update_fields=["is_active"])
+        picks = {
+            svc.available_agent([self.u1.id, self.u2.id]).id for _ in range(4)
+        }
+        self.assertEqual(picks, {self.u1.id, self.u2.id})
+
+    def test_empty_allowed_returns_none(self):
+        svc = self._svc()
+        self.assertIsNone(svc.available_agent([]))
