@@ -1,5 +1,42 @@
 # Текущий спринт
 
+**[2026-04-18]** — F6 R2: Расширенный SMTP onboarding ✅
+
+Коммит `bdcc8ec2`. R1 закрыл только Fernet re-save + тест-письмо.
+R2 добавляет редактирование всего конфига + toggle включения — без лазания
+в /django-admin/.
+
+**Новые endpoints:**
+- `POST /admin/mail/setup/save-config/` — host/port/username/from_email/
+  from_name/use_starttls/rate_per_minute/day/per_user_daily_limit.
+  Валидация диапазонов + full_clean для email.
+- `POST /admin/mail/setup/toggle-enabled/` — toggle массовой отправки.
+  При включении проверяет валидность Fernet — если пароль не
+  расшифровывается, отказ с объяснением.
+
+**UI:** 2 новых блока в mail_setup.html — форма SMTP (grid 2/3 col) и
+toggle-кнопка с предупреждением при невалидном Fernet.
+
+**Audit:** каждое save/toggle → ActivityEvent.Verb.UPDATE.
+
+**Тесты (staging):** 9/9 pass — save_config (5 кейсов) + toggle (4 кейса).
+
+**F5 R2: RR queue per-branch ✅**
+
+Коммит `d97c6d9d`. Cross-branch routing bug: `InboxRoundRobinService`
+строил очередь по `inbox.branch_id`, а candidates — по `conversation.branch_id`.
+При маршрутизации ekb→tmn пересечение пустое → RR вернул None. Новый
+`BranchRoundRobinService` привязан к target-branch. Regression-тест
+`test_cross_branch_routing_uses_target_branch_rr` специально проверяет
+кейс с op_ekb и op_tmn.
+
+Тесты: 19/19 в `test_auto_assign.py` (включая 4 новых
+BranchRoundRobinServiceTests).
+
+ADR: `docs/decisions.md [2026-04-18]`.
+
+---
+
 **[2026-04-18]** — F5: Off-hours форма вне рабочих часов ✅
 
 Коммиты `0dfeed17` (backend) + `6672fc7d`/`a1eac52a` (tests fix) +
