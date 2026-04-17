@@ -1,5 +1,25 @@
 # Текущий спринт
 
+**[2026-04-17]** — Big Release 2026 F3 Round 1 (Задачи) ✅
+
+По результатам `tasks-audit-2026-04-17.md` закрыто 5 приоритетных находок
+раздела «Задачи». Коммит `38a7ea48`.
+
+- **P0-4 TZ fix:** фильтр `overdue=1` использовал `due_at__lt=now` (UTC) — конфликт с Dashboard `_split_active_tasks` (локальный `today_start`). Теперь оба используют локальное начало дня. Решает проблему «задача на 23:59 локального вчера показывается в Dashboard, но не в Tasks при клике по ссылке».
+- **P1-7 IDOR:** `task_add_comment` теперь сначала проверяет `visible_tasks_qs(user)`, потом permissions. Возвращает 404 вместо 403 для невидимых задач (не палит существование).
+- **P2-1 aria-sort:** 7 sort-headers получили `aria-sort="ascending|descending|none"` — screen reader объявляет порядок сортировки.
+- **P1-5 Empty state с CTA:** две ветки empty state. При активных фильтрах/поиске — «Ничего не найдено» + кнопка «Сбросить фильтры». Без фильтров — «Задач пока нет» + CTA «+ Создать задачу» (V2Modal).
+- **P2-5 CSP-safe confirm:** `window.confirm()` в `form.v2-task-delete` и `form.v2-task-complete` заменены на двойной submit с visual badge «Нажмите ещё раз» (role="status", timeout 2.5с). Согласован с `.v2-done-check` на Dashboard/Tasks row. Touch + keyboard friendly.
+
+**Результат на staging:** HTTP 302, web restart, **134 теста зелёные** (Dashboard + Tasks + Companies + Companies inline/detail).
+
+**Оставшиеся в F3 Round 2** (следующий коммит в F3):
+- **P1-1 N+1 на `company.address/work_timezone`** — добавить `.only(...)` в `visible_tasks_qs`
+- **P1-2 Двойной `count()`** — применить fetch[:limit+1]+len pattern
+- **P1-4 Bulk-reassign confirm-modal** — preview перед применением (>5 задач)
+- **P2-2 Focus trap popover фильтров** — перенести из v2_modal
+- **Pre-existing F811:** 3 дубля `_can_delete_task_ui`, `_can_edit_task_ui`, `_can_manage_task_status_ui` в tasks.py — выбрать один источник (импорт из _base)
+
 **[2026-04-17]** — Big Release 2026 F2 Карта взаимосвязей ✅
 
 Полный отчёт: `knowledge-base/audits/F2-interconnections-2026-04-17.md`.
