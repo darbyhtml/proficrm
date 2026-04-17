@@ -41,12 +41,19 @@
           </svg>
           Интерфейс
         </button>
-        <button type="button" class="pref-tab w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-left transition-colors hover:bg-brand-soft/20"
+        <button type="button" class="pref-tab w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-left transition-colors hover:bg-brand-soft/20 border-b border-brand-soft/30"
                 data-tab="mail">
           <svg class="w-4 h-4 shrink-0 text-brand-dark/50" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
             <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/>
           </svg>
           Почта
+        </button>
+        <button type="button" class="pref-tab w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-left transition-colors hover:bg-brand-soft/20"
+                data-tab="security">
+          <svg class="w-4 h-4 shrink-0 text-brand-dark/50" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
+            <rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+          </svg>
+          Безопасность
         </button>
       </div>
     </nav>
@@ -399,6 +406,65 @@
             <a href="/mail/campaigns/" class="btn btn-outline text-sm">Перейти в раздел Почта</a>
           </div>
 
+        </div>
+      </section>
+
+      {# ─── Безопасность ─── #}
+      <section class="pref-section hidden" data-section="security" aria-labelledby="sec-title-password">
+        <div class="card card-pad space-y-4 mb-4">
+          <div>
+            <div id="sec-title-password" class="font-semibold text-base mb-0.5">Смена пароля</div>
+            <div class="text-sm muted">
+              Используется пользователями с ролью «Администратор». Менеджеры и остальные роли
+              входят по магической ссылке — пароль им менять не нужно.
+            </div>
+          </div>
+
+          {% if request.user.role == 'admin' or request.user.is_superuser %}
+            <form method="post" action="/settings/password/" class="space-y-3" id="passwordChangeForm" novalidate>
+              {% csrf_token %}
+              <div>
+                <label for="id_old_password" class="block text-xs font-medium text-brand-dark/70 mb-1">Текущий пароль</label>
+                <input type="password" name="old_password" id="id_old_password" autocomplete="current-password" required
+                       class="w-full rounded-xl border border-brand-soft bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/30 focus:border-brand-teal" />
+              </div>
+              <div>
+                <label for="id_new_password1" class="block text-xs font-medium text-brand-dark/70 mb-1">Новый пароль</label>
+                <input type="password" name="new_password1" id="id_new_password1" autocomplete="new-password" required minlength="8"
+                       class="w-full rounded-xl border border-brand-soft bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/30 focus:border-brand-teal" />
+                <div class="text-xs muted mt-1">Минимум 8 символов. Не похож на имя/email, не слишком распространён.</div>
+              </div>
+              <div>
+                <label for="id_new_password2" class="block text-xs font-medium text-brand-dark/70 mb-1">Повторите новый пароль</label>
+                <input type="password" name="new_password2" id="id_new_password2" autocomplete="new-password" required minlength="8"
+                       class="w-full rounded-xl border border-brand-soft bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-teal/30 focus:border-brand-teal" />
+              </div>
+              <div class="pt-1">
+                <button type="submit" class="btn btn-primary text-sm">Сменить пароль</button>
+              </div>
+            </form>
+          {% else %}
+            <div class="rounded-xl bg-brand-soft/30 border border-brand-soft px-4 py-3 text-sm muted">
+              У вас роль «{{ request.user.get_role_display }}» — вход выполняется по магической ссылке,
+              смена пароля не требуется. Если нужно перевыпустить ссылку — обратитесь к администратору.
+            </div>
+          {% endif %}
+        </div>
+
+        <div class="card card-pad space-y-3">
+          <div>
+            <div class="font-semibold text-base mb-0.5">Активные сессии</div>
+            <div class="text-sm muted">
+              При смене пароля все активные сессии автоматически прерываются,
+              и потребуется повторный вход. Если замечена подозрительная активность — обратитесь к администратору.
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <form method="post" action="/logout/" class="inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-outline text-sm">Выйти из этой сессии</button>
+            </form>
+          </div>
         </div>
       </section>
 
