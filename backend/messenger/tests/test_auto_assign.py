@@ -112,22 +112,36 @@ class MultiBranchRouterTests(TestCase):
         conv = self._make_conv("")
         self.assertEqual(self.router.route(conv), self.ekb)
 
-    def test_common_pool_picks_round_robin_branch(self):
+    def test_common_pool_same_branch_within_same_week(self):
+        """F5 (2026-04-18): общий пул работает по ПОНЕДЕЛЬНОЙ ротации,
+        а не per-visit RR. Все визиты на одной неделе → один и тот же филиал.
+        """
         cache.clear()
-        pool_ids = sorted([self.ekb.id, self.tmn.id, self.krd.id])
-
         picks = []
-        for _ in range(len(pool_ids) * 2):
+        for _ in range(5):
             conv = self._make_conv("Москва, Московская область")
             picks.append(self.router.route(conv).id)
+        # Все 5 визитов на одной и той же неделе должны дать один филиал
+        self.assertEqual(len(set(picks)), 1)
 
-        # Все филиалы общего пула должны быть выбраны.
-        self.assertEqual(set(picks), set(pool_ids))
-
-        # Round-robin: последовательность должна идти по возрастанию id
-        # и повторяться циклически.
-        expected_cycle = pool_ids + pool_ids
-        self.assertEqual(picks, expected_cycle)
+    def test_common_pool_weekly_rotation_cycles_branches(self):
+        """Понедельная ротация: разные недели → разные филиалы из пула
+        в порядке COMMON_POOL_ROTATION_ORDER = (ekb, krd, tym)."""
+        from datetime import date
+        pool_branches = [self.ekb, self.krd, self.tmn]
+        # 3 последовательные недели — должны попасть на разные филиалы по циклу
+        # (week-1) % 3: W1→ekb, W2→krd, W3→tym, W4→ekb
+        picked_by_week = {}
+        for week_num in (1, 2, 3, 4):
+            # Возьмём понедельник этой ISO-недели 2026 года
+            d = date.fromisocalendar(2026, week_num, 1)
+            branch = self.router._pick_common_pool_branch(pool_branches, today=d)
+            picked_by_week[week_num] = branch
+        # Проверяем циклическую ротацию: порядок ekb → krd → tym
+        self.assertEqual(picked_by_week[1], self.ekb)
+        self.assertEqual(picked_by_week[2], self.krd)
+        self.assertEqual(picked_by_week[3], self.tmn)
+        self.assertEqual(picked_by_week[4], self.ekb)  # цикл замкнулся
 
 
 class BranchLoadBalancerTests(TestCase):

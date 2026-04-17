@@ -45,7 +45,16 @@ class MultiBranchRouter:
     # Предпочтительный порядок ротации филиалов в общем пуле (по коду).
     # Совпадает с порядком из Q8: ЕКБ → Краснодар → Тюмень.
     # Если код не найден — филиал попадает в конец списка по id.
-    COMMON_POOL_ROTATION_ORDER = ("ekb", "krd", "tym")
+    # ВАЖНО: в проекте исторически сосуществуют два кода Тюмени —
+    # "tym" (в фикстуре branch_regions_2025_2026.json) и "tmn"
+    # (в seed_demo.py + ряде тестов). Держим оба как СИНОНИМЫ ОДНОГО
+    # слота ротации, чтобы порядок был одинаковым в любом окружении.
+    # Формат: tuple (индекс_слота, tuple_кодов_этого_слота).
+    COMMON_POOL_ROTATION_SLOTS = (
+        ("ekb",),
+        ("krd",),
+        ("tym", "tmn"),
+    )
 
     def route(self, conversation: Conversation) -> Optional[Branch]:
         region = (conversation.client_region or "").strip()
@@ -75,7 +84,8 @@ class MultiBranchRouter:
     def _pick_common_pool_branch(self, branches, today: Optional[date] = None):
         """Понедельная ротация: по ISO-неделе текущей даты.
 
-        Порядок филиалов — через COMMON_POOL_ROTATION_ORDER (коды),
+        Порядок филиалов — через COMMON_POOL_ROTATION_SLOTS (коды,
+        сгруппированные по слотам-синонимам: "tym"/"tmn" = один слот),
         остальные (неизвестные коды) — по возрастанию id в конце.
 
         Пример:
@@ -93,15 +103,17 @@ class MultiBranchRouter:
         today = today or timezone.localdate()
         iso_week = today.isocalendar().week
 
-        # Сортируем по COMMON_POOL_ROTATION_ORDER, остальное — по id.
-        ordered_codes = list(self.COMMON_POOL_ROTATION_ORDER)
+        # Строим map code → slot_index по COMMON_POOL_ROTATION_SLOTS.
+        code_to_slot = {}
+        for slot_idx, codes in enumerate(self.COMMON_POOL_ROTATION_SLOTS):
+            for code in codes:
+                code_to_slot[code.lower()] = slot_idx
 
         def _sort_key(b: Branch):
             code = (b.code or "").lower()
-            try:
-                return (0, ordered_codes.index(code), b.id)
-            except ValueError:
-                return (1, 0, b.id)
+            if code in code_to_slot:
+                return (0, code_to_slot[code], b.id)
+            return (1, 0, b.id)
 
         branches_sorted = sorted(branches, key=_sort_key)
         # (week-1) чтобы неделя 1 → index 0
