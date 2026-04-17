@@ -1,0 +1,144 @@
+{% extends "ui/base.html" %}
+{% block title %}Executive Dashboard — Управляющий группой{% endblock %}
+
+{% block extra_head %}
+  {% include "ui/_v2/v2_styles.html" %}
+  {% include "ui/_v2/v3_styles.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="v2 space-y-4">
+  <nav class="text-xs text-brand-dark/50 mb-1"><a href="/" class="hover:text-brand-teal">Главная</a> › <span>Executive Dashboard</span></nav>
+
+  <div>
+    <h1 class="v2-h1" style="margin:0">Executive Dashboard</h1>
+    <div class="v2-muted">{{ dashboard.user.get_full_name|default:dashboard.user.username }} · {{ dashboard.period_label_month }}</div>
+  </div>
+
+  {# ── Итоги по группе ── #}
+  <section class="v2-card">
+    <div class="v2-card__body" style="padding:16px 20px;display:grid;grid-template-columns:repeat(5,1fr);gap:12px">
+      <div class="v3-kpi-card">
+        <div class="v3-kpi-card__label">Задач выполнено (мес)</div>
+        <div class="v3-kpi-card__value">{{ dashboard.totals.done_month }}</div>
+      </div>
+      <div class="v3-kpi-card">
+        <div class="v3-kpi-card__label">Менеджеры онлайн</div>
+        <div class="v3-kpi-card__value">{{ dashboard.totals.online }}/{{ dashboard.totals.total_managers }}</div>
+      </div>
+      <div class="v3-kpi-card">
+        <div class="v3-kpi-card__label">Компаний всего</div>
+        <div class="v3-kpi-card__value">{{ dashboard.totals.companies_total }}</div>
+      </div>
+      <div class="v3-kpi-card">
+        <div class="v3-kpi-card__label">Новых компаний (мес)</div>
+        <div class="v3-kpi-card__value">{{ dashboard.totals.companies_new_month }}</div>
+      </div>
+      <div class="v3-kpi-card">
+        <div class="v3-kpi-card__label">Диалоги открытые</div>
+        <div class="v3-kpi-card__value">{{ dashboard.conversations.open }}</div>
+        <div class="v3-kpi-card__sub">+ {{ dashboard.conversations.waiting }} ждут связи</div>
+      </div>
+    </div>
+  </section>
+
+  {# ── Chart.js: сравнение подразделений ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Подразделения — задачи за месяц</h2>
+    </div>
+    <div class="v2-card__body" style="padding:16px 20px 20px">
+      <div class="v3-chart-wrap">
+        <canvas id="chartBranchesDone"></canvas>
+      </div>
+    </div>
+  </section>
+
+  {# ── Per-branch breakdown ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Разбивка по подразделениям</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px;overflow-x:auto">
+      <table class="v3-table" style="width:100%;border-collapse:collapse;font-size:14px">
+        <thead>
+          <tr style="text-align:left;border-bottom:1px solid var(--v3-border)">
+            <th style="padding:8px 6px">Подразделение</th>
+            <th style="padding:8px 6px">Задач DONE</th>
+            <th style="padding:8px 6px">Онлайн</th>
+            <th style="padding:8px 6px">Новых компаний</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in dashboard.per_branch %}
+            <tr style="border-bottom:1px solid var(--v3-border)">
+              <td style="padding:8px 6px">{{ b.name }} <span class="v2-muted" style="font-size:12px">({{ b.code }})</span></td>
+              <td style="padding:8px 6px"><strong>{{ b.done_count }}</strong></td>
+              <td style="padding:8px 6px">{{ b.online }}/{{ b.total_managers }}</td>
+              <td style="padding:8px 6px">{{ b.new_companies_month }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="v2-muted" style="padding:12px 6px">Подразделения отсутствуют.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {# ── Топ-10 менеджеров по группе ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Топ-10 менеджеров группы</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px">
+      {% for m in dashboard.top_managers %}
+        <div class="v3-rank-row">
+          <div class="v3-rank-row__num {% if m.rank <= 3 %}v3-rank-row__num--top{% endif %}">{{ m.rank }}</div>
+          <div>
+            {% if m.is_online %}<span class="v3-dot-online"></span>{% else %}<span class="v3-dot-offline"></span>{% endif %}
+            {{ m.full_name }}
+          </div>
+          <div><strong>{{ m.done_count }}</strong></div>
+          <div class="v2-muted" style="font-size:12px">задач</div>
+        </div>
+      {% empty %}
+        <div class="v2-muted">Менеджеров пока нет.</div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+{% include "ui/analytics_v2/_shared.html" %}
+
+{# Chart.js CDN + bar chart по филиалам. #}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" nonce="{{ request.csp_nonce|default:'' }}"></script>
+<script nonce="{{ request.csp_nonce|default:'' }}">
+(function(){
+  var ctx = document.getElementById('chartBranchesDone');
+  if (!ctx || typeof Chart === 'undefined') return;
+  var labels = [{% for b in dashboard.per_branch %}"{{ b.name|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}];
+  var data = [{% for b in dashboard.per_branch %}{{ b.done_count }}{% if not forloop.last %},{% endif %}{% endfor %}];
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Задач DONE',
+        data: data,
+        backgroundColor: 'rgba(1, 148, 142, 0.7)',
+        borderColor: '#01948E',
+        borderWidth: 1,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 } }
+      }
+    }
+  });
+})();
+</script>
+{% endblock %}

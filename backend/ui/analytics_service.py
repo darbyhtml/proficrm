@@ -1,4 +1,4 @@
-"""F7 R1 (2026-04-18): сервисный слой ролевых KPI-дашбордов.
+"""F7 R1+R2 (2026-04-18): сервисный слой ролевых KPI-дашбордов.
 
 Чистые функции без HTTP-зависимостей. Каждая возвращает dict с готовыми
 числами для шаблона. Тестируются изолированно.
@@ -8,8 +8,10 @@
 
 Текущий статус:
 - ✅ MANAGER (get_manager_dashboard) — 6 ключевых метрик.
-- ⏳ SALES_HEAD / BRANCH_DIRECTOR / GROUP_MANAGER / TENDERIST —
-  реализация в R2.
+- ✅ SALES_HEAD (get_sales_head_dashboard) — рейтинг + overdue + онлайн.
+- ✅ BRANCH_DIRECTOR (get_branch_director_dashboard) — KPI филиала + рост.
+- ✅ GROUP_MANAGER (get_group_manager_dashboard) — агрегат по всем филиалам.
+- ✅ TENDERIST (get_tenderist_dashboard) — read-only обзор компаний.
 """
 from __future__ import annotations
 
@@ -211,4 +213,250 @@ def get_manager_dashboard(user: User) -> dict[str, Any]:
         "cold_calls": cold,
         "expiring_contracts": contracts,
         "period_label_month": month_p.label,
+    }
+
+
+# ──────────────────────────────────────────────────────────────────
+# F7 R2: дашборды руководителей (SALES_HEAD / BRANCH_DIRECTOR /
+# GROUP_MANAGER) и TENDERIST (read-only).
+# ──────────────────────────────────────────────────────────────────
+
+
+def _managers_leaderboard(branch=None, period: Period = None, limit: int = 10) -> list[dict]:
+    """Рейтинг менеджеров по числу выполненных задач за период.
+
+    branch=None → все филиалы (для GROUP_MANAGER).
+    """
+    if period is None:
+        period = period_this_month()
+    qs = User.objects.filter(role=User.Role.MANAGER, is_active=True)
+    if branch is not None:
+        qs = qs.filter(branch=branch)
+    rows = (
+        qs.annotate(
+            done_count=Count(
+                "assigned_tasks",
+                filter=Q(
+                    assigned_tasks__status=Task.Status.DONE,
+                    assigned_tasks__updated_at__gte=period.start,
+                    assigned_tasks__updated_at__lt=period.end,
+                ),
+                distinct=True,
+            )
+        )
+        .order_by("-done_count", "username")[:limit]
+    )
+    result = []
+    for idx, u in enumerate(rows, start=1):
+        result.append({
+            "rank": idx,
+            "user_id": u.id,
+            "username": u.username,
+            "full_name": u.get_full_name() or u.username,
+            "done_count": u.done_count,
+            "is_online": bool(getattr(u, "messenger_online", False)),
+            "branch_id": u.branch_id,
+        })
+    return result
+
+
+def _overdue_by_manager(branch=None, limit: int = 10) -> list[dict]:
+    """Топ менеджеров с просроченными задачами (текущее состояние)."""
+    now = timezone.now()
+    qs = User.objects.filter(role=User.Role.MANAGER, is_active=True)
+    if branch is not None:
+        qs = qs.filter(branch=branch)
+    rows = (
+        qs.annotate(
+            overdue_count=Count(
+                "assigned_tasks",
+                filter=Q(
+                    assigned_tasks__status__in=[Task.Status.NEW, Task.Status.IN_PROGRESS],
+                    assigned_tasks__due_at__lt=now,
+                ),
+                distinct=True,
+            )
+        )
+        .filter(overdue_count__gt=0)
+        .order_by("-overdue_count")[:limit]
+    )
+    return [
+        {
+            "user_id": u.id,
+            "full_name": u.get_full_name() or u.username,
+            "overdue_count": u.overdue_count,
+        }
+        for u in rows
+    ]
+
+
+def _online_count(branch=None) -> dict:
+    """Сколько менеджеров сейчас онлайн / всего."""
+    qs = User.objects.filter(role=User.Role.MANAGER, is_active=True)
+    if branch is not None:
+        qs = qs.filter(branch=branch)
+    total = qs.count()
+    online = qs.filter(messenger_online=True).count()
+    return {"online": online, "total": total}
+
+
+def _branch_companies_growth(branch=None) -> dict:
+    """Рост компаний за месяц: прирост и абсолютное число."""
+    now = timezone.now()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    qs = Company.objects.all()
+    if branch is not None:
+        qs = qs.filter(branch=branch)
+    total = qs.count()
+    new_this_month = qs.filter(created_at__gte=month_start).count()
+    return {"total": total, "new_this_month": new_this_month}
+
+
+def _conversations_funnel(branch=None) -> dict:
+    """Воронка диалогов в мессенджере: waiting / open / resolved (30 дн)."""
+    try:
+        from messenger.models import Conversation
+    except Exception:
+        return {"waiting": 0, "open": 0, "resolved_month": 0}
+    now = timezone.now()
+    month_ago = now - timedelta(days=30)
+    qs = Conversation.objects.all()
+    if branch is not None:
+        qs = qs.filter(branch=branch)
+    return {
+        "waiting": qs.filter(status=Conversation.Status.WAITING_OFFLINE).count(),
+        "open": qs.filter(status=Conversation.Status.OPEN).count(),
+        "resolved_month": qs.filter(
+            status=Conversation.Status.RESOLVED,
+            last_activity_at__gte=month_ago,
+        ).count(),
+    }
+
+
+def get_sales_head_dashboard(user: User) -> dict[str, Any]:
+    """Дашборд РОПа (SALES_HEAD) — обзор своего подразделения."""
+    branch = user.branch
+    month_p = period_this_month()
+    return {
+        "user": user,
+        "branch": branch,
+        "period_label_month": month_p.label,
+        "leaderboard": _managers_leaderboard(branch=branch, period=month_p),
+        "overdue_by_manager": _overdue_by_manager(branch=branch),
+        "online": _online_count(branch=branch),
+        "conversations": _conversations_funnel(branch=branch),
+        "companies_growth": _branch_companies_growth(branch=branch),
+    }
+
+
+def get_branch_director_dashboard(user: User) -> dict[str, Any]:
+    """Дашборд директора подразделения — своё подразделение + сравнение."""
+    branch = user.branch
+    month_p = period_this_month()
+
+    # Рейтинг всех подразделений по выполненным задачам за месяц.
+    from accounts.models import Branch
+    branches_rank = []
+    for b in Branch.objects.all():
+        done = Task.objects.filter(
+            assigned_to__branch=b,
+            status=Task.Status.DONE,
+            updated_at__gte=month_p.start,
+            updated_at__lt=month_p.end,
+        ).count()
+        branches_rank.append({
+            "id": b.id,
+            "code": b.code,
+            "name": b.name,
+            "done_count": done,
+            "is_mine": b.id == (branch.id if branch else None),
+        })
+    branches_rank.sort(key=lambda r: (-r["done_count"], r["name"]))
+    for i, row in enumerate(branches_rank, start=1):
+        row["rank"] = i
+
+    return {
+        "user": user,
+        "branch": branch,
+        "period_label_month": month_p.label,
+        "leaderboard": _managers_leaderboard(branch=branch, period=month_p, limit=20),
+        "online": _online_count(branch=branch),
+        "conversations": _conversations_funnel(branch=branch),
+        "companies_growth": _branch_companies_growth(branch=branch),
+        "branches_rank": branches_rank,
+    }
+
+
+def get_group_manager_dashboard(user: User) -> dict[str, Any]:
+    """Дашборд управляющего группой компаний — executive-обзор всех филиалов."""
+    month_p = period_this_month()
+
+    from accounts.models import Branch
+    branches = list(Branch.objects.all())
+    per_branch = []
+    total_done = 0
+    total_online = 0
+    total_managers = 0
+    for b in branches:
+        done = Task.objects.filter(
+            assigned_to__branch=b,
+            status=Task.Status.DONE,
+            updated_at__gte=month_p.start,
+            updated_at__lt=month_p.end,
+        ).count()
+        online_stats = _online_count(branch=b)
+        new_companies = Company.objects.filter(
+            branch=b, created_at__gte=month_p.start
+        ).count()
+        per_branch.append({
+            "id": b.id,
+            "code": b.code,
+            "name": b.name,
+            "done_count": done,
+            "online": online_stats["online"],
+            "total_managers": online_stats["total"],
+            "new_companies_month": new_companies,
+        })
+        total_done += done
+        total_online += online_stats["online"]
+        total_managers += online_stats["total"]
+
+    per_branch.sort(key=lambda r: (-r["done_count"], r["name"]))
+
+    return {
+        "user": user,
+        "period_label_month": month_p.label,
+        "per_branch": per_branch,
+        "totals": {
+            "done_month": total_done,
+            "online": total_online,
+            "total_managers": total_managers,
+            "companies_total": Company.objects.count(),
+            "companies_new_month": Company.objects.filter(
+                created_at__gte=month_p.start
+            ).count(),
+        },
+        "top_managers": _managers_leaderboard(branch=None, period=month_p, limit=10),
+        "conversations": _conversations_funnel(branch=None),
+    }
+
+
+def get_tenderist_dashboard(user: User) -> dict[str, Any]:
+    """Дашборд тендериста — read-only обзор компаний и активности."""
+    today = timezone.localdate()
+    last_7 = today - timedelta(days=7)
+    return {
+        "user": user,
+        "companies_total": Company.objects.count(),
+        "companies_new_week": Company.objects.filter(
+            created_at__gte=last_7
+        ).count(),
+        "contracts_expiring_30": Company.objects.filter(
+            contract_until__isnull=False,
+            contract_until__gte=today,
+            contract_until__lte=today + timedelta(days=30),
+        ).count(),
+        "contracts_with_value": Company.objects.filter(
+            contract_until__isnull=False,
+        ).count(),
     }

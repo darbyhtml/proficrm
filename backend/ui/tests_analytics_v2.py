@@ -19,7 +19,11 @@ from accounts.models import Branch
 from companies.models import Company
 from tasksapp.models import Task
 from ui.analytics_service import (
+    get_branch_director_dashboard,
+    get_group_manager_dashboard,
     get_manager_dashboard,
+    get_sales_head_dashboard,
+    get_tenderist_dashboard,
     period_this_month,
     period_this_week,
     period_today,
@@ -136,6 +140,22 @@ class AnalyticsV2RouterTests(TestCase):
             role=User.Role.SALES_HEAD,
             branch=self.branch,
         )
+        self.director = User.objects.create_user(
+            username="router_director",
+            email="r@d.ru",
+            role=User.Role.BRANCH_DIRECTOR,
+            branch=self.branch,
+        )
+        self.gm = User.objects.create_user(
+            username="router_gm",
+            email="r@g.ru",
+            role=User.Role.GROUP_MANAGER,
+        )
+        self.tend = User.objects.create_user(
+            username="router_tend",
+            email="r@t.ru",
+            role=User.Role.TENDERIST,
+        )
 
     def test_manager_gets_manager_template(self):
         self.client.force_login(self.mgr)
@@ -143,16 +163,173 @@ class AnalyticsV2RouterTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn("Моя продуктивность", resp.content.decode("utf-8"))
 
-    def test_non_manager_gets_stub(self):
+    def test_sales_head_gets_team_dashboard(self):
         self.client.force_login(self.rop)
         resp = self.client.get("/analytics/v2/")
         self.assertEqual(resp.status_code, 200)
-        self.assertIn("Ваш дашборд в разработке", resp.content.decode("utf-8"))
+        self.assertIn("Аналитика отдела", resp.content.decode("utf-8"))
+
+    def test_branch_director_gets_branch_dashboard(self):
+        self.client.force_login(self.director)
+        resp = self.client.get("/analytics/v2/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Аналитика подразделения", resp.content.decode("utf-8"))
+
+    def test_group_manager_gets_executive_dashboard(self):
+        self.client.force_login(self.gm)
+        resp = self.client.get("/analytics/v2/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Executive Dashboard", resp.content.decode("utf-8"))
+
+    def test_tenderist_gets_tenderist_dashboard(self):
+        self.client.force_login(self.tend)
+        resp = self.client.get("/analytics/v2/")
+        self.assertEqual(resp.status_code, 200)
+        # Специфичный для tenderist заголовок «Обзор».
+        self.assertIn("Тендерист", resp.content.decode("utf-8"))
 
     def test_unauthenticated_redirected_to_login(self):
         resp = self.client.get("/analytics/v2/")
         # login_required → 302 на /login/.
         self.assertEqual(resp.status_code, 302)
+
+
+@override_settings(
+    SECURE_SSL_REDIRECT=False,
+    SECURE_HSTS_SECONDS=0,
+    SESSION_COOKIE_SECURE=False,
+)
+class SalesHeadDashboardTests(TestCase):
+    def setUp(self):
+        self.branch = Branch.objects.create(code="sh", name="Sales Head Branch")
+        self.other_branch = Branch.objects.create(code="sh2", name="Other Branch")
+        self.rop = User.objects.create_user(
+            username="sh_rop", email="rop@x.ru",
+            role=User.Role.SALES_HEAD, branch=self.branch,
+        )
+        self.mgr_a = User.objects.create_user(
+            username="sh_a", email="a@x.ru",
+            role=User.Role.MANAGER, branch=self.branch, messenger_online=True,
+        )
+        self.mgr_b = User.objects.create_user(
+            username="sh_b", email="b@x.ru",
+            role=User.Role.MANAGER, branch=self.branch,
+        )
+        self.mgr_other = User.objects.create_user(
+            username="sh_other", email="o@x.ru",
+            role=User.Role.MANAGER, branch=self.other_branch,
+        )
+        # Выполненные задачи за месяц: mgr_a — 3, mgr_b — 1, mgr_other — 10.
+        now = timezone.now()
+        for _ in range(3):
+            Task.objects.create(assigned_to=self.mgr_a, title="a", status=Task.Status.DONE)
+        for _ in range(1):
+            Task.objects.create(assigned_to=self.mgr_b, title="b", status=Task.Status.DONE)
+        for _ in range(10):
+            Task.objects.create(assigned_to=self.mgr_other, title="o", status=Task.Status.DONE)
+        # updated_at = auto_now, значит все в пределах «сейчас».
+
+    def test_leaderboard_only_includes_own_branch(self):
+        data = get_sales_head_dashboard(self.rop)
+        names = {row["username"] for row in data["leaderboard"]}
+        self.assertIn("sh_a", names)
+        self.assertIn("sh_b", names)
+        self.assertNotIn("sh_other", names)  # из чужого подразделения
+
+    def test_leaderboard_ranked_by_done_count(self):
+        data = get_sales_head_dashboard(self.rop)
+        first = data["leaderboard"][0]
+        self.assertEqual(first["username"], "sh_a")  # 3 задачи > 1
+        self.assertEqual(first["rank"], 1)
+
+    def test_online_count(self):
+        data = get_sales_head_dashboard(self.rop)
+        self.assertEqual(data["online"]["online"], 1)  # mgr_a
+        self.assertEqual(data["online"]["total"], 2)
+
+
+@override_settings(
+    SECURE_SSL_REDIRECT=False,
+    SECURE_HSTS_SECONDS=0,
+    SESSION_COOKIE_SECURE=False,
+)
+class BranchDirectorDashboardTests(TestCase):
+    def test_branches_rank_marks_mine_and_sorts_by_done(self):
+        b1 = Branch.objects.create(code="bd1", name="B1")
+        b2 = Branch.objects.create(code="bd2", name="B2")
+        director = User.objects.create_user(
+            username="bd_director", email="d@x.ru",
+            role=User.Role.BRANCH_DIRECTOR, branch=b1,
+        )
+        m1 = User.objects.create_user(username="bd_m1", email="m1@x.ru",
+                                       role=User.Role.MANAGER, branch=b1)
+        m2 = User.objects.create_user(username="bd_m2", email="m2@x.ru",
+                                       role=User.Role.MANAGER, branch=b2)
+        # b2 имеет больше выполненных задач.
+        Task.objects.create(assigned_to=m1, title="t", status=Task.Status.DONE)
+        for _ in range(5):
+            Task.objects.create(assigned_to=m2, title="t", status=Task.Status.DONE)
+
+        data = get_branch_director_dashboard(director)
+        rank = data["branches_rank"]
+        # b2 первым (больше done).
+        self.assertEqual(rank[0]["code"], "bd2")
+        # Моё подразделение помечено is_mine.
+        mine = [r for r in rank if r["is_mine"]][0]
+        self.assertEqual(mine["code"], "bd1")
+
+
+@override_settings(
+    SECURE_SSL_REDIRECT=False,
+    SECURE_HSTS_SECONDS=0,
+    SESSION_COOKIE_SECURE=False,
+)
+class GroupManagerDashboardTests(TestCase):
+    def test_totals_aggregate_across_all_branches(self):
+        b1 = Branch.objects.create(code="gm1", name="GM1")
+        b2 = Branch.objects.create(code="gm2", name="GM2")
+        gm = User.objects.create_user(
+            username="gm", email="g@x.ru", role=User.Role.GROUP_MANAGER,
+        )
+        m1 = User.objects.create_user(username="gm_m1", email="m1@g.ru",
+                                       role=User.Role.MANAGER, branch=b1,
+                                       messenger_online=True)
+        m2 = User.objects.create_user(username="gm_m2", email="m2@g.ru",
+                                       role=User.Role.MANAGER, branch=b2)
+        Task.objects.create(assigned_to=m1, title="x", status=Task.Status.DONE)
+        Task.objects.create(assigned_to=m2, title="y", status=Task.Status.DONE)
+
+        data = get_group_manager_dashboard(gm)
+        self.assertEqual(data["totals"]["done_month"], 2)
+        self.assertEqual(data["totals"]["online"], 1)
+        self.assertEqual(data["totals"]["total_managers"], 2)
+        # per_branch содержит оба подразделения.
+        codes = {b["code"] for b in data["per_branch"]}
+        self.assertEqual(codes, {"gm1", "gm2"})
+
+
+@override_settings(
+    SECURE_SSL_REDIRECT=False,
+    SECURE_HSTS_SECONDS=0,
+    SESSION_COOKIE_SECURE=False,
+)
+class TenderistDashboardTests(TestCase):
+    def test_tenderist_counters_populate(self):
+        b = Branch.objects.create(code="tb", name="Tendb")
+        tend = User.objects.create_user(
+            username="tendx", email="t@x.ru", role=User.Role.TENDERIST,
+        )
+        # 2 компании: одна с истекающим договором.
+        today = timezone.localdate()
+        Company.objects.create(
+            name="C1", branch=b,
+            contract_until=today + timedelta(days=15),
+        )
+        Company.objects.create(name="C2", branch=b)
+        data = get_tenderist_dashboard(tend)
+        self.assertEqual(data["companies_total"], 2)
+        self.assertEqual(data["contracts_with_value"], 1)
+        self.assertEqual(data["contracts_expiring_30"], 1)
 
 
 @override_settings(

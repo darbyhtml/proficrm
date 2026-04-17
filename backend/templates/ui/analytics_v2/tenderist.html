@@ -1,0 +1,57 @@
+{% extends "ui/base.html" %}
+{% block title %}Обзор — Тендерист{% endblock %}
+
+{% block extra_head %}
+  {% include "ui/_v2/v2_styles.html" %}
+  {% include "ui/_v2/v3_styles.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="v2 space-y-4">
+  <nav class="text-xs text-brand-dark/50 mb-1"><a href="/" class="hover:text-brand-teal">Главная</a> › <span>Обзор</span></nav>
+
+  <div>
+    <h1 class="v2-h1" style="margin:0">Обзор</h1>
+    <div class="v2-muted">{{ dashboard.user.get_full_name|default:dashboard.user.username }} · только для чтения</div>
+  </div>
+
+  <section class="v2-card">
+    <div class="v2-card__body" style="padding:16px 20px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+      <div class="v3-kpi-card">
+        <div class="v3-kpi-card__label">Компаний всего</div>
+        <div class="v3-kpi-card__value">{{ dashboard.companies_total }}</div>
+      </div>
+      <div class="v3-kpi-card">
+        <div class="v3-kpi-card__label">Новых за 7 дней</div>
+        <div class="v3-kpi-card__value">{{ dashboard.companies_new_week }}</div>
+      </div>
+      <div class="v3-kpi-card">
+        <div class="v3-kpi-card__label">С договорами</div>
+        <div class="v3-kpi-card__value">{{ dashboard.contracts_with_value }}</div>
+      </div>
+      <div class="v3-kpi-card">
+        <div class="v3-kpi-card__label">Договоры истекают (30 дн)</div>
+        <div class="v3-kpi-card__value" style="color:{% if dashboard.contracts_expiring_30 > 0 %}#d97706{% else %}#6b7280{% endif %}">{{ dashboard.contracts_expiring_30 }}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Что доступно в вашей роли</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px;font-size:14px;line-height:1.6">
+      <ul style="margin:0;padding-left:20px">
+        <li>Просмотр всех компаний и контактов (read-only) — <a href="/companies/" class="link">Компании</a>.</li>
+        <li>Добавление заметок к карточкам компаний.</li>
+        <li>Обзор ключевых метрик по группе (эта страница).</li>
+      </ul>
+      <p class="v2-muted" style="margin-top:8px;font-size:13px">
+        Задачи и редактирование компаний — закрыты для роли «Тендерист» по политике доступа.
+      </p>
+    </div>
+  </section>
+</div>
+
+{% include "ui/analytics_v2/_shared.html" %}
+{% endblock %}

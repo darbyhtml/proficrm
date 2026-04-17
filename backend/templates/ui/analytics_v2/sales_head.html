@@ -1,0 +1,94 @@
+{% extends "ui/base.html" %}
+{% block title %}Аналитика отдела — РОП{% endblock %}
+
+{% block extra_head %}
+  {% include "ui/_v2/v2_styles.html" %}
+  {% include "ui/_v2/v3_styles.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="v2 space-y-4">
+  <nav class="text-xs text-brand-dark/50 mb-1"><a href="/" class="hover:text-brand-teal">Главная</a> › <span>Аналитика отдела</span></nav>
+
+  <div>
+    <h1 class="v2-h1" style="margin:0">Аналитика отдела</h1>
+    <div class="v2-muted">
+      {{ dashboard.user.get_full_name|default:dashboard.user.username }}
+      {% if dashboard.branch %} · {{ dashboard.branch.name }}{% endif %}
+      · {{ dashboard.period_label_month }}
+    </div>
+  </div>
+
+  {# ── Быстрые KPI ── #}
+  <section class="v2-card">
+    <div class="v2-card__body" style="padding:16px 20px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+      <div class="v3-kpi-card">
+        <div class="v3-kpi-card__label">Онлайн сейчас</div>
+        <div class="v3-kpi-card__value">{{ dashboard.online.online }}/{{ dashboard.online.total }}</div>
+      </div>
+      <div class="v3-kpi-card">
+        <div class="v3-kpi-card__label">Новые компании (мес)</div>
+        <div class="v3-kpi-card__value">{{ dashboard.companies_growth.new_this_month }}</div>
+        <div class="v3-kpi-card__sub">из {{ dashboard.companies_growth.total }} всего</div>
+      </div>
+      <div class="v3-kpi-card">
+        <div class="v3-kpi-card__label">Диалоги (чат)</div>
+        <div class="v3-kpi-card__value">{{ dashboard.conversations.open }}</div>
+        <div class="v3-kpi-card__sub">открытых</div>
+      </div>
+      <div class="v3-kpi-card">
+        <div class="v3-kpi-card__label">Ждут связи (off-hours)</div>
+        <div class="v3-kpi-card__value" style="color:{% if dashboard.conversations.waiting > 0 %}#dc2626{% else %}#6b7280{% endif %}">{{ dashboard.conversations.waiting }}</div>
+      </div>
+    </div>
+  </section>
+
+  {# ── Рейтинг менеджеров ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Рейтинг менеджеров (задачи DONE за месяц)</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px">
+      {% if dashboard.leaderboard %}
+        {% for m in dashboard.leaderboard %}
+          <div class="v3-rank-row">
+            <div class="v3-rank-row__num {% if m.rank <= 3 %}v3-rank-row__num--top{% endif %}">{{ m.rank }}</div>
+            <div>
+              {% if m.is_online %}<span class="v3-dot-online" title="Онлайн"></span>{% else %}<span class="v3-dot-offline" title="Оффлайн"></span>{% endif %}
+              {{ m.full_name }}
+            </div>
+            <div><strong>{{ m.done_count }}</strong></div>
+            <div class="v2-muted" style="font-size:12px">задач</div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="v2-muted">Менеджеры в подразделении отсутствуют.</div>
+      {% endif %}
+    </div>
+  </section>
+
+  {# ── Просроченные задачи по менеджерам ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Просроченные задачи (топ-10)</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px">
+      {% if dashboard.overdue_by_manager %}
+        {% for m in dashboard.overdue_by_manager %}
+          <div class="v3-rank-row">
+            <div></div>
+            <div>{{ m.full_name }}</div>
+            <div><strong style="color:#dc2626">{{ m.overdue_count }}</strong></div>
+            <div class="v2-muted" style="font-size:12px">задач просрочено</div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="v2-muted" style="color:#059669">Все задачи отдела — в срок 👍</div>
+      {% endif %}
+    </div>
+  </section>
+
+</div>
+
+{% include "ui/analytics_v2/_shared.html" %}
+{% endblock %}

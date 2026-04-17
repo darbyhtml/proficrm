@@ -12,20 +12,44 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 
 from accounts.models import User
-from ui.analytics_service import get_manager_dashboard
+from ui.analytics_service import (
+    get_branch_director_dashboard,
+    get_group_manager_dashboard,
+    get_manager_dashboard,
+    get_sales_head_dashboard,
+    get_tenderist_dashboard,
+)
 
 
 @login_required
 def analytics_v2_home(request: HttpRequest) -> HttpResponse:
-    """Роутер: по роли пользователя показывает нужный дашборд."""
+    """Роутер: по роли пользователя показывает нужный дашборд.
+
+    F7 R2: покрыты все 5 ролей.
+    """
     user: User = request.user
     role = getattr(user, "role", None)
 
-    # MANAGER — свой дашборд личной продуктивности.
     if role == User.Role.MANAGER:
         ctx = {"dashboard": get_manager_dashboard(user)}
         return render(request, "ui/analytics_v2/manager.html", ctx)
 
-    # Остальные роли — заглушка до R2.
+    if role == User.Role.SALES_HEAD:
+        ctx = {"dashboard": get_sales_head_dashboard(user)}
+        return render(request, "ui/analytics_v2/sales_head.html", ctx)
+
+    if role == User.Role.BRANCH_DIRECTOR:
+        ctx = {"dashboard": get_branch_director_dashboard(user)}
+        return render(request, "ui/analytics_v2/branch_director.html", ctx)
+
+    if role == User.Role.GROUP_MANAGER or user.is_superuser or role == User.Role.ADMIN:
+        ctx = {"dashboard": get_group_manager_dashboard(user)}
+        return render(request, "ui/analytics_v2/group_manager.html", ctx)
+
+    if role == User.Role.TENDERIST:
+        ctx = {"dashboard": get_tenderist_dashboard(user)}
+        return render(request, "ui/analytics_v2/tenderist.html", ctx)
+
+    # Неизвестная роль — stub.
     ctx = {"role": role}
     return render(request, "ui/analytics_v2/stub.html", ctx)

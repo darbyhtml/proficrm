@@ -1,0 +1,78 @@
+{# F7 R2: общие стили + KPI-cards + Chart.js loader для ролевых дашбордов. #}
+
+<style>
+.v3-kpi-card {
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid var(--v3-border, #e2e8f0);
+  border-radius: 8px;
+}
+.v3-kpi-card__label {
+  font-size: 12px;
+  color: var(--v2-muted, #64748b);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.v3-kpi-card__value {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--brand-dark, #0f172a);
+  line-height: 1.1;
+}
+.v3-kpi-card__sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--v2-muted, #64748b);
+}
+.v3-progress {
+  height: 10px;
+  background: #f1f5f9;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.v3-progress__bar {
+  height: 100%;
+  background: linear-gradient(90deg, #01948E, #059669);
+  border-radius: 999px;
+  transition: width 0.3s;
+}
+.v3-rank-row {
+  display: grid;
+  grid-template-columns: 32px 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--v3-border, #e2e8f0);
+  font-size: 14px;
+}
+.v3-rank-row:last-child { border-bottom: none; }
+.v3-rank-row__num {
+  font-weight: 600;
+  color: var(--v2-muted, #64748b);
+  text-align: center;
+}
+.v3-rank-row__num--top { color: #01948E; }
+.v3-dot-online {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.v3-dot-offline {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d1d5db;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.v3-chart-wrap {
+  position: relative;
+  height: 240px;
+}
+</style>
