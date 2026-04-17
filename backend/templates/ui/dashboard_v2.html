@@ -360,7 +360,7 @@
           <span class="v2-count">{{ tasks_week_count|default:0 }}</span>
         </div>
         <div class="v2-card__body">
-          {% for t in tasks_week|slice:":5" %}
+          {% for t in tasks_week %}
           <a class="v2-item" href="{% url 'task_view' t.id %}">
             <span class="v2-item__dot"></span>
             <div class="flex-1 min-w-0">
@@ -377,7 +377,7 @@
           <div class="v2-card__empty">На неделе задач нет</div>
           {% endfor %}
         </div>
-        {% if tasks_week_count > 5 %}
+        {% if tasks_week_count > 3 %}
         <div class="v2-card__foot">
           <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list' %}?mine=1&date_from={{ week_range_start|date:'Y-m-d' }}&date_to={{ week_range_end|date:'Y-m-d' }}">Все задачи на неделю ({{ tasks_week_count }})
             <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M16.28 11.47a.75.75 0 010 1.06l-7.5 7.5a.75.75 0 01-1.06-1.06L14.69 12 7.72 5.03a.75.75 0 011.06-1.06l7.5 7.5z" clip-rule="evenodd"/></svg>

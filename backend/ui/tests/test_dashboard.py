@@ -549,10 +549,11 @@ class DashboardViewTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         response_text = response.content.decode('utf-8')
 
-        # v2 ссылки: /tasks/?today=1, /tasks/?status=new, /tasks/?overdue=1
-        self.assertIn("/tasks/?today=1", response_text)
-        self.assertIn("/tasks/?status=new", response_text)
-        self.assertIn("/tasks/?overdue=1", response_text)
+        # v2 ссылки фильтруют по текущему пользователю (mine=1), чтобы
+        # клик из «моих» задач оставался в контексте «моих».
+        self.assertIn("/tasks/?mine=1&amp;today=1", response_text)
+        self.assertIn("/tasks/?mine=1&amp;status=new", response_text)
+        self.assertIn("/tasks/?mine=1&amp;overdue=1", response_text)
 
     def test_task_status_badges_displayed(self):
         """Тест: статусы задач отображаются с правильными бейджами."""

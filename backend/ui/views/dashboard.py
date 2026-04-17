@@ -212,7 +212,7 @@ def view_as_reset(request: HttpRequest) -> HttpResponse:
 # ---------------------------------------------------------------------------
 
 DASHBOARD_PREVIEW_LIMIT = 3          # задач на карточку «Сегодня/Просрочено/…»
-DASHBOARD_WEEK_PREVIEW_LIMIT = 5     # задач в карточке «Ближайшие 7 дней»
+DASHBOARD_WEEK_PREVIEW_LIMIT = 3     # задач в карточке «Ближайшие 7 дней» (унифицировано с остальными)
 DASHBOARD_STALE_COMPANIES_LIMIT = 10 # компаний без задач
 DASHBOARD_DELETION_REQUESTS_LIMIT = 10
 TASK_TYPE_CACHE_KEY = "task_types_by_name"
