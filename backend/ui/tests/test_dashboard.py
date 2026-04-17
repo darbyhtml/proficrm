@@ -551,9 +551,12 @@ class DashboardViewTestCase(TestCase):
 
         # v2 ссылки фильтруют по текущему пользователю (mine=1), чтобы
         # клик из «моих» задач оставался в контексте «моих».
-        self.assertIn("/tasks/?mine=1&amp;today=1", response_text)
-        self.assertIn("/tasks/?mine=1&amp;status=new", response_text)
-        self.assertIn("/tasks/?mine=1&amp;overdue=1", response_text)
+        # Проверяем оба варианта экранирования амперсанда (& и &amp;).
+        def _contains_link(text: str, needle: str) -> bool:
+            return needle in text or needle.replace("&", "&amp;") in text
+        self.assertTrue(_contains_link(response_text, "/tasks/?mine=1&today=1"))
+        self.assertTrue(_contains_link(response_text, "/tasks/?mine=1&status=new"))
+        self.assertTrue(_contains_link(response_text, "/tasks/?mine=1&overdue=1"))
 
     def test_task_status_badges_displayed(self):
         """Тест: статусы задач отображаются с правильными бейджами."""
