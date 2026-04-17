@@ -1,5 +1,40 @@
 # Текущий спринт
 
+**[2026-04-17]** — Big Release 2026 F1 + F0d ✅
+
+**F0d Аудит Помощь/Настройки/Админка** (ux-researcher агент):
+Полный отчёт — `knowledge-base/audits/help-settings-admin-audit-2026-04-17.md`. Оценки: `/help/` 1/10 (заглушка), `/settings/` 6/10, `/admin/` 6.5/10.
+
+Critical gaps для Big Release:
+- Нет SMTP/GlobalMailAccount onboarding UI в кастомной Админке (настройка только через Django admin) — F6/F8
+- Нет UserAbsence модели и UI (отпуска/отгулы) — F5
+- Нет MobileAppBuild upload UI — F9
+- Нет FCM settings UI — F9
+- Роль TENDERIST отсутствовала в select ролей на /admin/users/ — **исправлено**
+- classic/modern режим карточки компании противоречит decisions.md — удалить в F4/F8
+
+5 quick-wins закрыто в этом же спринте:
+1. **TENDERIST в select ролей** (`users.html:70`)
+2. **Двойной breadcrumb** в `announcements.html` — оставлен семантический `<nav>`
+3. **Двойной breadcrumb** в `mobile_overview.html` — оставлен `<nav>`
+4. **Dead scale-picker CSS+JS** в `settings/dashboard_v2.html` (40+ строк удалены, разметка живёт в preferences_ui.html)
+5. **preferences_password redirect** `#security` → `#profile` (несуществующий tab)
+
+**F1 Дизайн-система v3:**
+- `backend/templates/ui/_v2/v3_styles.html` — токены (space/radius/цвета/типографика/тени/transitions), 10 новых компонентов (btn--lg/danger/info, badge, count--info, skeleton, spinner, textarea, form-error/hint/label, divider, tooltip, skip-link), глобальный `prefers-reduced-motion` media query, sr-only utility
+- `docs/wiki/01-Архитектура/Дизайн-система v3.md` — 620 строк документации: принципы, токены, компоненты, паттерны (empty state, confirmation без alert/confirm, loading), accessibility-чеклист, performance-правила, план миграции v2→v3
+- v2-токены остаются алиасами на v3 (обратная совместимость)
+- Подключено к 6 v2-шаблонам: dashboard_v2, task_list_v2, company_list_v2, settings/dashboard_v2, reports/cold_calls_day, reports/cold_calls_month
+
+**Коммиты (main):** `5c6fbb93`, `6db6ff8c`.
+
+**Результат на staging:**
+- HTTP 302 (login redirect) ✓
+- 78 тестов Dashboard — все зелёные
+- Web перезапущен
+
+**Дальше:** F2 (Карта взаимосвязей между страницами) и/или F3 (Задачи — редизайн + синхрон с Dashboard).
+
 **[2026-04-17]** — Big Release 2026 Трек A — 7 P0-фиксов ✅
 
 По результатам 6 параллельных аудитов (`knowledge-base/audits/_summary-2026-04-17.md`) закрыты 7 P0-блокеров подготовки к Big Release. Все правки — не breaking, applied на staging.
