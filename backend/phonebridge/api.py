@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import CallRequest, PhoneDevice, PhoneTelemetry, PhoneLogBundle, MobileAppQrToken
+from .models import CallRequest, PhoneDevice, PhoneTelemetry, PhoneLogBundle, MobileAppQrToken, MobileAppBuild
 from policy.engine import enforce
 
 
@@ -993,3 +993,67 @@ class QrTokenStatusView(APIView):
             }
         )
 
+
+
+# ──────────────────────────────────────────────────────────────────
+# F9 (2026-04-18): MobileAppBuild — latest APK info для CRMProfiDialer.
+# ──────────────────────────────────────────────────────────────────
+
+
+class MobileAppLatestView(APIView):
+    """GET /api/phone/app/latest/ — инфо о последней активной версии APK.
+
+    Возвращает JSON для CRMProfiDialer auto-update checker:
+    {
+        "version_name": "1.2.3",
+        "version_code": 15,
+        "sha256": "ab12...",
+        "size_bytes": 8192000,
+        "size_display": "7.8 МБ",
+        "download_url": "/media/mobile_apps/crmprofi-dialer-15.apk",
+        "uploaded_at": "2026-04-18T12:00:00+05:00"
+    }
+
+    Если версий нет — 404.
+
+    Auth: требуется JWT (device должен быть зарегистрирован).
+    """
+
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "mobile_app_latest"
+
+    def get(self, request):
+        build = (
+            MobileAppBuild.objects
+            .filter(is_active=True, env="production")
+            .order_by("-version_code", "-uploaded_at")
+            .first()
+        )
+        if not build:
+            return Response(
+                {"detail": "Активная версия APK не найдена."},
+                status=404,
+            )
+
+        try:
+            download_url = build.file.url
+        except Exception:
+            download_url = None
+
+        if not download_url:
+            return Response(
+                {"detail": "Файл APK повреждён или удалён."},
+                status=500,
+            )
+
+        return Response({
+            "version_name": build.version_name,
+            "version_code": build.version_code,
+            "sha256": build.sha256 or None,
+            "size_bytes": build.get_file_size(),
+            "size_display": build.get_file_size_display(),
+            "download_url": request.build_absolute_uri(download_url),
+            "uploaded_at": build.uploaded_at.isoformat(),
+        })

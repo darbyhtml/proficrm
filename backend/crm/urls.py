@@ -41,6 +41,7 @@ from phonebridge.api import (
     LogoutAllView,
     UserInfoView,
     QrTokenStatusView,
+    MobileAppLatestView,
 )
 from messenger.api import (
     ConversationViewSet, CannedResponseViewSet, ConversationLabelViewSet,
@@ -140,6 +141,8 @@ urlpatterns = [
     path("api/phone/user/info/", UserInfoView.as_view(), name="phone_user_info"),
     path("api/phone/qr/exchange/", QrTokenExchangeView.as_view(), name="phone_qr_exchange"),
     path("api/phone/qr/status/", QrTokenStatusView.as_view(), name="phone_qr_status"),
+    # F9 (2026-04-18): latest APK info для CRMProfiDialer auto-update.
+    path("api/phone/app/latest/", MobileAppLatestView.as_view(), name="phone_app_latest"),
     path("api/phone/logout/", LogoutView.as_view(), name="phone_logout"),
     path("api/phone/logout/all/", LogoutAllView.as_view(), name="phone_logout_all"),
     # Widget API (публичный, без аутентификации)
