@@ -214,9 +214,16 @@ def company_detail_v3_preview(
         for u in resp_qs
     ]
 
+    # Флаг админа (нужен для условного показа «Снять холодный» в popup-меню)
+    is_admin_user = bool(
+        request.user.is_superuser
+        or getattr(request.user, "role", None) == User.Role.ADMIN
+    )
+
     ctx = {
         "company": company,
         "variant": variant,
+        "is_admin_user": is_admin_user,
         "contacts": contacts,
         "open_tasks": open_tasks,
         "recent_tasks_done": recent_tasks_done,

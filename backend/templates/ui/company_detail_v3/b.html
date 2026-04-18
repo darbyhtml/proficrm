@@ -175,6 +175,12 @@
     border-color:#bfdbfe}
   .vb-phone--cold .vb-phone__cold-toggle:hover{background:#dbeafe}
 
+  /* Badge «❄ холодный» рядом с номером (вид «отметки») */
+  .vb-phone__cold-tag{display:inline-flex;align-items:center;gap:3px;
+    font-size:11px;padding:1px 7px;border-radius:9px;
+    background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;
+    margin-left:4px;white-space:nowrap}
+
   /* Комментарий к телефону — отдельная строка под номером */
   .vb-p__cmt{flex-basis:100%;font-size:11.5px;color:var(--v2-text-muted);
     font-style:italic;margin-top:2px;cursor:text;padding:1px 4px;
@@ -566,29 +572,38 @@
     <div class="vb-hero__row">
       <div class="vb-hero__left">
         <h1 class="vb-hero__name"
-            data-v3-edit
-            data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
-            data-edit-field="name"
-            data-edit-kind="inline">{{ company.name }}</h1>
+            data-v3-click-menu="name"
+            data-menu-value="{{ company.name }}"
+            data-menu-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+            title="Действия с названием">
+          <span data-v3-edit
+                data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+                data-edit-field="name"
+                data-edit-kind="inline">{{ company.name }}</span>
+        </h1>
         <div class="vb-hero__meta">
           <span>ИНН
-            <b data-v3-edit
-               data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
-               data-edit-field="inn"
-               data-edit-kind="inline">{{ company.inn|default:"—" }}</b>
-            {% if company.inn %}
-              <button class="vb-copy-btn" data-v3-copy data-copy-text="{{ company.inn }}"
-                      title="Скопировать ИНН" aria-label="Скопировать ИНН">
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-              </button>
-            {% endif %}
+            <b data-v3-click-menu="inn"
+               data-menu-value="{{ company.inn }}"
+               data-menu-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+               title="Действия с ИНН">
+              <span data-v3-edit
+                    data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+                    data-edit-field="inn"
+                    data-edit-kind="inline">{{ company.inn|default:"—" }}</span>
+            </b>
           </span>
           <span class="vb-hero__meta-dot"></span>
           <span title="Код причины постановки на учёт">КПП
-            <b data-v3-edit
-               data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
-               data-edit-field="kpp"
-               data-edit-kind="inline">{{ company.kpp|default:"—" }}</b>
+            <b data-v3-click-menu="kpp"
+               data-menu-value="{{ company.kpp }}"
+               data-menu-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+               title="Действия с КПП">
+              <span data-v3-edit
+                    data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+                    data-edit-field="kpp"
+                    data-edit-kind="inline">{{ company.kpp|default:"—" }}</span>
+            </b>
           </span>
           <span class="vb-hero__meta-dot"></span>
           <span class="vb-status {% if not company.status %}vb-status--empty{% endif %}"
@@ -720,23 +735,26 @@
             <button type="submit" class="vb-abtn vb-abtn--primary">Добавить</button>
           </div>
         </form>
-        {# Основной телефон компании #}
+        {# Основной телефон компании — popup-меню по клику #}
         <div class="vb-p vb-phone {% if company.primary_contact_is_cold_call or company.primary_cold_marked_at %}vb-phone--cold{% endif %}">
           <div class="vb-p__k">Телефон</div>
           <div class="vb-p__v">
             {% if company.phone %}
-            <a href="tel:{{ company.phone }}">{{ company.phone|format_phone }}</a>
-            <a href="tel:{{ company.phone }}" class="vb-call" title="Позвонить">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>
-            </a>
-            <button class="vb-phone__cold-toggle"
-                    data-v3-cold
-                    data-cold-url="{% url 'company_cold_call_toggle' company_id=company.id %}"
-                    data-cold-reset-url="{% url 'company_cold_call_reset' company_id=company.id %}"
-                    data-cold-row=".vb-phone"
-                    title="{% if company.primary_contact_is_cold_call %}Отмечен холодным{% if company.primary_cold_marked_by %} · {{ company.primary_cold_marked_by|full_name }}{% endif %}{% if company.primary_cold_marked_at %} · {{ company.primary_cold_marked_at|date:'d.m.Y' }}{% endif %}{% else %}Пометить как холодный звонок{% endif %}">
-              {% if company.primary_contact_is_cold_call %}холодный{% else %}+ холодный{% endif %}
-            </button>
+            <span data-v3-click-menu="phone"
+                  data-menu-value="{{ company.phone }}"
+                  data-menu-edit-url="{% url 'company_main_phone_update' company_id=company.id %}"
+                  data-menu-cold-url="{% url 'company_cold_call_toggle' company_id=company.id %}"
+                  data-menu-cold-reset-url="{% url 'company_cold_call_reset' company_id=company.id %}"
+                  data-menu-is-cold="{% if company.primary_contact_is_cold_call %}1{% else %}0{% endif %}"
+                  data-menu-is-admin="{% if is_admin_user %}1{% else %}0{% endif %}"
+                  title="Действия с номером">
+              <span data-v3-edit
+                    data-edit-url="{% url 'company_main_phone_update' company_id=company.id %}"
+                    data-edit-kind="main-phone">{{ company.phone|format_phone }}</span>
+            </span>
+            {% if company.primary_contact_is_cold_call %}
+              <span class="vb-phone__cold-tag" title="{% if company.primary_cold_marked_by %}{{ company.primary_cold_marked_by|full_name }} · {% endif %}{{ company.primary_cold_marked_at|date:'d.m.Y' }}">❄ холодный</span>
+            {% endif %}
             {% else %}
             <span data-v3-edit
                   data-edit-url="{% url 'company_main_phone_update' company_id=company.id %}"
@@ -749,18 +767,22 @@
         <div class="vb-p vb-phone {% if p.is_cold_call or p.cold_marked_at %}vb-phone--cold{% endif %}">
           <div class="vb-p__k">Ещё</div>
           <div class="vb-p__v">
-            <a href="tel:{{ p.value }}">{{ p.value|format_phone }}</a>
-            <a href="tel:{{ p.value }}" class="vb-call" title="Позвонить">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>
-            </a>
-            <button class="vb-phone__cold-toggle"
-                    data-v3-cold
-                    data-cold-url="{% url 'company_phone_cold_call_toggle' company_phone_id=p.id %}"
-                    data-cold-reset-url="{% url 'company_phone_cold_call_reset' company_phone_id=p.id %}"
-                    data-cold-row=".vb-phone"
-                    title="{% if p.is_cold_call %}Отмечен холодным{% if p.cold_marked_by %} · {{ p.cold_marked_by|full_name }}{% endif %}{% if p.cold_marked_at %} · {{ p.cold_marked_at|date:'d.m.Y' }}{% endif %}{% else %}Пометить как холодный звонок{% endif %}">
-              {% if p.is_cold_call %}холодный{% else %}+ холодный{% endif %}
-            </button>
+            <span data-v3-click-menu="phone-extra"
+                  data-menu-value="{{ p.value }}"
+                  data-menu-edit-url="{% url 'company_phone_value_update' company_phone_id=p.id %}"
+                  data-menu-delete-url="{% url 'company_phone_delete' company_phone_id=p.id %}"
+                  data-menu-cold-url="{% url 'company_phone_cold_call_toggle' company_phone_id=p.id %}"
+                  data-menu-cold-reset-url="{% url 'company_phone_cold_call_reset' company_phone_id=p.id %}"
+                  data-menu-is-cold="{% if p.is_cold_call %}1{% else %}0{% endif %}"
+                  data-menu-is-admin="{% if is_admin_user %}1{% else %}0{% endif %}"
+                  title="Действия с номером">
+              <span data-v3-edit
+                    data-edit-url="{% url 'company_phone_value_update' company_phone_id=p.id %}"
+                    data-edit-kind="phone-value">{{ p.value|format_phone }}</span>
+            </span>
+            {% if p.is_cold_call %}
+              <span class="vb-phone__cold-tag" title="{% if p.cold_marked_by %}{{ p.cold_marked_by|full_name }} · {% endif %}{{ p.cold_marked_at|date:'d.m.Y' }}">❄ холодный</span>
+            {% endif %}
             <div class="vb-p__cmt" data-v3-edit
                  data-edit-url="{% url 'company_phone_comment_update' company_phone_id=p.id %}"
                  data-edit-kind="phone-note"
@@ -769,12 +791,19 @@
           </div>
         </div>
         {% endfor %}
-        {# Основной email #}
+        {# Основной email — popup-меню по клику #}
         <div class="vb-p">
           <div class="vb-p__k">Email</div>
           <div class="vb-p__v">
             {% if company.email %}
-              <a href="mailto:{{ company.email }}">{{ company.email }}</a>
+              <span data-v3-click-menu="email"
+                    data-menu-value="{{ company.email }}"
+                    data-menu-edit-url="{% url 'company_main_email_update' company_id=company.id %}"
+                    title="Действия с email">
+                <span data-v3-edit
+                      data-edit-url="{% url 'company_main_email_update' company_id=company.id %}"
+                      data-edit-kind="main-email">{{ company.email }}</span>
+              </span>
             {% else %}
               <span data-v3-edit
                     data-edit-url="{% url 'company_main_email_update' company_id=company.id %}"
@@ -785,29 +814,61 @@
         </div>
         {% for e in company.emails.all|slice:":2" %}
         <div class="vb-p">
-          <div class="vb-p__k">{{ e.note|default:"Ещё"|truncatechars:12 }}</div>
-          <div class="vb-p__v"><a href="mailto:{{ e.value }}">{{ e.value }}</a></div>
+          <div class="vb-p__k">Ещё</div>
+          <div class="vb-p__v">
+            <span data-v3-click-menu="email-extra"
+                  data-menu-value="{{ e.value }}"
+                  data-menu-edit-url="{% url 'company_email_value_update' company_email_id=e.id %}"
+                  title="Действия с email">
+              <span data-v3-edit
+                    data-edit-url="{% url 'company_email_value_update' company_email_id=e.id %}"
+                    data-edit-kind="email-value">{{ e.value }}</span>
+            </span>
+          </div>
         </div>
         {% endfor %}
         <div class="vb-p">
           <div class="vb-p__k">Адрес</div>
-          <div class="vb-p__v vb-p__v--multi"
-               data-v3-edit
-               data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
-               data-edit-field="address"
-               data-edit-kind="inline">{{ company.address|default:"—" }}</div>
+          <div class="vb-p__v vb-p__v--multi">
+            {% if company.address %}
+              <span data-v3-click-menu="address"
+                    data-menu-value="{{ company.address }}"
+                    data-menu-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+                    title="Действия с адресом">
+                <span data-v3-edit
+                      data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+                      data-edit-field="address"
+                      data-edit-kind="inline">{{ company.address }}</span>
+              </span>
+            {% else %}
+              <span data-v3-edit
+                    data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+                    data-edit-field="address"
+                    data-edit-kind="inline"
+                    style="color:var(--v2-text-faint);font-style:italic">—</span>
+            {% endif %}
+          </div>
         </div>
         <div class="vb-p">
           <div class="vb-p__k">Сайт</div>
-          <div class="vb-p__v" style="display:flex;align-items:center;gap:6px;min-width:0">
-            <span data-v3-edit
-                  data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
-                  data-edit-field="website"
-                  data-edit-kind="inline"
-                  style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ company.website|default:"—" }}</span>
+          <div class="vb-p__v">
             {% if company.website %}
-              <a href="{{ company.website|external_url }}" target="_blank" rel="noopener"
-                 class="vb-ext-link" title="Открыть сайт">↗</a>
+              <span data-v3-click-menu="website"
+                    data-menu-value="{{ company.website }}"
+                    data-menu-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+                    title="Действия с сайтом"
+                    style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">
+                <span data-v3-edit
+                      data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+                      data-edit-field="website"
+                      data-edit-kind="inline">{{ company.website }}</span>
+              </span>
+            {% else %}
+              <span data-v3-edit
+                    data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+                    data-edit-field="website"
+                    data-edit-kind="inline"
+                    style="color:var(--v2-text-faint);font-style:italic">—</span>
             {% endif %}
           </div>
         </div>
@@ -819,42 +880,54 @@
         <div class="vb-p">
           <div class="vb-p__k">Юр. название</div>
           <div class="vb-p__v"
-               data-v3-edit
-               data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
-               data-edit-field="legal_name"
-               data-edit-kind="inline">{{ company.legal_name|default:"—" }}</div>
-        </div>
-        <div class="vb-p">
-          <div class="vb-p__k">КПП</div>
-          <div class="vb-p__v"
-               data-v3-edit
-               data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
-               data-edit-field="kpp"
-               data-edit-kind="inline">{{ company.kpp|default:"—" }}</div>
+               data-v3-click-menu="text"
+               data-menu-value="{{ company.legal_name }}"
+               data-menu-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+               title="Действия с юр. названием">
+            <span data-v3-edit
+                  data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+                  data-edit-field="legal_name"
+                  data-edit-kind="inline">{{ company.legal_name|default:"—" }}</span>
+          </div>
         </div>
         <div class="vb-p">
           <div class="vb-p__k">Вид деятельности</div>
           <div class="vb-p__v"
-               data-v3-edit
-               data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
-               data-edit-field="activity_kind"
-               data-edit-kind="inline">{{ company.activity_kind|default:"—" }}</div>
+               data-v3-click-menu="text"
+               data-menu-value="{{ company.activity_kind }}"
+               data-menu-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+               title="Действия">
+            <span data-v3-edit
+                  data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+                  data-edit-field="activity_kind"
+                  data-edit-kind="inline">{{ company.activity_kind|default:"—" }}</span>
+          </div>
         </div>
         <div class="vb-p">
           <div class="vb-p__k">Режим работы</div>
           <div class="vb-p__v"
-               data-v3-edit
-               data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
-               data-edit-field="work_schedule"
-               data-edit-kind="inline">{{ company.work_schedule|default:"—" }}</div>
+               data-v3-click-menu="text"
+               data-menu-value="{{ company.work_schedule }}"
+               data-menu-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+               title="Действия">
+            <span data-v3-edit
+                  data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+                  data-edit-field="work_schedule"
+                  data-edit-kind="inline">{{ company.work_schedule|default:"—" }}</span>
+          </div>
         </div>
         <div class="vb-p">
           <div class="vb-p__k">Сотрудников</div>
           <div class="vb-p__v"
-               data-v3-edit
-               data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
-               data-edit-field="employees_count"
-               data-edit-kind="inline">{{ company.employees_count|default:"—" }}</div>
+               data-v3-click-menu="text"
+               data-menu-value="{{ company.employees_count }}"
+               data-menu-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+               title="Действия">
+            <span data-v3-edit
+                  data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+                  data-edit-field="employees_count"
+                  data-edit-kind="inline">{{ company.employees_count|default:"—" }}</span>
+          </div>
         </div>
         {% if company.spheres.all %}
         <div class="vb-p">
@@ -902,23 +975,23 @@
           </div>
           {% for ph in c.phones.all|slice:":2" %}
           <div class="vb-contact__row vb-phone {% if ph.is_cold_call %}vb-phone--cold{% endif %}">
-            <a href="tel:{{ ph.value }}">{{ ph.value|format_phone }}</a>
-            <a href="tel:{{ ph.value }}" class="vb-call" title="Позвонить">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>
-            </a>
-            <button class="vb-phone__cold-toggle"
-                    data-v3-cold
-                    data-cold-url="{% url 'contact_phone_cold_call_toggle' contact_phone_id=ph.id %}"
-                    data-cold-reset-url="{% url 'contact_phone_cold_call_reset' contact_phone_id=ph.id %}"
-                    data-cold-row=".vb-phone"
-                    title="{% if ph.cold_marked_by %}{{ ph.cold_marked_by|full_name }}, {{ ph.cold_marked_at|date:'d.m.Y' }}{% else %}Пометить как холодный{% endif %}">
-              {% if ph.is_cold_call %}холодный{% else %}+ холодный{% endif %}
-            </button>
+            <span data-v3-click-menu="phone-extra"
+                  data-menu-value="{{ ph.value }}"
+                  data-menu-cold-url="{% url 'contact_phone_cold_call_toggle' contact_phone_id=ph.id %}"
+                  data-menu-cold-reset-url="{% url 'contact_phone_cold_call_reset' contact_phone_id=ph.id %}"
+                  data-menu-is-cold="{% if ph.is_cold_call %}1{% else %}0{% endif %}"
+                  data-menu-is-admin="{% if is_admin_user %}1{% else %}0{% endif %}"
+                  title="Действия с номером">{{ ph.value|format_phone }}</span>
+            {% if ph.is_cold_call %}
+              <span class="vb-phone__cold-tag" title="{% if ph.cold_marked_by %}{{ ph.cold_marked_by|full_name }} · {% endif %}{{ ph.cold_marked_at|date:'d.m.Y' }}">❄ холодный</span>
+            {% endif %}
           </div>
           {% endfor %}
           {% for em in c.emails.all|slice:":1" %}
           <div class="vb-contact__row">
-            <a href="mailto:{{ em.value }}">{{ em.value }}</a>
+            <span data-v3-click-menu="email"
+                  data-menu-value="{{ em.value }}"
+                  title="Действия с email">{{ em.value }}</span>
           </div>
           {% endfor %}
           <button class="vb-contact__x" title="Удалить контакт"

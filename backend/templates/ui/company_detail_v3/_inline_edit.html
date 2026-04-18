@@ -18,6 +18,10 @@
   [data-v3-edit]:hover{outline:1px dashed var(--v2-primary-100);outline-offset:2px;cursor:text}
   [data-v3-edit]:focus{outline:2px solid var(--v2-primary);outline-offset:2px;
     background:var(--v2-primary-50);cursor:text}
+  /* Внутри data-v3-click-menu — курсор меню, не text; hover-outline снимаем
+     (у родителя свой) */
+  [data-v3-click-menu] [data-v3-edit]:hover{outline:none;cursor:pointer}
+  [data-v3-click-menu] [data-v3-edit]{cursor:pointer}
   [data-v3-edit].is-saving{opacity:.6;pointer-events:none}
   [data-v3-edit].is-error{outline:2px solid var(--v2-danger);background:var(--v2-danger-50)}
 
@@ -69,6 +73,34 @@
   .v3-pop-date button.is-clear{background:var(--v2-bg-muted);color:var(--v2-text-muted)}
   .v3-pop-date button:hover{background:var(--v2-primary-dark)}
   .v3-pop-date button.is-clear:hover{background:var(--v2-border);color:var(--v2-danger)}
+
+  /* ─── Popup-меню действий (классический паттерн amoCRM-подобный) ─── */
+  /* Триггер: элемент с data-v3-click-menu. По клику открывается меню
+     с действиями для соответствующего типа поля (телефон/email/адрес/etc). */
+  [data-v3-click-menu]{cursor:pointer;border-radius:var(--v3-radius-xs);
+    transition:background .1s,outline .1s;padding:1px 3px;margin:-1px -3px}
+  [data-v3-click-menu]:hover{background:var(--v2-primary-50);
+    outline:1px dashed var(--v2-primary-100)}
+  [data-v3-click-menu].is-active{background:var(--v2-primary-50);
+    outline:1px solid var(--v2-primary)}
+
+  .v3-menu{position:absolute;z-index:120;background:var(--v2-bg);
+    border:1px solid var(--v2-border-strong);border-radius:var(--v2-radius);
+    box-shadow:var(--v2-shadow-lg);min-width:200px;max-width:280px;
+    padding:4px 0;display:flex;flex-direction:column;
+    animation:v3-pop-in .12s ease;overflow:hidden}
+  .v3-menu__item{display:flex;align-items:center;gap:10px;padding:8px 14px;
+    font-size:13px;color:var(--v2-text);cursor:pointer;
+    background:none;border:0;text-align:left;width:100%;
+    font-family:inherit;line-height:1.35;transition:background .1s}
+  .v3-menu__item:hover{background:var(--v2-primary-50)}
+  .v3-menu__item--danger:hover{background:var(--v2-danger-50);color:var(--v2-danger)}
+  .v3-menu__item svg{width:14px;height:14px;flex:0 0 14px;opacity:.7}
+  .v3-menu__item:hover svg{opacity:1}
+  .v3-menu__sep{height:1px;background:var(--v2-border);margin:4px 0}
+  .v3-menu__label{font-size:10.5px;color:var(--v2-text-muted);
+    text-transform:uppercase;letter-spacing:.06em;padding:4px 14px 2px;
+    font-weight:600}
 </style>
 
 <script nonce="{{ request.csp_nonce|default:'' }}">
@@ -490,6 +522,317 @@
       } catch(_){}
       // Fallback на tel: (браузер откроет стандартный вызов)
     });
+  });
+
+  // ── Popup-меню действий по клику на поле (classic-паттерн).
+  //    Маркер: data-v3-click-menu="<type>" где <type> ∈
+  //    phone|phone-extra|email|email-extra|address|website|
+  //    name|inn|kpp|legal_name|activity_kind|work_schedule|employees_count|
+  //    contact-name|contact-phone|contact-email|deal
+  //    Дополнительные data-атрибуты контролируют поведение действий:
+  //    - data-menu-value — значение для copy/open/call
+  //    - data-menu-edit-url / data-menu-edit-field / data-menu-edit-kind —
+  //      параметры для режима «Изменить» (активирует contenteditable у
+  //      родительского [data-v3-edit] или открывает инлайн-комбобокс).
+  //    - data-menu-delete-url — для действия «Удалить» (доп. телефоны/email).
+  //    - data-menu-cold-url / data-menu-cold-reset-url — для phone actions.
+  //    - data-is-admin="1" — если текущий user ADMIN (показ «Снять холодный»).
+  let _activeMenu = null;
+  function _closeV3Menu(){
+    if(_activeMenu){
+      try{ _activeMenu.menu.remove(); }catch(_){}
+      if(_activeMenu.target) _activeMenu.target.classList.remove('is-active');
+      _activeMenu = null;
+    }
+  }
+  async function _menuCopy(text, label){
+    try{
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        await navigator.clipboard.writeText(text || '');
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text || ''; ta.style.position='fixed'; ta.style.top='-9999px';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      toast((label||'Скопировано') + ' ✓', 'ok');
+    } catch(err){ toast('Не удалось скопировать', 'err'); }
+  }
+  function _menuCall(phone){ window.location.href = 'tel:' + phone; }
+  function _menuMail(email){ window.location.href = 'mailto:' + email; }
+  function _menuOpen(url){
+    if(!url) return;
+    if(!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+  function _menuOpenMaps(addr){
+    const q = encodeURIComponent(addr || '');
+    window.open('https://yandex.ru/maps/?text=' + q, '_blank', 'noopener,noreferrer');
+  }
+  function _menuTriggerEdit(target){
+    // Находим parent [data-v3-edit] или сам если он там есть, активируем
+    let editEl = target.closest('[data-v3-edit]') || target.querySelector('[data-v3-edit]');
+    if(!editEl) editEl = target; // target сам — editable
+    if(editEl && editEl.focus){
+      editEl.focus();
+      // Выделим весь текст для быстрого ввода
+      try{
+        const range = document.createRange();
+        range.selectNodeContents(editEl);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }catch(_){}
+    }
+  }
+  function _menuTriggerCombobox(target){
+    const cb = target.closest('[data-v3-combobox]') || target.querySelector('[data-v3-combobox]');
+    if(cb && cb.click) cb.click();
+  }
+  async function _menuDelete(url, target, confirmText){
+    if(!confirm(confirmText || 'Удалить?')) return;
+    try{
+      await _postForm(url, {});
+      toast('Удалено ✓', 'ok');
+      const row = target.closest('.vb-p, .vb-phone, .vb-contact__row, .vb-contact');
+      if(row){ row.style.transition='opacity .2s'; row.style.opacity='0';
+        setTimeout(()=>location.reload(), 300);
+      } else { location.reload(); }
+    } catch(err){ toast('Ошибка: ' + err.message, 'err'); }
+  }
+  async function _menuColdToggle(url, target){
+    try{
+      await _postForm(url, {confirmed: '1'});
+      toast('Отмечено как холодный ✓', 'ok');
+      setTimeout(()=>location.reload(), 400);
+    } catch(err){ toast('Ошибка: ' + err.message, 'err'); }
+  }
+  async function _menuColdReset(url){
+    if(!confirm('Снять отметку «холодный звонок»?')) return;
+    try{
+      await _postForm(url, {});
+      toast('Отметка снята ✓', 'ok');
+      setTimeout(()=>location.reload(), 400);
+    } catch(err){ toast('Ошибка: ' + err.message, 'err'); }
+  }
+  function _makeMenuItem(opts){
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'v3-menu__item' + (opts.danger ? ' v3-menu__item--danger' : '');
+    if(opts.icon){
+      btn.insertAdjacentHTML('beforeend', opts.icon);
+    }
+    const span = document.createElement('span');
+    span.textContent = opts.label;
+    btn.appendChild(span);
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      _closeV3Menu();
+      if(opts.onClick) opts.onClick();
+    });
+    return btn;
+  }
+  // Heroicons Outline (fill:none; stroke:currentColor; viewBox 0 0 24 24)
+  const ICONS = {
+    phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>',
+    copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>',
+    edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>',
+    mail: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>',
+    open: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>',
+    map: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+    snow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07M2 12h20"/></svg>',
+  };
+  function _buildPhoneMenu(trig){
+    const container = document.createElement('div');
+    const value = trig.dataset.menuValue || '';
+    if(value){
+      container.appendChild(_makeMenuItem({
+        label: 'Позвонить', icon: ICONS.phone, onClick: ()=>_menuCall(value),
+      }));
+      container.appendChild(_makeMenuItem({
+        label: 'Скопировать', icon: ICONS.copy, onClick: ()=>_menuCopy(value, 'Номер скопирован'),
+      }));
+    }
+    if(trig.dataset.menuEditUrl || trig.closest('[data-v3-edit]')){
+      container.appendChild(_makeMenuItem({
+        label: 'Изменить', icon: ICONS.edit, onClick: ()=>_menuTriggerEdit(trig),
+      }));
+    }
+    // Cold-call actions
+    const coldToggleUrl = trig.dataset.menuColdUrl;
+    const coldResetUrl = trig.dataset.menuColdResetUrl;
+    const isCold = trig.dataset.menuIsCold === '1';
+    const isAdmin = trig.dataset.menuIsAdmin === '1';
+    if(coldToggleUrl && !isCold){
+      container.appendChild(_makeMenuItem({
+        label: 'Отметить холодным', icon: ICONS.snow,
+        onClick: ()=>_menuColdToggle(coldToggleUrl, trig),
+      }));
+    }
+    if(coldResetUrl && isCold && isAdmin){
+      container.appendChild(_makeMenuItem({
+        label: 'Снять отметку холодного', icon: ICONS.snow, danger: true,
+        onClick: ()=>_menuColdReset(coldResetUrl),
+      }));
+    }
+    // Delete для доп. телефонов
+    const delUrl = trig.dataset.menuDeleteUrl;
+    if(delUrl){
+      const sep = document.createElement('div'); sep.className='v3-menu__sep';
+      container.appendChild(sep);
+      container.appendChild(_makeMenuItem({
+        label: 'Удалить номер', icon: ICONS.trash, danger: true,
+        onClick: ()=>_menuDelete(delUrl, trig, 'Удалить этот телефон?'),
+      }));
+    }
+    return container;
+  }
+  function _buildEmailMenu(trig){
+    const container = document.createElement('div');
+    const value = trig.dataset.menuValue || '';
+    if(value){
+      container.appendChild(_makeMenuItem({
+        label: 'Написать письмо', icon: ICONS.mail, onClick: ()=>_menuMail(value),
+      }));
+      container.appendChild(_makeMenuItem({
+        label: 'Скопировать', icon: ICONS.copy, onClick: ()=>_menuCopy(value, 'Email скопирован'),
+      }));
+    }
+    if(trig.dataset.menuEditUrl || trig.closest('[data-v3-edit]')){
+      container.appendChild(_makeMenuItem({
+        label: 'Изменить', icon: ICONS.edit, onClick: ()=>_menuTriggerEdit(trig),
+      }));
+    }
+    const delUrl = trig.dataset.menuDeleteUrl;
+    if(delUrl){
+      const sep = document.createElement('div'); sep.className='v3-menu__sep';
+      container.appendChild(sep);
+      container.appendChild(_makeMenuItem({
+        label: 'Удалить email', icon: ICONS.trash, danger: true,
+        onClick: ()=>_menuDelete(delUrl, trig, 'Удалить этот email?'),
+      }));
+    }
+    return container;
+  }
+  function _buildAddressMenu(trig){
+    const container = document.createElement('div');
+    const value = trig.dataset.menuValue || '';
+    if(value){
+      container.appendChild(_makeMenuItem({
+        label: 'Открыть в Яндекс.Картах', icon: ICONS.map, onClick: ()=>_menuOpenMaps(value),
+      }));
+      container.appendChild(_makeMenuItem({
+        label: 'Скопировать', icon: ICONS.copy, onClick: ()=>_menuCopy(value, 'Адрес скопирован'),
+      }));
+    }
+    if(trig.dataset.menuEditUrl || trig.closest('[data-v3-edit]')){
+      container.appendChild(_makeMenuItem({
+        label: 'Изменить', icon: ICONS.edit, onClick: ()=>_menuTriggerEdit(trig),
+      }));
+    }
+    return container;
+  }
+  function _buildWebsiteMenu(trig){
+    const container = document.createElement('div');
+    const value = trig.dataset.menuValue || '';
+    if(value){
+      container.appendChild(_makeMenuItem({
+        label: 'Открыть в новой вкладке', icon: ICONS.open, onClick: ()=>_menuOpen(value),
+      }));
+      container.appendChild(_makeMenuItem({
+        label: 'Скопировать ссылку', icon: ICONS.copy, onClick: ()=>_menuCopy(value, 'Ссылка скопирована'),
+      }));
+    }
+    if(trig.dataset.menuEditUrl || trig.closest('[data-v3-edit]')){
+      container.appendChild(_makeMenuItem({
+        label: 'Изменить', icon: ICONS.edit, onClick: ()=>_menuTriggerEdit(trig),
+      }));
+    }
+    return container;
+  }
+  function _buildTextMenu(trig, labelCopy){
+    const container = document.createElement('div');
+    const value = trig.dataset.menuValue || trig.innerText.trim();
+    if(value && value !== '—' && value !== 'не задано'){
+      container.appendChild(_makeMenuItem({
+        label: 'Скопировать', icon: ICONS.copy,
+        onClick: ()=>_menuCopy(value, (labelCopy||'Скопировано')),
+      }));
+    }
+    if(trig.dataset.menuEditUrl || trig.closest('[data-v3-edit]') || trig.closest('[data-v3-combobox]')){
+      container.appendChild(_makeMenuItem({
+        label: 'Изменить', icon: ICONS.edit, onClick: ()=>{
+          if(trig.closest('[data-v3-combobox]')) _menuTriggerCombobox(trig);
+          else _menuTriggerEdit(trig);
+        },
+      }));
+    }
+    return container;
+  }
+  function _openV3Menu(trig){
+    _closeV3Menu();
+    const type = trig.dataset.v3ClickMenu;
+    let body;
+    if(type === 'phone' || type === 'phone-extra') body = _buildPhoneMenu(trig);
+    else if(type === 'email' || type === 'email-extra') body = _buildEmailMenu(trig);
+    else if(type === 'address') body = _buildAddressMenu(trig);
+    else if(type === 'website') body = _buildWebsiteMenu(trig);
+    else body = _buildTextMenu(trig, 'Скопировано');
+    if(!body.children.length) return; // Нечего показывать — например пустое поле без прав
+
+    const menu = document.createElement('div');
+    menu.className = 'v3-menu';
+    menu.appendChild(body);
+    document.body.appendChild(menu);
+    // Позиционирование под элементом
+    const rect = trig.getBoundingClientRect();
+    menu.style.left = (rect.left + window.scrollX) + 'px';
+    menu.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+    // Если меню выходит справа за viewport — прижмём к правому краю
+    requestAnimationFrame(()=>{
+      const mrect = menu.getBoundingClientRect();
+      if(mrect.right > window.innerWidth - 8){
+        menu.style.left = (window.innerWidth - mrect.width - 8 + window.scrollX) + 'px';
+      }
+      if(mrect.bottom > window.innerHeight - 8){
+        menu.style.top = (rect.top + window.scrollY - mrect.height - 4) + 'px';
+      }
+    });
+    trig.classList.add('is-active');
+    _activeMenu = { menu, target: trig };
+  }
+  // Global click listener — делегирование
+  document.addEventListener('click', function(e){
+    const trig = e.target.closest('[data-v3-click-menu]');
+    if(trig){
+      // Пропускаем только настоящие ссылки/кнопки, чтобы они работали штатно
+      // (например ссылка «↗» на сайте или tel:/mailto:). contenteditable
+      // НЕ пропускаем — щелчок по тексту должен всегда открывать меню.
+      const realLink = e.target.closest('a[href]:not([href^="#"]), button:not([data-v3-edit]):not([data-v3-combobox])');
+      if(realLink && trig.contains(realLink)){
+        return; // Настоящая ссылка — работает как ссылка
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      // Снимаем фокус с contenteditable, если случайно попал туда
+      const editable = trig.querySelector('[contenteditable="true"]');
+      if(editable && document.activeElement === editable){
+        editable.blur();
+      }
+      if(_activeMenu && _activeMenu.target === trig){
+        _closeV3Menu();
+      } else {
+        _openV3Menu(trig);
+      }
+      return;
+    }
+    if(_activeMenu && !e.target.closest('.v3-menu')){
+      _closeV3Menu();
+    }
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && _activeMenu) _closeV3Menu();
   });
 
   // ── Phone normalizer: аналог backend companies.normalizers.normalize_phone,
