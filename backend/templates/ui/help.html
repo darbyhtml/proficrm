@@ -1,75 +1,306 @@
 {% extends "ui/base.html" %}
 {% block title %}Помощь — CRM ПРОФИ{% endblock %}
 
-{% block content %}
-  <div class="space-y-4">
-    <div>
-      <h1 class="text-2xl font-semibold">Помощь</h1>
-      <div class="text-sm text-brand-dark/70 mt-1">
-        Видеоуроки, инструкции и ответы на частые вопросы по работе с CRM
-      </div>
-    </div>
-
-    <div class="card card-pad">
-      <div class="text-center py-12">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brand-soft/50 mb-4">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#01948E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-            <path d="M12 17h.01"/>
-          </svg>
-        </div>
-        <h2 class="text-xl font-semibold mb-2">Раздел в разработке</h2>
-        <p class="text-brand-dark/70 mb-6 max-w-md mx-auto">
-          Здесь будут размещены обучающие видео, инструкции по использованию CRM и ответы на частые вопросы для быстрого обучения работе в системе.
-        </p>
-        <div class="flex flex-wrap gap-3 justify-center text-sm">
-          <div class="px-4 py-2 bg-brand-soft/30 rounded-lg">
-            📹 Видеоуроки
-          </div>
-          <div class="px-4 py-2 bg-brand-soft/30 rounded-lg">
-            📖 Инструкции
-          </div>
-          <div class="px-4 py-2 bg-brand-soft/30 rounded-lg">
-            ❓ FAQ
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div class="card card-pad">
-        <h3 class="font-semibold mb-2">Быстрый старт</h3>
-        <p class="text-sm text-brand-dark/70 mb-3">
-          Основные функции CRM и как начать работу
-        </p>
-        <div class="text-xs muted-2">Скоро</div>
-      </div>
-
-      <div class="card card-pad">
-        <h3 class="font-semibold mb-2">Работа с компаниями</h3>
-        <p class="text-sm text-brand-dark/70 mb-3">
-          Создание, редактирование и управление компаниями
-        </p>
-        <div class="text-xs muted-2">Скоро</div>
-      </div>
-
-      <div class="card card-pad">
-        <h3 class="font-semibold mb-2">Задачи и напоминания</h3>
-        <p class="text-sm text-brand-dark/70 mb-3">
-          Как создавать задачи и настраивать напоминания
-        </p>
-        <div class="text-xs muted-2">Скоро</div>
-      </div>
-
-      <div class="card card-pad">
-        <h3 class="font-semibold mb-2">Частые вопросы</h3>
-        <p class="text-sm text-brand-dark/70 mb-3">
-          Ответы на наиболее часто задаваемые вопросы
-        </p>
-        <div class="text-xs muted-2">Скоро</div>
-      </div>
-    </div>
-  </div>
+{% block extra_head %}
+  {% include "ui/_v2/v2_styles.html" %}
+  {% include "ui/_v2/v3_styles.html" %}
 {% endblock %}
 
+{% block content %}
+<div class="v2 space-y-4">
+
+  <nav class="text-xs text-brand-dark/50 mb-1" aria-label="Хлебные крошки">
+    <a href="/" class="hover:text-brand-teal transition">Главная</a>
+    <span class="mx-1" aria-hidden="true">›</span>
+    <span>Помощь</span>
+  </nav>
+
+  <div>
+    <h1 class="v2-h1" style="margin:0">Помощь</h1>
+    <div class="v2-muted">Быстрый старт, разделы, частые вопросы</div>
+  </div>
+
+  {# ── Быстрый старт: 3 шага ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Быстрый старт</h2>
+    </div>
+    <div class="v2-card__body" style="padding:16px 20px">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+        <div class="v3-help-step">
+          <div class="v3-help-step__num">1</div>
+          <div class="v3-help-step__title">Добавьте компанию</div>
+          <div class="v3-help-step__text">
+            Раздел <a href="/companies/" class="link">Компании</a> → кнопка «+ Добавить».
+            Укажите ИНН — остальное подтянется автоматически.
+          </div>
+        </div>
+        <div class="v3-help-step">
+          <div class="v3-help-step__num">2</div>
+          <div class="v3-help-step__title">Поставьте задачу</div>
+          <div class="v3-help-step__text">
+            В карточке компании нажмите «+ Задача» или перейдите в
+            <a href="/tasks/" class="link">Задачи</a>. Назначьте тип,
+            ответственного и срок.
+          </div>
+        </div>
+        <div class="v3-help-step">
+          <div class="v3-help-step__num">3</div>
+          <div class="v3-help-step__title">Отмечайте результат</div>
+          <div class="v3-help-step__text">
+            Выполненные задачи меняют статус на «Выполнена».
+            Статистику см. в <a href="/analytics/v2/" class="link">Аналитике</a>.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ── Разделы ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Разделы CRM</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">
+        <a href="/" class="v3-help-card">
+          <div class="v3-help-card__title">🏠 Рабочий стол</div>
+          <div class="v3-help-card__text">Задачи на сегодня, договоры, уведомления, быстрый поиск.</div>
+        </a>
+        <a href="/tasks/" class="v3-help-card">
+          <div class="v3-help-card__title">✅ Задачи</div>
+          <div class="v3-help-card__text">Список задач, фильтры по типу/статусу/срокам, повторяющиеся (RRULE).</div>
+        </a>
+        <a href="/companies/" class="v3-help-card">
+          <div class="v3-help-card__title">🏢 Компании</div>
+          <div class="v3-help-card__text">Клиенты, контакты, договоры, история взаимодействий, заметки.</div>
+        </a>
+        <a href="/messenger/conversations/" class="v3-help-card">
+          <div class="v3-help-card__title">💬 Чат</div>
+          <div class="v3-help-card__text">Live-chat с клиентами через виджет на сайте. Авто-распределение.</div>
+        </a>
+        <a href="/mail/campaigns/" class="v3-help-card">
+          <div class="v3-help-card__title">✉️ Почта</div>
+          <div class="v3-help-card__text">Массовые рассылки по сегментам. Требует настроенного SMTP.</div>
+        </a>
+        <a href="/analytics/v2/" class="v3-help-card">
+          <div class="v3-help-card__title">📊 Аналитика</div>
+          <div class="v3-help-card__text">KPI-дашборды по ролям: менеджер / РОП / директор / управляющий.</div>
+        </a>
+        <a href="/settings/" class="v3-help-card">
+          <div class="v3-help-card__title">⚙️ Настройки</div>
+          <div class="v3-help-card__text">Профиль, интерфейс, почта пользователя, отсутствие (отпуск/больничный).</div>
+        </a>
+        {% if request.user.is_superuser or request.user.role == "admin" %}
+          <a href="/admin/" class="v3-help-card">
+            <div class="v3-help-card__title">🛠️ Админка</div>
+            <div class="v3-help-card__text">SMTP, роли, подразделения, журнал событий.</div>
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  {# ── FAQ ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Частые вопросы</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px">
+
+      <details class="v3-faq">
+        <summary class="v3-faq__q">Как установить себе «отпуск» или «больничный»?</summary>
+        <div class="v3-faq__a">
+          <a href="/settings/" class="link">Настройки</a> → вкладка
+          «Отсутствие» → укажите период и тип. В это время диалоги
+          в чате не будут автоматически назначаться на вас.
+        </div>
+      </details>
+
+      <details class="v3-faq">
+        <summary class="v3-faq__q">Не уходят массовые рассылки — что проверить?</summary>
+        <div class="v3-faq__a">
+          1. <a href="/admin/mail/setup/" class="link">Настройки почты</a> —
+          статус Fernet должен быть «Валиден». Если «InvalidToken» — введите
+          пароль SMTP заново.<br>
+          2. Флаг «Массовая отправка: включена» — без него ничего не стартует.<br>
+          3. Отправьте тест-письмо себе кнопкой «Отправить тест-письмо».<br>
+          4. Ошибки массовой отправки — в
+          <a href="/admin/error-log/" class="link">Журнале ошибок</a>.
+        </div>
+      </details>
+
+      <details class="v3-faq">
+        <summary class="v3-faq__q">Как распределяются диалоги в чате между менеджерами?</summary>
+        <div class="v3-faq__a">
+          1. Регион клиента определяется по GeoIP или из анкеты.<br>
+          2. Регион → подразделение (ЕКБ / Тюмень / Краснодар). Для
+          Москвы/МО, СПб/ЛО, Новгородской/Псковской области — понедельная
+          ротация: неделя 1 → ЕКБ, 2 → Краснодар, 3 → Тюмень, цикл.<br>
+          3. Внутри подразделения — Round-Robin среди онлайн-менеджеров
+          (не в отсутствии).
+        </div>
+      </details>
+
+      <details class="v3-faq">
+        <summary class="v3-faq__q">Клиент написал вне рабочих часов — что произойдёт?</summary>
+        <div class="v3-faq__a">
+          Клиент увидит форму: «Как удобнее связаться?» (звонок / мессенджер /
+          email / другое) + поле контакта. Диалог уходит в статус
+          «Ждёт связи» (amber-бейдж). Утром менеджер открывает карточку
+          и нажимает «✓ Я связался» — диалог возвращается в «Открыт».
+        </div>
+      </details>
+
+      <details class="v3-faq">
+        <summary class="v3-faq__q">У компании не подгружаются данные по ИНН — что делать?</summary>
+        <div class="v3-faq__a">
+          Проверьте корректность ИНН (10 или 12 цифр). Если данные не
+          приходят — интеграция AmoCRM временно недоступна или по этому
+          ИНН нет записи в реестре. Введите данные вручную.
+        </div>
+      </details>
+
+      <details class="v3-faq">
+        <summary class="v3-faq__q">Забыл пароль — как восстановить?</summary>
+        <div class="v3-faq__a">
+          Обратитесь к Администратору (роль ADMIN). Функция самовосстановления
+          пока не доступна из соображений безопасности — пароль меняется
+          через админ-панель.
+        </div>
+      </details>
+
+      <details class="v3-faq">
+        <summary class="v3-faq__q">Как позвонить клиенту из CRM через телефон?</summary>
+        <div class="v3-faq__a">
+          Кликните на иконку телефона в карточке компании/контакта.
+          Если установлен CRMProfiDialer на Android и устройство спарено
+          в <a href="/settings/" class="link">Настройках</a> — вызов уйдёт
+          через ваш телефон.
+        </div>
+      </details>
+
+      <details class="v3-faq">
+        <summary class="v3-faq__q">Как передать компанию другому менеджеру?</summary>
+        <div class="v3-faq__a">
+          В карточке компании — кнопка «Передать». Доступно вам (если
+          ответственный), вашему РОПу/директору подразделения и
+          администратору. Передача фиксируется в истории карточки.
+        </div>
+      </details>
+
+    </div>
+  </section>
+
+  {# ── Контакт поддержки ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Нужна помощь?</h2>
+    </div>
+    <div class="v2-card__body" style="padding:16px 20px;font-size:14px;line-height:1.6">
+      <p>
+        Если ответа на ваш вопрос здесь нет — напишите в чат ИТ-поддержки
+        или обратитесь к вашему Администратору CRM. Для срочных проблем
+        (не работает вход, теряются данные) — звоните напрямую.
+      </p>
+      <p class="v2-muted" style="margin-top:8px;font-size:13px">
+        Админ в вашем подразделении может посмотреть
+        <a href="/admin/error-log/" class="link">журнал ошибок</a> и
+        <a href="/django-admin/" class="link">техническую админку</a>.
+      </p>
+    </div>
+  </section>
+
+</div>
+
+<style>
+.v3-help-step {
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid var(--v3-border, #e2e8f0);
+  border-radius: 8px;
+}
+.v3-help-step__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #01948E;
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.v3-help-step__title {
+  font-weight: 600;
+  color: var(--brand-dark, #0f172a);
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+.v3-help-step__text {
+  font-size: 13px;
+  color: var(--v2-muted, #64748b);
+  line-height: 1.5;
+}
+.v3-help-card {
+  display: block;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid var(--v3-border, #e2e8f0);
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+.v3-help-card:hover {
+  border-color: #01948E;
+  background: #f0fdf9;
+}
+.v3-help-card__title {
+  font-weight: 600;
+  color: var(--brand-dark, #0f172a);
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+.v3-help-card__text {
+  font-size: 13px;
+  color: var(--v2-muted, #64748b);
+  line-height: 1.5;
+}
+.v3-faq {
+  border-bottom: 1px solid var(--v3-border, #e2e8f0);
+  padding: 10px 0;
+}
+.v3-faq:last-child { border-bottom: none; }
+.v3-faq__q {
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--brand-dark, #0f172a);
+  font-size: 14px;
+  padding: 4px 0;
+  list-style: none;
+  position: relative;
+  padding-left: 24px;
+}
+.v3-faq__q::before {
+  content: "▸";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  color: #01948E;
+  transition: transform 0.15s;
+}
+.v3-faq[open] .v3-faq__q::before {
+  transform: rotate(90deg);
+}
+.v3-faq__q::-webkit-details-marker { display: none; }
+.v3-faq__a {
+  padding: 8px 0 4px 24px;
+  font-size: 13px;
+  color: var(--v2-muted, #475569);
+  line-height: 1.6;
+}
+</style>
+{% endblock %}
