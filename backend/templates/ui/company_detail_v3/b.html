@@ -858,7 +858,7 @@
         {% for c in contacts %}
         <div class="vb-contact" data-contact-id="{{ c.id }}">
           <div class="vb-contact__top">
-            <span class="vb-contact__name">{{ c.name|default:"—" }}</span>
+            <span class="vb-contact__name">{{ c|default:"—" }}</span>
             {% if c.position %}<span class="vb-contact__pos">{{ c.position }}</span>{% endif %}
             {% if c.is_cold_call %}
               <span class="vb-contact__cold" title="{% if c.cold_marked_by %}{{ c.cold_marked_by|full_name }}, {% endif %}{{ c.cold_marked_at|date:'d.m.Y' }}">❄ холодный</span>

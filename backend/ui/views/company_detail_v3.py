@@ -274,6 +274,39 @@ def contact_quick_create(request: HttpRequest, company_id) -> HttpResponse:
     phone = (request.POST.get("phone") or "").strip()
     email = (request.POST.get("email") or "").strip()
 
+    # Валидация email — Django EmailValidator
+    if email:
+        from django.core.validators import validate_email
+        from django.core.exceptions import ValidationError
+        try:
+            validate_email(email)
+        except ValidationError:
+            return JsonResponse(
+                {"ok": False, "error": f"Невалидный email: {email}"}, status=400
+            )
+
+    # Валидация phone — только цифры, +, пробелы, скобки, дефис
+    # Блокируем кириллицу и не-ASCII символы (защита от copy-paste из Word)
+    if phone:
+        import re
+        if re.search(r"[^\d+\s\-()]", phone):
+            return JsonResponse(
+                {"ok": False, "error": "Телефон содержит недопустимые символы"},
+                status=400,
+            )
+        # Нормализуем: убираем пробелы/скобки/дефисы, если начинается с 8 → +7
+        digits = re.sub(r"[^\d]", "", phone)
+        if digits.startswith("8") and len(digits) == 11:
+            phone = "+7" + digits[1:]
+        elif digits.startswith("7") and len(digits) == 11:
+            phone = "+7" + digits[1:]
+        elif len(digits) == 10:
+            phone = "+7" + digits
+        elif phone.startswith("+"):
+            phone = "+" + digits
+        else:
+            phone = "+" + digits if digits else phone
+
     try:
         with db_tx.atomic():
             contact = Contact.objects.create(
