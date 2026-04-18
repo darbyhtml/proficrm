@@ -1,5 +1,34 @@
 # Текущий спринт
 
+**[2026-04-18]** — F4 R2 + F8 R2 + F11 (settings_test) ✅
+
+Три доводящих коммита после большого пакета F5-F7.
+
+**F4 R2: company_detail timeline pagination** (`b792620b`).
+До фикса /companies/<id>/ грузил до 4600 timeline-items разом, HTML >2 МБ.
+Решение: извлёк for-блок в `_partials/_company_timeline_items.html`,
+ограничил initial render 50 items + AJAX endpoint
+`/companies/<uuid>/timeline/items/?offset=50&limit=50`, JS-кнопка
+«Показать ещё (N)». Все 5 счётчиков `timeline_items|length`
+переведены на `timeline_total_count`.
+Staging smoke: detail = 570 KB, timeline endpoint 200.
+
+**F8 R2: help.html content** (`fb953658`). Было «Раздел в разработке».
+Стало: быстрый старт (3 шага), 8 карточек-разделов, FAQ (8 вопросов
+из проблем проекта с ссылками на конкретные URL), блок контакта
+поддержки. Собственный CSS для v3-help-step / v3-help-card / v3-faq.
+
+**F11 settings_test.py** (`afd83b82`). Наследование от settings.py с
+отключённым SECURE_SSL_REDIRECT/HSTS/SECURE_COOKIES + локальный кэш +
+eager Celery + MD5-hasher. Staging messenger regression: 78 failures
+(SSL redirect) → 23 (реальный widget Origin долг, заhspawn в отдельный
+task).
+
+Остаток roadmap: F9 (Android + FCM + MobileAppBuild), F10 (Playwright
+E2E), F11 CI/CD + security hardening, F12 prod deploy + release notes.
+
+---
+
 **[2026-04-18]** — F7 R1+R2: Ролевая аналитика v2 ✅ (все 5 ролей)
 
 Коммиты `c7ccbaae` (R1 MANAGER) + `49a89797` (test fix) + `4ee7295e` (R2 остальные 4 роли).
