@@ -1297,8 +1297,24 @@ def company_main_phone_update(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company.id)
 
     raw = (request.POST.get("phone") or "").strip()
+    # Валидация: блок кириллицы/большого объёма латиницы (защита от инжекта
+    # «+ телавпвапефон» и подобного мусора через inline-edit).
+    import re as _re_mp
+    if raw and (_re_mp.search(r"[А-Яа-яЁё]", raw) or len(_re_mp.findall(r"[A-Za-z]", raw)) > 4):
+        return JsonResponse(
+            {"success": False, "error": "Телефон содержит недопустимые символы."},
+            status=400,
+        )
     from companies.normalizers import normalize_phone as _normalize_phone
     normalized = _normalize_phone(raw) if raw else ""
+    # Если есть ввод, но после нормализации < 10 цифр — отказ
+    if raw and normalized:
+        _d = _re_mp.sub(r"\D", "", normalized)
+        if len(_d) < 10:
+            return JsonResponse(
+                {"success": False, "error": "Некорректный телефон: должно быть минимум 10 цифр."},
+                status=400,
+            )
 
     # Проверка дублей с доп. телефонами
     if normalized:
@@ -1346,10 +1362,24 @@ def company_phone_value_update(request: HttpRequest, company_phone_id) -> HttpRe
         return redirect("company_detail", company_id=company.id)
 
     raw = (request.POST.get("phone") or "").strip()
+    # Строгая валидация: блокируем кириллицу и большие скопления латиницы.
+    import re as _re_phone
+    if _re_phone.search(r"[А-Яа-яЁё]", raw) or len(_re_phone.findall(r"[A-Za-z]", raw)) > 4:
+        return JsonResponse(
+            {"success": False, "error": "Телефон содержит недопустимые символы."},
+            status=400,
+        )
     from companies.normalizers import normalize_phone as _normalize_phone
     normalized = _normalize_phone(raw) if raw else ""
     if not normalized:
         return JsonResponse({"success": False, "error": "Телефон не может быть пустым."}, status=400)
+    # Проверка: итоговый номер должен содержать минимум 10 цифр
+    _digits = _re_phone.sub(r"\D", "", normalized)
+    if len(_digits) < 10:
+        return JsonResponse(
+            {"success": False, "error": "Некорректный телефон: должно быть минимум 10 цифр."},
+            status=400,
+        )
 
     # Дубли: основной телефон и другие доп. телефоны
     if (company.phone or "").strip() == normalized:
@@ -1394,10 +1424,24 @@ def company_phone_create(request: HttpRequest, company_id) -> HttpResponse:
         return JsonResponse({"success": False, "error": "Нет прав на редактирование этой компании."}, status=403)
 
     raw = (request.POST.get("phone") or "").strip()
+    # Строгая валидация: блокируем кириллицу и большие скопления латиницы.
+    import re as _re_phone
+    if _re_phone.search(r"[А-Яа-яЁё]", raw) or len(_re_phone.findall(r"[A-Za-z]", raw)) > 4:
+        return JsonResponse(
+            {"success": False, "error": "Телефон содержит недопустимые символы."},
+            status=400,
+        )
     from companies.normalizers import normalize_phone as _normalize_phone
     normalized = _normalize_phone(raw) if raw else ""
     if not normalized:
         return JsonResponse({"success": False, "error": "Телефон не может быть пустым."}, status=400)
+    # Проверка: итоговый номер должен содержать минимум 10 цифр
+    _digits = _re_phone.sub(r"\D", "", normalized)
+    if len(_digits) < 10:
+        return JsonResponse(
+            {"success": False, "error": "Некорректный телефон: должно быть минимум 10 цифр."},
+            status=400,
+        )
 
     # Дубли: основной телефон и другие доп. телефоны
     if (company.phone or "").strip() == normalized:

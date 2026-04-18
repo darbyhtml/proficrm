@@ -153,21 +153,32 @@ def company_detail_v3_preview(
     timeline_raw.sort(key=lambda x: x["at"], reverse=True)
     timeline = timeline_raw[:5]
 
-    # Договор: дней до истечения
+    # Договор: единая точка правды — берём бейдж/уровень из companies.services,
+    # чтобы логика совпадала с дашбордом и classic.
+    from companies.services import get_contract_alert, _get_annual_contract_alert
     contract_days_left = None
     contract_level = None  # danger / warn / ok / expired / none
-    if company.contract_until:
-        today = timezone.localdate()
-        delta = (company.contract_until - today).days
-        contract_days_left = delta
-        if delta < 0:
-            contract_level = "expired"
-        elif delta <= 7:
-            contract_level = "danger"
-        elif delta <= 30:
-            contract_level = "warn"
+    contract_is_annual = bool(company.contract_type and company.contract_type.is_annual)
+    if contract_is_annual:
+        # Годовые: алерт по сумме
+        annual_level = _get_annual_contract_alert(company.contract_amount, company.contract_type)
+        if annual_level in ("danger", "warn"):
+            contract_level = annual_level
         else:
-            contract_level = "ok"
+            contract_level = "ok" if company.contract_amount is not None else None
+    else:
+        # Не-годовые: алерт по дате
+        if company.contract_until:
+            today = timezone.localdate()
+            delta = (company.contract_until - today).days
+            contract_days_left = delta
+            level, _ = get_contract_alert(company)
+            if delta < 0:
+                contract_level = "expired"
+            elif level:
+                contract_level = level
+            else:
+                contract_level = "ok"
 
     # Справочники для combobox'ов (JSON-сериализуем прямо тут, чтобы шаблон
     # мог встроить их в data-edit-options)
@@ -214,6 +225,7 @@ def company_detail_v3_preview(
         "timeline": timeline,
         "contract_days_left": contract_days_left,
         "contract_level": contract_level,
+        "contract_is_annual": contract_is_annual,
         "classic_url": f"/companies/{company.id}/",
         "client_branches": client_branches,
         "client_branches_total": client_branches_total,

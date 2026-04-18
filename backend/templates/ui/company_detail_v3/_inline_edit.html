@@ -492,6 +492,93 @@
     });
   });
 
+  // ── Phone normalizer: аналог backend companies.normalizers.normalize_phone,
+  //    но live в браузере. Применяется к input[type=tel][data-v3-phone].
+  //    Поведение:
+  //    - На input событие: всё нецифровое/нe-«+» стирается; если пусто и
+  //      пользователь начал вводить не-9ку — автоподставляется +7.
+  //    - На paste: захватываем clipboard, нормализуем, вставляем готовый.
+  //    - На blur: финальный форматтер в «+7 (XXX) XXX-XX-XX».
+  //    - На keydown: блокируем буквы (кроме Ctrl+V/C/X/A, навигационных).
+  function _phoneDigits(s){ return (s || '').replace(/\D+/g, ''); }
+  function _normalizePhoneRu(raw){
+    // Возвращает E.164 «+7XXXXXXXXXX» (11 цифр), либо короче если ввод незавершён.
+    let s = (raw || '').trim();
+    if(!s) return '';
+    let digits = _phoneDigits(s);
+    // Если 11 цифр и начинается с 8 → 7
+    if(digits.length === 11 && digits[0] === '8'){ digits = '7' + digits.slice(1); }
+    // Если 11 цифр и начинается с 7 → норма
+    if(digits.length === 11 && digits[0] === '7'){ return '+' + digits; }
+    // 10 цифр — добавляем 7
+    if(digits.length === 10){ return '+7' + digits; }
+    // Больше 11 — обрезаем
+    if(digits.length > 11){
+      digits = digits.slice(0, 11);
+      if(digits[0] === '8') digits = '7' + digits.slice(1);
+      return '+' + digits;
+    }
+    // Незавершённый ввод — возвращаем с + если начинается с 7/8, иначе +7
+    if(digits.length > 0){
+      if(digits[0] === '7' || digits[0] === '8'){
+        return '+' + (digits[0] === '8' ? '7' + digits.slice(1) : digits);
+      }
+      // Всё что начинается с 9 — логично что RU мобильный без префикса
+      return '+7' + digits;
+    }
+    return '';
+  }
+  function _formatPhoneRu(e164){
+    // +7XXXXXXXXXX → +7 (XXX) XXX-XX-XX. Если цифр меньше — форматирует частично.
+    const digits = _phoneDigits(e164);
+    if(digits.length === 0) return '';
+    if(digits[0] !== '7') return '+' + digits;
+    const d = digits.slice(1); // 10 цифр после 7
+    let out = '+7';
+    if(d.length > 0) out += ' (' + d.slice(0, 3);
+    if(d.length >= 3) out += ')';
+    if(d.length > 3) out += ' ' + d.slice(3, 6);
+    if(d.length > 6) out += '-' + d.slice(6, 8);
+    if(d.length > 8) out += '-' + d.slice(8, 10);
+    return out;
+  }
+  document.querySelectorAll('input[type=tel][data-v3-phone]').forEach(function(inp){
+    if(inp.dataset.v3PhoneWired) return;
+    inp.dataset.v3PhoneWired = '1';
+    // Блок буквенного ввода (кроме Ctrl+combos)
+    inp.addEventListener('keydown', function(e){
+      if(e.ctrlKey || e.metaKey || e.altKey) return;
+      const allowed = ['Backspace','Delete','Tab','Enter','ArrowLeft','ArrowRight',
+                       'ArrowUp','ArrowDown','Home','End',' '];
+      if(allowed.indexOf(e.key) >= 0) return;
+      // Цифры 0-9, + ,( , ), -  пропускаем
+      if(/^[\d+()\-]$/.test(e.key)) return;
+      e.preventDefault();
+    });
+    // На paste — нормализуем всё
+    inp.addEventListener('paste', function(e){
+      e.preventDefault();
+      const txt = (e.clipboardData || window.clipboardData).getData('text') || '';
+      const normalized = _normalizePhoneRu(txt);
+      inp.value = _formatPhoneRu(normalized);
+    });
+    // На input — чистим мусор, форматируем live
+    inp.addEventListener('input', function(){
+      const pos = inp.selectionStart;
+      const before = inp.value;
+      const normalized = _normalizePhoneRu(before);
+      const formatted = _formatPhoneRu(normalized);
+      if(formatted !== before){
+        inp.value = formatted;
+        // Пытаемся сохранить курсор в конце (простое поведение)
+        inp.setSelectionRange(formatted.length, formatted.length);
+      }
+    });
+    inp.addEventListener('blur', function(){
+      inp.value = _formatPhoneRu(_normalizePhoneRu(inp.value));
+    });
+  });
+
   // ── AJAX-формы: submit → fetch → reload. Используется для endpoints,
   //    которые отвечают JSON (не редиректом). Маркер: data-v3-ajax-reload
   document.querySelectorAll('form[data-v3-ajax-reload]').forEach(function(form){
