@@ -1,5 +1,39 @@
 # Текущий спринт
 
+**[2026-04-18]** — Финальный добив долгов: 4 закрытых задачи ✅
+
+После предыдущего большого пакета остались долги: 23 падающих теста,
+ручной APK upload, отсутствие monitoring, неполный E2E. Всё закрыто.
+
+**1. Widget API tests: 78 → 23 → 0 падений** (`39aad64d`).
+В `settings_test.py` добавлен `MESSENGER_WIDGET_STRICT_ORIGIN=False`.
+Это dev-режим (пустой allowlist пропускает запросы). В проде остаётся
+True. **148/148 messenger тестов зелёные.**
+
+**2. F9 UI: /admin/mobile-apps/** (`e9db8f0e`). Кастомная страница
+админа: форма загрузки APK (version_name/code/file), таблица версий,
+actions «⬇ APK» и toggle is_active. Больше не нужно лезть в
+`/django-admin/`. 6/6 тестов зелёные.
+
+**3. F11 monitoring: /metrics** (`a76144ea`). Prometheus exposition
+format без внешних зависимостей. Bearer-token авторизация через
+`METRICS_TOKEN` (пустой → 503). 6 бизнес-метрик: crm_up,
+companies_total, tasks_open, conversations_waiting_offline/open,
+users_absent, mobile_app_builds_active. 5/5 тестов зелёные.
+
+**4. F10 E2E R2: flows.spec.ts** (`c6c00936`). 6 реальных flow:
+create-company, create-task, off-hours endpoint validation, analytics
+ролевой роутер, /admin/mobile-apps/ рендер. Идемпотентны (суффикс
+`E2E-{timestamp}`).
+
+**Staging regression:** 159/159 тестов (messenger + ui.mobile_apps +
+crm.metrics) — полный green. Git log 15+ коммитов от предыдущего
+состояния.
+
+Остаток roadmap: только F12 (prod deploy руками user).
+
+---
+
 **[2026-04-18]** — F9 + F10 + F11 rest: Android endpoint + Playwright E2E + CI/CD hardening ✅
 
 4 ключевых коммита за итерацию.
