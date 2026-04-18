@@ -72,7 +72,7 @@
         <tbody>
           {% for b in dashboard.per_branch %}
             <tr style="border-bottom:1px solid var(--v3-border)">
-              <td style="padding:8px 6px">{{ b.name }} <span class="v2-muted" style="font-size:12px">({{ b.code }})</span></td>
+              <td style="padding:8px 6px">{{ b.name }} <span class="v2-muted" style="font-size:14px">({{ b.code }})</span></td>
               <td style="padding:8px 6px"><strong>{{ b.done_count }}</strong></td>
               <td style="padding:8px 6px">{{ b.online }}/{{ b.total_managers }}</td>
               <td style="padding:8px 6px">{{ b.new_companies_month }}</td>
@@ -99,7 +99,7 @@
             {{ m.full_name }}
           </div>
           <div><strong>{{ m.done_count }}</strong></div>
-          <div class="v2-muted" style="font-size:12px">задач</div>
+          <div class="v2-muted" style="font-size:14px">задач</div>
         </div>
       {% empty %}
         <div class="v2-muted">Менеджеров пока нет.</div>

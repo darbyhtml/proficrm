@@ -48,7 +48,7 @@
             <span class="v3-badge v3-badge--success">Да</span>
           {% else %}
             <span class="v3-badge v3-badge--danger">Нет</span>
-            <span class="v2-muted" style="margin-left:6px;font-size:13px">— без этого рассылка не стартует</span>
+            <span class="v2-muted" style="margin-left:6px;font-size:14px">— без этого рассылка не стартует</span>
           {% endif %}
         </dd>
 
@@ -68,10 +68,10 @@
         <dd>
           {% if fernet_status.valid %}
             <span class="v3-badge v3-badge--success">Валиден</span>
-            <span class="v2-muted" style="margin-left:6px;font-size:13px">— расшифровка проходит</span>
+            <span class="v2-muted" style="margin-left:6px;font-size:14px">— расшифровка проходит</span>
           {% elif fernet_status.has_password %}
             <span class="v3-badge v3-badge--danger">InvalidToken</span>
-            <div class="v2-muted" style="margin-top:6px;font-size:13px;line-height:1.5">
+            <div class="v2-muted" style="margin-top:6px;font-size:14px;line-height:1.5">
               Пароль зашифрован, но не расшифровывается текущим <code>MAILER_FERNET_KEY</code>
               в <code>.env</code>. Чаще всего — ключ был заменён после первоначальной настройки.
               {% if fernet_status.error %}<br><span style="color:#c62828">Тех. детали: {{ fernet_status.error }}</span>{% endif %}
@@ -79,7 +79,7 @@
             </div>
           {% else %}
             <span class="v3-badge v3-badge--warn">Не задан</span>
-            <span class="v2-muted" style="margin-left:6px;font-size:13px">— введите пароль ниже, чтобы начать отправку</span>
+            <span class="v2-muted" style="margin-left:6px;font-size:14px">— введите пароль ниже, чтобы начать отправку</span>
           {% endif %}
         </dd>
       </dl>
@@ -92,7 +92,7 @@
       <h2 class="v2-card__title">Пересохранить пароль SMTP</h2>
     </div>
     <div class="v2-card__body" style="padding:12px 20px 16px">
-      <p class="v2-muted" style="margin:0 0 12px 0;font-size:13px;line-height:1.5">
+      <p class="v2-muted" style="margin:0 0 12px 0;font-size:14px;line-height:1.5">
         Введите действующий пароль вашей учётки SMTP (smtp.bz / Яндекс / другой провайдер).
         Он будет зашифрован текущим <code>MAILER_FERNET_KEY</code> и сохранён в БД.
         Приёмник и сервер не трогаем — только пароль.
@@ -110,7 +110,7 @@
         </div>
       </form>
 
-      <div class="rounded-xl bg-brand-soft/30 border border-brand-soft px-4 py-3 text-sm mt-4" style="font-size:13px;line-height:1.5">
+      <div class="rounded-xl bg-brand-soft/30 border border-brand-soft px-4 py-3 text-sm mt-4" style="font-size:14px;line-height:1.5">
         <strong>Что произойдёт после сохранения:</strong>
         <ol style="margin:6px 0 0 20px;padding:0">
           <li>Пароль зашифрован Fernet и записан в <code>GlobalMailAccount.smtp_password_enc</code>.</li>
@@ -127,7 +127,7 @@
       <h2 class="v2-card__title">Тестовое письмо</h2>
     </div>
     <div class="v2-card__body" style="padding:12px 20px 16px">
-      <p class="v2-muted" style="margin:0 0 12px 0;font-size:13px;line-height:1.5">
+      <p class="v2-muted" style="margin:0 0 12px 0;font-size:14px;line-height:1.5">
         Отправит тест на email вашей учётки ({% if request.user.email %}<code>{{ request.user.email }}</code>{% else %}<span style="color:#c62828">email не задан</span>{% endif %}).
         Полный end-to-end: расшифровка пароля → SMTP handshake → отправка.
       </p>
@@ -222,7 +222,7 @@
       <h2 class="v2-card__title">Массовая отправка</h2>
     </div>
     <div class="v2-card__body" style="padding:12px 20px 16px">
-      <p class="v2-muted" style="margin:0 0 12px 0;font-size:13px;line-height:1.5">
+      <p class="v2-muted" style="margin:0 0 12px 0;font-size:14px;line-height:1.5">
         {% if account.is_enabled %}
           Массовая отправка <strong>включена</strong>. Кампании и автоматические письма будут отправляться.
         {% else %}
@@ -244,7 +244,7 @@
     <div class="v2-card__head">
       <h2 class="v2-card__title">Что дальше</h2>
     </div>
-    <div class="v2-card__body" style="padding:12px 20px 16px;font-size:13px;line-height:1.6">
+    <div class="v2-card__body" style="padding:12px 20px 16px;font-size:14px;line-height:1.6">
       <ul style="margin:0;padding-left:20px">
         <li>API ключ smtp.bz для мониторинга квоты — пока через <a href="/django-admin/mailer/globalmailaccount/" class="link">Django Admin</a>. Будет перенесён в R3.</li>
         <li>Раздел <a href="/mail/campaigns/" class="link">Почта → Кампании</a> — создание и запуск рассылок. Работает только при валидном Fernet и включённом SMTP.</li>

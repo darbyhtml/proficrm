@@ -51,11 +51,11 @@
         <div class="v3-rank-row" {% if b.is_mine %}style="background:#f0fdf9;border-radius:4px;padding-left:8px"{% endif %}>
           <div class="v3-rank-row__num {% if b.rank <= 3 %}v3-rank-row__num--top{% endif %}">{{ b.rank }}</div>
           <div>
-            {{ b.name }} <span class="v2-muted" style="font-size:12px">({{ b.code }})</span>
+            {{ b.name }} <span class="v2-muted" style="font-size:14px">({{ b.code }})</span>
             {% if b.is_mine %}<span class="v3-badge v3-badge--success" style="margin-left:4px">ваше</span>{% endif %}
           </div>
           <div><strong>{{ b.done_count }}</strong></div>
-          <div class="v2-muted" style="font-size:12px">задач</div>
+          <div class="v2-muted" style="font-size:14px">задач</div>
         </div>
       {% endfor %}
     </div>
@@ -76,7 +76,7 @@
               {{ m.full_name }}
             </div>
             <div><strong>{{ m.done_count }}</strong></div>
-            <div class="v2-muted" style="font-size:12px">задач</div>
+            <div class="v2-muted" style="font-size:14px">задач</div>
           </div>
         {% endfor %}
       {% else %}

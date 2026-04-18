@@ -7,11 +7,11 @@
 {% include "ui/_v2/v3_styles.html" %}
 <style>
   /* WCAG AA: контраст повышен с ~3.8:1 до ~5.2:1 */
-  .v2-tz-badge{display:inline-flex;align-items:center;gap:3px;padding:1px 6px;font-size:10px;
+  .v2-tz-badge{display:inline-flex;align-items:center;gap:3px;padding:1px 6px;font-size:14px;
     background:rgba(253,173,58,.15);color:#92400E;border-radius:999px;font-weight:600;
     border:1px solid rgba(253,173,58,.3)}
-  .v2-task-desc{font-size:11px;color:var(--v2-text-muted);margin-top:2px;line-height:1.4}
-  .v2-quick-btn{font-size:11px;padding:6px 10px;border-radius:6px;border:1px solid var(--v2-border);
+  .v2-task-desc{font-size:14px;color:var(--v2-text-muted);margin-top:2px;line-height:1.4}
+  .v2-quick-btn{font-size:14px;padding:6px 10px;border-radius:6px;border:1px solid var(--v2-border);
     background:#fff;cursor:pointer;color:var(--v2-text);font-weight:500;min-height:28px}
   .v2-quick-btn:hover{background:var(--v2-bg-soft);border-color:var(--v2-primary)}
   .v2-quick-btn:focus-visible{outline:2px solid var(--v2-primary);outline-offset:2px}
@@ -31,16 +31,16 @@
   /* Компактная шапка (hero) */
   .v2-hero{padding:16px 20px !important}
   .v2-hero__title{font-size:18px !important;margin:0 0 2px 0 !important}
-  .v2-hero__sub{font-size:12px !important;opacity:.9}
+  .v2-hero__sub{font-size:14px !important;opacity:.9}
   .v2-hero__stats{margin-top:12px !important;gap:8px !important}
   .v2-hero__stat{padding:8px 12px !important}
   .v2-hero__stat-value{font-size:20px !important;line-height:1.1 !important}
-  .v2-hero__stat-label{font-size:10px !important;letter-spacing:.04em}
+  .v2-hero__stat-label{font-size:14px !important;letter-spacing:.04em}
   a.v2-hero__stat{transition:transform .15s ease,background .15s ease}
   a.v2-hero__stat:hover{transform:translateY(-1px);background:rgba(255,255,255,.16)}
   #v2DashUpdateIndicator{position:fixed;top:16px;right:16px;z-index:50;display:none;
     background:#fff;border:1px solid var(--v2-border);border-radius:10px;padding:8px 12px;
-    box-shadow:0 4px 16px rgba(0,0,0,.08);font-size:13px;color:var(--v2-text)}
+    box-shadow:0 4px 16px rgba(0,0,0,.08);font-size:14px;color:var(--v2-text)}
   #v2DashUpdateIndicator.visible{display:flex;align-items:center;gap:8px}
   @keyframes v2-spin{to{transform:rotate(360deg)}}
   .v2-spin{animation:v2-spin 1s linear infinite}
@@ -78,7 +78,7 @@
           </svg>
           Обновить
         </button>
-        <span id="v2LastUpdate" style="font-size:10px;color:rgba(255,255,255,.7);padding:0 4px"
+        <span id="v2LastUpdate" style="font-size:14px;color:rgba(255,255,255,.7);padding:0 4px"
               title="Время последнего успешного обновления" aria-live="polite"></span>
         {% if can_view_cold_call_reports %}
         <button type="button" id="v2OpenReportDay" class="v2-btn v2-btn--ghost v2-btn--sm"
@@ -324,7 +324,7 @@
                 <label for="contract-amount-{{ item.company.id }}" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Сумма годового договора, ₽</label>
                 <input type="number" step="0.01" min="0" class="v2-input"
                        id="contract-amount-{{ item.company.id }}"
-                       style="width:100px;padding:4px 6px;font-size:12px"
+                       style="width:100px;padding:4px 6px;font-size:14px"
                        value="{% if item.amount %}{{ item.amount }}{% endif %}"
                        placeholder="Сумма, ₽"
                        data-inline-input />
@@ -357,7 +357,7 @@
           <h2 class="v2-card__title">
             <svg class="v2-ic" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM12.75 6a.75.75 0 00-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 000-1.5h-3.75V6z" clip-rule="evenodd"/></svg>
             Ближайшие 7 дней
-            <span class="v2-muted" style="font-weight:400;font-size:12px;margin-left:4px">{{ week_range_start|date:"d.m" }} — {{ week_range_end|date:"d.m" }}</span>
+            <span class="v2-muted" style="font-weight:400;font-size:14px;margin-left:4px">{{ week_range_start|date:"d.m" }} — {{ week_range_end|date:"d.m" }}</span>
           </h2>
           <span class="v2-count">{{ tasks_week_count|default:0 }}</span>
         </div>
@@ -450,15 +450,15 @@
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
           <div style="min-width:0">
             <h2 id="v2ReportTitle" style="font-weight:600;font-size:15px;color:var(--v2-text);margin:0">Отчёт</h2>
-            <div id="v2ReportSub" class="v2-muted" style="margin-top:2px;font-size:12px">—</div>
+            <div id="v2ReportSub" class="v2-muted" style="margin-top:2px;font-size:14px">—</div>
           </div>
           <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" data-report-close aria-label="Закрыть отчёт" title="Закрыть">
             <span aria-hidden="true">✕</span>
           </button>
         </div>
         <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px">
-          <select id="v2ReportDaySelect" class="v2-select" aria-label="Выбор дня отчёта" style="display:none;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--v2-border);min-width:180px"></select>
-          <select id="v2ReportMonthSelect" class="v2-select" aria-label="Выбор месяца отчёта" style="display:none;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--v2-border);min-width:180px"></select>
+          <select id="v2ReportDaySelect" class="v2-select" aria-label="Выбор дня отчёта" style="display:none;font-size:14px;padding:6px 10px;border-radius:8px;border:1px solid var(--v2-border);min-width:180px"></select>
+          <select id="v2ReportMonthSelect" class="v2-select" aria-label="Выбор месяца отчёта" style="display:none;font-size:14px;padding:6px 10px;border-radius:8px;border:1px solid var(--v2-border);min-width:180px"></select>
           <button type="button" id="v2ReportCopy" class="v2-btn v2-btn--sm" style="font-weight:600">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             Скопировать
@@ -467,7 +467,7 @@
       </div>
       <div style="flex:1;overflow:auto;padding:12px 20px">
         <label for="v2ReportText" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Текст отчёта</label>
-        <textarea id="v2ReportText" readonly style="width:100%;min-height:280px;border:1px solid var(--v2-border);border-radius:8px;padding:10px 12px;font-size:12px;font-family:'Courier New',monospace;color:var(--v2-text);background:var(--v2-bg-soft);resize:vertical;line-height:1.5"></textarea>
+        <textarea id="v2ReportText" readonly style="width:100%;min-height:280px;border:1px solid var(--v2-border);border-radius:8px;padding:10px 12px;font-size:14px;font-family:'Courier New',monospace;color:var(--v2-text);background:var(--v2-bg-soft);resize:vertical;line-height:1.5"></textarea>
       </div>
     </div>
   </div>
@@ -651,7 +651,7 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
           const hint = document.createElement('span');
           hint.textContent = 'Нажмите ещё раз';
           hint.setAttribute('role', 'status');
-          hint.style.cssText = 'position:absolute;left:100%;top:50%;transform:translate(8px,-50%);background:var(--v2-primary);color:#fff;font-size:10px;padding:2px 6px;border-radius:6px;white-space:nowrap;pointer-events:none;z-index:2;box-shadow:0 2px 4px rgba(0,0,0,.15)';
+          hint.style.cssText = 'position:absolute;left:100%;top:50%;transform:translate(8px,-50%);background:var(--v2-primary);color:#fff;font-size:14px;padding:2px 6px;border-radius:6px;white-space:nowrap;pointer-events:none;z-index:2;box-shadow:0 2px 4px rgba(0,0,0,.15)';
           btn.style.position = 'relative';
           btn.appendChild(hint);
           btn._hint = hint;

@@ -56,7 +56,7 @@
       {% else %}
         <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
           <div>
-            <div style="font-size:13px;color:var(--v2-muted)">В срок выполнено</div>
+            <div style="font-size:14px;color:var(--v2-muted)">В срок выполнено</div>
             <div style="font-size:28px;font-weight:600;color:var(--brand-dark)">
               {{ dashboard.on_time.on_time }} / {{ dashboard.on_time.total }}
               <span style="font-size:14px;color:var(--v2-muted);margin-left:8px">({{ dashboard.on_time.ratio }}%)</span>
@@ -118,7 +118,7 @@
             <div class="v3-kpi-card__value">{{ dashboard.cold_calls.ratio }}%</div>
           </div>
         </div>
-        <div class="v2-muted" style="margin-top:8px;font-size:12px">
+        <div class="v2-muted" style="margin-top:8px;font-size:14px">
           Успех — создана задача в течение 24 часов после звонка.
         </div>
       {% endif %}
@@ -137,7 +137,7 @@
             <li style="padding:8px 0;border-bottom:1px solid var(--v3-border);display:flex;align-items:center;justify-content:space-between;gap:12px">
               <div>
                 <a href="/companies/{{ c.id }}/" class="link" style="font-weight:500">{{ c.name }}</a>
-                <div class="v2-muted" style="font-size:12px">до {{ c.until|date:"d.m.Y" }}</div>
+                <div class="v2-muted" style="font-size:14px">до {{ c.until|date:"d.m.Y" }}</div>
               </div>
               <span class="v3-badge v3-badge--{% if c.level == 'danger' %}danger{% elif c.level == 'warn' %}warn{% else %}info{% endif %}">
                 {{ c.days_left }} дн.
@@ -151,7 +151,7 @@
     </div>
   </section>
 
-  <div class="v2-muted" style="font-size:12px;padding:8px 4px">
+  <div class="v2-muted" style="font-size:14px;padding:8px 4px">
     F7 R1 — ролевые дашборды. Рейтинг команды, тренды, графики — в R2.
   </div>
 
@@ -165,7 +165,7 @@
   border-radius: 8px;
 }
 .v3-kpi-card__label {
-  font-size: 12px;
+  font-size:14px;
   color: var(--v2-muted, #64748b);
   margin-bottom: 4px;
   text-transform: uppercase;

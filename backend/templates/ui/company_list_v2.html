@@ -11,8 +11,8 @@
       background:var(--v2-bg);border:1px solid var(--v2-border-strong);
       border-radius:var(--v2-radius-lg);box-shadow:var(--v2-shadow-lg);
       padding:16px;width:720px;max-width:calc(100vw - 40px)}
-    .v2-fpop__hint-inline{font-size:10px;color:var(--v2-text-muted);font-weight:400;margin-left:4px}
-    .v2-select--multi{min-height:auto;padding:4px 6px !important;font-size:12px}
+    .v2-fpop__hint-inline{font-size:14px;color:var(--v2-text-muted);font-weight:400;margin-left:4px}
+    .v2-select--multi{min-height:auto;padding:4px 6px !important;font-size:14px}
     .v2-select--multi option{padding:4px 6px;border-radius:4px}
     .v2-select--multi option:checked{background:linear-gradient(var(--v2-primary),var(--v2-primary));color:#fff}
 
@@ -21,7 +21,7 @@
     .v2-tr--overdue:hover{background:linear-gradient(90deg,color-mix(in srgb, var(--v2-danger-50) 80%, var(--v2-danger)) 0%,var(--v2-bg-soft) 220px) !important}
     /* Чип сферы — заметнее (цветной border + фон) */
     .v2-sphere-chip{display:inline-flex;align-items:center;gap:3px;
-      padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;
+      padding:2px 8px;border-radius:999px;font-size:14px;font-weight:600;
       background:#EEF2FF;color:#3730A3;border:1px solid #C7D2FE}
     .v2-sphere-chip--important{background:#FEF3C7;color:#92400E;border-color:#FCD34D}
   </style>
@@ -217,7 +217,7 @@
             <strong style="font-size:16px">Подтверждение массового переназначения</strong>
             <button type="button" id="v2BulkModalClose" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--v2-text-muted);line-height:1">&times;</button>
           </div>
-          <div id="v2BulkModalBody" style="padding:16px 20px;overflow-y:auto;flex:1;font-size:13px">
+          <div id="v2BulkModalBody" style="padding:16px 20px;overflow-y:auto;flex:1;font-size:14px">
             <div style="text-align:center;color:var(--v2-text-muted);padding:24px 0">Загрузка превью…</div>
           </div>
           <div style="padding:14px 20px;border-top:1px solid var(--v2-border);display:flex;gap:10px;justify-content:flex-end">
@@ -287,12 +287,12 @@
           <div class="v2-td" style="min-width:0">
             <div class="v2-item__title" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
               <span>{% if q and c.search_name_html %}{{ c.search_name_html|safe }}{% else %}{{ c.name }}{% endif %}</span>
-              {% if 'inn' in company_list_columns and c.inn %}<span class="v2-item__meta" style="font-size:11px">ИНН {% if q and c.search_inn_html %}{{ c.search_inn_html|safe }}{% else %}{{ c.inn }}{% endif %}</span>{% endif %}
-              {% if 'overdue' in company_list_columns and c.has_overdue %}<span class="v2-count v2-count--danger" style="font-size:10px;padding:1px 6px">просрочка</span>{% endif %}
+              {% if 'inn' in company_list_columns and c.inn %}<span class="v2-item__meta" style="font-size:14px">ИНН {% if q and c.search_inn_html %}{{ c.search_inn_html|safe }}{% else %}{{ c.inn }}{% endif %}</span>{% endif %}
+              {% if 'overdue' in company_list_columns and c.has_overdue %}<span class="v2-count v2-count--danger" style="font-size:14px;padding:1px 6px">просрочка</span>{% endif %}
             </div>
             {% if c.address %}<div class="v2-item__meta">{% if q and c.search_address_html %}{{ c.search_address_html|safe }}{% else %}{{ c.address|truncatechars:60 }}{% endif %}</div>{% endif %}
             {% if q and c.search_reasons %}
-              <div class="v2-item__meta" style="color:#f97316;font-weight:500;font-size:11px;margin-top:2px">
+              <div class="v2-item__meta" style="color:#f97316;font-weight:500;font-size:14px;margin-top:2px">
                 Найдено:
                 {% for r in c.search_reasons %}<b>{{ r.label }}</b>: {{ r.value_html|safe }}{% if not forloop.last %} · {% endif %}{% endfor %}
               </div>
@@ -304,7 +304,7 @@
                 </span>
               {% endfor %}{% endif %}
               {% with guessed=c.address|guess_ru_tz %}{% with tz=c.work_timezone|default:guessed %}
-                {% if tz %}<span class="v2-count v2-count--warn" style="font-size:10px;padding:1px 6px" title="{{ tz }}">{{ tz|tz_now_hhmm }} · {{ tz|tz_label }}</span>{% endif %}
+                {% if tz %}<span class="v2-count v2-count--warn" style="font-size:14px;padding:1px 6px" title="{{ tz }}">{{ tz|tz_now_hhmm }} · {{ tz|tz_label }}</span>{% endif %}
               {% endwith %}{% endwith %}
             </div>
           </div>
@@ -328,7 +328,7 @@
         {% endfor %}
       </div>
 
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:12px;border-top:1px solid var(--v2-border);font-size:13px;color:var(--v2-text-muted);gap:12px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:12px;border-top:1px solid var(--v2-border);font-size:14px;color:var(--v2-text-muted);gap:12px;flex-wrap:wrap">
         <div>Стр. {{ page.number }} из {{ page.paginator.num_pages }} · всего {{ companies_filtered|default:companies_total }}</div>
         <div style="display:flex;gap:10px;align-items:center">
           <form method="get" style="display:inline-flex;align-items:center;gap:6px">
@@ -337,7 +337,7 @@
               (status=1&status=2&region=3 при пагинации и смене per_page).
             {% endcomment %}
             {% for k, vals in request.GET.lists %}{% if k != 'per_page' and k != 'page' %}{% for v in vals %}<input type="hidden" name="{{ k }}" value="{{ v }}" />{% endfor %}{% endif %}{% endfor %}
-            <label style="font-size:12px">На странице</label>
+            <label style="font-size:14px">На странице</label>
             <select name="per_page" class="v2-input v2-input--sm v2-autosubmit" style="width:auto">
               <option value="25"{% if per_page == 25 %} selected{% endif %}>25</option>
               <option value="50"{% if per_page == 50 %} selected{% endif %}>50</option>
@@ -448,17 +448,17 @@ document.querySelectorAll('.v2-autosubmit').forEach(function(sel){
     html += '<div style="font-weight:600;margin-bottom:4px">Будет переназначено: <span style="color:#059669">'+allowedCount+'</span>';
     if(forbiddenCount) html += ' <span style="color:#b91c1c">(пропущено: '+forbiddenCount+')</span>';
     html += '</div>';
-    html += '<div style="font-size:12px;color:var(--v2-text-muted)">Новый ответственный: <b>'+escapeHtml(target.name||'—')+'</b>'
+    html += '<div style="font-size:14px;color:var(--v2-text-muted)">Новый ответственный: <b>'+escapeHtml(target.name||'—')+'</b>'
          + (target.role ? ' ('+escapeHtml(target.role)+')' : '')
          + (target.branch && target.branch !== '—' ? ' · '+escapeHtml(target.branch) : '') + '</div>';
     if(oldResps.length){
-      html += '<div style="font-size:12px;color:var(--v2-text-muted);margin-top:4px">Текущие: '
+      html += '<div style="font-size:14px;color:var(--v2-text-muted);margin-top:4px">Текущие: '
            + oldResps.map(r => escapeHtml(r.name)+' ('+r.count+')').join(', ') + '</div>';
     }
     html += '</div>';
     if(forbiddenCount && forbidden.length){
       html += '<details style="margin-bottom:8px;padding:8px;background:#fef2f2;border-radius:8px"><summary style="cursor:pointer;font-weight:600;color:#b91c1c">Пропущено ('+forbiddenCount+')</summary>'
-           + '<ul style="margin:6px 0 0 18px;padding:0;max-height:160px;overflow-y:auto;font-size:12px">'
+           + '<ul style="margin:6px 0 0 18px;padding:0;max-height:160px;overflow-y:auto;font-size:14px">'
            + forbidden.map(f => '<li>'+escapeHtml(f.name)+' — '+escapeHtml(f.reason||'нет прав')+'</li>').join('')
            + (forbiddenCount > forbidden.length ? '<li style="color:#b91c1c">… и ещё '+(forbiddenCount-forbidden.length)+'</li>' : '')
            + '</ul></details>';
@@ -467,7 +467,7 @@ document.querySelectorAll('.v2-autosubmit').forEach(function(sel){
       html += '<details open style="margin-bottom:4px"><summary style="cursor:pointer;font-weight:600;margin-bottom:6px">Компании (первые '+companies.length
            + (totalCount > companies.length ? ' из '+totalCount : '')+')</summary>'
            + '<div style="max-height:260px;overflow-y:auto;border:1px solid var(--v2-border);border-radius:6px">'
-           + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+           + '<table style="width:100%;border-collapse:collapse;font-size:14px">'
            + '<thead style="background:var(--v2-bg-soft);position:sticky;top:0"><tr>'
            + '<th style="text-align:left;padding:6px 8px">Компания</th>'
            + '<th style="text-align:left;padding:6px 8px">ИНН</th>'

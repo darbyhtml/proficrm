@@ -47,7 +47,7 @@
             <label for="id_version_name" class="v3-label">Версия (имя)</label>
             <input type="text" name="version_name" id="id_version_name" class="v2-input"
                    placeholder="1.2.3" maxlength="32" required />
-            <div class="v2-muted" style="font-size:12px;margin-top:4px">
+            <div class="v2-muted" style="font-size:14px;margin-top:4px">
               Семантическая версия, отображается пользователю. Пример: 1.2.3
             </div>
           </div>
@@ -55,7 +55,7 @@
             <label for="id_version_code" class="v3-label">Версия (код)</label>
             <input type="number" name="version_code" id="id_version_code" class="v2-input"
                    min="1" required />
-            <div class="v2-muted" style="font-size:12px;margin-top:4px">
+            <div class="v2-muted" style="font-size:14px;margin-top:4px">
               Монотонно возрастающее целое. Android сравнивает их для auto-update.
             </div>
           </div>
@@ -65,7 +65,7 @@
           <label for="id_file" class="v3-label">APK-файл</label>
           <input type="file" name="file" id="id_file" accept=".apk"
                  class="v2-input" required />
-          <div class="v2-muted" style="font-size:12px;margin-top:4px">
+          <div class="v2-muted" style="font-size:14px;margin-top:4px">
             SHA256 вычислится автоматически при сохранении.
           </div>
         </div>
@@ -102,11 +102,11 @@
                 <td style="padding:8px 6px"><strong>{{ b.version_name }}</strong></td>
                 <td style="padding:8px 6px">{{ b.version_code }}</td>
                 <td style="padding:8px 6px">{{ b.get_file_size_display }}</td>
-                <td style="padding:8px 6px;font-family:monospace;font-size:12px">{{ b.sha256|slice:":12" }}…</td>
+                <td style="padding:8px 6px;font-family:monospace;font-size:14px">{{ b.sha256|slice:":12" }}…</td>
                 <td style="padding:8px 6px">
                   {{ b.uploaded_at|date:"d.m.Y H:i" }}
                   {% if b.uploaded_by %}
-                    <div class="v2-muted" style="font-size:12px">{{ b.uploaded_by.get_full_name|default:b.uploaded_by.username }}</div>
+                    <div class="v2-muted" style="font-size:14px">{{ b.uploaded_by.get_full_name|default:b.uploaded_by.username }}</div>
                   {% endif %}
                 </td>
                 <td style="padding:8px 6px">
@@ -119,11 +119,11 @@
                 <td style="padding:8px 6px">
                   <div style="display:flex;gap:6px;flex-wrap:wrap">
                     {% if b.file %}
-                      <a href="{{ b.file.url }}" class="v2-btn v2-btn--ghost" style="font-size:12px;padding:4px 8px" download>⬇ APK</a>
+                      <a href="{{ b.file.url }}" class="v2-btn v2-btn--ghost" style="font-size:14px;padding:4px 8px" download>⬇ APK</a>
                     {% endif %}
                     <form method="post" action="{% url 'settings_mobile_apps_toggle' build_id=b.id %}" style="display:inline">
                       {% csrf_token %}
-                      <button type="submit" class="v2-btn v2-btn--ghost" style="font-size:12px;padding:4px 8px">
+                      <button type="submit" class="v2-btn v2-btn--ghost" style="font-size:14px;padding:4px 8px">
                         {% if b.is_active %}Отключить{% else %}Включить{% endif %}
                       </button>
                     </form>
@@ -152,12 +152,12 @@
         <code>GET /api/phone/app/latest/</code> — возвращает самую свежую
         активную production-версию (сортировка по <code>version_code</code>).
       </p>
-      <p class="v2-muted" style="margin-top:8px;font-size:13px">
+      <p class="v2-muted" style="margin-top:8px;font-size:14px">
         Если приложение получает версию с кодом больше своего — предлагает
         пользователю скачать и установить. SHA256 используется для проверки
         целостности загруженного файла.
       </p>
-      <p class="v2-muted" style="margin-top:8px;font-size:13px">
+      <p class="v2-muted" style="margin-top:8px;font-size:14px">
         Только одна активная версия с наивысшим <code>version_code</code>
         «видна» из приложения. Отключённые (is_active=False) остаются в
         истории, но не предлагаются для обновления.
