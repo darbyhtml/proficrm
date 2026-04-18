@@ -17,9 +17,16 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from django.db import transaction as db_tx
+
 from accounts.models import Branch
+from audit.models import ActivityEvent
+from audit.service import log_event
 from companies.models import (
-    Company, CompanyDeal, CompanyNote, CompanySphere, CompanyStatus, Contact, ContractType,
+    Company, CompanyDeal, CompanyNote, CompanySphere, CompanyStatus,
+    Contact, ContactEmail, ContactPhone, ContractType,
 )
 from tasksapp.models import Task
 
@@ -221,3 +228,74 @@ def company_detail_v3_preview(
         "c": "ui/company_detail_v3/c.html",
     }
     return render(request, template_map[variant], ctx)
+
+
+@login_required
+@require_POST
+def contact_quick_create(request: HttpRequest, company_id) -> HttpResponse:
+    """POST /companies/<id>/contacts/quick-create/
+    Принимает простые поля: name (или first_name+last_name), position,
+    phone, email. Создаёт Contact + ContactPhone + ContactEmail в одной
+    транзакции. Облегчённая альтернатива полному contact_create с
+    FormSet'ами — для inline-форм в v3-карточке.
+
+    Возвращает: 302 redirect на карточку v3/b/ (чтобы после submit форма
+    обновилась с новым контактом).
+    """
+    from ui.views.company_detail import _can_edit_company  # reuse permission check
+
+    user = request.user
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch"), id=company_id
+    )
+    if not _can_edit_company(user, company):
+        return JsonResponse({"ok": False, "error": "Нет прав"}, status=403)
+
+    name_raw = (request.POST.get("name") or "").strip()
+    first_name = (request.POST.get("first_name") or "").strip()
+    last_name = (request.POST.get("last_name") or "").strip()
+
+    # Если передан один name — пробуем разобрать: "Иванов Иван Иванович"
+    if name_raw and not (first_name or last_name):
+        parts = name_raw.split(None, 1)
+        last_name = parts[0] if parts else ""
+        first_name = parts[1] if len(parts) > 1 else ""
+
+    if not (first_name or last_name):
+        return JsonResponse({"ok": False, "error": "Укажите ФИО"}, status=400)
+
+    position = (request.POST.get("position") or "").strip()
+    phone = (request.POST.get("phone") or "").strip()
+    email = (request.POST.get("email") or "").strip()
+
+    try:
+        with db_tx.atomic():
+            contact = Contact.objects.create(
+                company=company,
+                first_name=first_name[:120],
+                last_name=last_name[:120],
+                position=position[:255],
+            )
+            if phone:
+                ContactPhone.objects.create(contact=contact, value=phone[:50])
+            if email:
+                ContactEmail.objects.create(contact=contact, value=email[:254])
+    except Exception as exc:
+        logger.exception("contact_quick_create failed")
+        return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+
+    try:
+        log_event(
+            actor=user,
+            verb=ActivityEvent.Verb.CREATE,
+            entity_type="contact",
+            entity_id=contact.id,
+            company_id=company.id,
+            message=f"Добавлен контакт: {contact}",
+        )
+    except Exception:
+        pass
+
+    # Redirect обратно на v3/b/
+    from django.shortcuts import redirect
+    return redirect(f"/companies/{company.id}/v3/b/")

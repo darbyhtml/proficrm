@@ -388,10 +388,24 @@
       btn.dataset.busy = '1';
       btn.style.opacity = '0.6';
       try {
-        await _postForm(url, {});
-        if(row) row.classList.toggle('vb-phone--cold');
-        btn.textContent = row && row.classList.contains('vb-phone--cold') ? 'холодный' : '+ холодный';
-        toast(row && row.classList.contains('vb-phone--cold') ? 'Отмечено как холодный' : 'Отметка снята', 'ok');
+        if(isColdNow){
+          // Снятие отметки — через reset endpoint (передаётся в data-cold-reset-url)
+          const resetUrl = btn.dataset.coldResetUrl;
+          if(!resetUrl){
+            toast('Снять отметку может только администратор', 'err');
+            return;
+          }
+          await _postForm(resetUrl, {});
+          if(row) row.classList.remove('vb-phone--cold');
+          btn.textContent = '+ холодный';
+          toast('Отметка снята', 'ok');
+        } else {
+          // Постановка — backend требует confirmed=1
+          await _postForm(url, {confirmed: '1'});
+          if(row) row.classList.add('vb-phone--cold');
+          btn.textContent = 'холодный';
+          toast('Отмечено как холодный', 'ok');
+        }
       } catch(err){
         toast('Ошибка: ' + (err.message || 'не удалось'), 'err');
       } finally {

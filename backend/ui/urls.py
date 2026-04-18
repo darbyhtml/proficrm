@@ -39,6 +39,8 @@ urlpatterns = [
     path("companies/<uuid:company_id>/timeline/items/", views.company_timeline_items, name="company_timeline_items"),
     # F4 R3: preview редизайна карточки компании (a/b/c)
     path("companies/<uuid:company_id>/v3/<str:variant>/", views.company_detail_v3_preview, name="company_detail_v3_preview"),
+    # F4 R3: quick-endpoints для inline-форм v3 (упрощённая альтернатива FormSet-эндпоинтам)
+    path("companies/<uuid:company_id>/contacts/quick-create/", views.contact_quick_create, name="contact_quick_create"),
     path("companies/<uuid:company_id>/update/", views.company_update, name="company_update"),
     path("companies/<uuid:company_id>/inline/", views.company_inline_update, name="company_inline_update"),
     path("companies/<uuid:company_id>/main-phone/update/", views.company_main_phone_update, name="company_main_phone_update"),

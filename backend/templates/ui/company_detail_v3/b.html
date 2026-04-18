@@ -347,6 +347,9 @@
     font-size:13px;line-height:1;border-radius:var(--v3-radius-xs);font-family:inherit}
   .vb-contact:hover .vb-contact__x{opacity:1}
   .vb-contact__x:hover{color:var(--v2-danger);background:var(--v2-danger-50)}
+  .vb-contact__cold{display:inline-flex;align-items:center;gap:3px;
+    padding:1px 7px;font-size:10.5px;font-weight:500;color:#1d4ed8;
+    background:#eff6ff;border:1px solid #bfdbfe;border-radius:999px;line-height:1.3}
 
   .vb-deal{position:relative}
   .vb-deal__x{position:absolute;right:6px;top:6px;opacity:0;transition:opacity .12s;
@@ -485,17 +488,10 @@
               <span data-v3-combobox-label>{{ company.responsible|full_name|default:"—" }}</span>
             </b>
           </span>
+          {% if company.branch %}
           <span class="vb-hero__meta-dot"></span>
-          <span><b data-v3-combobox
-                   data-edit-url="{% url 'company_update' company_id=company.id %}"
-                   data-edit-param="branch"
-                   data-edit-current="{% if company.branch %}{{ company.branch.id }}{% endif %}"
-                   data-edit-clearable="1"
-                   data-edit-options='{{ branch_options_json|escape }}'
-                   title="Изменить подразделение">
-              <span data-v3-combobox-label>{{ company.branch.name|default:"— без подразд. —" }}</span>
-            </b>
-          </span>
+          <span title="Подразделение (редактируется на full-edit странице)"><b>{{ company.branch.name }}</b></span>
+          {% endif %}
         </div>
       </div>
 
@@ -559,12 +555,11 @@
           <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
         </button>
         <div class="vb-more-menu" id="vbMoreMenu" hidden>
-          <button type="button" data-v2-modal-open="/companies/{{ company.id }}/transfer-modal/v3/"
-                  data-v2-modal-title="Передать компанию">Передать менеджеру…</button>
+          <a href="/companies/{{ company.id }}/edit/">Редактировать всё (форма)…</a>
           <button type="button" data-act="copy-link">Копировать ссылку</button>
           <a href="{{ classic_url }}?classic=1">Открыть старую карточку</a>
           <div class="vb-more-menu__sep"></div>
-          <button type="button" class="is-danger" data-act="delete-company">Удалить компанию…</button>
+          <button type="button" class="is-danger" data-act="delete-company">Запросить удаление…</button>
         </div>
       </div>
     </div>
@@ -591,9 +586,10 @@
             <button class="vb-phone__cold-toggle"
                     data-v3-cold
                     data-cold-url="{% url 'company_cold_call_toggle' company_id=company.id %}"
+                    data-cold-reset-url="{% url 'company_cold_call_reset' company_id=company.id %}"
                     data-cold-row=".vb-phone"
-                    title="Пометить как холодный звонок">
-              {% if company.primary_contact_is_cold_call or company.primary_cold_marked_at %}холодный{% else %}+ холодный{% endif %}
+                    title="{% if company.primary_contact_is_cold_call %}Отмечен холодным{% if company.primary_cold_marked_by %} · {{ company.primary_cold_marked_by|full_name }}{% endif %}{% if company.primary_cold_marked_at %} · {{ company.primary_cold_marked_at|date:'d.m.Y' }}{% endif %}{% else %}Пометить как холодный звонок{% endif %}">
+              {% if company.primary_contact_is_cold_call %}холодный{% else %}+ холодный{% endif %}
             </button>
             {% else %}
             <span data-v3-edit
@@ -617,8 +613,10 @@
             <button class="vb-phone__cold-toggle"
                     data-v3-cold
                     data-cold-url="{% url 'company_phone_cold_call_toggle' company_phone_id=p.id %}"
-                    data-cold-row=".vb-phone">
-              {% if p.is_cold_call or p.cold_marked_at %}холодный{% else %}+ холодный{% endif %}
+                    data-cold-reset-url="{% url 'company_phone_cold_call_reset' company_phone_id=p.id %}"
+                    data-cold-row=".vb-phone"
+                    title="{% if p.is_cold_call %}Отмечен холодным{% if p.cold_marked_by %} · {{ p.cold_marked_by|full_name }}{% endif %}{% if p.cold_marked_at %} · {{ p.cold_marked_at|date:'d.m.Y' }}{% endif %}{% else %}Пометить как холодный звонок{% endif %}">
+              {% if p.is_cold_call %}холодный{% else %}+ холодный{% endif %}
             </button>
           </div>
         </div>
@@ -668,9 +666,10 @@
         </div>
 
         <form class="vb-qform vb-qform--hidden" id="vbContactForm" method="post"
-              action="{% url 'contact_create' company_id=company.id %}">
+              action="{% url 'contact_quick_create' company_id=company.id %}">
           {% csrf_token %}
-          <input type="text" class="vb-qform__in" name="name" placeholder="ФИО" required>
+          <input type="text" class="vb-qform__in" name="name"
+                 placeholder="Фамилия Имя (или «Иванов И.И.»)" required>
           <input type="text" class="vb-qform__in" name="position" placeholder="Должность (необязательно)">
           <div class="vb-qform__row">
             <input type="tel" class="vb-qform__in" name="phone" placeholder="Телефон">
@@ -687,22 +686,35 @@
           <div class="vb-contact__top">
             <span class="vb-contact__name">{{ c.name|default:"—" }}</span>
             {% if c.position %}<span class="vb-contact__pos">{{ c.position }}</span>{% endif %}
+            {% if c.is_cold_call %}
+              <span class="vb-contact__cold" title="{% if c.cold_marked_by %}{{ c.cold_marked_by|full_name }}, {% endif %}{{ c.cold_marked_at|date:'d.m.Y' }}">❄ холодный</span>
+            {% endif %}
           </div>
+          {% for ph in c.phones.all|slice:":2" %}
+          <div class="vb-contact__row vb-phone {% if ph.is_cold_call %}vb-phone--cold{% endif %}">
+            <a href="tel:{{ ph.value }}">{{ ph.value|format_phone }}</a>
+            <a href="tel:{{ ph.value }}" class="vb-call" title="Позвонить">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>
+            </a>
+            <button class="vb-phone__cold-toggle"
+                    data-v3-cold
+                    data-cold-url="{% url 'contact_phone_cold_call_toggle' contact_phone_id=ph.id %}"
+                    data-cold-reset-url="{% url 'contact_phone_cold_call_reset' contact_phone_id=ph.id %}"
+                    data-cold-row=".vb-phone"
+                    title="{% if ph.cold_marked_by %}{{ ph.cold_marked_by|full_name }}, {{ ph.cold_marked_at|date:'d.m.Y' }}{% else %}Пометить как холодный{% endif %}">
+              {% if ph.is_cold_call %}холодный{% else %}+ холодный{% endif %}
+            </button>
+          </div>
+          {% endfor %}
+          {% for em in c.emails.all|slice:":1" %}
           <div class="vb-contact__row">
-            {% for ph in c.phones.all|slice:":1" %}
-              <a href="tel:{{ ph.value }}">{{ ph.value|format_phone }}</a>
-              <a href="tel:{{ ph.value }}" class="vb-call" title="Позвонить">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>
-              </a>
-            {% endfor %}
-            {% for em in c.emails.all|slice:":1" %}
-              <a href="mailto:{{ em.value }}">{{ em.value }}</a>
-            {% endfor %}
+            <a href="mailto:{{ em.value }}">{{ em.value }}</a>
           </div>
+          {% endfor %}
           <button class="vb-contact__x" title="Удалить контакт"
                   data-v3-delete
                   data-delete-url="/contacts/{{ c.id }}/delete/"
-                  data-delete-confirm="Удалить контакт «{{ c.name }}»?">×</button>
+                  data-delete-confirm="Удалить контакт «{{ c.name|default:'—' }}»?">×</button>
         </div>
         {% empty %}
         <div class="vb-empty">Ещё нет ЛПР. <a href="#" data-v3-toggle-form="vbContactForm">+ добавить</a></div>
@@ -1082,7 +1094,7 @@
       if(!confirm('Отметить задачу выполненной?')) return;
       chk.classList.add('vb-task__chk--done');
       try {
-        await postForm('/tasks/' + taskId + '/set-status/', {status:'done'});
+        await postForm('/tasks/' + taskId + '/status/', {status:'done'});
         toast('Задача выполнена', 'ok');
         // row плавно скрываем
         const row = chk.closest('.vb-task');
@@ -1201,7 +1213,7 @@
     btn.addEventListener('click', async function(){
       if(!confirm('Запросить удаление компании? Запрос попадёт администратору на одобрение.')) return;
       try {
-        await postForm('/companies/' + COMPANY_ID + '/delete-request/create/', {});
+        await postForm('/companies/' + COMPANY_ID + '/delete-request/', {});
         toast('Запрос на удаление отправлен', 'ok');
         setTimeout(function(){ location.reload(); }, 600);
       } catch(err){ toast('Ошибка: ' + err.message, 'err'); }
