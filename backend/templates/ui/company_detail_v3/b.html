@@ -735,13 +735,12 @@
             <button type="submit" class="vb-abtn vb-abtn--primary">Добавить</button>
           </div>
         </form>
-        {# Основной телефон компании — popup-меню по клику #}
+        {# Основной телефон компании — popup-меню по клику (всегда) #}
         <div class="vb-p vb-phone {% if company.primary_contact_is_cold_call or company.primary_cold_marked_at %}vb-phone--cold{% endif %}">
           <div class="vb-p__k">Телефон</div>
           <div class="vb-p__v">
-            {% if company.phone %}
             <span data-v3-click-menu="phone"
-                  data-menu-value="{{ company.phone }}"
+                  data-menu-value="{{ company.phone|default:'' }}"
                   data-menu-edit-url="{% url 'company_main_phone_update' company_id=company.id %}"
                   data-menu-cold-url="{% url 'company_cold_call_toggle' company_id=company.id %}"
                   data-menu-cold-reset-url="{% url 'company_cold_call_reset' company_id=company.id %}"
@@ -750,16 +749,10 @@
                   title="Действия с номером">
               <span data-v3-edit
                     data-edit-url="{% url 'company_main_phone_update' company_id=company.id %}"
-                    data-edit-kind="main-phone">{{ company.phone|format_phone }}</span>
+                    data-edit-kind="main-phone"{% if not company.phone %} style="color:var(--v2-text-faint);font-style:italic"{% endif %}>{% if company.phone %}{{ company.phone|format_phone }}{% else %}+ телефон{% endif %}</span>
             </span>
             {% if company.primary_contact_is_cold_call %}
               <span class="vb-phone__cold-tag" title="{% if company.primary_cold_marked_by %}{{ company.primary_cold_marked_by|full_name }} · {% endif %}{{ company.primary_cold_marked_at|date:'d.m.Y' }}">❄ холодный</span>
-            {% endif %}
-            {% else %}
-            <span data-v3-edit
-                  data-edit-url="{% url 'company_main_phone_update' company_id=company.id %}"
-                  data-edit-kind="main-phone"
-                  style="color:var(--v2-text-faint);font-style:italic">+ телефон</span>
             {% endif %}
           </div>
         </div>
@@ -830,46 +823,30 @@
         <div class="vb-p">
           <div class="vb-p__k">Адрес</div>
           <div class="vb-p__v vb-p__v--multi">
-            {% if company.address %}
-              <span data-v3-click-menu="address"
-                    data-menu-value="{{ company.address }}"
-                    data-menu-edit-url="{% url 'company_inline_update' company_id=company.id %}"
-                    title="Действия с адресом">
-                <span data-v3-edit
-                      data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
-                      data-edit-field="address"
-                      data-edit-kind="inline">{{ company.address }}</span>
-              </span>
-            {% else %}
+            <span data-v3-click-menu="address"
+                  data-menu-value="{{ company.address|default:'' }}"
+                  data-menu-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+                  title="Действия с адресом">
               <span data-v3-edit
                     data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
                     data-edit-field="address"
-                    data-edit-kind="inline"
-                    style="color:var(--v2-text-faint);font-style:italic">—</span>
-            {% endif %}
+                    data-edit-kind="inline"{% if not company.address %} style="color:var(--v2-text-faint);font-style:italic"{% endif %}>{% if company.address %}{{ company.address }}{% else %}—{% endif %}</span>
+            </span>
           </div>
         </div>
         <div class="vb-p">
           <div class="vb-p__k">Сайт</div>
           <div class="vb-p__v">
-            {% if company.website %}
-              <span data-v3-click-menu="website"
-                    data-menu-value="{{ company.website }}"
-                    data-menu-edit-url="{% url 'company_inline_update' company_id=company.id %}"
-                    title="Действия с сайтом"
-                    style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">
-                <span data-v3-edit
-                      data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
-                      data-edit-field="website"
-                      data-edit-kind="inline">{{ company.website }}</span>
-              </span>
-            {% else %}
+            <span data-v3-click-menu="website"
+                  data-menu-value="{{ company.website|default:'' }}"
+                  data-menu-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+                  title="Действия с сайтом"
+                  style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">
               <span data-v3-edit
                     data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
                     data-edit-field="website"
-                    data-edit-kind="inline"
-                    style="color:var(--v2-text-faint);font-style:italic">—</span>
-            {% endif %}
+                    data-edit-kind="inline"{% if not company.website %} style="color:var(--v2-text-faint);font-style:italic"{% endif %}>{% if company.website %}{{ company.website }}{% else %}—{% endif %}</span>
+            </span>
           </div>
         </div>
       </div>
@@ -977,11 +954,12 @@
           <div class="vb-contact__row vb-phone {% if ph.is_cold_call %}vb-phone--cold{% endif %}">
             <span data-v3-click-menu="phone-extra"
                   data-menu-value="{{ ph.value }}"
+                  data-menu-context="{% if c.last_name or c.first_name %}{{ c.last_name }} {{ c.first_name }}{% else %}ЛПР{% endif %}{% if c.position %} · {{ c.position }}{% endif %}"
                   data-menu-cold-url="{% url 'contact_phone_cold_call_toggle' contact_phone_id=ph.id %}"
                   data-menu-cold-reset-url="{% url 'contact_phone_cold_call_reset' contact_phone_id=ph.id %}"
                   data-menu-is-cold="{% if ph.is_cold_call %}1{% else %}0{% endif %}"
                   data-menu-is-admin="{% if is_admin_user %}1{% else %}0{% endif %}"
-                  title="Действия с номером">{{ ph.value|format_phone }}</span>
+                  title="{% if c.last_name or c.first_name %}{{ c.last_name }} {{ c.first_name }}{% else %}ЛПР{% endif %}{% if c.position %}, {{ c.position }}{% endif %}">{{ ph.value|format_phone }}</span>
             {% if ph.is_cold_call %}
               <span class="vb-phone__cold-tag" title="{% if ph.cold_marked_by %}{{ ph.cold_marked_by|full_name }} · {% endif %}{{ ph.cold_marked_at|date:'d.m.Y' }}">❄ холодный</span>
             {% endif %}
@@ -991,7 +969,8 @@
           <div class="vb-contact__row">
             <span data-v3-click-menu="email"
                   data-menu-value="{{ em.value }}"
-                  title="Действия с email">{{ em.value }}</span>
+                  data-menu-context="{% if c.last_name or c.first_name %}{{ c.last_name }} {{ c.first_name }}{% else %}ЛПР{% endif %}{% if c.position %} · {{ c.position }}{% endif %}"
+                  title="{% if c.last_name or c.first_name %}{{ c.last_name }} {{ c.first_name }}{% else %}ЛПР{% endif %}{% if c.position %}, {{ c.position }}{% endif %}">{{ em.value }}</span>
           </div>
           {% endfor %}
           <button class="vb-contact__x" title="Удалить контакт"
@@ -1240,8 +1219,7 @@
           </div>
         </div>
         {% if contract_is_annual %}
-        {# Годовой договор: показ суммы вместо даты. Пороговые значения
-           (warn/danger) настраиваются в contract_type — см. services.py. #}
+        {% comment %}Годовой договор: сумма вместо даты. Пороги warn/danger настраиваются в contract_type (services.py).{% endcomment %}
         <div class="vb-p">
           <div class="vb-p__k">Сумма</div>
           <div class="vb-p__v" data-v3-edit

@@ -101,6 +101,11 @@
   .v3-menu__label{font-size:10.5px;color:var(--v2-text-muted);
     text-transform:uppercase;letter-spacing:.06em;padding:4px 14px 2px;
     font-weight:600}
+  /* Подзаголовок popup-меню: контекст (ФИО контакта, должность и т.д.) */
+  .v3-menu__ctx{padding:8px 14px 6px;font-size:11.5px;color:var(--v2-text-muted);
+    border-bottom:1px solid var(--v2-border);background:var(--v2-bg-soft);
+    font-weight:500;line-height:1.35;max-width:100%;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 
 <script nonce="{{ request.csp_nonce|default:'' }}">
@@ -176,11 +181,22 @@
 
     el.addEventListener('focus', function(){
       originalText = el.innerText.trim();
-      // Очищаем плейсхолдер «—» / «не задано» при фокусе
-      // чтобы пользователю не пришлось стирать его вручную.
+      // Очищаем плейсхолдер/подсказку при фокусе, чтобы пользователю не
+      // пришлось стирать вручную. Расширенный список (совместно с v3/b).
+      const txt = originalText.toLowerCase();
       const placeholders = ['—', '-', 'не задан', 'не задано', 'нет'];
-      if(placeholders.indexOf(originalText.toLowerCase()) >= 0){
+      const prefixPlaceholders = ['+ телефон', '+ email', '+ адрес', '+ сайт',
+        '+ комментарий', '+ имя', '+ ответственный', '+ статус', '+ договор',
+        '+ сумма', '+ тип', '+ подразделение'];
+      if(placeholders.indexOf(txt) >= 0){
         el.innerText = '';
+      } else {
+        for(let i = 0; i < prefixPlaceholders.length; i++){
+          if(txt.startsWith(prefixPlaceholders[i])){
+            el.innerText = '';
+            break;
+          }
+        }
       }
     });
     el.addEventListener('keydown', function(e){
@@ -783,6 +799,14 @@
 
     const menu = document.createElement('div');
     menu.className = 'v3-menu';
+    // Подзаголовок — кто/что для кого это значение (например, ФИО контакта)
+    const ctx = (trig.dataset.menuContext || '').trim();
+    if(ctx){
+      const hdr = document.createElement('div');
+      hdr.className = 'v3-menu__ctx';
+      hdr.textContent = ctx;
+      menu.appendChild(hdr);
+    }
     menu.appendChild(body);
     document.body.appendChild(menu);
     // Позиционирование под элементом
