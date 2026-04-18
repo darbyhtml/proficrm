@@ -71,6 +71,8 @@
 (function(){
   'use strict';
 
+  function _init(){
+
   // ── Helpers ──────────────────────────────────────────────────────
   function getCookie(name){
     const m = document.cookie.match('(?:^|; )' + name + '=([^;]*)');
@@ -488,5 +490,14 @@
 
   // Экспорт для точечного вызова снаружи
   window.V3Edit = { close: _closePop, toast: toast, post: _postForm };
+  } // end _init
+
+  // Если скрипт подключён до парсинга DOM (как partial в начале {% block content %}),
+  // ждём DOMContentLoaded. Иначе вызываем сразу.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _init);
+  } else {
+    _init();
+  }
 })();
 </script>

@@ -1292,6 +1292,7 @@
 <script nonce="{{ request.csp_nonce|default:'' }}">
 (function(){
   'use strict';
+  function _init(){
   const COMPANY_ID = "{{ company.id }}";
   function getCsrfTok(){
     let t = (document.cookie.match('(?:^|; )csrftoken=([^;]*)') || [])[1] || '';
@@ -1585,6 +1586,12 @@
     toast('Сохранено', 'ok');
     setTimeout(function(){ location.reload(); }, 400);
   });
+  } // end _init
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _init);
+  } else {
+    _init();
+  }
 })();
 </script>
 {% endblock %}
