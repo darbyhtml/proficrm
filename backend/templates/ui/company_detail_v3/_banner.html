@@ -1,14 +1,14 @@
-{# A/B/C switcher — вставляется во все 3 варианта. #}
+{# A/B/C switcher (preview-режим). Убирается в Этапе 6 (replace). #}
 <div class="v3-banner">
-  <span class="v3-banner__label">PREVIEW · V3</span>
+  <span class="v3-banner__label">PREVIEW</span>
   <div class="v3-banner__tabs">
     <a href="{% url 'company_detail_v3_preview' company_id=company.id variant='a' %}"
-       {% if variant == 'a' %}class="is-active"{% endif %}>A · NOTION</a>
+       {% if variant == 'a' %}class="is-active"{% endif %}>A · Notion</a>
     <a href="{% url 'company_detail_v3_preview' company_id=company.id variant='b' %}"
-       {% if variant == 'b' %}class="is-active"{% endif %}>B · LINEAR</a>
+       {% if variant == 'b' %}class="is-active"{% endif %}>B · Dashboard</a>
     <a href="{% url 'company_detail_v3_preview' company_id=company.id variant='c' %}"
-       {% if variant == 'c' %}class="is-active"{% endif %}>C · EDITORIAL</a>
+       {% if variant == 'c' %}class="is-active"{% endif %}>C · Editorial</a>
   </div>
-  <span class="v3-banner__note">Три варианта одних и тех же данных — выберите лучший</span>
-  <a href="{{ classic_url }}" class="v3-banner__back">← к старой карточке</a>
+  <span class="v3-banner__note">Превью нового дизайна карточки</span>
+  <a href="{{ classic_url }}" class="v3-banner__back">← к классической карточке</a>
 </div>
