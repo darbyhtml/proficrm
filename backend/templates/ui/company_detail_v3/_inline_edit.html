@@ -492,7 +492,7 @@
   window.V3Edit = { close: _closePop, toast: toast, post: _postForm };
   } // end _init
 
-  // Если скрипт подключён до парсинга DOM (как partial в начале {% block content %}),
+  // Если скрипт подключён до парсинга DOM (как partial в начале block-контента),
   // ждём DOMContentLoaded. Иначе вызываем сразу.
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', _init);
