@@ -1,0 +1,442 @@
+{# Этап 2 (2026-04-18): inline-edit engine для карточки компании v3.
+   3 компонента:
+     • ClickToEdit — [contenteditable] для коротких текстов (name/inn/address/
+       phone.value/phone.note/email.value/contact.name/contact.position)
+     • PopoverCombobox — поповер-селект с поиском для статуса/ответственного/
+       подразделения/сферы/тип_договора/регион
+     • DatePopover — <input type="date"> popover для contract_until
+
+   Все вызывают _v3Save() который:
+     – шлёт POST с CSRF
+     – ждёт JSON или редирект
+     – показывает V2Toast (или fallback alert)
+     – при ошибке восстанавливает прежнее значение
+#}
+<style nonce="{{ request.csp_nonce|default:'' }}">
+  /* Визуал при редактировании */
+  [data-v3-edit]:hover{outline:1px dashed var(--v2-primary-100);outline-offset:2px;cursor:text}
+  [data-v3-edit]:focus{outline:2px solid var(--v2-primary);outline-offset:2px;
+    background:var(--v2-primary-50);cursor:text}
+  [data-v3-edit].is-saving{opacity:.6;pointer-events:none}
+  [data-v3-edit].is-error{outline:2px solid var(--v2-danger);background:var(--v2-danger-50)}
+
+  /* Combobox trigger (любой элемент с data-v3-combobox) */
+  [data-v3-combobox]{cursor:pointer;user-select:none}
+  [data-v3-combobox]:hover{outline:1px dashed var(--v2-primary-100);outline-offset:2px}
+
+  /* Popover */
+  .v3-pop{position:absolute;z-index:100;background:var(--v2-bg);
+    border:1px solid var(--v2-border-strong);border-radius:var(--v2-radius);
+    box-shadow:var(--v2-shadow-lg);min-width:240px;max-width:360px;
+    display:flex;flex-direction:column;overflow:hidden;
+    animation:v3-pop-in .12s ease}
+  @keyframes v3-pop-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+  .v3-pop__search{border:0;border-bottom:1px solid var(--v2-border);
+    padding:9px 12px;font-size:13px;outline:none;font-family:inherit;
+    background:var(--v2-bg)}
+  .v3-pop__search::placeholder{color:var(--v2-text-faint)}
+  .v3-pop__list{max-height:280px;overflow-y:auto;padding:4px 0}
+  .v3-pop__opt{padding:7px 12px;font-size:13px;cursor:pointer;
+    color:var(--v2-text);display:flex;align-items:center;gap:8px;
+    transition:background .1s;line-height:1.4}
+  .v3-pop__opt:hover,.v3-pop__opt.is-active{background:var(--v2-primary-50)}
+  .v3-pop__opt.is-current{color:var(--v2-primary-dark);font-weight:500}
+  .v3-pop__opt.is-current::before{content:"✓";color:var(--v2-primary);margin-right:2px;font-weight:700}
+  .v3-pop__group{padding:6px 12px 3px;font-size:10.5px;color:var(--v2-text-muted);
+    text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+  .v3-pop__empty{padding:14px 12px;font-size:12.5px;color:var(--v2-text-faint);
+    text-align:center;font-style:italic}
+  .v3-pop__foot{border-top:1px solid var(--v2-border);padding:6px 8px;
+    display:flex;gap:6px;justify-content:flex-end}
+  .v3-pop__clear{font-size:11.5px;padding:4px 8px;background:none;border:0;
+    color:var(--v2-text-muted);cursor:pointer;border-radius:var(--v3-radius-xs);
+    font-family:inherit}
+  .v3-pop__clear:hover{background:var(--v2-bg-muted);color:var(--v2-danger)}
+
+  /* Date popover */
+  .v3-pop-date{padding:10px 12px;display:flex;gap:6px;align-items:center}
+  .v3-pop-date input[type="date"]{font:inherit;font-size:13px;padding:5px 8px;
+    border:1px solid var(--v2-border-strong);border-radius:var(--v2-radius-sm);
+    background:var(--v2-bg);color:var(--v2-text)}
+  .v3-pop-date button{font:inherit;font-size:12px;padding:5px 10px;
+    background:var(--v2-primary);color:#fff;border:0;
+    border-radius:var(--v2-radius-sm);cursor:pointer}
+  .v3-pop-date button.is-clear{background:var(--v2-bg-muted);color:var(--v2-text-muted)}
+  .v3-pop-date button:hover{background:var(--v2-primary-dark)}
+  .v3-pop-date button.is-clear:hover{background:var(--v2-border);color:var(--v2-danger)}
+</style>
+
+<script nonce="{{ request.csp_nonce|default:'' }}">
+(function(){
+  'use strict';
+
+  // ── Helpers ──────────────────────────────────────────────────────
+  function getCookie(name){
+    const m = document.cookie.match('(?:^|; )' + name + '=([^;]*)');
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function toast(msg, type){
+    if(window.V2Toast){ V2Toast.show(msg, {type: type||'ok'}); }
+    else if(window.uiToast){ window.uiToast(msg, type||'success'); }
+    else console.log('[toast]', msg);
+  }
+  const CSRF = getCookie('csrftoken');
+
+  async function _postForm(url, bodyObj){
+    const body = new URLSearchParams(bodyObj).toString();
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': CSRF,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: body,
+      credentials: 'same-origin',
+    });
+    // Django view может вернуть 302-redirect (classic paths) или JSON
+    // Если 3xx через fetch — обрабатываем как успех (non-AJAX view)
+    if(resp.ok){
+      const ctype = resp.headers.get('Content-Type') || '';
+      if(ctype.indexOf('application/json') >= 0){
+        return await resp.json();
+      }
+      return {ok: true};
+    }
+    // Попробуем прочитать JSON ошибок
+    try {
+      const data = await resp.json();
+      throw new Error(data.error || data.detail || ('HTTP ' + resp.status));
+    } catch(e){
+      throw new Error('HTTP ' + resp.status);
+    }
+  }
+
+  // ── ClickToEdit: contenteditable с data-v3-edit ───────────────────
+  document.querySelectorAll('[data-v3-edit]').forEach(function(el){
+    if(el.dataset.v3Wired) return;
+    el.dataset.v3Wired = '1';
+    el.setAttribute('contenteditable', 'true');
+    el.setAttribute('spellcheck', 'false');
+    el.tabIndex = 0;
+
+    let originalText = el.innerText.trim();
+
+    el.addEventListener('focus', function(){
+      originalText = el.innerText.trim();
+    });
+    el.addEventListener('keydown', function(e){
+      if(e.key === 'Enter'){ e.preventDefault(); el.blur(); }
+      if(e.key === 'Escape'){ e.preventDefault(); el.innerText = originalText; el.blur(); }
+    });
+    el.addEventListener('blur', async function(){
+      const newText = el.innerText.trim();
+      if(newText === originalText) return;
+
+      const url = el.dataset.editUrl;
+      const field = el.dataset.editField;
+      const kind = el.dataset.editKind || 'inline';
+      if(!url){ console.warn('data-edit-url missing'); return; }
+
+      el.classList.add('is-saving');
+      let body = {};
+      if(kind === 'inline') body = {field: field, value: newText};
+      else if(kind === 'phone-value') body = {value: newText};
+      else if(kind === 'phone-note') body = {note: newText};
+      else if(kind === 'email-value') body = {value: newText};
+      else if(kind === 'main-phone') body = {phone: newText};
+      else if(kind === 'main-email') body = {email: newText};
+      else body = {value: newText};
+
+      try {
+        await _postForm(url, body);
+        originalText = newText;
+        el.classList.remove('is-saving');
+        toast('Сохранено', 'ok');
+      } catch(err){
+        el.classList.remove('is-saving');
+        el.classList.add('is-error');
+        setTimeout(function(){ el.classList.remove('is-error'); }, 1500);
+        el.innerText = originalText;
+        toast('Ошибка: ' + (err.message || 'не удалось сохранить'), 'err');
+      }
+    });
+  });
+
+  // ── PopoverCombobox ──────────────────────────────────────────────
+  // <element data-v3-combobox
+  //          data-edit-url="..."
+  //          data-edit-param="status" (имя POST-поля)
+  //          data-edit-current="12"
+  //          data-edit-options='[{"id":"1","label":"А"},{"id":"2","label":"Б","group":"EKB"}]'
+  //          data-edit-clearable="1" >
+
+  let _openedPop = null;
+  function _closePop(){
+    if(_openedPop){ _openedPop.remove(); _openedPop = null; }
+  }
+  document.addEventListener('click', function(e){
+    if(_openedPop && !_openedPop.contains(e.target) && !e.target.closest('[data-v3-combobox]')){
+      _closePop();
+    }
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && _openedPop){ _closePop(); }
+  });
+
+  function _openCombobox(trigger){
+    _closePop();
+    const url = trigger.dataset.editUrl;
+    const paramName = trigger.dataset.editParam || 'value';
+    const currentId = trigger.dataset.editCurrent || '';
+    const clearable = trigger.dataset.editClearable === '1';
+    let options = [];
+    try { options = JSON.parse(trigger.dataset.editOptions || '[]'); }
+    catch(e){ console.error('bad options JSON', e); return; }
+
+    const pop = document.createElement('div');
+    pop.className = 'v3-pop';
+    // Search field
+    const search = document.createElement('input');
+    search.type = 'text';
+    search.className = 'v3-pop__search';
+    search.placeholder = 'Поиск…';
+    pop.appendChild(search);
+    const list = document.createElement('div');
+    list.className = 'v3-pop__list';
+    pop.appendChild(list);
+
+    function render(filter){
+      list.innerHTML = '';
+      const f = (filter || '').toLowerCase().trim();
+      let lastGroup = null;
+      let shown = 0;
+      options.forEach(function(opt){
+        if(f && opt.label.toLowerCase().indexOf(f) < 0) return;
+        if(opt.group && opt.group !== lastGroup){
+          lastGroup = opt.group;
+          const g = document.createElement('div');
+          g.className = 'v3-pop__group';
+          g.textContent = opt.group;
+          list.appendChild(g);
+        }
+        const o = document.createElement('div');
+        o.className = 'v3-pop__opt';
+        if(String(opt.id) === String(currentId)) o.classList.add('is-current');
+        o.textContent = opt.label;
+        o.addEventListener('click', async function(){
+          await _saveCombobox(trigger, url, paramName, opt.id, opt.label);
+        });
+        list.appendChild(o);
+        shown++;
+      });
+      if(!shown){
+        const e = document.createElement('div');
+        e.className = 'v3-pop__empty';
+        e.textContent = 'Ничего не найдено';
+        list.appendChild(e);
+      }
+    }
+    render('');
+    search.addEventListener('input', function(){ render(search.value); });
+
+    if(clearable && currentId){
+      const foot = document.createElement('div');
+      foot.className = 'v3-pop__foot';
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'v3-pop__clear';
+      clearBtn.textContent = '× Очистить';
+      clearBtn.addEventListener('click', async function(){
+        await _saveCombobox(trigger, url, paramName, '', '— не задано —');
+      });
+      foot.appendChild(clearBtn);
+      pop.appendChild(foot);
+    }
+
+    document.body.appendChild(pop);
+    // Position под trigger
+    const r = trigger.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - r.bottom;
+    const popRect = pop.getBoundingClientRect();
+    if(spaceBelow < 320 && r.top > popRect.height + 10){
+      pop.style.top = (window.scrollY + r.top - popRect.height - 4) + 'px';
+    } else {
+      pop.style.top = (window.scrollY + r.bottom + 4) + 'px';
+    }
+    pop.style.left = (window.scrollX + r.left) + 'px';
+    _openedPop = pop;
+    setTimeout(function(){ search.focus(); }, 10);
+  }
+
+  async function _saveCombobox(trigger, url, paramName, newId, newLabel){
+    trigger.style.opacity = '0.6';
+    try {
+      const body = {};
+      body[paramName] = newId;
+      await _postForm(url, body);
+      trigger.dataset.editCurrent = newId;
+      // Заменяем только текстовое содержимое, сохраняя вложенные элементы-украшения
+      const textSpan = trigger.querySelector('[data-v3-combobox-label]') || trigger;
+      textSpan.textContent = newLabel;
+      trigger.style.opacity = '';
+      _closePop();
+      toast('Обновлено', 'ok');
+    } catch(err){
+      trigger.style.opacity = '';
+      toast('Ошибка: ' + (err.message || 'не удалось'), 'err');
+    }
+  }
+
+  document.querySelectorAll('[data-v3-combobox]').forEach(function(trigger){
+    if(trigger.dataset.v3Wired) return;
+    trigger.dataset.v3Wired = '1';
+    trigger.setAttribute('role', 'button');
+    trigger.tabIndex = 0;
+    trigger.addEventListener('click', function(e){
+      e.stopPropagation();
+      _openCombobox(trigger);
+    });
+    trigger.addEventListener('keydown', function(e){
+      if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); _openCombobox(trigger); }
+    });
+  });
+
+  // ── DatePopover ──────────────────────────────────────────────────
+  // <element data-v3-date-edit data-edit-url="..."
+  //          data-edit-param="contract_until"
+  //          data-edit-current="2026-12-31">
+  document.querySelectorAll('[data-v3-date-edit]').forEach(function(trigger){
+    if(trigger.dataset.v3Wired) return;
+    trigger.dataset.v3Wired = '1';
+    trigger.style.cursor = 'pointer';
+    trigger.setAttribute('role', 'button');
+    trigger.tabIndex = 0;
+    trigger.addEventListener('click', function(e){
+      e.stopPropagation();
+      _closePop();
+      const pop = document.createElement('div');
+      pop.className = 'v3-pop v3-pop-date';
+      const input = document.createElement('input');
+      input.type = 'date';
+      input.value = trigger.dataset.editCurrent || '';
+      const saveBtn = document.createElement('button');
+      saveBtn.textContent = 'OK';
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'is-clear';
+      clearBtn.textContent = '×';
+      pop.appendChild(input);
+      pop.appendChild(saveBtn);
+      pop.appendChild(clearBtn);
+      document.body.appendChild(pop);
+      const r = trigger.getBoundingClientRect();
+      pop.style.top = (window.scrollY + r.bottom + 4) + 'px';
+      pop.style.left = (window.scrollX + r.left) + 'px';
+      _openedPop = pop;
+      setTimeout(function(){ input.focus(); }, 10);
+
+      async function saveDate(newVal){
+        const url = trigger.dataset.editUrl;
+        const paramName = trigger.dataset.editParam || 'contract_until';
+        try {
+          const body = {};
+          body[paramName] = newVal;
+          await _postForm(url, body);
+          trigger.dataset.editCurrent = newVal;
+          if(newVal){
+            const parts = newVal.split('-');
+            trigger.textContent = parts[2] + '.' + parts[1] + '.' + parts[0];
+          } else {
+            trigger.textContent = '—';
+          }
+          _closePop();
+          toast('Дата обновлена', 'ok');
+        } catch(err){
+          toast('Ошибка: ' + (err.message || 'не удалось'), 'err');
+        }
+      }
+      saveBtn.addEventListener('click', function(){ saveDate(input.value); });
+      clearBtn.addEventListener('click', function(){ saveDate(''); });
+      input.addEventListener('keydown', function(ev){
+        if(ev.key === 'Enter'){ ev.preventDefault(); saveDate(input.value); }
+      });
+    });
+  });
+
+  // ── Cold-call toggle ────────────────────────────────────────────
+  // <button data-v3-cold
+  //         data-cold-url="/company-phones/<id>/cold-call/toggle/"
+  //         data-cold-row=".vb-phone">   ← selector для родительской строки (чтобы
+  //                                         переключить класс .vb-phone--cold)
+  document.querySelectorAll('[data-v3-cold]').forEach(function(btn){
+    if(btn.dataset.v3Wired) return;
+    btn.dataset.v3Wired = '1';
+    btn.addEventListener('click', async function(e){
+      e.preventDefault();
+      if(btn.dataset.busy === '1') return;
+      const url = btn.dataset.coldUrl;
+      const rowSel = btn.dataset.coldRow || '.vb-phone';
+      const row = btn.closest(rowSel);
+      if(!url) return;
+
+      // Confirm: перевод в холодный, снятие — без confirm
+      const isColdNow = row && row.classList.contains('vb-phone--cold');
+      if(!isColdNow){
+        if(!confirm('Отметить звонок как холодный?')) return;
+      }
+
+      btn.dataset.busy = '1';
+      btn.style.opacity = '0.6';
+      try {
+        await _postForm(url, {});
+        if(row) row.classList.toggle('vb-phone--cold');
+        btn.textContent = row && row.classList.contains('vb-phone--cold') ? 'холодный' : '+ холодный';
+        toast(row && row.classList.contains('vb-phone--cold') ? 'Отмечено как холодный' : 'Отметка снята', 'ok');
+      } catch(err){
+        toast('Ошибка: ' + (err.message || 'не удалось'), 'err');
+      } finally {
+        btn.dataset.busy = '0';
+        btn.style.opacity = '';
+      }
+    });
+  });
+
+  // ── Call phone через CRMProfiDialer (вместо простого tel:) ──────
+  // Если установлен phone-bridge — шлём на телефон оператора; иначе href="tel:"
+  // по-умолчанию отработает браузерно.
+  document.querySelectorAll('.vb-call').forEach(function(btn){
+    if(btn.dataset.v3Wired) return;
+    btn.dataset.v3Wired = '1';
+    btn.addEventListener('click', async function(e){
+      const tel = btn.getAttribute('href') || '';
+      const phone = tel.replace(/^tel:/, '').trim();
+      if(!phone) return;
+      // Пробуем через phonebridge (CRMProfiDialer). Если нет — tel: сработает сам.
+      try {
+        const body = new URLSearchParams({phone: phone, company_id: '{{ company.id }}'});
+        const resp = await fetch('/phone/call/', {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': CSRF,
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          body: body.toString(),
+          credentials: 'same-origin',
+        });
+        if(resp.ok){
+          const data = await resp.json().catch(() => ({}));
+          if(data && data.ok){
+            e.preventDefault();
+            toast('Отправлено на телефон ✓', 'ok');
+            return;
+          }
+        }
+      } catch(_){}
+      // Fallback на tel: (браузер откроет стандартный вызов)
+    });
+  });
+
+  // Экспорт для точечного вызова снаружи
+  window.V3Edit = { close: _closePop, toast: toast, post: _postForm };
+})();
+</script>

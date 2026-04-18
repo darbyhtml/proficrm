@@ -7,16 +7,23 @@ URL: /companies/<uuid>/v3/<a|b|c>/
 """
 from __future__ import annotations
 
+import json
 import logging
 from datetime import timedelta
 
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 
-from companies.models import Company, CompanyDeal, CompanyNote, Contact
+from accounts.models import Branch
+from companies.models import (
+    Company, CompanyDeal, CompanyNote, CompanySphere, CompanyStatus, Contact, ContractType,
+)
 from tasksapp.models import Task
+
+User = get_user_model()
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +137,40 @@ def company_detail_v3_preview(
         else:
             contract_level = "ok"
 
+    # Справочники для combobox'ов (JSON-сериализуем прямо тут, чтобы шаблон
+    # мог встроить их в data-edit-options)
+    status_options = [
+        {"id": str(s.id), "label": s.name}
+        for s in CompanyStatus.objects.order_by("sort_order", "name")
+    ]
+    sphere_options = [
+        {"id": str(s.id), "label": s.name}
+        for s in CompanySphere.objects.order_by("name")
+    ]
+    contract_type_options = [
+        {"id": str(ct.id), "label": ct.name}
+        for ct in ContractType.objects.order_by("name")
+    ]
+    branch_options = [
+        {"id": str(b.id), "label": b.name}
+        for b in Branch.objects.order_by("name")
+    ]
+    # Менеджеры для «Ответственный» — активные, с группировкой по подразделению
+    resp_qs = (
+        User.objects.filter(is_active=True)
+        .select_related("branch")
+        .exclude(role=User.Role.ADMIN)
+        .order_by("branch__name", "last_name", "first_name")
+    )
+    responsible_options = [
+        {
+            "id": str(u.id),
+            "label": u.get_full_name() or u.username,
+            "group": u.branch.name if u.branch_id else "Без подразделения",
+        }
+        for u in resp_qs
+    ]
+
     ctx = {
         "company": company,
         "variant": variant,
@@ -142,6 +183,12 @@ def company_detail_v3_preview(
         "contract_days_left": contract_days_left,
         "contract_level": contract_level,
         "classic_url": f"/companies/{company.id}/",
+        # JSON-опции для data-edit-options (dumps с ensure_ascii=False для кириллицы)
+        "status_options_json": json.dumps(status_options, ensure_ascii=False),
+        "sphere_options_json": json.dumps(sphere_options, ensure_ascii=False),
+        "contract_type_options_json": json.dumps(contract_type_options, ensure_ascii=False),
+        "branch_options_json": json.dumps(branch_options, ensure_ascii=False),
+        "responsible_options_json": json.dumps(responsible_options, ensure_ascii=False),
     }
 
     template_map = {

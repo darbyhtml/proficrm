@@ -311,6 +311,7 @@
 {% block content %}
 <div class="vb">
   {% include "ui/company_detail_v3/_banner.html" %}
+  {% include "ui/company_detail_v3/_inline_edit.html" %}
 
   {# ═════════════════════ HERO ═════════════════════ #}
   <section class="vb-hero">
@@ -322,37 +323,71 @@
 
     <div class="vb-hero__row">
       <div class="vb-hero__left">
-        <h1 class="vb-hero__name" contenteditable="true" data-edit-field="name"
-            spellcheck="false">{{ company.name }}</h1>
+        <h1 class="vb-hero__name"
+            data-v3-edit
+            data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+            data-edit-field="name"
+            data-edit-kind="inline">{{ company.name }}</h1>
         <div class="vb-hero__meta">
-          <span>ИНН <b contenteditable="true" data-edit-field="inn">{{ company.inn|default:"—" }}</b></span>
+          <span>ИНН
+            <b data-v3-edit
+               data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+               data-edit-field="inn"
+               data-edit-kind="inline">{{ company.inn|default:"—" }}</b>
+          </span>
           <span class="vb-hero__meta-dot"></span>
-          {% if company.status %}
-            <span class="vb-status">● {{ company.status.name }}</span>
-          {% else %}
-            <span class="vb-status vb-status--empty">○ без статуса</span>
-          {% endif %}
+          <span class="vb-status {% if not company.status %}vb-status--empty{% endif %}"
+                data-v3-combobox
+                data-edit-url="{% url 'company_update' company_id=company.id %}"
+                data-edit-param="status"
+                data-edit-current="{% if company.status %}{{ company.status.id }}{% endif %}"
+                data-edit-clearable="1"
+                data-edit-options='{{ status_options_json|escape }}'
+                title="Изменить статус">
+            {% if company.status %}● <span data-v3-combobox-label>{{ company.status.name }}</span>
+            {% else %}○ <span data-v3-combobox-label>без статуса</span>{% endif %}
+          </span>
           <span class="vb-hero__meta-dot"></span>
-          <span>Ведёт <b>{{ company.responsible|full_name|default:"—" }}</b></span>
-          {% if company.branch %}
-            <span class="vb-hero__meta-dot"></span>
-            <span>{{ company.branch.name }}</span>
-          {% endif %}
+          <span>Ведёт
+            <b data-v3-combobox
+               data-edit-url="{% url 'company_transfer' company_id=company.id %}"
+               data-edit-param="responsible_id"
+               data-edit-current="{% if company.responsible %}{{ company.responsible.id }}{% endif %}"
+               data-edit-options='{{ responsible_options_json|escape }}'
+               title="Передать другому менеджеру">
+              <span data-v3-combobox-label>{{ company.responsible|full_name|default:"—" }}</span>
+            </b>
+          </span>
+          <span class="vb-hero__meta-dot"></span>
+          <span><b data-v3-combobox
+                   data-edit-url="{% url 'company_update' company_id=company.id %}"
+                   data-edit-param="branch"
+                   data-edit-current="{% if company.branch %}{{ company.branch.id }}{% endif %}"
+                   data-edit-clearable="1"
+                   data-edit-options='{{ branch_options_json|escape }}'
+                   title="Изменить подразделение">
+              <span data-v3-combobox-label>{{ company.branch.name|default:"— без подразд. —" }}</span>
+            </b>
+          </span>
         </div>
       </div>
 
       <div class="vb-hero__kpis">
         <div class="vb-kpi {% if contract_level == 'expired' or contract_level == 'danger' %}vb-kpi--danger{% elif contract_level == 'warn' %}vb-kpi--warn{% elif contract_level == 'ok' %}vb-kpi--accent{% endif %}">
           <div class="vb-kpi__l">Договор</div>
-          {% if company.contract_until %}
-            <div class="vb-kpi__v">{{ company.contract_until|date:"d.m.Y" }}</div>
-            <div class="vb-kpi__sub">
-              {% if contract_level == 'expired' %}истёк{% else %}ещё {{ contract_days_left }} дн.{% endif %}
-            </div>
-          {% else %}
-            <div class="vb-kpi__v" style="color:var(--v2-text-faint)">—</div>
-            <div class="vb-kpi__sub">не заключён</div>
-          {% endif %}
+          <div class="vb-kpi__v"
+               data-v3-date-edit
+               data-edit-url="{% url 'company_contract_update' company_id=company.id %}"
+               data-edit-param="contract_until"
+               data-edit-current="{% if company.contract_until %}{{ company.contract_until|date:'Y-m-d' }}{% endif %}"
+               title="Изменить дату окончания договора">
+            {% if company.contract_until %}{{ company.contract_until|date:"d.m.Y" }}{% else %}—{% endif %}
+          </div>
+          <div class="vb-kpi__sub">
+            {% if contract_level == 'expired' %}истёк
+            {% elif company.contract_until %}ещё {{ contract_days_left }} дн.
+            {% else %}не заключён{% endif %}
+          </div>
         </div>
         <div class="vb-kpi {% if open_tasks %}vb-kpi--accent{% endif %}">
           <div class="vb-kpi__l">Задач</div>
@@ -405,58 +440,86 @@
           <span class="vb-sec__t"><b>Связь</b> с компанией</span>
           <button class="vb-sec__add" title="Добавить телефон">+</button>
         </div>
-        {% if company.phone %}
+        {# Основной телефон компании #}
         <div class="vb-p vb-phone {% if company.primary_contact_is_cold_call or company.primary_cold_marked_at %}vb-phone--cold{% endif %}">
           <div class="vb-p__k">Телефон</div>
           <div class="vb-p__v">
+            {% if company.phone %}
             <a href="tel:{{ company.phone }}">{{ company.phone|format_phone }}</a>
             <a href="tel:{{ company.phone }}" class="vb-call" title="Позвонить">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>
             </a>
-            <button class="vb-phone__cold-toggle" title="Пометить как холодный звонок" data-cold="company-primary">
+            <button class="vb-phone__cold-toggle"
+                    data-v3-cold
+                    data-cold-url="{% url 'company_cold_call_toggle' company_id=company.id %}"
+                    data-cold-row=".vb-phone"
+                    title="Пометить как холодный звонок">
               {% if company.primary_contact_is_cold_call or company.primary_cold_marked_at %}холодный{% else %}+ холодный{% endif %}
             </button>
+            {% else %}
+            <span data-v3-edit
+                  data-edit-url="{% url 'company_main_phone_update' company_id=company.id %}"
+                  data-edit-kind="main-phone"
+                  style="color:var(--v2-text-faint);font-style:italic">+ телефон</span>
+            {% endif %}
           </div>
         </div>
-        {% endif %}
         {% for p in company.phones.all|slice:":3" %}
         <div class="vb-p vb-phone {% if p.is_cold_call or p.cold_marked_at %}vb-phone--cold{% endif %}">
-          <div class="vb-p__k">{{ p.note|default:"Ещё"|truncatechars:12 }}</div>
+          <div class="vb-p__k" data-v3-edit
+               data-edit-url="{% url 'company_phone_comment_update' company_phone_id=p.id %}"
+               data-edit-kind="phone-note"
+               title="Комментарий к номеру">{{ p.note|default:"Ещё"|truncatechars:12 }}</div>
           <div class="vb-p__v">
             <a href="tel:{{ p.value }}">{{ p.value|format_phone }}</a>
             <a href="tel:{{ p.value }}" class="vb-call" title="Позвонить">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>
             </a>
-            <button class="vb-phone__cold-toggle" data-cold="company-phone" data-id="{{ p.id }}">
+            <button class="vb-phone__cold-toggle"
+                    data-v3-cold
+                    data-cold-url="{% url 'company_phone_cold_call_toggle' company_phone_id=p.id %}"
+                    data-cold-row=".vb-phone">
               {% if p.is_cold_call or p.cold_marked_at %}холодный{% else %}+ холодный{% endif %}
             </button>
           </div>
         </div>
         {% endfor %}
-        {% if company.email %}
+        {# Основной email #}
         <div class="vb-p">
           <div class="vb-p__k">Email</div>
-          <div class="vb-p__v"><a href="mailto:{{ company.email }}">{{ company.email }}</a></div>
+          <div class="vb-p__v">
+            {% if company.email %}
+              <a href="mailto:{{ company.email }}">{{ company.email }}</a>
+            {% else %}
+              <span data-v3-edit
+                    data-edit-url="{% url 'company_main_email_update' company_id=company.id %}"
+                    data-edit-kind="main-email"
+                    style="color:var(--v2-text-faint);font-style:italic">+ email</span>
+            {% endif %}
+          </div>
         </div>
-        {% endif %}
         {% for e in company.emails.all|slice:":2" %}
         <div class="vb-p">
           <div class="vb-p__k">{{ e.note|default:"Ещё"|truncatechars:12 }}</div>
           <div class="vb-p__v"><a href="mailto:{{ e.value }}">{{ e.value }}</a></div>
         </div>
         {% endfor %}
-        {% if company.address %}
         <div class="vb-p">
           <div class="vb-p__k">Адрес</div>
-          <div class="vb-p__v vb-p__v--multi">{{ company.address }}</div>
+          <div class="vb-p__v vb-p__v--multi"
+               data-v3-edit
+               data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+               data-edit-field="address"
+               data-edit-kind="inline">{{ company.address|default:"—" }}</div>
         </div>
-        {% endif %}
-        {% if company.website %}
         <div class="vb-p">
           <div class="vb-p__k">Сайт</div>
-          <div class="vb-p__v"><a href="{{ company.website|external_url }}" target="_blank" rel="noopener">{{ company.website }}</a></div>
+          <div class="vb-p__v"
+               data-v3-edit
+               data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+               data-edit-field="website"
+               data-edit-kind="inline">{{ company.website|default:"—" }}</div>
         </div>
-        {% endif %}
       </div>
 
       <div class="vb-sec">
@@ -552,20 +615,28 @@
         <div class="vb-sec__h">
           <span class="vb-sec__t"><b>Договор</b></span>
         </div>
-        {% if company.contract_until %}
         <div class="vb-p">
-          <div class="vb-p__k">Действует</div>
-          <div class="vb-p__v">до {{ company.contract_until|date:"d.m.Y" }}</div>
+          <div class="vb-p__k">Действует до</div>
+          <div class="vb-p__v"
+               data-v3-date-edit
+               data-edit-url="{% url 'company_contract_update' company_id=company.id %}"
+               data-edit-param="contract_until"
+               data-edit-current="{% if company.contract_until %}{{ company.contract_until|date:'Y-m-d' }}{% endif %}">
+            {% if company.contract_until %}{{ company.contract_until|date:"d.m.Y" }}{% else %}—{% endif %}
+          </div>
         </div>
-        {% if company.contract_type %}
         <div class="vb-p">
           <div class="vb-p__k">Тип</div>
-          <div class="vb-p__v">{{ company.contract_type.name }}</div>
+          <div class="vb-p__v"
+               data-v3-combobox
+               data-edit-url="{% url 'company_contract_update' company_id=company.id %}"
+               data-edit-param="contract_type"
+               data-edit-current="{% if company.contract_type %}{{ company.contract_type.id }}{% endif %}"
+               data-edit-clearable="1"
+               data-edit-options='{{ contract_type_options_json|escape }}'>
+            <span data-v3-combobox-label>{{ company.contract_type.name|default:"—" }}</span>
+          </div>
         </div>
-        {% endif %}
-        {% else %}
-        <div class="vb-empty">Договор не заключён. <a href="#" data-act="edit-contract">+ указать</a></div>
-        {% endif %}
       </div>
 
       <div class="vb-sec">
