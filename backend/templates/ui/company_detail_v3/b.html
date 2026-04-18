@@ -29,7 +29,7 @@
 
   .vb-hero__row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:28px;
     align-items:flex-start}
-  @media (max-width:1100px){.vb-hero__row{grid-template-columns:1fr}}
+  @media (max-width:1280px){.vb-hero__row{grid-template-columns:1fr}}
 
   .vb-hero__left{min-width:0}
   .vb-hero__name{font-size:26px;font-weight:700;letter-spacing:-0.02em;
@@ -58,7 +58,8 @@
     border-color:var(--v2-border)}
 
   /* KPI-пилюли (правая часть hero) */
-  .vb-hero__kpis{display:flex;gap:8px;flex-wrap:wrap}
+  .vb-hero__kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(124px,1fr));gap:8px}
+  @media (min-width:1281px){.vb-hero__kpis{display:flex;flex-wrap:wrap}}
   .vb-kpi{background:var(--v2-bg);border:1px solid var(--v2-border);
     border-radius:var(--v2-radius);padding:9px 14px;min-width:124px;
     transition:border-color .12s,box-shadow .12s;cursor:default}
@@ -251,9 +252,9 @@
     padding-top:2px}
 
   /* ─── Task row (центр) ─── */
-  .vb-task{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;
-    padding:9px 10px;border-bottom:1px solid var(--v2-border);cursor:pointer;
-    font-size:13px;transition:background .12s;
+  .vb-task{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:10px;align-items:center;
+    padding:9px 10px;border-bottom:1px solid var(--v2-border);
+    font-size:13px;transition:background .12s;position:relative;
     margin:0 -10px;border-radius:var(--v3-radius-xs)}
   .vb-task:hover{background:var(--v2-bg-soft)}
   .vb-task:last-child{border-bottom:none}
@@ -407,7 +408,6 @@
   .vb-more-menu__sep{height:1px;background:var(--v2-border);margin:3px 0}
 
   /* Task row */
-  .vb-task{position:relative;grid-template-columns:auto 1fr auto auto !important}
   .vb-task__body{cursor:pointer;min-width:0}
   .vb-task__chk{cursor:pointer}
   .vb-task__chk:hover{border-color:var(--v2-primary)}
@@ -426,6 +426,29 @@
   /* Timeline load-more */
   .vb-tl-more{padding:10px 0;text-align:center}
   .vb-tl-more .vb-abtn{height:30px;padding:0 16px;font-size:12.5px}
+
+  /* Accessibility: focus-visible единый паттерн для всех vb-* кнопок */
+  .vb-abtn:focus-visible,
+  .vb-sec__add:focus-visible,
+  .vb-note__btn:focus-visible,
+  .vb-task__a:focus-visible,
+  .vb-tabs__t:focus-visible,
+  .vb-phone__cold-toggle:focus-visible,
+  .vb-copy-btn:focus-visible,
+  .vb-call:focus-visible,
+  .vb-more-menu button:focus-visible,
+  .vb-more-menu a:focus-visible{
+    outline:2px solid var(--v2-primary);outline-offset:2px;border-radius:var(--v3-radius-xs)}
+
+  /* Print styles: скрываем интерактивные элементы */
+  @media print {
+    .vb-hero__actions, .vb-more-menu, .vb-tabs,
+    .vb-task__actions, .vb-note__actions, .vb-sec__add,
+    .vb-copy-btn, .vb-phone__cold-toggle, .vb-note-form,
+    .vb-qform, .v3-banner, #vbMoreAnchor{display:none !important}
+    .vb-note__editor{display:none !important}
+    .vb{background:#fff}
+  }
 
   /* Copy-to-clipboard micro-button */
   .vb-copy-btn{background:none;border:0;padding:2px 5px;cursor:pointer;
@@ -610,11 +633,13 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
         Заметка
       </button>
-      <button class="vb-abtn" data-act="new-deal">
+      <button class="vb-abtn" data-v3-toggle-form="vbDealForm"
+              data-v3-switch-tab="" data-v3-scroll-to="vbDealForm">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
         Сделка
       </button>
-      <button class="vb-abtn" data-act="new-contact">
+      <button class="vb-abtn" data-v3-toggle-form="vbContactForm"
+              data-v3-scroll-to="vbContactForm">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0116 0"/></svg>
         ЛПР
       </button>
@@ -641,8 +666,20 @@
       <div class="vb-sec">
         <div class="vb-sec__h">
           <span class="vb-sec__t"><b>Связь</b> с компанией</span>
-          <button class="vb-sec__add" title="Добавить телефон">+</button>
+          <button class="vb-sec__add" data-v3-toggle-form="vbPhoneForm" title="Добавить телефон">+</button>
         </div>
+
+        <form class="vb-qform vb-qform--hidden" id="vbPhoneForm" method="post"
+              action="{% url 'company_phone_create' company_id=company.id %}">
+          {% csrf_token %}
+          <input type="tel" class="vb-qform__in" name="phone"
+                 placeholder="+7 (999) 123-45-67" required>
+          <input type="text" class="vb-qform__in" name="comment" placeholder="Комментарий (необязательно)">
+          <div class="vb-qform__foot">
+            <button type="button" class="vb-qform__cancel" data-v3-close-form="vbPhoneForm">Отмена</button>
+            <button type="submit" class="vb-abtn vb-abtn--primary">Добавить</button>
+          </div>
+        </form>
         {# Основной телефон компании #}
         <div class="vb-p vb-phone {% if company.primary_contact_is_cold_call or company.primary_cold_marked_at %}vb-phone--cold{% endif %}">
           <div class="vb-p__k">Телефон</div>
@@ -1256,7 +1293,18 @@
 (function(){
   'use strict';
   const COMPANY_ID = "{{ company.id }}";
-  const CSRF = (document.cookie.match('(?:^|; )csrftoken=([^;]*)') || [])[1] || '';
+  function getCsrfTok(){
+    let t = (document.cookie.match('(?:^|; )csrftoken=([^;]*)') || [])[1] || '';
+    if(!t){
+      const meta = document.querySelector('meta[name=csrf-token]');
+      if(meta) t = meta.content || '';
+    }
+    if(!t){
+      const inp = document.querySelector('input[name=csrfmiddlewaretoken]');
+      if(inp) t = inp.value || '';
+    }
+    return t ? decodeURIComponent(t) : '';
+  }
   function toast(msg, type){
     if(window.V2Toast){ V2Toast.show(msg, {type: type||'ok'}); }
     else if(window.uiToast){ window.uiToast(msg, type||'success'); }
@@ -1267,7 +1315,7 @@
     const r = await fetch(url, {
       method:'POST',
       headers:{
-        'X-CSRFToken':CSRF,
+        'X-CSRFToken':getCsrfTok(),
         'Content-Type':'application/x-www-form-urlencoded',
         'X-Requested-With':'XMLHttpRequest',
       },
@@ -1306,11 +1354,13 @@
       const id = btn.getAttribute('data-v3-toggle-form');
       const form = document.getElementById(id);
       if(!form) return;
-      form.classList.toggle('vb-qform--hidden');
-      if(!form.classList.contains('vb-qform--hidden')){
-        const firstIn = form.querySelector('input,textarea');
-        if(firstIn) firstIn.focus();
+      form.classList.remove('vb-qform--hidden');
+      // scroll в зону формы, если есть data-v3-scroll-to
+      if(btn.getAttribute('data-v3-scroll-to')){
+        form.scrollIntoView({behavior:'smooth', block:'center'});
       }
+      const firstIn = form.querySelector('input,textarea');
+      if(firstIn) setTimeout(function(){ firstIn.focus(); }, 120);
     });
   });
   document.querySelectorAll('[data-v3-close-form]').forEach(function(btn){

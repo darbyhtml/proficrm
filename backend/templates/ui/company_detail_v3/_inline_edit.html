@@ -76,19 +76,32 @@
     const m = document.cookie.match('(?:^|; )' + name + '=([^;]*)');
     return m ? decodeURIComponent(m[1]) : '';
   }
+  function getCsrf(){
+    // Lazy + fallback: cookie → meta → hidden input. Вычисляется при
+    // каждом POST — защищено от ротации токена.
+    let t = getCookie('csrftoken');
+    if(!t){
+      const meta = document.querySelector('meta[name=csrf-token]');
+      if(meta) t = meta.content || '';
+    }
+    if(!t){
+      const inp = document.querySelector('input[name=csrfmiddlewaretoken]');
+      if(inp) t = inp.value || '';
+    }
+    return t;
+  }
   function toast(msg, type){
     if(window.V2Toast){ V2Toast.show(msg, {type: type||'ok'}); }
     else if(window.uiToast){ window.uiToast(msg, type||'success'); }
     else console.log('[toast]', msg);
   }
-  const CSRF = getCookie('csrftoken');
 
   async function _postForm(url, bodyObj){
     const body = new URLSearchParams(bodyObj).toString();
     const resp = await fetch(url, {
       method: 'POST',
       headers: {
-        'X-CSRFToken': CSRF,
+        'X-CSRFToken': getCsrf(),
         'Content-Type': 'application/x-www-form-urlencoded',
         'X-Requested-With': 'XMLHttpRequest',
       },
@@ -125,10 +138,32 @@
 
     el.addEventListener('focus', function(){
       originalText = el.innerText.trim();
+      // Очищаем плейсхолдер «—» / «не задано» при фокусе
+      // чтобы пользователю не пришлось стирать его вручную.
+      const placeholders = ['—', '-', 'не задан', 'не задано', 'нет'];
+      if(placeholders.indexOf(originalText.toLowerCase()) >= 0){
+        el.innerText = '';
+      }
     });
     el.addEventListener('keydown', function(e){
-      if(e.key === 'Enter'){ e.preventDefault(); el.blur(); }
+      const field = el.dataset.editField || '';
+      const isMulti = el.classList.contains('vb-p__v--multi') || field === 'address';
+      if(e.key === 'Enter'){
+        if(isMulti && !e.ctrlKey && !e.metaKey){
+          // Многострочное поле — Enter вставляет перевод строки.
+          // Ctrl+Enter / Cmd+Enter — сохраняет.
+          return;
+        }
+        e.preventDefault(); el.blur();
+      }
       if(e.key === 'Escape'){ e.preventDefault(); el.innerText = originalText; el.blur(); }
+    });
+
+    // Paste как plain text (без HTML из Word/Docs)
+    el.addEventListener('paste', function(e){
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+      document.execCommand('insertText', false, text);
     });
     el.addEventListener('blur', async function(){
       const newText = el.innerText.trim();
@@ -431,7 +466,7 @@
         const resp = await fetch('/phone/call/', {
           method: 'POST',
           headers: {
-            'X-CSRFToken': CSRF,
+            'X-CSRFToken': getCsrf(),
             'Content-Type': 'application/x-www-form-urlencoded',
             'X-Requested-With': 'XMLHttpRequest',
           },

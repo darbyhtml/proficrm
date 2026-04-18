@@ -29,6 +29,7 @@ from companies.models import (
     Contact, ContactEmail, ContactPhone, ContractType,
 )
 from tasksapp.models import Task
+from ui.views._base import policy_required, require_can_view_company
 
 User = get_user_model()
 
@@ -38,6 +39,8 @@ _VALID_VARIANTS = {"a", "b", "c"}
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:companies:detail")
+@require_can_view_company
 def company_detail_v3_preview(
     request: HttpRequest, company_id, variant: str
 ) -> HttpResponse:
@@ -233,6 +236,8 @@ def company_detail_v3_preview(
 
 @login_required
 @require_POST
+@policy_required(resource_type="action", resource="ui:companies:update")
+@require_can_view_company
 def contact_quick_create(request: HttpRequest, company_id) -> HttpResponse:
     """POST /companies/<id>/contacts/quick-create/
     Принимает простые поля: name (или first_name+last_name), position,
