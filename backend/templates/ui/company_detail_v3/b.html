@@ -145,11 +145,16 @@
   .vb-call:hover{transform:scale(1.08);background:var(--v2-primary-dark)}
   .vb-call svg{width:11px;height:11px}
 
-  /* Phone row with cold-call стрип */
+  /* Phone row with cold-call стрип.
+     ВАЖНО: phone row НЕ ограничен nowrap, чтобы cold-toggle кнопка
+     могла переноситься на 2-ю строку на узких колонках — иначе
+     обрезается до «...» через .vb-p__v ellipsis. */
   .vb-phone{position:relative;padding-left:8px}
   .vb-phone::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:2px;
     background:transparent;border-radius:2px}
   .vb-phone--cold::before{background:#3b82f6}
+  .vb-phone .vb-p__v{white-space:normal;text-overflow:clip;overflow:visible;
+    display:flex;flex-wrap:wrap;gap:5px;align-items:center}
   .vb-phone__cold-toggle{display:inline-flex;align-items:center;gap:3px;
     font-size:10.5px;padding:1px 6px;border-radius:var(--v3-radius-round);
     color:var(--v2-text-muted);background:var(--v2-bg-muted);

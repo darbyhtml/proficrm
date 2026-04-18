@@ -54,9 +54,11 @@
     font-family:inherit}
   .v3-pop__clear:hover{background:var(--v2-bg-muted);color:var(--v2-danger)}
 
-  /* Date popover */
-  .v3-pop-date{padding:10px 12px;display:flex;gap:6px;align-items:center}
+  /* Date popover: inline input + 2 кнопки в одной строке, без wrap. */
+  .v3-pop-date{padding:10px 12px;display:flex;gap:6px;align-items:center;
+    flex-wrap:nowrap;min-width:260px}
   .v3-pop-date input[type="date"]{font:inherit;font-size:13px;padding:5px 8px;
+    flex:1;min-width:120px;
     border:1px solid var(--v2-border-strong);border-radius:var(--v2-radius-sm);
     background:var(--v2-bg);color:var(--v2-text)}
   .v3-pop-date button{font:inherit;font-size:12px;padding:5px 10px;
