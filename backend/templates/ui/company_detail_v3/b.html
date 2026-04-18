@@ -302,6 +302,38 @@
   .vb-note__btn svg{width:14px;height:14px}
   .vb-note__pin-ic{font-size:12px;color:var(--v2-accent-600);margin-right:3px}
 
+  /* Attachments в заметке */
+  .vb-note__atts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .vb-att{display:inline-flex;text-decoration:none;border-radius:var(--v3-radius-xs);
+    overflow:hidden;transition:transform .12s,box-shadow .12s;line-height:0}
+  .vb-att:hover{transform:translateY(-1px);box-shadow:var(--v2-shadow-sm)}
+  .vb-att--img{width:64px;height:64px;background:var(--v2-bg-muted);
+    border:1px solid var(--v2-border)}
+  .vb-att--img img{width:100%;height:100%;object-fit:cover;display:block}
+  .vb-att--file{align-items:center;gap:6px;padding:6px 10px;
+    background:var(--v2-bg-muted);border:1px solid var(--v2-border);
+    color:var(--v2-text);font-size:12px;line-height:1.3;max-width:240px}
+  .vb-att__ext{font-weight:700;font-size:10px;padding:2px 5px;border-radius:var(--v3-radius-xs);
+    background:var(--v2-primary-50);color:var(--v2-primary-dark);letter-spacing:.04em;flex:0 0 auto}
+  .vb-att__name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* Note edit inline-form */
+  .vb-note__editor{display:flex;flex-direction:column;gap:8px;margin-top:8px;
+    padding:10px;background:var(--v2-bg-soft);border:1px solid var(--v2-primary-100);
+    border-radius:var(--v2-radius-sm)}
+  .vb-note__editor[hidden]{display:none}
+
+  /* Image preview modal (V2Modal openHtml body) */
+  .vb-img-preview{display:flex;flex-direction:column;align-items:center;gap:10px;
+    padding:8px;max-height:70vh}
+  .vb-img-preview img{max-width:100%;max-height:60vh;object-fit:contain;
+    border-radius:var(--v2-radius-sm)}
+  .vb-img-preview__name{font-size:12px;color:var(--v2-text-muted);text-align:center}
+  .vb-img-preview__dl{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
+    background:var(--v2-primary);color:#fff;text-decoration:none;border-radius:var(--v2-radius-sm);
+    font-size:12px;transition:background .12s}
+  .vb-img-preview__dl:hover{background:var(--v2-primary-dark)}
+
   /* Note add form (inline bottom of notes tab) */
   .vb-note-form{padding:10px 12px;background:var(--v2-bg-soft);
     border:1px solid var(--v2-border);border-radius:var(--v2-radius-sm);
@@ -915,13 +947,62 @@
         {% for n in recent_notes %}
         <div class="vb-note {% if n.is_pinned %}vb-note--pinned{% endif %}" data-note-id="{{ n.id }}">
           <div class="vb-note__text">{% if n.is_pinned %}<span class="vb-note__pin-ic">📌</span>{% endif %}{{ n.text|default:"— без текста —"|linebreaksbr }}</div>
+
+          {# Attachments — thumbnails для картинок + cards для прочих #}
+          {% if n.attachment or n.note_attachments.all %}
+          <div class="vb-note__atts">
+            {% if n.attachment %}
+              {% with ext=n.attachment_ext|lower %}
+              {% if ext == 'jpg' or ext == 'jpeg' or ext == 'png' or ext == 'webp' or ext == 'gif' %}
+                <a href="{{ n.attachment.url }}" class="vb-att vb-att--img"
+                   data-v3-img-preview data-img-src="{{ n.attachment.url }}"
+                   data-img-name="{{ n.attachment_name|default:'Изображение' }}"
+                   title="{{ n.attachment_name }}">
+                  <img src="{{ n.attachment.url }}" alt="" loading="lazy">
+                </a>
+              {% else %}
+                <a href="{{ n.attachment.url }}" class="vb-att vb-att--file" target="_blank" download
+                   title="{{ n.attachment_name }}">
+                  <span class="vb-att__ext">{{ ext|upper|default:"FILE" }}</span>
+                  <span class="vb-att__name">{{ n.attachment_name|truncatechars:28 }}</span>
+                </a>
+              {% endif %}
+              {% endwith %}
+            {% endif %}
+            {% for att in n.note_attachments.all %}
+              {% with ext=att.file_ext|lower %}
+              {% if ext == 'jpg' or ext == 'jpeg' or ext == 'png' or ext == 'webp' or ext == 'gif' %}
+                <a href="{{ att.file.url }}" class="vb-att vb-att--img"
+                   data-v3-img-preview data-img-src="{{ att.file.url }}"
+                   data-img-name="{{ att.file_name|default:'Изображение' }}"
+                   title="{{ att.file_name }}">
+                  <img src="{{ att.file.url }}" alt="" loading="lazy">
+                </a>
+              {% else %}
+                <a href="{{ att.file.url }}" class="vb-att vb-att--file" target="_blank" download
+                   title="{{ att.file_name }}">
+                  <span class="vb-att__ext">{{ ext|upper|default:"FILE" }}</span>
+                  <span class="vb-att__name">{{ att.file_name|truncatechars:28 }}</span>
+                </a>
+              {% endif %}
+              {% endwith %}
+            {% endfor %}
+          </div>
+          {% endif %}
+
           <div class="vb-note__meta">
             <span>{{ n.author|full_name|default:"—" }}</span>
-            <span>{{ n.created_at|date:"d.m.Y H:i" }}</span>
+            <span>{{ n.created_at|date:"d.m.Y H:i" }}{% if n.edited_at %} · изменено {{ n.edited_at|date:"d.m.Y" }}{% endif %}</span>
             <div class="vb-note__actions">
               <button class="vb-note__btn" title="{% if n.is_pinned %}Открепить{% else %}Закрепить{% endif %}"
                       data-v3-note-pin
                       data-note-url="{% url 'company_note_pin_toggle' company_id=company.id note_id=n.id %}">📌</button>
+              <button class="vb-note__btn" title="Редактировать"
+                      data-v3-note-edit
+                      data-note-id="{{ n.id }}"
+                      data-note-text="{{ n.text|default:''|escape }}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
               <button class="vb-note__btn vb-note__btn--danger" title="Удалить заметку"
                       data-v3-note-delete
                       data-note-url="{% url 'company_note_delete' company_id=company.id note_id=n.id %}">
@@ -929,6 +1010,17 @@
               </button>
             </div>
           </div>
+
+          {# Edit-form (скрытая; раскрывается по клику edit) #}
+          <form class="vb-note__editor" hidden method="post" enctype="multipart/form-data"
+                action="{% url 'company_note_edit' company_id=company.id note_id=n.id %}">
+            {% csrf_token %}
+            <textarea name="text" class="vb-note-form__ta" required>{{ n.text|default:'' }}</textarea>
+            <div class="vb-note-form__foot">
+              <button type="button" class="vb-qform__cancel" data-v3-note-edit-cancel>Отмена</button>
+              <button type="submit" class="vb-abtn vb-abtn--primary">Сохранить</button>
+            </div>
+          </form>
         </div>
         {% empty %}
         <div class="vb-empty" id="vbNotesEmpty">Ещё нет заметок. Напишите первую ↓</div>
@@ -1253,6 +1345,44 @@
         toast('Ошибка: ' + err.message, 'err');
       }
     });
+  });
+
+  // ── Note edit toggle ──
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest('[data-v3-note-edit]');
+    if(!btn) return;
+    e.stopPropagation();
+    const note = btn.closest('.vb-note');
+    if(!note) return;
+    const form = note.querySelector('.vb-note__editor');
+    if(form) form.hidden = !form.hidden;
+    if(form && !form.hidden){
+      const ta = form.querySelector('textarea');
+      if(ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+    }
+  });
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest('[data-v3-note-edit-cancel]');
+    if(!btn) return;
+    const form = btn.closest('.vb-note__editor');
+    if(form) form.hidden = true;
+  });
+
+  // ── Image preview через V2Modal ──
+  document.addEventListener('click', function(e){
+    const link = e.target.closest('[data-v3-img-preview]');
+    if(!link) return;
+    e.preventDefault();
+    const src = link.getAttribute('data-img-src');
+    const name = link.getAttribute('data-img-name') || 'Изображение';
+    if(!src || !window.V2Modal) return;
+    const html =
+      '<div class="vb-img-preview">' +
+        '<img src="' + src + '" alt="' + name + '">' +
+        '<div class="vb-img-preview__name">' + name + '</div>' +
+        '<a href="' + src + '" download class="vb-img-preview__dl">⬇ Скачать</a>' +
+      '</div>';
+    window.V2Modal.openHtml({title: name, html: html});
   });
 
   // ── Note pin ──

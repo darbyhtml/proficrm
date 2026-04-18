@@ -102,11 +102,12 @@ def company_detail_v3_preview(
         .order_by("-updated_at")[:5]
     )
 
-    # Заметки (последние)
+    # Заметки (последние, с вложениями)
     recent_notes = list(
         CompanyNote.objects.filter(company=company)
         .select_related("author")
-        .order_by("-created_at")[:8]
+        .prefetch_related("note_attachments")
+        .order_by("-is_pinned", "-created_at")[:8]
     )
 
     # Сделки
