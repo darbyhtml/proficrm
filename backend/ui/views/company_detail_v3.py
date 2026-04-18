@@ -141,7 +141,7 @@ def company_detail_v3_preview(
     # мог встроить их в data-edit-options)
     status_options = [
         {"id": str(s.id), "label": s.name}
-        for s in CompanyStatus.objects.order_by("sort_order", "name")
+        for s in CompanyStatus.objects.order_by("name")
     ]
     sphere_options = [
         {"id": str(s.id), "label": s.name}
