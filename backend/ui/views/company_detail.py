@@ -252,7 +252,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         .order_by("-created_at")[:100]
     )
     # Объединяем всё в один список (без лимита итогового)
-    timeline_items = sorted(
+    _all_timeline = sorted(
         [{"date": n.created_at, "kind": "note", "obj": n} for n in timeline_notes]
         + [{"date": e.occurred_at, "kind": "event", "obj": e} for e in timeline_events]
         + [{"date": t.created_at, "kind": "task_created", "obj": t} for t in timeline_tasks]
@@ -265,6 +265,16 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         key=lambda x: x["date"],
         reverse=True,
     )
+    # F4 R2 (2026-04-18): пагинация timeline — первые 50, остальное по AJAX.
+    # Без пагинации на компаниях с длинной историей (~4600 items) страница
+    # раздувалась до >2 МБ HTML и тормозила первый paint.
+    TIMELINE_INITIAL = 50
+    timeline_total_count = len(_all_timeline)
+    timeline_items = _all_timeline[:TIMELINE_INITIAL]
+    timeline_has_more = timeline_total_count > TIMELINE_INITIAL
+    # Сохраняем полный список в request.session для AJAX-подгрузки.
+    # (альтернатива — повторный запрос БД, но это дороже при 4600 items)
+    # Пока же endpoint сам пересчитывает — session не раздуваем.
 
     quick_form = CompanyQuickEditForm(instance=company)
     contract_form = CompanyContractForm(instance=company)
@@ -2668,4 +2678,88 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
     )
     return JsonResponse({"ok": True, "id": str(call.id), "phone": normalized})
 
+
+
+
+
+@login_required
+@require_can_view_company
+def company_timeline_items(request: HttpRequest, company_id) -> HttpResponse:
+    """F4 R2 (2026-04-18): AJAX-подгрузка timeline-событий.
+    
+    GET /companies/<company_id>/timeline/items/?offset=50&limit=50 →
+    HTML-фрагмент с <li> элементами из _company_timeline_items.html.
+    
+    Используется кнопкой «Показать ещё» на карточке компании.
+    """
+    from companies.models import CompanyDeletionRequest
+    from mailer.models import CampaignRecipient
+    
+    try:
+        offset = max(0, int(request.GET.get('offset', 50)))
+    except (TypeError, ValueError):
+        offset = 50
+    try:
+        limit = max(1, min(100, int(request.GET.get('limit', 50))))
+    except (TypeError, ValueError):
+        limit = 50
+    
+    company = get_object_or_404(Company, id=company_id)
+    
+    # Тот же набор источников, что и в company_detail view.
+    timeline_notes = list(
+        CompanyNote.objects.filter(company=company)
+        .select_related('author').order_by('-created_at')[:2000]
+    )
+    timeline_events = list(
+        company.history_events.select_related('actor', 'from_user', 'to_user')
+        .order_by('-occurred_at')[:500]
+    )
+    timeline_tasks = list(
+        Task.objects.filter(company=company)
+        .select_related('created_by', 'assigned_to', 'type')
+        .order_by('-created_at')[:500]
+    )
+    timeline_deals = list(
+        CompanyDeal.objects.filter(company=company)
+        .select_related('created_by').order_by('-created_at')[:500]
+    )
+    timeline_calls = list(
+        CallRequest.objects.filter(company=company)
+        .select_related('created_by').order_by('-created_at')[:500]
+    )
+    timeline_mailings = list(
+        CampaignRecipient.objects.filter(company=company, status='sent')
+        .select_related('campaign').order_by('-updated_at')[:500]
+    )
+    timeline_delreqs = list(
+        CompanyDeletionRequest.objects.filter(company=company)
+        .select_related('requested_by', 'decided_by')
+        .order_by('-created_at')[:100]
+    )
+    all_items = sorted(
+        [{'date': n.created_at, 'kind': 'note', 'obj': n} for n in timeline_notes]
+        + [{'date': e.occurred_at, 'kind': 'event', 'obj': e} for e in timeline_events]
+        + [{'date': t.created_at, 'kind': 'task_created', 'obj': t} for t in timeline_tasks]
+        + [{'date': t.completed_at, 'kind': 'task_done', 'obj': t} for t in timeline_tasks if t.completed_at]
+        + [{'date': d.created_at, 'kind': 'deal', 'obj': d} for d in timeline_deals]
+        + [{'date': c.created_at, 'kind': 'call', 'obj': c} for c in timeline_calls]
+        + [{'date': m.updated_at, 'kind': 'mailing', 'obj': m} for m in timeline_mailings]
+        + [{'date': r.created_at, 'kind': 'delreq_created', 'obj': r} for r in timeline_delreqs]
+        + [{'date': r.decided_at, 'kind': 'delreq_decided', 'obj': r} for r in timeline_delreqs if r.decided_at],
+        key=lambda x: x['date'],
+        reverse=True,
+    )
+    items_slice = all_items[offset:offset + limit]
+    has_more = len(all_items) > offset + limit
+    return render(
+        request,
+        'ui/_partials/_company_timeline_items.html',
+        {
+            'items': items_slice,
+            'has_more': has_more,
+            'next_offset': offset + limit,
+            'total': len(all_items),
+        },
+    )
 

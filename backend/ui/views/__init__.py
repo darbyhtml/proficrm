@@ -25,7 +25,7 @@ from ui.views.company_list import (
     company_autocomplete, company_duplicates,
 )  # noqa: F401
 from ui.views.company_detail import (
-    company_detail, company_tasks_history,
+    company_detail, company_tasks_history, company_timeline_items,
     company_delete_request_create, company_delete_request_cancel,
     company_delete_request_approve, company_delete_direct,
     company_contract_update,

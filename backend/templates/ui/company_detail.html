@@ -433,7 +433,7 @@
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
               </svg>
-              <span class="text-xs">{{ timeline_items|length }}</span>
+              <span class="text-xs">{{ timeline_total_count|default:timeline_items|length }}</span>
             </button>
           {% endif %}
 
@@ -3333,7 +3333,7 @@
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
-                <span class="text-xs">{{ timeline_items|length }}</span>
+                <span class="text-xs">{{ timeline_total_count|default:timeline_items|length }}</span>
               </button>
             {% endif %}
 
@@ -3472,7 +3472,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
             <span>История</span>
-            <span class="text-[10px] bg-brand-soft/50 text-brand-dark/60 rounded-full px-1.5">{{ timeline_items|length }}</span>
+            <span class="text-[10px] bg-brand-soft/50 text-brand-dark/60 rounded-full px-1.5">{{ timeline_total_count|default:timeline_items|length }}</span>
           </span>
         </button>
         {% endif %}
@@ -4467,10 +4467,24 @@
               </svg>
               История взаимодействий
             </div>
-            <span class="text-xs text-brand-dark/50">{{ timeline_items|length }} событий</span>
+            <span class="text-xs text-brand-dark/50">{{ timeline_total_count|default:timeline_items|length }} событий</span>
           </div>
 
-          <ol class="relative border-l-2 border-brand-soft/50 ml-3 space-y-0">
+          <ol class="relative border-l-2 border-brand-soft/50 ml-3 space-y-0" id="companyTimelineList" data-company-id="{{ company.id }}" data-timeline-offset="{{ timeline_items|length }}" data-timeline-total="{{ timeline_total_count|default:timeline_items|length }}">
+            {% include "ui/_partials/_company_timeline_items.html" with items=timeline_items %}
+          </ol>
+          {% if timeline_has_more %}
+            <div class="mt-4 text-center">
+              <button type="button"
+                      id="companyTimelineLoadMore"
+                      class="btn btn-outline btn-sm"
+                      data-company-id="{{ company.id }}">
+                Показать ещё ({{ timeline_total_count|add:"-50" }})
+              </button>
+            </div>
+          {% endif %}
+          {# F4 R2: старый inline for-блок удалён — заменён на partial. Фрагмент ниже (до endfor) — старая логика, оставлена в истории git. #}
+          {% if False %}
             {% for item in timeline_items %}
               <li class="mb-4 ml-6">
                 {% if item.kind == "event" %}
@@ -4661,7 +4675,8 @@
                 {% endif %}
               </li>
             {% endfor %}
-          </ol>
+          {% endif %}
+          {# /F4 R2 legacy fallback #}
         </div>
       </div>
       {% endif %}
@@ -5349,6 +5364,50 @@
           const msg = err && err.message ? err.message : 'Ошибка загрузки истории задач';
           content.innerHTML = `<div class="text-center py-8 text-red-600">${msg}</div>`;
           if (window.uiToast) window.uiToast(msg, 'error');
+        }
+      });
+    })();
+  </script>
+
+  {# F4 R2 (2026-04-18): AJAX-подгрузка timeline-событий. #}
+  <script nonce="{{ request.csp_nonce|default:'' }}">
+    (function(){
+      var btn = document.getElementById('companyTimelineLoadMore');
+      var list = document.getElementById('companyTimelineList');
+      if (!btn || !list) return;
+      var companyId = list.getAttribute('data-company-id');
+      var offset = parseInt(list.getAttribute('data-timeline-offset') || '0', 10);
+      var total = parseInt(list.getAttribute('data-timeline-total') || '0', 10);
+
+      btn.addEventListener('click', async function(e){
+        e.preventDefault();
+        if (btn.disabled) return;
+        btn.disabled = true;
+        var origText = btn.textContent;
+        btn.textContent = 'Загрузка…';
+        try {
+          var res = await fetch(
+            '/companies/' + companyId + '/timeline/items/?offset=' + offset + '&limit=50',
+            { headers: { 'X-Requested-With': 'XMLHttpRequest' } }
+          );
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          var html = await res.text();
+          // Вставляем новые <li> в конец <ol>.
+          list.insertAdjacentHTML('beforeend', html);
+          offset += 50;
+          list.setAttribute('data-timeline-offset', offset);
+          var remaining = Math.max(0, total - offset);
+          if (remaining > 0) {
+            btn.disabled = false;
+            btn.textContent = 'Показать ещё (' + remaining + ')';
+          } else {
+            btn.remove();
+          }
+        } catch (err) {
+          console.error('Timeline load-more failed:', err);
+          btn.disabled = false;
+          btn.textContent = origText;
+          if (window.uiToast) window.uiToast('Не удалось загрузить события', 'error');
         }
       });
     })();
@@ -8296,7 +8355,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
               </svg>
               История взаимодействий
-              <span class="text-xs font-normal text-brand-dark/40" id="timelineTotalCount">{{ timeline_items|length }}</span>
+              <span class="text-xs font-normal text-brand-dark/40" id="timelineTotalCount">{{ timeline_total_count|default:timeline_items|length }}</span>
             </div>
             <div class="flex items-center gap-2">
               <!-- Сортировка -->
