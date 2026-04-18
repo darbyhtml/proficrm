@@ -184,6 +184,7 @@
 
           {% if status or assigned_to or search_q or date_from or date_to or mine == '1' or today == '1' or overdue == '1' or show_done == '1' %}
           <a class="v2-btn v2-btn--ghost v2-btn--sm" href="{% url 'task_list' %}"
+             data-reset-filters
              title="Сбросить все фильтры">Сброс</a>
           {% endif %}
         </div>
@@ -921,6 +922,15 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
     });
   }
 })();
+
+// Клик по «Сброс всех фильтров» — очистить localStorage ДО перехода,
+// иначе блок «Remember filters» моментально редиректит обратно.
+document.addEventListener('click', function(e){
+  const resetBtn = e.target && e.target.closest ? e.target.closest('[data-reset-filters]') : null;
+  if(!resetBtn) return;
+  try { localStorage.removeItem('v2_task_filters_v1'); } catch(_) {}
+  // Ссылка сама продолжит переход на /tasks/ (href) — не preventDefault.
+});
 
 // Клик по фильтр-чипу — убрать ключ(и) из URL и localStorage, переход
 document.addEventListener('click', function(e){
