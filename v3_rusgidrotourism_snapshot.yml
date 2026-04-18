@@ -1,0 +1,275 @@
+- generic [active] [ref=e1]:
+  - link "Перейти к основному содержимому" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]:
+          - link "CRM ПРОФИ" [ref=e7] [cursor=pointer]:
+            - /url: /
+          - generic [ref=e8]: простая, как amo, но без лишнего
+        - generic [ref=e9]:
+          - button "Уведомления" [ref=e11] [cursor=pointer]:
+            - img [ref=e12]
+            - generic [ref=e15]: "16"
+          - link "А" [ref=e16] [cursor=pointer]:
+            - /url: /settings/#profile
+            - generic [ref=e17]: А
+          - link "Администратор" [ref=e18] [cursor=pointer]:
+            - /url: /settings/
+          - button "Выйти" [ref=e20] [cursor=pointer]
+    - generic [ref=e21]:
+      - complementary [ref=e22]:
+        - generic [ref=e23]:
+          - navigation [ref=e24]:
+            - link "Рабочий стол" [ref=e25] [cursor=pointer]:
+              - /url: /
+              - img [ref=e27]
+              - generic [ref=e29]: Рабочий стол
+            - link "Задачи" [ref=e30] [cursor=pointer]:
+              - /url: /tasks/
+              - img [ref=e32]
+              - generic [ref=e35]: Задачи
+            - link "Компании" [ref=e36] [cursor=pointer]:
+              - /url: /companies/
+              - img [ref=e38]
+              - generic [ref=e41]: Компании
+            - link "Почта" [ref=e42] [cursor=pointer]:
+              - /url: /mail/campaigns/
+              - img [ref=e44]
+              - generic [ref=e47]: Почта
+            - link "Чат" [ref=e48] [cursor=pointer]:
+              - /url: /messenger/
+              - img [ref=e50]
+              - generic [ref=e52]: Чат
+            - link "Аналитика" [ref=e53] [cursor=pointer]:
+              - /url: /analytics/
+              - img [ref=e55]
+              - generic [ref=e58]: Аналитика
+            - link "Помощь" [ref=e59] [cursor=pointer]:
+              - /url: /help/
+              - img [ref=e61]
+              - generic [ref=e64]: Помощь
+            - link "Настройки" [ref=e65] [cursor=pointer]:
+              - /url: /settings/
+              - img [ref=e67]
+              - generic [ref=e70]: Настройки
+            - link "Админка" [ref=e71] [cursor=pointer]:
+              - /url: /admin/
+              - img [ref=e73]
+              - generic [ref=e74]: Админка
+          - link "Приложение" [ref=e76] [cursor=pointer]:
+            - /url: /mobile-app/
+            - generic [ref=e77]:
+              - img [ref=e79]
+              - generic [ref=e84]: Приложение
+      - main [ref=e85]:
+        - generic [ref=e86]:
+          - generic [ref=e87]:
+            - generic [ref=e88]: PREVIEW
+            - generic [ref=e89]:
+              - link "A · Notion" [ref=e90] [cursor=pointer]:
+                - /url: /companies/00008e13-5413-47e5-b815-350e4ef96e23/v3/a/
+              - link "B · Dashboard" [ref=e91] [cursor=pointer]:
+                - /url: /companies/00008e13-5413-47e5-b815-350e4ef96e23/v3/b/
+              - link "C · Editorial" [ref=e92] [cursor=pointer]:
+                - /url: /companies/00008e13-5413-47e5-b815-350e4ef96e23/v3/c/
+            - generic [ref=e93]: Превью нового дизайна карточки
+            - link "← к классической карточке" [ref=e94] [cursor=pointer]:
+              - /url: /companies/00008e13-5413-47e5-b815-350e4ef96e23/
+          - generic [ref=e95]:
+            - generic [ref=e96]:
+              - link "Компании" [ref=e97] [cursor=pointer]:
+                - /url: /companies/
+              - generic [ref=e98]: ›
+              - generic [ref=e99]: Русгидротуризм
+            - generic [ref=e100]:
+              - generic [ref=e101]:
+                - heading "Русгидротуризм" [level=1] [ref=e102]
+                - generic [ref=e103]:
+                  - generic [ref=e104]:
+                    - text: ИНН 1902018368
+                    - button "Скопировать ИНН" [ref=e105] [cursor=pointer]:
+                      - img [ref=e106]
+                  - button "без статуса" [ref=e110] [cursor=pointer]:
+                    - img [ref=e111]
+                    - generic [ref=e113]: без статуса
+                  - generic [ref=e115]:
+                    - text: Ведёт
+                    - button "Оттен Валентина" [ref=e116] [cursor=pointer]
+                  - generic "Подразделение (редактируется на full-edit странице)" [ref=e118]: Тюмень
+              - generic [ref=e119]:
+                - generic [ref=e120]:
+                  - generic [ref=e121]: Договор
+                  - button "—" [ref=e122] [cursor=pointer]
+                  - generic [ref=e123]: не заключён
+                - generic [ref=e124]:
+                  - generic [ref=e125]: Задач
+                  - generic [ref=e126]: "0"
+                  - generic [ref=e127]: нет активных
+                - generic [ref=e128]:
+                  - generic [ref=e129]: ЛПР
+                  - generic [ref=e130]: "2"
+                  - generic [ref=e131]: контактных лиц
+                - generic [ref=e132]:
+                  - generic [ref=e133]: Сделок
+                  - generic [ref=e134]: "0"
+                  - generic [ref=e135]: по компании
+            - generic [ref=e136]:
+              - button "Задача" [ref=e137] [cursor=pointer]:
+                - img [ref=e138]
+                - text: Задача
+              - button "Заметка" [ref=e140] [cursor=pointer]:
+                - img [ref=e141]
+                - text: Заметка
+              - button "Сделка" [ref=e144] [cursor=pointer]:
+                - img [ref=e145]
+                - text: Сделка
+              - button "ЛПР" [ref=e147] [cursor=pointer]:
+                - img [ref=e148]
+                - text: ЛПР
+              - button "Ещё действия" [ref=e152] [cursor=pointer]:
+                - img [ref=e153]
+          - generic [ref=e157]:
+            - generic [ref=e158]:
+              - generic [ref=e159]:
+                - generic [ref=e160]:
+                  - generic [ref=e161]: Связь с компанией
+                  - button "+" [ref=e162] [cursor=pointer]
+                - generic [ref=e163]:
+                  - generic [ref=e164]: Телефон
+                  - generic [ref=e165]:
+                    - link "+7 (390) 423-1012" [ref=e166] [cursor=pointer]:
+                      - /url: tel:+73904231012
+                    - link "Позвонить" [ref=e167] [cursor=pointer]:
+                      - /url: tel:+73904231012
+                      - img [ref=e168]
+                    - button "+ холодный" [ref=e170] [cursor=pointer]
+                - generic [ref=e171]:
+                  - generic "Комментарий к номеру" [ref=e172]: Ещё
+                  - generic [ref=e173]:
+                    - link "+7 (800) 333-8000" [ref=e174] [cursor=pointer]:
+                      - /url: tel:+78003338000
+                    - link "Позвонить" [ref=e175] [cursor=pointer]:
+                      - /url: tel:+78003338000
+                      - img [ref=e176]
+                    - button "+ холодный" [ref=e178] [cursor=pointer]
+                - generic [ref=e179]:
+                  - generic [ref=e180]: Email
+                  - link "office@cso-sges.ru" [ref=e182] [cursor=pointer]:
+                    - /url: mailto:office@cso-sges.ru
+                - generic [ref=e183]:
+                  - generic [ref=e184]: Ещё
+                  - link "kormilkinai@sges.rushydro.ru" [ref=e186] [cursor=pointer]:
+                    - /url: mailto:kormilkinai@sges.rushydro.ru
+                - generic [ref=e187]:
+                  - generic [ref=e188]: Адрес
+                  - generic [ref=e189]: 655619, РЕСПУБЛИКА ХАКАСИЯ, ГОРОД САЯНОГОРСК, Г. САЯНОГОРСК, РП ЧЕРЕМУШКИ, СТР. 48, ПОМЕЩ. 2Н
+                - generic [ref=e190]:
+                  - generic [ref=e191]: Сайт
+                  - generic [ref=e192]:
+                    - generic [ref=e193]: http://cso-sges.rushydro.ru
+                    - link "↗" [ref=e194] [cursor=pointer]:
+                      - /url: http://cso-sges.rushydro.ru
+              - group [ref=e195]:
+                - 'generic "▸ Дополнительно: реквизиты, режим работы, сферы" [ref=e196] [cursor=pointer]'
+              - generic [ref=e197]:
+                - generic [ref=e198]:
+                  - generic [ref=e199]:
+                    - text: ЛПР
+                    - generic [ref=e200]: "2"
+                  - button "+" [ref=e201] [cursor=pointer]
+                - generic [ref=e202]:
+                  - generic [ref=e203]:
+                    - generic [ref=e204]: Силенко Яна Александровна
+                    - generic "Оттен Валентина, 04.03.2025" [ref=e205]: ❄ холодный
+                  - generic [ref=e206]:
+                    - link "+7 (390) 423-2208" [ref=e207] [cursor=pointer]:
+                      - /url: tel:+73904232208
+                    - link "Позвонить" [ref=e208] [cursor=pointer]:
+                      - /url: tel:+73904232208
+                      - img [ref=e209]
+                    - button "+ холодный" [ref=e211] [cursor=pointer]
+                  - button "×" [ref=e212] [cursor=pointer]
+                - generic [ref=e213]:
+                  - generic [ref=e215]: dbc13f82-6425-48d9-a9ca-5b663b364c5e
+                  - generic [ref=e216]:
+                    - link "+7 (800) 333-8000" [ref=e217] [cursor=pointer]:
+                      - /url: tel:+78003338000
+                    - link "Позвонить" [ref=e218] [cursor=pointer]:
+                      - /url: tel:+78003338000
+                      - img [ref=e219]
+                    - button "+ холодный" [ref=e221] [cursor=pointer]
+                  - link "kormilkinai@sges.rushydro.ru" [ref=e223] [cursor=pointer]:
+                    - /url: mailto:kormilkinai@sges.rushydro.ru
+                  - button "×" [ref=e224] [cursor=pointer]
+            - generic [ref=e225]:
+              - generic [ref=e226]:
+                - button "Активность 2" [ref=e227] [cursor=pointer]:
+                  - text: Активность
+                  - generic [ref=e228]: "2"
+                - button "Задачи 0" [ref=e229] [cursor=pointer]:
+                  - text: Задачи
+                  - generic [ref=e230]: "0"
+                - button "Заметки 2" [ref=e231] [cursor=pointer]:
+                  - text: Заметки
+                  - generic [ref=e232]: "2"
+              - generic [ref=e234]:
+                - generic [ref=e235] [cursor=pointer]:
+                  - generic [ref=e236]: 📝
+                  - generic [ref=e237]:
+                    - generic [ref=e238]: "Задача: новая компания!"
+                    - generic [ref=e239]:
+                      - generic [ref=e240]: Заметка·
+                      - generic [ref=e241]: Администратор
+                  - generic [ref=e242]: 18.01.2026 14:54
+                - generic [ref=e243] [cursor=pointer]:
+                  - generic [ref=e244]: 📝
+                  - generic [ref=e245]:
+                    - generic [ref=e246]: "Импорт из amo (type: common, id: 265956939)"
+                    - generic [ref=e247]:
+                      - generic [ref=e248]: Заметка·
+                      - generic [ref=e249]: Валентина Оттен
+                  - generic [ref=e250]: 18.01.2026 11:10
+              - text: · · · ·
+            - generic [ref=e251]:
+              - generic [ref=e252]:
+                - generic [ref=e254]: Договор
+                - generic [ref=e255]:
+                  - generic [ref=e256]: Действует до
+                  - button "—" [ref=e257] [cursor=pointer]
+                - generic [ref=e258]:
+                  - generic [ref=e259]: Тип
+                  - button "—" [ref=e260] [cursor=pointer]
+              - generic [ref=e261]:
+                - generic [ref=e262]:
+                  - generic [ref=e263]:
+                    - text: Сделки
+                    - generic [ref=e264]: "0"
+                  - button "+" [ref=e265] [cursor=pointer]
+                - generic [ref=e266]:
+                  - text: Сделок ещё нет.
+                  - link "+ сделка" [ref=e267] [cursor=pointer]:
+                    - /url: "#"
+              - generic [ref=e268]:
+                - generic [ref=e269]:
+                  - generic [ref=e270]: Группа компаний
+                  - link "✎" [ref=e271] [cursor=pointer]:
+                    - /url: /companies/00008e13-5413-47e5-b815-350e4ef96e23/edit/#head_company
+                - generic [ref=e272]:
+                  - text: Компания самостоятельная.
+                  - link "+ привязать" [ref=e273] [cursor=pointer]:
+                    - /url: /companies/00008e13-5413-47e5-b815-350e4ef96e23/edit/#head_company
+        - group [ref=e274]:
+          - generic "▸ Подробности — служебная информация и история" [ref=e275] [cursor=pointer]
+  - link "Прогресс рассылки" [ref=e276] [cursor=pointer]:
+    - /url: /mail/campaigns/a3a29c99-7e85-46be-b00e-33298c3684a8/
+    - generic [ref=e277]:
+      - 'generic "Готово: Рассылка по БПЛА · 1/1" [ref=e278]':
+        - generic [ref=e279]: 100%
+      - generic:
+        - generic: Готово
+        - generic: Рассылка по БПЛА
+        - generic: "Всего: 1 · Отправлено: 1 · Ошибки: 0 · В очереди: 0"
+        - button "Закрыть" [ref=e280]:
+          - img [ref=e281]

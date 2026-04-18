@@ -29,7 +29,7 @@ from companies.models import (
     Contact, ContactEmail, ContactPhone, ContractType,
 )
 from tasksapp.models import Task
-from ui.views._base import policy_required, require_can_view_company
+from ui.views._base import policy_required, require_can_view_company, _safe_next_v3
 
 User = get_user_model()
 
@@ -335,6 +335,7 @@ def contact_quick_create(request: HttpRequest, company_id) -> HttpResponse:
     except Exception:
         pass
 
-    # Redirect обратно на v3/b/
+    # Redirect на next (если безопасный) или на v3/b/ по умолчанию
     from django.shortcuts import redirect
-    return redirect(f"/companies/{company.id}/v3/b/")
+    nxt = _safe_next_v3(request, company.id)
+    return redirect(nxt or f"/companies/{company.id}/v3/b/")

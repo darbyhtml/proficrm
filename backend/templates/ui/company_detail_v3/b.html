@@ -679,8 +679,10 @@
         </div>
 
         <form class="vb-qform vb-qform--hidden" id="vbPhoneForm" method="post"
-              action="{% url 'company_phone_create' company_id=company.id %}">
+              action="{% url 'company_phone_create' company_id=company.id %}"
+              data-v3-ajax-reload>
           {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
           <input type="tel" class="vb-qform__in" name="phone"
                  placeholder="+7 (999) 123-45-67" required>
           <input type="text" class="vb-qform__in" name="comment" placeholder="Комментарий (необязательно)">
@@ -842,6 +844,7 @@
         <form class="vb-qform vb-qform--hidden" id="vbContactForm" method="post"
               action="{% url 'contact_quick_create' company_id=company.id %}">
           {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
           <input type="text" class="vb-qform__in" name="name"
                  placeholder="Фамилия Имя (или «Иванов И.И.»)" required>
           <input type="text" class="vb-qform__in" name="position" placeholder="Должность (необязательно)">
@@ -1073,6 +1076,7 @@
           <form class="vb-note__editor" hidden method="post" enctype="multipart/form-data"
                 action="{% url 'company_note_edit' company_id=company.id note_id=n.id %}">
             {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
             <textarea name="text" class="vb-note-form__ta" required>{{ n.text|default:'' }}</textarea>
             <div class="vb-note-form__foot">
               <button type="button" class="vb-qform__cancel" data-v3-note-edit-cancel>Отмена</button>
@@ -1089,6 +1093,7 @@
               action="{% url 'company_note_add' company_id=company.id %}"
               id="vbNoteAddForm">
           {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
           <textarea class="vb-note-form__ta" name="text"
                     placeholder="Напишите заметку — что обсуждали, что решили..."></textarea>
           <div class="vb-note-form__foot">
@@ -1143,6 +1148,7 @@
         <form class="vb-qform vb-qform--hidden" id="vbDealForm" method="post"
               action="{% url 'company_deal_add' company_id=company.id %}">
           {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
           <textarea class="vb-qform__in" name="program" rows="2"
                     placeholder="Название сделки / программа обучения" required></textarea>
           <div class="vb-qform__foot">

@@ -48,6 +48,7 @@ from ui.views._base import (
     _detach_client_branches,
     _invalidate_company_count_cache,
     _is_ajax,
+    _safe_next_v3,
     _notify_branch_leads,
     _notify_head_deleted_with_branches,
     format_phone,
@@ -2303,6 +2304,9 @@ def company_note_add(request: HttpRequest, company_id) -> HttpResponse:
             extra_files=extra_files,
         )
 
+    nxt = _safe_next_v3(request, company_id)
+    if nxt:
+        return redirect(nxt)
     return redirect("company_detail", company_id=company_id)
 
 
@@ -2426,6 +2430,9 @@ def company_note_edit(request: HttpRequest, company_id, note_id: int) -> HttpRes
         company_id=company.id,
         message="Изменена заметка",
     )
+    nxt = _safe_next_v3(request, company.id)
+    if nxt:
+        return redirect(nxt)
     return redirect("company_detail", company_id=company.id)
 
 
@@ -2474,6 +2481,9 @@ def company_note_delete(request: HttpRequest, company_id, note_id: int) -> HttpR
         company_id=company.id,
         message="Удалена заметка",
     )
+    nxt = _safe_next_v3(request, company.id)
+    if nxt:
+        return redirect(nxt)
     return redirect("company_detail", company_id=company.id)
 
 
@@ -2529,6 +2539,9 @@ def company_deal_add(request: HttpRequest, company_id) -> HttpResponse:
         company_id=company.id,
         message="Добавлена сделка",
     )
+    nxt = _safe_next_v3(request, company.id)
+    if nxt:
+        return redirect(nxt)
     return redirect("company_detail", company_id=company.id)
 
 
@@ -2557,6 +2570,9 @@ def company_deal_delete(request: HttpRequest, company_id, deal_id: int) -> HttpR
         company_id=company.id,
         message="Удалена сделка",
     )
+    nxt = _safe_next_v3(request, company.id)
+    if nxt:
+        return redirect(nxt)
     return redirect("company_detail", company_id=company.id)
 
 

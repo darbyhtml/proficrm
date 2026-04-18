@@ -132,6 +132,7 @@ __all__ = [
     "_tokenize_search_query",
     "_normalize_email_for_search",
     "_is_ajax",
+    "_safe_next_v3",
     "_dt_label",
     "_cold_call_json",
     # sub-functions of _apply_company_filters
@@ -425,6 +426,24 @@ def _normalize_email_for_search(email: str) -> str:
 def _is_ajax(request: HttpRequest) -> bool:
     # Django 4+ убрал request.is_ajax(); используем заголовок как и в других AJAX endpoints проекта.
     return (request.headers.get("X-Requested-With") or "") == "XMLHttpRequest"
+
+
+def _safe_next_v3(request: HttpRequest, company_id) -> str | None:
+    """F4 R3: если POST/GET содержит `next`, который указывает на v3-preview
+    этой же компании — вернуть его. Whitelist защита от open-redirect.
+
+    Используется в view-хендлерах create/delete (deal/note/task/phone/email),
+    чтобы после submit возвращаться туда, откуда пришёл запрос (v3/b/ vs
+    классическая карточка).
+    """
+    nxt = (request.POST.get("next") or request.GET.get("next") or "").strip()
+    if not nxt:
+        return None
+    prefix = f"/companies/{company_id}/v3/"
+    # whitelist: только внутренние v3-URL этой компании
+    if nxt.startswith(prefix) and "\n" not in nxt and "\r" not in nxt:
+        return nxt
+    return None
 
 
 def _dt_label(dt: datetime | None) -> str:

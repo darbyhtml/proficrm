@@ -492,6 +492,47 @@
     });
   });
 
+  // ── AJAX-формы: submit → fetch → reload. Используется для endpoints,
+  //    которые отвечают JSON (не редиректом). Маркер: data-v3-ajax-reload
+  document.querySelectorAll('form[data-v3-ajax-reload]').forEach(function(form){
+    if(form.dataset.v3AjaxWired) return;
+    form.dataset.v3AjaxWired = '1';
+    form.addEventListener('submit', async function(e){
+      e.preventDefault();
+      const fd = new FormData(form);
+      // Убираем csrf из body, ставим в header
+      const csrf = (fd.get('csrfmiddlewaretoken') || '').toString() || getCsrf();
+      try {
+        const resp = await fetch(form.action, {
+          method: 'POST',
+          body: fd,
+          headers: { 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest' },
+          credentials: 'same-origin',
+        });
+        if(resp.ok){
+          const ctype = resp.headers.get('Content-Type') || '';
+          let data = null;
+          if(ctype.indexOf('application/json') >= 0){
+            data = await resp.json().catch(() => null);
+          }
+          if(data && data.success === false){
+            toast(data.error || 'Ошибка', 'error');
+            return;
+          }
+          toast('Добавлено ✓', 'ok');
+          // Перезагружаем чтобы увидеть новые данные в шаблоне
+          setTimeout(() => location.reload(), 300);
+        } else {
+          let err = 'HTTP ' + resp.status;
+          try{ const d = await resp.json(); err = d.error || d.detail || err; }catch(_){}
+          toast(err, 'error');
+        }
+      } catch(err){
+        toast(err.message || 'Сеть недоступна', 'error');
+      }
+    });
+  });
+
   // Экспорт для точечного вызова снаружи
   window.V3Edit = { close: _closePop, toast: toast, post: _postForm };
   } // end _init
