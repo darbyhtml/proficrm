@@ -1,5 +1,64 @@
 # Текущий спринт
 
+**[2026-04-18]** — F4 R3 v3/b: дотошное Playwright E2E + 5 багфиксов ✅
+
+Продолжение редизайна карточки компании. После предыдущих раундов
+выявлены и закрыты 5 багов через визуальное тестирование браузером
+(credentials sdm / crm-staging.groupprofi.ru) и backend-проверки.
+
+**1. Contact с пустым ФИО рендерил UUID в шаблоне** (`a473ea8a`).
+Шаблон v3/b.html:861 использовал `{{ c|default:"—" }}`, но Contact
+объект никогда не falsy → `__str__` возвращал `str(self.pk)`, попадали
+UUID в карточку. Заменено на явную `{% if c.last_name or c.first_name %}`
+с fallback `<span style="color:var(--v2-fg-muted)">—</span>`.
+
+**2. Сохранение v3-контекста после POST-действий** (`6138ef3f`).
+Сделка/Заметка/ЛПР/Телефон форма после submit редиректили на classic
+`/companies/<id>/` — пользователь терял preview. Для vbPhoneForm
+(AJAX-JSON endpoint) был ещё хуже сценарий: submit показывал сырой JSON.
+
+Решения:
+- `_safe_next_v3(request, company_id)` в `ui/views/_base.py` —
+  whitelist helper (только `/companies/<id>/v3/…`, защита от
+  open-redirect).
+- `company_deal_add/delete`, `company_note_add/edit/delete`,
+  `contact_quick_create`: при наличии валидного `next` — редирект туда.
+- Все POST-формы v3/b.html получили hidden input `name=next` со
+  значением `request.get_full_path`.
+- vbPhoneForm получил `data-v3-ajax-reload` + JS-обработчик через
+  fetch + `location.reload()`.
+
+**3. CompanyPhone.comment не сохранялся при создании** (`4893d904`).
+Форма в шаблоне имеет input `name=comment`, модель имеет поле comment,
+endpoint игнорировал. Теперь `request.POST.get('comment').strip()[:255]`
+передаётся в `CompanyPhone.objects.create`.
+
+**4. CompanyPhone.comment не отображался + inline-edit ломался**
+(`0ecf8421`). 2 connected бага:
+- b.html:724 рендерил `{{ p.note|default:"Ещё" }}`, но в модели поле
+  `comment`. Всегда fallback «Ещё».
+- `_inline_edit.html:187` для `kind=phone-note` шлёт `{note: ...}`,
+  backend ожидает `{comment: ...}`. Inline-edit комментария не работал.
+
+Оба исправлены → `{{ p.comment|default:"Ещё"|truncatechars:12 }}`,
+`body = {comment: newText}`.
+
+**Playwright end-to-end тесты** (все успешно):
+- Сделка create+delete (hidden next работает, возврат на v3/b/).
+- Заметка create+pin+edit+delete (всё через `location.reload()` +
+  `postForm()`, возврат контекста v3/b/).
+- Телефон add+comment «ресепшн»+cold on/off+DB verify.
+- Inline-edit KPP (`190201001` → DB → очистка), activity_kind
+  («Энергетика» → DB → очистка), website (любой строке → saved; known
+  classic issue — CharField без URL-валидации).
+- Задача через V2Modal: type radio + description + due_at + assigned_to
+  → submit → создана (Task UUID в БД) → chk click → status=done в БД.
+
+Весь тестовый контент очищен: 0 сделок/заметок/телефонов/задач с
+меткой «УДАЛИТЬ» в БД.
+
+---
+
 **[2026-04-18]** — Финальный добив долгов: 4 закрытых задачи ✅
 
 После предыдущего большого пакета остались долги: 23 падающих теста,
