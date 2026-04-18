@@ -510,15 +510,20 @@
   .vb-ext-link:hover{background:var(--v2-primary);color:#fff;transform:scale(1.08)}
 
   /* «Дополнительно» details */
-  .vb-more-details{margin-top:8px;padding-top:8px;border-top:1px dashed var(--v2-border)}
-  .vb-more-details summary{cursor:pointer;font-size:11.5px;
-    color:var(--v2-text-muted);padding:4px 0;letter-spacing:.02em;
-    font-weight:500;user-select:none;list-style:none;
-    display:inline-flex;align-items:center;gap:4px}
+  .vb-more-details{margin-top:10px;padding-top:10px;border-top:1px solid var(--v2-border)}
+  .vb-more-details summary{cursor:pointer;font-size:13px;
+    color:var(--v2-primary);padding:6px 10px;letter-spacing:0;
+    font-weight:600;user-select:none;list-style:none;
+    display:inline-flex;align-items:center;gap:6px;
+    background:var(--v2-primary-50);border:1px solid var(--v2-primary-100);
+    border-radius:var(--v2-radius-sm);transition:all .12s}
   .vb-more-details summary::-webkit-details-marker{display:none}
-  .vb-more-details summary::before{content:"▸";font-size:9px;transition:transform .12s}
+  .vb-more-details summary::before{content:"▸";font-size:10px;
+    transition:transform .12s;color:var(--v2-primary)}
   .vb-more-details[open] summary::before{transform:rotate(90deg)}
-  .vb-more-details summary:hover{color:var(--v2-primary)}
+  .vb-more-details summary:hover{background:var(--v2-primary-100);
+    border-color:var(--v2-primary)}
+  .vb-more-details[open] summary{margin-bottom:8px}
 
   /* ─── Служебный accordion (Этап 5) ─── */
   .vb-sys{border-top:1px solid var(--v2-border);
@@ -606,7 +611,8 @@
           <span data-v3-edit
                 data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
                 data-edit-field="name"
-                data-edit-kind="inline">{{ company.name }}</span>
+                data-edit-kind="inline"
+                data-edit-placeholder="Название компании…">{{ company.name }}</span>
         </h1>
         <div class="vb-hero__meta">
           <span>ИНН
@@ -617,7 +623,8 @@
               <span data-v3-edit
                     data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
                     data-edit-field="inn"
-                    data-edit-kind="inline">{{ company.inn|default:"—" }}</span>
+                    data-edit-kind="inline"
+                    data-edit-placeholder="ИНН (10 или 12 цифр)">{{ company.inn|default:"—" }}</span>
             </b>
           </span>
           <span class="vb-hero__meta-dot"></span>
@@ -629,7 +636,8 @@
               <span data-v3-edit
                     data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
                     data-edit-field="kpp"
-                    data-edit-kind="inline">{{ company.kpp|default:"—" }}</span>
+                    data-edit-kind="inline"
+                    data-edit-placeholder="КПП (9 цифр)">{{ company.kpp|default:"—" }}</span>
             </b>
           </span>
           <span class="vb-hero__meta-dot"></span>
@@ -787,7 +795,8 @@
                   title="Действия с номером">
               <span data-v3-edit
                     data-edit-url="{% url 'company_main_phone_update' company_id=company.id %}"
-                    data-edit-kind="main-phone"{% if not company.phone %} style="color:var(--v2-text-faint);font-style:italic"{% endif %}>{% if company.phone %}{{ company.phone|format_phone }}{% else %}+ телефон{% endif %}</span>
+                    data-edit-kind="main-phone"
+                    data-edit-placeholder="+7 (___) ___-__-__"{% if not company.phone %} style="color:var(--v2-text-faint);font-style:italic"{% endif %}>{% if company.phone %}{{ company.phone|format_phone }}{% else %}+ телефон{% endif %}</span>
             </span>
             {% if company.primary_contact_is_cold_call %}
               <span class="vb-phone__cold-tag" title="{% if company.primary_cold_marked_by %}{{ company.primary_cold_marked_by|full_name }} · {% endif %}{{ company.primary_cold_marked_at|date:'d.m.Y' }}">❄ холодный</span>
@@ -814,7 +823,8 @@
                   title="Действия с номером">
               <span data-v3-edit
                     data-edit-url="{% url 'company_phone_value_update' company_phone_id=p.id %}"
-                    data-edit-kind="phone-value">{{ p.value|format_phone }}</span>
+                    data-edit-kind="phone-value"
+                    data-edit-placeholder="+7 (___) ___-__-__">{{ p.value|format_phone }}</span>
             </span>
             {% if p.is_cold_call %}
               <span class="vb-phone__cold-tag" title="{% if p.cold_marked_by %}{{ p.cold_marked_by|full_name }} · {% endif %}{{ p.cold_marked_at|date:'d.m.Y' }}">❄ холодный</span>
@@ -838,12 +848,14 @@
                     title="Действия с email">
                 <span data-v3-edit
                       data-edit-url="{% url 'company_main_email_update' company_id=company.id %}"
-                      data-edit-kind="main-email">{{ company.email }}</span>
+                      data-edit-kind="main-email"
+                      data-edit-placeholder="name@company.ru">{{ company.email }}</span>
               </span>
             {% else %}
               <span data-v3-edit
                     data-edit-url="{% url 'company_main_email_update' company_id=company.id %}"
                     data-edit-kind="main-email"
+                    data-edit-placeholder="name@company.ru"
                     style="color:var(--v2-text-faint);font-style:italic">+ email</span>
             {% endif %}
           </div>
@@ -873,7 +885,8 @@
               <span data-v3-edit
                     data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
                     data-edit-field="address"
-                    data-edit-kind="inline"{% if not company.address %} style="color:var(--v2-text-faint);font-style:italic"{% endif %}>{% if company.address %}{{ company.address }}{% else %}—{% endif %}</span>
+                    data-edit-kind="inline"
+                    data-edit-placeholder="Юр. или фактический адрес…"{% if not company.address %} style="color:var(--v2-text-faint);font-style:italic"{% endif %}>{% if company.address %}{{ company.address }}{% else %}—{% endif %}</span>
             </span>
           </div>
         </div>
@@ -888,7 +901,8 @@
               <span data-v3-edit
                     data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
                     data-edit-field="website"
-                    data-edit-kind="inline"{% if not company.website %} style="color:var(--v2-text-faint);font-style:italic"{% endif %}>{% if company.website %}{{ company.website }}{% else %}—{% endif %}</span>
+                    data-edit-kind="inline"
+                    data-edit-placeholder="https://example.ru"{% if not company.website %} style="color:var(--v2-text-faint);font-style:italic"{% endif %}>{% if company.website %}{{ company.website }}{% else %}—{% endif %}</span>
             </span>
           </div>
         </div>
@@ -907,7 +921,8 @@
             <span data-v3-edit
                   data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
                   data-edit-field="legal_name"
-                  data-edit-kind="inline">{{ company.legal_name|default:"—" }}</span>
+                  data-edit-kind="inline"
+                  data-edit-placeholder="Полное юридическое название">{{ company.legal_name|default:"—" }}</span>
           </div>
         </div>
         <div class="vb-p">
@@ -920,7 +935,8 @@
             <span data-v3-edit
                   data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
                   data-edit-field="activity_kind"
-                  data-edit-kind="inline">{{ company.activity_kind|default:"—" }}</span>
+                  data-edit-kind="inline"
+                  data-edit-placeholder="Отрасль, чем занимается компания">{{ company.activity_kind|default:"—" }}</span>
           </div>
         </div>
         <div class="vb-p">
@@ -943,14 +959,16 @@
                   data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
                   data-edit-field="workday_start"
                   data-edit-kind="inline"
-                  style="display:inline-block;min-width:50px">{% if company.workday_start %}{{ company.workday_start|time:"H:i" }}{% else %}—{% endif %}</span>
+                  data-edit-placeholder="09:00"
+                  style="display:inline-block;min-width:60px">{% if company.workday_start %}{{ company.workday_start|time:"H:i" }}{% else %}—{% endif %}</span>
             {% if company.workday_start or company.workday_end %}
             <span style="color:var(--v2-text-muted);margin:0 6px">—</span>
             <span data-v3-edit
                   data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
                   data-edit-field="workday_end"
                   data-edit-kind="inline"
-                  style="display:inline-block;min-width:50px">{% if company.workday_end %}{{ company.workday_end|time:"H:i" }}{% else %}—{% endif %}</span>
+                  data-edit-placeholder="18:00"
+                  style="display:inline-block;min-width:60px">{% if company.workday_end %}{{ company.workday_end|time:"H:i" }}{% else %}—{% endif %}</span>
             {% endif %}
           </div>
         </div>
@@ -964,7 +982,8 @@
             <span data-v3-edit
                   data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
                   data-edit-field="work_schedule"
-                  data-edit-kind="inline">{{ company.work_schedule|default:"—" }}</span>
+                  data-edit-kind="inline"
+                  data-edit-placeholder="Например: Пн-Пт 9:00-18:00">{{ company.work_schedule|default:"—" }}</span>
           </div>
         </div>
         <div class="vb-p">
@@ -977,7 +996,8 @@
             <span data-v3-edit
                   data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
                   data-edit-field="employees_count"
-                  data-edit-kind="inline">{{ company.employees_count|default:"—" }}</span>
+                  data-edit-kind="inline"
+                  data-edit-placeholder="Число сотрудников">{{ company.employees_count|default:"—" }}</span>
           </div>
         </div>
         {% if company.spheres.all %}
@@ -1300,6 +1320,7 @@
                data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
                data-edit-field="contract_amount"
                data-edit-kind="inline"
+               data-edit-placeholder="Сумма в рублях"
                title="Сумма годового договора (₽)">{% if company.contract_amount %}{{ company.contract_amount|floatformat:"0" }} ₽{% else %}—{% endif %}</div>
         </div>
         {% else %}

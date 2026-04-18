@@ -16,18 +16,41 @@
 <style nonce="{{ request.csp_nonce|default:'' }}">
   /* Визуал при редактировании */
   [data-v3-edit]:hover{outline:1px dashed var(--v2-primary-100);outline-offset:2px;cursor:text}
-  [data-v3-edit]:focus{outline:2px solid var(--v2-primary);outline-offset:2px;
-    background:var(--v2-primary-50);cursor:text}
+  /* Активный режим: input-like визуал — очевидно что курсор в поле
+     (особенно для пустых: «—», «+ телефон», «+ сайт» и т.п.). */
+  [data-v3-edit]:focus,
+  [data-v3-edit].is-editing{
+    outline:none;
+    border:1.5px solid var(--v2-primary);
+    background:var(--v2-bg);
+    padding:5px 10px;
+    border-radius:var(--v2-radius-sm);
+    min-width:160px;
+    min-height:28px;
+    display:inline-block;
+    vertical-align:middle;
+    box-shadow:0 0 0 3px var(--v2-primary-50);
+    cursor:text;
+    font-style:normal;
+    color:var(--v2-text);
+    line-height:1.4}
+  /* Placeholder в пустом edit-поле при фокусе */
+  [data-v3-edit]:focus:empty::before,
+  [data-v3-edit].is-editing:empty::before{
+    content:attr(data-edit-placeholder);
+    color:var(--v2-text-faint);
+    font-style:italic;
+    pointer-events:none}
   /* Внутри data-v3-click-menu — клик должен открывать МЕНЮ, а не сразу
      активировать contenteditable. pointer-events:none на внутреннем
-     [data-v3-edit] → события всплывают к родителю data-v3-click-menu.
-     Когда юзер выбрал «Изменить» в меню — JS _menuTriggerEdit() снимает
-     класс is-not-editable → можно редактировать. */
+     [data-v3-edit] → события всплывают к родителю. JS при клике «Изменить»
+     в меню добавляет класс .is-editing → pointer-events:auto. */
   [data-v3-click-menu] [data-v3-edit]:not(.is-editing){pointer-events:none;cursor:pointer}
   [data-v3-click-menu] [data-v3-edit].is-editing{pointer-events:auto;cursor:text}
   [data-v3-click-menu] [data-v3-edit]:hover{outline:none}
   [data-v3-edit].is-saving{opacity:.6;pointer-events:none}
-  [data-v3-edit].is-error{outline:2px solid var(--v2-danger);background:var(--v2-danger-50)}
+  [data-v3-edit].is-error{outline:none;border:1.5px solid var(--v2-danger);
+    background:var(--v2-danger-50);box-shadow:0 0 0 3px var(--v2-danger-100)}
 
   /* Combobox trigger (любой элемент с data-v3-combobox) */
   [data-v3-combobox]{cursor:pointer;user-select:none}
