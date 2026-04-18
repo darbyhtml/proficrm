@@ -29,7 +29,7 @@
 
   .vb-hero__row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:28px;
     align-items:flex-start}
-  @media (max-width:1280px){.vb-hero__row{grid-template-columns:1fr}}
+  @media (max-width:1200px){.vb-hero__row{grid-template-columns:1fr}}
 
   .vb-hero__left{min-width:0}
   .vb-hero__name{font-size:26px;font-weight:700;letter-spacing:-0.02em;
@@ -59,7 +59,7 @@
 
   /* KPI-пилюли (правая часть hero) */
   .vb-hero__kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(124px,1fr));gap:8px}
-  @media (min-width:1281px){.vb-hero__kpis{display:flex;flex-wrap:wrap}}
+  @media (min-width:1201px){.vb-hero__kpis{display:flex;flex-wrap:wrap}}
   .vb-kpi{background:var(--v2-bg);border:1px solid var(--v2-border);
     border-radius:var(--v2-radius);padding:9px 14px;min-width:124px;
     transition:border-color .12s,box-shadow .12s;cursor:default}
@@ -94,13 +94,16 @@
   .vb-abtn--spacer{margin-left:auto}
 
   /* ═════════════ 3-COLUMN GRID ═════════════ */
+  /* max-width центральной колонки чтобы на QHD/4K не растекалось */
+  .vb-col--center{max-width:1200px}
   .vb-grid{display:grid;grid-template-columns:320px minmax(0,1fr) 320px;
     gap:0;background:var(--v2-border);
     border-top:1px solid var(--v2-border)}
   .vb-grid>*{background:var(--v2-bg)}
   .vb-grid>*+*{border-left:1px solid var(--v2-border)}
-  @media (max-width:1280px){.vb-grid{grid-template-columns:1fr}
-    .vb-grid>*+*{border-left:none;border-top:1px solid var(--v2-border)}}
+  @media (max-width:1200px){.vb-grid{grid-template-columns:1fr}
+    .vb-grid>*+*{border-left:none;border-top:1px solid var(--v2-border)}
+    .vb-col--center{max-width:100%}}
 
   .vb-col{padding:18px 20px;display:flex;flex-direction:column;gap:22px;min-width:0}
   .vb-col--center{padding:18px 22px}
@@ -130,6 +133,19 @@
   .vb-tag--warn{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
   .vb-tag--danger{background:var(--v2-danger-50);color:var(--v2-danger);
     border:1px solid var(--v2-danger-100)}
+
+  /* ─── Alert-баннер в hero (запрос на удаление и т.п.) ─── */
+  .vb-alert{display:flex;align-items:center;gap:10px;
+    padding:10px 14px;margin-bottom:12px;border-radius:var(--v2-radius);
+    font-size:13px;line-height:1.4}
+  .vb-alert--danger{background:var(--v2-danger-50);color:var(--v2-danger);
+    border:1px solid var(--v2-danger-100)}
+  .vb-alert svg{flex:0 0 16px}
+  .vb-alert__act{margin-left:auto;padding:4px 12px;border-radius:var(--v2-radius-sm);
+    background:var(--v2-danger);color:#fff;text-decoration:none;
+    font-size:12px;font-weight:500;white-space:nowrap}
+  .vb-alert__act:hover{background:var(--v2-danger-dark,#c53030);
+    text-decoration:none}
 
   /* ─── Property row ─── */
   .vb-p{display:flex;align-items:center;gap:10px;padding:6px 0;
@@ -563,6 +579,17 @@
 
   {# ═════════════════════ HERO ═════════════════════ #}
   <section class="vb-hero">
+    {% if delete_req %}
+    <div class="vb-alert vb-alert--danger" role="alert">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span>Запрос на удаление от <b>{{ delete_req.requested_by|full_name|default:"—" }}</b>
+        {% if delete_req.requested_at %}· {{ delete_req.requested_at|date:"d.m.Y H:i" }}{% endif %}
+        {% if delete_req.reason %} · причина: {{ delete_req.reason|truncatechars:100 }}{% endif %}</span>
+      {% if is_admin_user %}
+      <a href="/companies/{{ company.id }}/delete-request/" class="vb-alert__act">Рассмотреть</a>
+      {% endif %}
+    </div>
+    {% endif %}
     <div class="vb-hero__crumb">
       <a href="/companies/">Компании</a>
       <span class="vb-hero__crumb-sep">›</span>
@@ -634,6 +661,17 @@
           <span class="vb-hero__meta-dot"></span>
           <span title="Подразделение (наследуется от ответственного)">Подразделение <b>{{ company.branch.name }}</b></span>
           {% endif %}
+          <span class="vb-hero__meta-dot"></span>
+          <span title="Регион клиента">Регион
+            <b data-v3-combobox
+               data-edit-url="{% url 'company_update' company_id=company.id %}"
+               data-edit-param="region"
+               data-edit-current="{% if company.region %}{{ company.region.id }}{% endif %}"
+               data-edit-clearable="1"
+               data-edit-options='{{ region_options_json|escape }}'>
+              <span data-v3-combobox-label>{{ company.region.name|default:"—" }}</span>
+            </b>
+          </span>
         </div>
       </div>
 
@@ -860,7 +898,7 @@
                data-v3-click-menu="text"
                data-menu-value="{{ company.legal_name }}"
                data-menu-edit-url="{% url 'company_inline_update' company_id=company.id %}"
-               title="Действия с юр. названием">
+               title="{{ company.legal_name|default:'Действия с юр. названием' }}">
             <span data-v3-edit
                   data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
                   data-edit-field="legal_name"

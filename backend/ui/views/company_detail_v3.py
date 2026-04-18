@@ -25,8 +25,8 @@ from accounts.models import Branch
 from audit.models import ActivityEvent
 from audit.service import log_event
 from companies.models import (
-    Company, CompanyDeal, CompanyNote, CompanySphere, CompanyStatus,
-    Contact, ContactEmail, ContactPhone, ContractType,
+    Company, CompanyDeal, CompanyDeletionRequest, CompanyNote, CompanySphere,
+    CompanyStatus, Contact, ContactEmail, ContactPhone, ContractType, Region,
 )
 from tasksapp.models import Task
 from ui.views._base import policy_required, require_can_view_company, _safe_next_v3
@@ -52,9 +52,17 @@ def company_detail_v3_preview(
 
     company = get_object_or_404(
         Company.objects
-        .select_related("responsible", "branch", "status", "contract_type", "head_company")
+        .select_related("responsible", "branch", "status", "contract_type", "head_company", "region")
         .prefetch_related("phones", "emails", "spheres"),
         id=company_id,
+    )
+
+    # P0: Pending delete request — предупреждение в шапке (classic-паттерн)
+    delete_req = (
+        CompanyDeletionRequest.objects
+        .filter(company_id=company.id, status="pending")
+        .select_related("requested_by")
+        .first()
     )
 
     # F4 Этап 4: группа компаний — head_company + client_branches (топ-5)
@@ -194,6 +202,11 @@ def company_detail_v3_preview(
         {"id": str(ct.id), "label": ct.name}
         for ct in ContractType.objects.order_by("name")
     ]
+    # P0: регионы — 77.6% компаний на проде имеют регион; 334 правки/период
+    region_options = [
+        {"id": str(r.id), "label": r.name}
+        for r in Region.objects.order_by("name")
+    ]
     branch_options = [
         {"id": str(b.id), "label": b.name}
         for b in Branch.objects.order_by("name")
@@ -241,6 +254,8 @@ def company_detail_v3_preview(
         "status_options_json": json.dumps(status_options, ensure_ascii=False),
         "sphere_options_json": json.dumps(sphere_options, ensure_ascii=False),
         "contract_type_options_json": json.dumps(contract_type_options, ensure_ascii=False),
+        "region_options_json": json.dumps(region_options, ensure_ascii=False),
+        "delete_req": delete_req,
         "branch_options_json": json.dumps(branch_options, ensure_ascii=False),
         "responsible_options_json": json.dumps(responsible_options, ensure_ascii=False),
     }
@@ -326,6 +341,16 @@ def contact_quick_create(request: HttpRequest, company_id) -> HttpResponse:
         else:
             phone = "+" + digits if digits else phone
 
+    # Null-byte / control-chars защита (PostgreSQL отклоняет NUL)
+    for fld_name, fld_val in (("ФИО", f"{first_name} {last_name}"),
+                               ("Должность", position),
+                               ("Email", email),
+                               ("Телефон", phone)):
+        if "\x00" in (fld_val or ""):
+            return JsonResponse(
+                {"ok": False, "error": f"Поле «{fld_name}» содержит недопустимые символы."},
+                status=400,
+            )
     try:
         with db_tx.atomic():
             contact = Contact.objects.create(
@@ -338,9 +363,12 @@ def contact_quick_create(request: HttpRequest, company_id) -> HttpResponse:
                 ContactPhone.objects.create(contact=contact, value=phone[:50])
             if email:
                 ContactEmail.objects.create(contact=contact, value=email[:254])
-    except Exception as exc:
+    except Exception:
         logger.exception("contact_quick_create failed")
-        return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+        return JsonResponse(
+            {"ok": False, "error": "Не удалось сохранить контакт. Попробуйте позже."},
+            status=400,
+        )
 
     try:
         log_event(

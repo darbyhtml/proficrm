@@ -1369,15 +1369,21 @@ def company_phone_value_update(request: HttpRequest, company_phone_id) -> HttpRe
             {"success": False, "error": "Телефон содержит недопустимые символы."},
             status=400,
         )
+    # Null-byte защита (PostgreSQL отклоняет NUL → 500)
+    if "\x00" in raw:
+        return JsonResponse(
+            {"success": False, "error": "Телефон содержит недопустимые символы."},
+            status=400,
+        )
     from companies.normalizers import normalize_phone as _normalize_phone
     normalized = _normalize_phone(raw) if raw else ""
     if not normalized:
         return JsonResponse({"success": False, "error": "Телефон не может быть пустым."}, status=400)
-    # Проверка: итоговый номер должен содержать минимум 10 цифр
-    _digits = _re_phone.sub(r"\D", "", normalized)
-    if len(_digits) < 10:
+    # Строгий формат: +<цифры>, длина 11-15 (E.164). normalize_phone для мусора
+    # возвращает original[:50] — этот кейс отсекаем здесь.
+    if not _re_phone.fullmatch(r"\+\d{10,15}", normalized):
         return JsonResponse(
-            {"success": False, "error": "Некорректный телефон: должно быть минимум 10 цифр."},
+            {"success": False, "error": "Некорректный формат телефона."},
             status=400,
         )
 
@@ -1461,15 +1467,21 @@ def company_phone_create(request: HttpRequest, company_id) -> HttpResponse:
             {"success": False, "error": "Телефон содержит недопустимые символы."},
             status=400,
         )
+    # Null-byte защита (PostgreSQL отклоняет NUL → 500)
+    if "\x00" in raw:
+        return JsonResponse(
+            {"success": False, "error": "Телефон содержит недопустимые символы."},
+            status=400,
+        )
     from companies.normalizers import normalize_phone as _normalize_phone
     normalized = _normalize_phone(raw) if raw else ""
     if not normalized:
         return JsonResponse({"success": False, "error": "Телефон не может быть пустым."}, status=400)
-    # Проверка: итоговый номер должен содержать минимум 10 цифр
-    _digits = _re_phone.sub(r"\D", "", normalized)
-    if len(_digits) < 10:
+    # Строгий формат: +<цифры>, длина 11-15 (E.164). normalize_phone для мусора
+    # возвращает original[:50] — этот кейс отсекаем здесь.
+    if not _re_phone.fullmatch(r"\+\d{10,15}", normalized):
         return JsonResponse(
-            {"success": False, "error": "Некорректный телефон: должно быть минимум 10 цифр."},
+            {"success": False, "error": "Некорректный формат телефона."},
             status=400,
         )
 
@@ -1481,6 +1493,11 @@ def company_phone_create(request: HttpRequest, company_id) -> HttpResponse:
     from django.db.models import Max
 
     comment_raw = (request.POST.get("comment") or "").strip()[:255]
+    if "\x00" in comment_raw:
+        return JsonResponse(
+            {"success": False, "error": "Комментарий содержит недопустимые символы."},
+            status=400,
+        )
     with transaction.atomic():
         if CompanyPhone.objects.filter(company=company, value=normalized).exists():
             return JsonResponse({"success": False, "error": "Такой телефон уже есть в дополнительных номерах."}, status=400)

@@ -858,6 +858,19 @@
   document.addEventListener('keydown', function(e){
     if(e.key === 'Escape' && _activeMenu) _closeV3Menu();
   });
+  // Закрывать popup при resize окна (позиция становится невалидной)
+  let _resizeTimer = null;
+  window.addEventListener('resize', function(){
+    if(_activeMenu){
+      clearTimeout(_resizeTimer);
+      _resizeTimer = setTimeout(_closeV3Menu, 150);
+    }
+    // Комбобокс тоже закрываем
+    if(_openedPop){
+      clearTimeout(_resizeTimer);
+      _resizeTimer = setTimeout(_closePop, 150);
+    }
+  });
 
   // ── Phone normalizer: аналог backend companies.normalizers.normalize_phone,
   //    но live в браузере. Применяется к input[type=tel][data-v3-phone].
