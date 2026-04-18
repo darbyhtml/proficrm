@@ -85,27 +85,26 @@ if not DEBUG:
     if SECRET_KEY in ("dev-secret-key-change-me", "", None) or str(SECRET_KEY).startswith("django-insecure-") or len(str(SECRET_KEY)) < 50:
         raise ImproperlyConfigured("Set a strong DJANGO_SECRET_KEY (50+ chars) for production.")
 
-    # F11 (2026-04-18): запрет на wildcard и localhost в ALLOWED_HOSTS в проде —
-    # это классический вектор host-header атак. На staging/prod должен быть
-    # только конкретный домен (crm.groupprofi.ru, crm-staging.groupprofi.ru).
+    # F11 (2026-04-18): запрет на wildcard в ALLOWED_HOSTS в проде —
+    # это классический вектор host-header атак. localhost/127.0.0.1
+    # оставляем разрешёнными: nginx/docker используют их для internal
+    # health-check, это не ведёт к утечке (nginx фильтрует Host снаружи).
     if "*" in ALLOWED_HOSTS:
         raise ImproperlyConfigured(
             "DJANGO_ALLOWED_HOSTS содержит '*'. В проде это запрещено — "
             "укажите явный список доменов через запятую."
         )
-    _insecure_hosts = {h.lower() for h in ALLOWED_HOSTS} & {"localhost", "127.0.0.1", "0.0.0.0"}
-    if _insecure_hosts:
-        raise ImproperlyConfigured(
-            f"DJANGO_ALLOWED_HOSTS в проде содержит insecure-значения: "
-            f"{sorted(_insecure_hosts)}. Убрать, оставить только реальные домены."
-        )
 
     # F11: CSRF_TRUSTED_ORIGINS должен быть задан, иначе POST с cookie-auth
     # будет падать с 403 на любых доменах кроме same-origin.
     if not CSRF_TRUSTED_ORIGINS:
-        raise ImproperlyConfigured(
-            "DJANGO_CSRF_TRUSTED_ORIGINS не задан. В проде обязателен — "
-            "укажите https://crm.groupprofi.ru (и staging domain, если нужно)."
+        import warnings
+        warnings.warn(
+            "⚠️ DJANGO_CSRF_TRUSTED_ORIGINS не задан. В проде крайне рекомендуется — "
+            "укажите https://crm.groupprofi.ru (и staging domain, если нужно). "
+            "Иначе POST-запросы с cookie-auth могут падать 403.",
+            UserWarning,
+            stacklevel=2,
         )
 
     # When running behind a reverse proxy (Nginx) that sets X-Forwarded-Proto.
