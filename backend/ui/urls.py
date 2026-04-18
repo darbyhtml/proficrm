@@ -97,6 +97,10 @@ urlpatterns = [
     path("admin/access/roles/<str:role>/", views.settings_access_role, name="settings_access_role"),
     # F7 R1: ролевые KPI-дашборды v2 (MVP — MANAGER)
     path("analytics/v2/", views.analytics_v2_home, name="analytics_v2_home"),
+    # F9 UI: управление APK-билдами CRMProfiDialer
+    path("admin/mobile-apps/", views.settings_mobile_apps, name="settings_mobile_apps"),
+    path("admin/mobile-apps/upload/", views.settings_mobile_apps_upload, name="settings_mobile_apps_upload"),
+    path("admin/mobile-apps/<uuid:build_id>/toggle/", views.settings_mobile_apps_toggle, name="settings_mobile_apps_toggle"),
     # F6 R1+R2: SMTP onboarding wizard + Fernet re-save UI + config edit
     path("admin/mail/setup/", views.settings_mail_setup, name="settings_mail_setup"),
     path("admin/mail/setup/save-password/", views.settings_mail_save_password, name="settings_mail_save_password"),

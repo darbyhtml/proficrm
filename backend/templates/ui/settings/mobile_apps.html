@@ -1,0 +1,169 @@
+{% extends "ui/base.html" %}
+{% block title %}Мобильное приложение — CRM ПРОФИ{% endblock %}
+
+{% block extra_head %}
+  {% include "ui/_v2/v2_styles.html" %}
+  {% include "ui/_v2/v3_styles.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="v2 space-y-4">
+
+  <nav class="text-xs text-brand-dark/50 mb-1" aria-label="Хлебные крошки">
+    <a href="/admin/" class="hover:text-brand-teal transition">Настройки</a>
+    <span class="mx-1" aria-hidden="true">›</span>
+    <span>Мобильное приложение</span>
+  </nav>
+
+  <div>
+    <h1 class="v2-h1" style="margin:0">Мобильное приложение (CRMProfiDialer)</h1>
+    <div class="v2-muted">Загрузка APK-билдов и управление версиями для auto-update.</div>
+  </div>
+
+  {% if messages %}
+    <div class="space-y-2">
+      {% for m in messages %}
+        <div class="rounded-xl px-4 py-3 text-sm
+          {% if 'success' in m.tags %}bg-emerald-50 border border-emerald-200 text-emerald-800
+          {% elif 'error' in m.tags %}bg-red-50 border border-red-200 text-red-800
+          {% else %}bg-brand-soft/30 border border-brand-soft text-brand-dark{% endif %}">
+          {{ m }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {# ── Загрузка APK ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Загрузить новую версию</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px">
+      <form method="post" action="{% url 'settings_mobile_apps_upload' %}" enctype="multipart/form-data" class="space-y-3">
+        {% csrf_token %}
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label for="id_version_name" class="v3-label">Версия (имя)</label>
+            <input type="text" name="version_name" id="id_version_name" class="v2-input"
+                   placeholder="1.2.3" maxlength="32" required />
+            <div class="v2-muted" style="font-size:12px;margin-top:4px">
+              Семантическая версия, отображается пользователю. Пример: 1.2.3
+            </div>
+          </div>
+          <div>
+            <label for="id_version_code" class="v3-label">Версия (код)</label>
+            <input type="number" name="version_code" id="id_version_code" class="v2-input"
+                   min="1" required />
+            <div class="v2-muted" style="font-size:12px;margin-top:4px">
+              Монотонно возрастающее целое. Android сравнивает их для auto-update.
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label for="id_file" class="v3-label">APK-файл</label>
+          <input type="file" name="file" id="id_file" accept=".apk"
+                 class="v2-input" required />
+          <div class="v2-muted" style="font-size:12px;margin-top:4px">
+            SHA256 вычислится автоматически при сохранении.
+          </div>
+        </div>
+
+        <div>
+          <button type="submit" class="v2-btn">Загрузить APK</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  {# ── Список версий ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Загруженные версии ({{ builds|length }})</h2>
+    </div>
+    <div class="v2-card__body" style="padding:12px 20px 16px;overflow-x:auto">
+      {% if builds %}
+        <table style="width:100%;border-collapse:collapse;font-size:14px">
+          <thead>
+            <tr style="text-align:left;border-bottom:1px solid var(--v3-border)">
+              <th style="padding:8px 6px">Версия</th>
+              <th style="padding:8px 6px">Code</th>
+              <th style="padding:8px 6px">Размер</th>
+              <th style="padding:8px 6px">SHA256</th>
+              <th style="padding:8px 6px">Загружено</th>
+              <th style="padding:8px 6px">Статус</th>
+              <th style="padding:8px 6px">Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for b in builds %}
+              <tr style="border-bottom:1px solid var(--v3-border)">
+                <td style="padding:8px 6px"><strong>{{ b.version_name }}</strong></td>
+                <td style="padding:8px 6px">{{ b.version_code }}</td>
+                <td style="padding:8px 6px">{{ b.get_file_size_display }}</td>
+                <td style="padding:8px 6px;font-family:monospace;font-size:12px">{{ b.sha256|slice:":12" }}…</td>
+                <td style="padding:8px 6px">
+                  {{ b.uploaded_at|date:"d.m.Y H:i" }}
+                  {% if b.uploaded_by %}
+                    <div class="v2-muted" style="font-size:12px">{{ b.uploaded_by.get_full_name|default:b.uploaded_by.username }}</div>
+                  {% endif %}
+                </td>
+                <td style="padding:8px 6px">
+                  {% if b.is_active %}
+                    <span class="v3-badge v3-badge--success">Активен</span>
+                  {% else %}
+                    <span class="v3-badge v3-badge--warn">Отключён</span>
+                  {% endif %}
+                </td>
+                <td style="padding:8px 6px">
+                  <div style="display:flex;gap:6px;flex-wrap:wrap">
+                    {% if b.file %}
+                      <a href="{{ b.file.url }}" class="v2-btn v2-btn--ghost" style="font-size:12px;padding:4px 8px" download>⬇ APK</a>
+                    {% endif %}
+                    <form method="post" action="{% url 'settings_mobile_apps_toggle' build_id=b.id %}" style="display:inline">
+                      {% csrf_token %}
+                      <button type="submit" class="v2-btn v2-btn--ghost" style="font-size:12px;padding:4px 8px">
+                        {% if b.is_active %}Отключить{% else %}Включить{% endif %}
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="v2-muted" style="padding:16px 0">
+          Ни одной версии пока не загружено. Загрузите первый APK через форму выше.
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  {# ── Инфо ── #}
+  <section class="v2-card">
+    <div class="v2-card__head">
+      <h2 class="v2-card__title">Как работает auto-update</h2>
+    </div>
+    <div class="v2-card__body" style="padding:16px 20px;font-size:14px;line-height:1.6">
+      <p>
+        CRMProfiDialer периодически вызывает
+        <code>GET /api/phone/app/latest/</code> — возвращает самую свежую
+        активную production-версию (сортировка по <code>version_code</code>).
+      </p>
+      <p class="v2-muted" style="margin-top:8px;font-size:13px">
+        Если приложение получает версию с кодом больше своего — предлагает
+        пользователю скачать и установить. SHA256 используется для проверки
+        целостности загруженного файла.
+      </p>
+      <p class="v2-muted" style="margin-top:8px;font-size:13px">
+        Только одна активная версия с наивысшим <code>version_code</code>
+        «видна» из приложения. Отключённые (is_active=False) остаются в
+        истории, но не предлагаются для обновления.
+      </p>
+    </div>
+  </section>
+
+</div>
+{% endblock %}

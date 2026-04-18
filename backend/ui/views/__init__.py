@@ -100,6 +100,13 @@ from ui.views.settings_mail import (
 
 # F7 R1: ролевые KPI-дашборды v2
 from ui.views.analytics_v2 import analytics_v2_home  # noqa: F401
+
+# F9 UI: управление APK-билдами CRMProfiDialer
+from ui.views.settings_mobile_apps import (
+    settings_mobile_apps,
+    settings_mobile_apps_upload,
+    settings_mobile_apps_toggle,
+)  # noqa: F401
 from ui.views.mobile import (
     mobile_app_page, mobile_app_download, mobile_app_qr_image,
 )  # noqa: F401
