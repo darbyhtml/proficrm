@@ -374,17 +374,44 @@
   .vb-more-menu button.is-danger:hover{background:var(--v2-danger-50);color:var(--v2-danger)}
   .vb-more-menu__sep{height:1px;background:var(--v2-border);margin:3px 0}
 
-  /* Task row: кликабельность */
-  .vb-task{cursor:pointer}
+  /* Task row */
+  .vb-task{position:relative;grid-template-columns:auto 1fr auto auto !important}
+  .vb-task__body{cursor:pointer;min-width:0}
   .vb-task__chk{cursor:pointer}
   .vb-task__chk:hover{border-color:var(--v2-primary)}
   .vb-task__chk--done{background:var(--v2-primary);border-color:var(--v2-primary);
     display:flex;align-items:center;justify-content:center}
   .vb-task__chk--done::before{content:"✓";color:#fff;font-size:10px;font-weight:700}
+  .vb-task__actions{display:flex;gap:2px;opacity:0;transition:opacity .12s;padding-left:4px}
+  .vb-task:hover .vb-task__actions{opacity:1}
+  .vb-task__a{background:none;border:0;cursor:pointer;padding:4px 7px;
+    border-radius:var(--v3-radius-xs);color:var(--v2-text-muted);font-family:inherit;
+    font-size:12px;line-height:1;transition:all .1s;display:inline-flex;align-items:center;justify-content:center}
+  .vb-task__a:hover{background:var(--v2-bg-muted);color:var(--v2-text)}
+  .vb-task__a--danger:hover{background:var(--v2-danger-50);color:var(--v2-danger)}
+  .vb-task__a svg{width:12px;height:12px}
 
   /* Timeline load-more */
   .vb-tl-more{padding:10px 0;text-align:center}
   .vb-tl-more .vb-abtn{height:30px;padding:0 16px;font-size:12.5px}
+
+  /* External-link icon (website) */
+  .vb-ext-link{display:inline-flex;align-items:center;justify-content:center;
+    width:22px;height:22px;border-radius:50%;background:var(--v2-primary-50);
+    color:var(--v2-primary-dark);text-decoration:none;font-size:12px;
+    font-weight:600;flex:0 0 auto;transition:all .12s}
+  .vb-ext-link:hover{background:var(--v2-primary);color:#fff;transform:scale(1.08)}
+
+  /* «Дополнительно» details */
+  .vb-more-details{margin-top:8px;padding-top:8px;border-top:1px dashed var(--v2-border)}
+  .vb-more-details summary{cursor:pointer;font-size:11.5px;
+    color:var(--v2-text-muted);padding:4px 0;letter-spacing:.02em;
+    font-weight:500;user-select:none;list-style:none;
+    display:inline-flex;align-items:center;gap:4px}
+  .vb-more-details summary::-webkit-details-marker{display:none}
+  .vb-more-details summary::before{content:"▸";font-size:9px;transition:transform .12s}
+  .vb-more-details[open] summary::before{transform:rotate(90deg)}
+  .vb-more-details summary:hover{color:var(--v2-primary)}
 
   /* ─── Служебный accordion (Этап 5) ─── */
   .vb-sys{border-top:1px solid var(--v2-border);
@@ -651,13 +678,72 @@
         </div>
         <div class="vb-p">
           <div class="vb-p__k">Сайт</div>
+          <div class="vb-p__v" style="display:flex;align-items:center;gap:6px;min-width:0">
+            <span data-v3-edit
+                  data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+                  data-edit-field="website"
+                  data-edit-kind="inline"
+                  style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ company.website|default:"—" }}</span>
+            {% if company.website %}
+              <a href="{{ company.website|external_url }}" target="_blank" rel="noopener"
+                 class="vb-ext-link" title="Открыть сайт">↗</a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      {# ─── Дополнительные поля (из classic) ─── #}
+      <details class="vb-more-details">
+        <summary>Дополнительно: реквизиты, режим работы, сферы</summary>
+        <div class="vb-p">
+          <div class="vb-p__k">Юр. название</div>
           <div class="vb-p__v"
                data-v3-edit
                data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
-               data-edit-field="website"
-               data-edit-kind="inline">{{ company.website|default:"—" }}</div>
+               data-edit-field="legal_name"
+               data-edit-kind="inline">{{ company.legal_name|default:"—" }}</div>
         </div>
-      </div>
+        <div class="vb-p">
+          <div class="vb-p__k">КПП</div>
+          <div class="vb-p__v"
+               data-v3-edit
+               data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+               data-edit-field="kpp"
+               data-edit-kind="inline">{{ company.kpp|default:"—" }}</div>
+        </div>
+        <div class="vb-p">
+          <div class="vb-p__k">Вид деятельности</div>
+          <div class="vb-p__v"
+               data-v3-edit
+               data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+               data-edit-field="activity_kind"
+               data-edit-kind="inline">{{ company.activity_kind|default:"—" }}</div>
+        </div>
+        <div class="vb-p">
+          <div class="vb-p__k">Режим работы</div>
+          <div class="vb-p__v"
+               data-v3-edit
+               data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+               data-edit-field="work_schedule"
+               data-edit-kind="inline">{{ company.work_schedule|default:"—" }}</div>
+        </div>
+        <div class="vb-p">
+          <div class="vb-p__k">Сотрудников</div>
+          <div class="vb-p__v"
+               data-v3-edit
+               data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+               data-edit-field="employees_count"
+               data-edit-kind="inline">{{ company.employees_count|default:"—" }}</div>
+        </div>
+        {% if company.spheres.all %}
+        <div class="vb-p">
+          <div class="vb-p__k">Сферы</div>
+          <div class="vb-p__v vb-p__v--multi">
+            {% for s in company.spheres.all %}{{ s.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </details>
 
       <div class="vb-sec">
         <div class="vb-sec__h">
@@ -758,25 +844,71 @@
 
       <div data-tab-panel="tasks" hidden>
         {% for t in open_tasks %}
-        <div class="vb-task"
-             data-v2-modal-open="/tasks/v2/{{ t.id }}/partial/"
-             data-v2-modal-title="Задача">
+        <div class="vb-task" data-task-id="{{ t.id }}">
           <span class="vb-task__chk {% if t.is_urgent %}vb-task__chk--urgent{% endif %}"
                 data-v3-task-done
                 data-task-id="{{ t.id }}"
                 title="Отметить выполненной"></span>
-          <div class="vb-task__body">
+          <div class="vb-task__body"
+               data-v2-modal-open="/tasks/v2/{{ t.id }}/partial/"
+               data-v2-modal-title="Задача">
             <div class="vb-task__title">{% if t.type %}{{ t.type.name }}{% if t.title and t.title|lower != t.type.name|lower %} · {{ t.title }}{% endif %}{% else %}{{ t.title|default:"Без названия" }}{% endif %}</div>
-            <div class="vb-task__sub">{{ t.assigned_to|full_name|default:"—" }}{% if t.is_urgent %} · срочная{% endif %}</div>
+            <div class="vb-task__sub">
+              {{ t.assigned_to|full_name|default:"—" }}{% if t.is_urgent %} · срочная{% endif %}
+              {% if t.status == 'in_progress' %} · в работе{% endif %}
+            </div>
           </div>
           <span class="vb-task__due {% if t.due_at and t.due_at < now %}vb-task__due--overdue{% endif %}">{% if t.due_at %}{{ t.due_at|date:"d.m H:i" }}{% else %}без срока{% endif %}</span>
+          <div class="vb-task__actions">
+            {% if t.status != 'in_progress' %}
+            <button class="vb-task__a" title="Взять в работу"
+                    data-v3-task-status
+                    data-task-id="{{ t.id }}"
+                    data-status="in_progress">▶</button>
+            {% endif %}
+            <button class="vb-task__a" title="Редактировать"
+                    data-v2-modal-open="/tasks/v2/{{ t.id }}/edit/partial/"
+                    data-v2-modal-title="Задача — редактирование">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="vb-task__a vb-task__a--danger" title="Удалить задачу"
+                    data-v3-delete
+                    data-delete-url="/tasks/{{ t.id }}/delete/"
+                    data-delete-confirm="Удалить задачу? Это действие необратимо.">×</button>
+          </div>
         </div>
-        {% empty %}
+        {% endfor %}
+
+        {% if not open_tasks %}
         <div class="vb-empty">Активных задач нет.
           <a href="#" data-v2-modal-open="{% url 'ui_v2_task_create_partial' %}?company={{ company.id }}"
              data-v2-modal-title="Новая задача">+ задача</a>
         </div>
-        {% endfor %}
+        {% endif %}
+
+        {% if recent_tasks_done %}
+        <details style="margin-top:14px;border-top:1px solid var(--v2-border);padding-top:10px">
+          <summary style="cursor:pointer;font-size:12px;color:var(--v2-text-muted);font-weight:500">
+            История задач · {{ recent_tasks_done|length }} завершённых
+          </summary>
+          <div style="margin-top:8px">
+            {% for t in recent_tasks_done %}
+            <div class="vb-task" style="opacity:.65">
+              <span class="vb-task__chk vb-task__chk--done"></span>
+              <div class="vb-task__body"
+                   data-v2-modal-open="/tasks/v2/{{ t.id }}/partial/"
+                   data-v2-modal-title="Задача">
+                <div class="vb-task__title" style="text-decoration:line-through">
+                  {% if t.type %}{{ t.type.name }}{% else %}{{ t.title|default:"—" }}{% endif %}
+                </div>
+                <div class="vb-task__sub">{{ t.assigned_to|full_name|default:"—" }} · {{ t.updated_at|date:"d.m.Y" }}</div>
+              </div>
+              <span class="vb-task__due">{{ t.get_status_display }}</span>
+            </div>
+            {% endfor %}
+          </div>
+        </details>
+        {% endif %}
       </div>
 
       <div data-tab-panel="notes" hidden id="vbNotesPanel">
@@ -1088,7 +1220,7 @@
   // ── Task чекбокс: mark done ──
   document.querySelectorAll('[data-v3-task-done]').forEach(function(chk){
     chk.addEventListener('click', async function(e){
-      e.stopPropagation();  // не открывать модалку
+      e.stopPropagation();
       const taskId = chk.getAttribute('data-task-id');
       if(!taskId) return;
       if(!confirm('Отметить задачу выполненной?')) return;
@@ -1096,12 +1228,28 @@
       try {
         await postForm('/tasks/' + taskId + '/status/', {status:'done'});
         toast('Задача выполнена', 'ok');
-        // row плавно скрываем
         const row = chk.closest('.vb-task');
         if(row){ row.style.transition = 'opacity .3s'; row.style.opacity = '0.3'; }
         setTimeout(function(){ location.reload(); }, 400);
       } catch(err){
         chk.classList.remove('vb-task__chk--done');
+        toast('Ошибка: ' + err.message, 'err');
+      }
+    });
+  });
+
+  // ── Task action: «В работу» ──
+  document.querySelectorAll('[data-v3-task-status]').forEach(function(btn){
+    btn.addEventListener('click', async function(e){
+      e.stopPropagation();
+      const taskId = btn.getAttribute('data-task-id');
+      const status = btn.getAttribute('data-status');
+      if(!taskId || !status) return;
+      try {
+        await postForm('/tasks/' + taskId + '/status/', {status: status});
+        toast('Статус обновлён', 'ok');
+        setTimeout(function(){ location.reload(); }, 400);
+      } catch(err){
         toast('Ошибка: ' + err.message, 'err');
       }
     });
