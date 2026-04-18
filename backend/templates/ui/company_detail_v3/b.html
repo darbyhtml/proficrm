@@ -944,12 +944,14 @@
                   data-edit-field="workday_start"
                   data-edit-kind="inline"
                   style="display:inline-block;min-width:50px">{% if company.workday_start %}{{ company.workday_start|time:"H:i" }}{% else %}—{% endif %}</span>
+            {% if company.workday_start or company.workday_end %}
             <span style="color:var(--v2-text-muted);margin:0 6px">—</span>
             <span data-v3-edit
                   data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
                   data-edit-field="workday_end"
                   data-edit-kind="inline"
                   style="display:inline-block;min-width:50px">{% if company.workday_end %}{{ company.workday_end|time:"H:i" }}{% else %}—{% endif %}</span>
+            {% endif %}
           </div>
         </div>
         <div class="vb-p">
@@ -1048,7 +1050,7 @@
           <button class="vb-contact__x" title="Удалить контакт"
                   data-v3-delete
                   data-delete-url="/contacts/{{ c.id }}/delete/"
-                  data-delete-confirm="Удалить контакт «{{ c.name|default:'—' }}»?">×</button>
+                  data-delete-confirm="Удалить контакт «{% if c.last_name or c.first_name %}{{ c.last_name }} {{ c.first_name }}{% elif c.phones.first %}{{ c.phones.first.value|format_phone }}{% elif c.emails.first %}{{ c.emails.first.value }}{% else %}без имени{% endif %}»?">×</button>
         </div>
         {% empty %}
         <div class="vb-empty">Ещё нет ЛПР. <a href="#" data-v3-toggle-form="vbContactForm">+ добавить</a></div>

@@ -18,10 +18,14 @@
   [data-v3-edit]:hover{outline:1px dashed var(--v2-primary-100);outline-offset:2px;cursor:text}
   [data-v3-edit]:focus{outline:2px solid var(--v2-primary);outline-offset:2px;
     background:var(--v2-primary-50);cursor:text}
-  /* Внутри data-v3-click-menu — курсор меню, не text; hover-outline снимаем
-     (у родителя свой) */
-  [data-v3-click-menu] [data-v3-edit]:hover{outline:none;cursor:pointer}
-  [data-v3-click-menu] [data-v3-edit]{cursor:pointer}
+  /* Внутри data-v3-click-menu — клик должен открывать МЕНЮ, а не сразу
+     активировать contenteditable. pointer-events:none на внутреннем
+     [data-v3-edit] → события всплывают к родителю data-v3-click-menu.
+     Когда юзер выбрал «Изменить» в меню — JS _menuTriggerEdit() снимает
+     класс is-not-editable → можно редактировать. */
+  [data-v3-click-menu] [data-v3-edit]:not(.is-editing){pointer-events:none;cursor:pointer}
+  [data-v3-click-menu] [data-v3-edit].is-editing{pointer-events:auto;cursor:text}
+  [data-v3-click-menu] [data-v3-edit]:hover{outline:none}
   [data-v3-edit].is-saving{opacity:.6;pointer-events:none}
   [data-v3-edit].is-error{outline:2px solid var(--v2-danger);background:var(--v2-danger-50)}
 
@@ -375,6 +379,11 @@
       trigger.style.opacity = '';
       _closePop();
       toast('Обновлено', 'ok');
+      // Для контракта-типа переключение годовой ↔ не-годовой требует reload,
+      // чтобы обновить sidebar (Сумма vs Действует до).
+      if(paramName === 'contract_type'){
+        setTimeout(() => location.reload(), 400);
+      }
     } catch(err){
       trigger.style.opacity = '';
       toast('Ошибка: ' + (err.message || 'не удалось'), 'err');
@@ -594,6 +603,14 @@
     let editEl = target.closest('[data-v3-edit]') || target.querySelector('[data-v3-edit]');
     if(!editEl) editEl = target; // target сам — editable
     if(editEl && editEl.focus){
+      // Переводим в режим редактирования (pointer-events:auto)
+      editEl.classList.add('is-editing');
+      // На blur снимаем класс обратно
+      const removeClass = () => {
+        editEl.classList.remove('is-editing');
+        editEl.removeEventListener('blur', removeClass);
+      };
+      editEl.addEventListener('blur', removeClass);
       editEl.focus();
       // Выделим весь текст для быстрого ввода
       try{
