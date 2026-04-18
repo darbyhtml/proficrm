@@ -6,13 +6,49 @@
   {% include "ui/_v2/v2_styles.html" %}
   {% include "ui/_v2/v3_styles.html" %}
   <style>
-    /* Сгруппированные действия bulk-панели: переназначить / перенести */
-    .v2-bulk__group{display:inline-flex;align-items:center;gap:8px;padding:6px 10px 6px 12px;
-      background:var(--v2-bg-soft);border:1px solid var(--v2-border);border-radius:10px}
-    .v2-bulk__group-label{font-size:11px;font-weight:700;text-transform:uppercase;
-      color:var(--v2-text-muted);letter-spacing:.04em;white-space:nowrap}
-    .v2-bulk__group .v2-select,.v2-bulk__group .v2-input{padding:5px 8px;min-width:180px}
-    .v2-bulk__group .v2-input[type="datetime-local"]{min-width:200px}
+    /* Bulk actions — выровнены по высоте 36px (как .v2-btn / .v2-input / .v2-select).
+       Группы ячеек собраны в pill-контейнер с inner-label сверху. */
+    .v2-bulk{align-items:stretch}
+    .v2-bulk__selection{display:inline-flex;align-items:center;gap:8px;padding:0 12px;height:36px;
+      background:var(--v2-bg-soft);border:1px solid var(--v2-border);border-radius:8px;
+      font-size:13px;font-weight:500;color:var(--v2-text);white-space:nowrap}
+    .v2-bulk__selection-ic{width:16px;height:16px;color:var(--v2-text-muted);flex:0 0 auto}
+    .v2-bulk__selection b{color:var(--v2-primary);font-weight:700;min-width:1ch;display:inline-block;text-align:center}
+    .v2-bulk__selection.is-empty b{color:var(--v2-text-muted)}
+    .v2-bulk__divider{width:1px;align-self:stretch;background:var(--v2-border);margin:0 2px}
+
+    .v2-bulk__group{display:inline-flex;align-items:center;gap:6px;height:36px;
+      padding:0 4px 0 12px;background:#fff;border:1px solid var(--v2-border-strong);
+      border-radius:8px;transition:border-color .15s}
+    .v2-bulk__group:focus-within{border-color:var(--v2-primary)}
+    .v2-bulk__group-label{font-size:12px;font-weight:600;color:var(--v2-text-muted);
+      letter-spacing:.01em;white-space:nowrap;padding-right:2px}
+    .v2-bulk__group .v2-select,.v2-bulk__group .v2-input{
+      height:28px;min-width:180px;padding:0 8px;font-size:13px;
+      border:1px solid transparent;background:transparent;
+      border-radius:6px}
+    .v2-bulk__group .v2-input[type="datetime-local"]{min-width:170px}
+    .v2-bulk__group .v2-select:focus,.v2-bulk__group .v2-input:focus{
+      border-color:var(--v2-primary);background:#fff}
+    .v2-bulk__group .v2-btn{height:28px;padding:0 12px;font-size:13px;border-radius:6px}
+    .v2-bulk__group .v2-btn[disabled]{opacity:.45;cursor:not-allowed}
+    .v2-bulk__clear{margin-left:auto}
+
+    /* Confirm modal body */
+    .v2-bulk-confirm{font-size:14px;color:var(--v2-text);line-height:1.5}
+    .v2-bulk-confirm__hero{display:flex;align-items:flex-start;gap:12px;
+      padding:14px 16px;background:#fff7ed;border:1px solid #fed7aa;
+      border-radius:10px;margin-bottom:14px}
+    .v2-bulk-confirm__hero-ic{width:32px;height:32px;border-radius:50%;
+      background:#fb923c;color:#fff;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+    .v2-bulk-confirm__hero-text{flex:1;font-size:13px;line-height:1.5;color:#7c2d12}
+    .v2-bulk-confirm__hero-text b{color:#9a3412}
+    .v2-bulk-confirm dl{display:grid;grid-template-columns:140px 1fr;gap:8px 16px;margin:0 0 16px 0}
+    .v2-bulk-confirm dt{font-size:12px;font-weight:600;color:var(--v2-text-muted);
+      text-transform:uppercase;letter-spacing:.03em;align-self:center}
+    .v2-bulk-confirm dd{margin:0;font-size:14px;color:var(--v2-text);font-weight:500}
+    .v2-bulk-confirm__foot{display:flex;justify-content:flex-end;gap:8px;
+      padding-top:12px;border-top:1px solid var(--v2-border)}
 
     /* Popover задач: ширина 640px */
     .v2-fpop{position:absolute;z-index:40;top:calc(100% + 6px);right:0;left:auto;
@@ -155,14 +191,22 @@
 
       {% if can_bulk_actions and page.object_list %}
       <div class="v2-bulk">
-        <span class="v2-bulk__label">Выбрано: <b id="v2BulkCount">0</b></span>
+        <div class="v2-bulk__selection is-empty" id="v2BulkSelection">
+          <svg class="v2-bulk__selection-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="9 11 12 14 22 4"/>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+          </svg>
+          <span>Выбрано: <b id="v2BulkCount">0</b></span>
+        </div>
+
+        <div class="v2-bulk__divider"></div>
 
         {% if transfer_targets %}
         <form method="post" action="{% url 'task_bulk_reassign' %}" id="v2BulkForm" style="display:contents">
           {% csrf_token %}
           <div class="v2-bulk__group">
             <span class="v2-bulk__group-label">Переназначить</span>
-            <select name="assigned_to_id" class="v2-select" required>
+            <select name="assigned_to_id" class="v2-select" id="v2BulkAssignee" required>
               <option value="">Выбрать исполнителя…</option>
               {% regroup transfer_targets by branch as bulk_branches %}
               {% for bg in bulk_branches %}
@@ -173,7 +217,7 @@
                 </optgroup>
               {% endfor %}
             </select>
-            <button type="submit" name="apply_mode" value="selected" class="v2-btn v2-btn--sm" id="v2BulkApply" disabled>Применить</button>
+            <button type="submit" name="apply_mode" value="selected" class="v2-btn" id="v2BulkApply" disabled>Применить</button>
           </div>
         </form>
         {% endif %}
@@ -183,13 +227,13 @@
           {% csrf_token %}
           <div class="v2-bulk__group">
             <span class="v2-bulk__group-label">Перенести срок</span>
-            <input type="datetime-local" name="due_at" class="v2-input" title="Новый срок" />
-            <button type="submit" name="apply_mode" value="selected" class="v2-btn v2-btn--ghost v2-btn--sm" id="v2BulkRescheduleApply" disabled>Применить</button>
+            <input type="datetime-local" name="due_at" class="v2-input" id="v2BulkDue" title="Новый срок" />
+            <button type="submit" name="apply_mode" value="selected" class="v2-btn" id="v2BulkRescheduleApply" disabled>Применить</button>
           </div>
         </form>
         {% endif %}
 
-        <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" id="v2BulkClear" disabled style="margin-left:auto">Снять выбор</button>
+        <button type="button" class="v2-btn v2-btn--ghost v2-bulk__clear" id="v2BulkClear" disabled>Снять выбор</button>
       </div>
       {% endif %}
 
@@ -515,13 +559,14 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
 })();
 </script>
 <script>
-// Bulk selection + reschedule + confirmations
+// Bulk selection + reschedule + V2Modal confirm (2026-04-18 redesign)
 (function(){
   const reassignForm = document.getElementById('v2BulkForm');
   const rescheduleForm = document.getElementById('v2BulkRescheduleForm');
   const all = document.getElementById('v2BulkAll');
   const rows = document.querySelectorAll('.v2-bulk-row');
   const count = document.getElementById('v2BulkCount');
+  const selection = document.getElementById('v2BulkSelection');
   const apply = document.getElementById('v2BulkApply');
   const rescheduleApply = document.getElementById('v2BulkRescheduleApply');
   const clear = document.getElementById('v2BulkClear');
@@ -529,6 +574,7 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
   function update(){
     const n = document.querySelectorAll('.v2-bulk-row:checked').length;
     if(count) count.textContent = n;
+    if(selection) selection.classList.toggle('is-empty', n === 0);
     if(apply) apply.disabled = n === 0;
     if(rescheduleApply) rescheduleApply.disabled = n === 0;
     if(clear) clear.disabled = n === 0;
@@ -548,66 +594,163 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
   // Инжектим фильтры + task_ids в bulk-форму при сабмите
   function injectFiltersAndIds(form){
     if(!form) return;
-    form.addEventListener('submit', function(){
-      // Убираем возможные прошлые инжекты
-      form.querySelectorAll('input[data-v2-injected="1"]').forEach(el => el.remove());
-      // Фильтры
-      const filters = document.getElementById('v2TaskFilters');
-      if(filters){
-        ['q','status','assigned_to','date_from','date_to','mine','today','overdue','show_done','sort','dir','per_page'].forEach(name => {
-          const el = filters.querySelector('[name="'+name+'"]');
-          if(!el) return;
-          const val = el.type === 'checkbox' ? (el.checked ? el.value : '') : el.value;
-          if(!val) return;
-          const hidden = document.createElement('input');
-          hidden.type = 'hidden'; hidden.name = name; hidden.value = val;
-          hidden.setAttribute('data-v2-injected','1');
-          form.appendChild(hidden);
-        });
-      }
-      // task_ids (чекбоксы вне формы из-за display:contents — браузер их не подтянет)
-      document.querySelectorAll('.v2-bulk-row:checked').forEach(cb => {
+    // Убираем возможные прошлые инжекты
+    form.querySelectorAll('input[data-v2-injected="1"]').forEach(el => el.remove());
+    // Фильтры
+    const filters = document.getElementById('v2TaskFilters');
+    if(filters){
+      ['q','status','assigned_to','date_from','date_to','mine','today','overdue','show_done','sort','dir','per_page'].forEach(name => {
+        const el = filters.querySelector('[name="'+name+'"]');
+        if(!el) return;
+        const val = el.type === 'checkbox' ? (el.checked ? el.value : '') : el.value;
+        if(!val) return;
         const hidden = document.createElement('input');
-        hidden.type = 'hidden'; hidden.name = 'task_ids'; hidden.value = cb.value;
+        hidden.type = 'hidden'; hidden.name = name; hidden.value = val;
         hidden.setAttribute('data-v2-injected','1');
         form.appendChild(hidden);
       });
-    });
-  }
-  injectFiltersAndIds(reassignForm);
-  injectFiltersAndIds(rescheduleForm);
-
-  // Валидация даты для переноса
-  if(rescheduleForm){
-    rescheduleForm.addEventListener('submit', function(e){
-      const dt = rescheduleForm.querySelector('input[name="due_at"]');
-      if(!dt || !dt.value){
-        e.preventDefault();
-        if(window.V2Toast) V2Toast.show('Укажи новый срок (дата и время)', {type:'err'});
-        else alert('Укажи новый срок (дата и время)');
-        return false;
-      }
+    }
+    // task_ids (чекбоксы вне формы из-за display:contents — браузер их не подтянет)
+    document.querySelectorAll('.v2-bulk-row:checked').forEach(cb => {
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden'; hidden.name = 'task_ids'; hidden.value = cb.value;
+      hidden.setAttribute('data-v2-injected','1');
+      form.appendChild(hidden);
     });
   }
 
-  // F3 P1-4: confirm для bulk-reassign при >5 задачах (предотвращает массовое
-  // случайное переназначение). Двойной клик по кнопке «Применить» с бейджем
-  // «Подтвердите: N задач будет переназначено». Для ≤5 — без confirm.
+  // ── Confirm modal: красивое подтверждение перед применением bulk-действия ──
+  function escHtml(s){
+    return String(s==null?'':s).replace(/[&<>"']/g, function(ch){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+    });
+  }
+  function pluralTasks(n){
+    const mod10 = n % 10, mod100 = n % 100;
+    if(mod10 === 1 && mod100 !== 11) return 'задача';
+    if(mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'задачи';
+    return 'задач';
+  }
+  function formatDueLocal(value){
+    // value формата "2026-04-18T14:30" → "18.04.2026, 14:30"
+    if(!value) return '—';
+    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value);
+    if(!m) return value;
+    return `${m[3]}.${m[2]}.${m[1]}, ${m[4]}:${m[5]}`;
+  }
+  function showConfirm(opts){
+    // opts: { action: 'reassign'|'reschedule', count, summaryRows: [{label, value}], onConfirm }
+    const severity = opts.count > 20 ? 'high' : opts.count > 5 ? 'mid' : 'low';
+    const heroText = severity === 'high'
+      ? `Будет применено к <b>${opts.count} ${pluralTasks(opts.count)}</b> — действие затрагивает крупную группу. Проверьте параметры ниже.`
+      : severity === 'mid'
+      ? `Будет применено к <b>${opts.count} ${pluralTasks(opts.count)}</b>. Проверьте параметры перед подтверждением.`
+      : `Будет применено к <b>${opts.count} ${pluralTasks(opts.count)}</b>.`;
+
+    const dlHtml = opts.summaryRows.map(function(r){
+      return `<dt>${escHtml(r.label)}</dt><dd>${escHtml(r.value)}</dd>`;
+    }).join('');
+
+    const html = `
+      <div class="v2-bulk-confirm">
+        <div class="v2-bulk-confirm__hero">
+          <div class="v2-bulk-confirm__hero-ic" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg>
+          </div>
+          <div class="v2-bulk-confirm__hero-text">${heroText}</div>
+        </div>
+        <dl>${dlHtml}</dl>
+        <div class="v2-bulk-confirm__foot">
+          <button type="button" class="v2-btn v2-btn--ghost" id="v2BulkCancel">Отмена</button>
+          <button type="button" class="v2-btn" id="v2BulkConfirm">Подтвердить и применить</button>
+        </div>
+      </div>
+    `;
+    if(!window.V2Modal){
+      // Fallback, если V2Modal не подключён на странице
+      if(confirm('Применить к ' + opts.count + ' ' + pluralTasks(opts.count) + '?')) opts.onConfirm();
+      return;
+    }
+    window.V2Modal.openHtml({ html: html, title: opts.title || 'Подтверждение массового действия' });
+    // Обработчики — ждём появления узлов в DOM
+    setTimeout(function(){
+      const cancelBtn = document.getElementById('v2BulkCancel');
+      const confirmBtn = document.getElementById('v2BulkConfirm');
+      if(cancelBtn) cancelBtn.addEventListener('click', function(){ window.V2Modal.close(); });
+      if(confirmBtn) confirmBtn.addEventListener('click', function(){
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Применяется…';
+        window.V2Modal.close();
+        opts.onConfirm();
+      });
+    }, 20);
+  }
+
+  // Reassign: перехватываем submit, показываем confirm
   if(reassignForm && apply){
     reassignForm.addEventListener('submit', function(e){
-      const n = document.querySelectorAll('.v2-bulk-row:checked').length;
-      if(n <= 5) return;  // малое количество — без confirm
-      if(apply.dataset.bulkConfirmed === '1') return;  // второй submit
+      if(reassignForm.dataset.bulkConfirmed === '1'){
+        reassignForm.dataset.bulkConfirmed = '';
+        return;  // второй сабмит после confirm — пропускаем
+      }
       e.preventDefault();
-      apply.dataset.bulkConfirmed = '1';
-      const orig = apply.textContent;
-      apply.textContent = `Подтвердить: ${n} задач?`;
-      apply.classList.add('v2-btn--danger');
-      apply._confirmTimer = setTimeout(function(){
-        apply.dataset.bulkConfirmed = '';
-        apply.textContent = orig;
-        apply.classList.remove('v2-btn--danger');
-      }, 3000);
+      const n = document.querySelectorAll('.v2-bulk-row:checked').length;
+      if(n === 0) return;
+      const select = reassignForm.querySelector('select[name="assigned_to_id"]');
+      if(!select || !select.value){
+        if(window.V2Toast) V2Toast.show('Выберите исполнителя', {type:'err'});
+        return;
+      }
+      const selectedText = select.options[select.selectedIndex]?.text || '—';
+      showConfirm({
+        title: 'Переназначение задач',
+        action: 'reassign',
+        count: n,
+        summaryRows: [
+          { label: 'Действие', value: 'Переназначить исполнителя' },
+          { label: 'Количество', value: `${n} ${pluralTasks(n)}` },
+          { label: 'Новый исполнитель', value: selectedText },
+        ],
+        onConfirm: function(){
+          reassignForm.dataset.bulkConfirmed = '1';
+          injectFiltersAndIds(reassignForm);
+          reassignForm.submit();
+        }
+      });
+    });
+  }
+
+  // Reschedule: validation + confirm
+  if(rescheduleForm && rescheduleApply){
+    rescheduleForm.addEventListener('submit', function(e){
+      if(rescheduleForm.dataset.bulkConfirmed === '1'){
+        rescheduleForm.dataset.bulkConfirmed = '';
+        return;
+      }
+      e.preventDefault();
+      const n = document.querySelectorAll('.v2-bulk-row:checked').length;
+      if(n === 0) return;
+      const dt = rescheduleForm.querySelector('input[name="due_at"]');
+      if(!dt || !dt.value){
+        if(window.V2Toast) V2Toast.show('Укажите новый срок (дата и время)', {type:'err'});
+        else alert('Укажите новый срок');
+        return;
+      }
+      showConfirm({
+        title: 'Перенос срока задач',
+        action: 'reschedule',
+        count: n,
+        summaryRows: [
+          { label: 'Действие', value: 'Перенести срок выполнения' },
+          { label: 'Количество', value: `${n} ${pluralTasks(n)}` },
+          { label: 'Новый срок', value: formatDueLocal(dt.value) },
+        ],
+        onConfirm: function(){
+          rescheduleForm.dataset.bulkConfirmed = '1';
+          injectFiltersAndIds(rescheduleForm);
+          rescheduleForm.submit();
+        }
+      });
     });
   }
 
