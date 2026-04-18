@@ -42,7 +42,7 @@ def company_detail_v3_preview(
 
     # Контактные лица (ЛПР) — с prefetch phones/emails
     contacts = list(
-        Contact.objects.filter(company=company, is_archived=False)
+        Contact.objects.filter(company=company)
         .prefetch_related("phones", "emails")
         .order_by("-created_at")[:6]
     )
