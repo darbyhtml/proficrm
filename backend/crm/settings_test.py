@@ -40,6 +40,13 @@ PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.MD5PasswordHasher",
 ]
 
+# ── Widget origin: dev-режим для тестов ──
+# В проде MESSENGER_WIDGET_STRICT_ORIGIN=True → 403 при пустом allowlist.
+# В тестах APIClient не передаёт Origin header и не настраивает inbox.
+# allowed_domains — поэтому все widget-endpoint-тесты получали 403.
+# Выключаем strict для тестовой среды (обратная совместимость dev).
+MESSENGER_WIDGET_STRICT_ORIGIN = False
+
 # ── Логирование: не шумим в тестах ──
 import logging  # noqa: E402
 logging.disable(logging.CRITICAL)
