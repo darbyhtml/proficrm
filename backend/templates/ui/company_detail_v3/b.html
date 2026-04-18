@@ -283,11 +283,104 @@
 
   /* ─── Note item ─── */
   .vb-note{padding:12px 0;border-bottom:1px solid var(--v2-border);line-height:1.5;
-    font-size:13px}
+    font-size:13px;display:flex;flex-direction:column;gap:4px;position:relative}
   .vb-note:last-child{border-bottom:none}
-  .vb-note__text{color:var(--v2-text);margin-bottom:4px;word-break:break-word}
-  .vb-note__meta{font-size:11.5px;color:var(--v2-text-muted);display:flex;gap:8px}
+  .vb-note--pinned{background:var(--v2-accent-50);
+    padding-left:10px;padding-right:10px;margin:0 -10px;
+    border-radius:var(--v3-radius-xs);border-bottom-color:transparent}
+  .vb-note__text{color:var(--v2-text);word-break:break-word;white-space:pre-wrap}
+  .vb-note__meta{font-size:11.5px;color:var(--v2-text-muted);display:flex;
+    gap:8px;align-items:center}
   .vb-note__meta span:not(:last-child)::after{content:"·";margin-left:8px;color:var(--v2-text-faint)}
+  .vb-note__actions{display:flex;gap:2px;margin-left:auto;opacity:0;transition:opacity .12s}
+  .vb-note:hover .vb-note__actions{opacity:1}
+  .vb-note__btn{background:none;border:0;color:var(--v2-text-muted);cursor:pointer;
+    font-size:13px;padding:3px 6px;border-radius:var(--v3-radius-xs);font-family:inherit;
+    line-height:1;display:inline-flex;align-items:center;justify-content:center}
+  .vb-note__btn:hover{background:var(--v2-bg-muted);color:var(--v2-text)}
+  .vb-note__btn--danger:hover{color:var(--v2-danger);background:var(--v2-danger-50)}
+  .vb-note__btn svg{width:14px;height:14px}
+  .vb-note__pin-ic{font-size:12px;color:var(--v2-accent-600);margin-right:3px}
+
+  /* Note add form (inline bottom of notes tab) */
+  .vb-note-form{padding:10px 12px;background:var(--v2-bg-soft);
+    border:1px solid var(--v2-border);border-radius:var(--v2-radius-sm);
+    display:flex;flex-direction:column;gap:8px;margin-top:10px}
+  .vb-note-form__ta{font:inherit;font-size:13px;padding:8px 10px;
+    background:var(--v2-bg);border:1px solid var(--v2-border);
+    border-radius:var(--v2-radius-sm);color:var(--v2-text);
+    min-height:58px;resize:vertical;outline:none;font-family:inherit;
+    width:100%;box-sizing:border-box;transition:border-color .12s}
+  .vb-note-form__ta:focus{border-color:var(--v2-primary)}
+  .vb-note-form__foot{display:flex;gap:8px;align-items:center;justify-content:flex-end}
+  .vb-note-form__foot label.vb-file{display:inline-flex;align-items:center;gap:4px;
+    padding:5px 8px;font-size:12px;color:var(--v2-text-muted);cursor:pointer;
+    border-radius:var(--v3-radius-xs);transition:all .1s}
+  .vb-note-form__foot label.vb-file:hover{color:var(--v2-primary);background:var(--v2-primary-50)}
+  .vb-note-form__foot input[type="file"]{display:none}
+  .vb-note-form__foot span.files-hint{font-size:11px;color:var(--v2-text-faint)}
+  .vb-note-form__foot .vb-abtn{height:30px;padding:0 14px;font-size:12.5px}
+
+  /* ─── Deal quick-add / Contact quick-add (inline modal-row) ─── */
+  .vb-qform{padding:10px 12px;background:var(--v2-bg-soft);
+    border:1px dashed var(--v2-primary-100);border-radius:var(--v2-radius-sm);
+    display:flex;flex-direction:column;gap:8px;margin-bottom:8px}
+  .vb-qform--hidden{display:none}
+  .vb-qform__in{font:inherit;font-size:13px;padding:6px 10px;
+    background:var(--v2-bg);border:1px solid var(--v2-border);
+    border-radius:var(--v2-radius-sm);color:var(--v2-text);outline:none;
+    font-family:inherit}
+  .vb-qform__in:focus{border-color:var(--v2-primary)}
+  .vb-qform__row{display:flex;gap:6px}
+  .vb-qform__row .vb-qform__in{flex:1}
+  .vb-qform__foot{display:flex;gap:6px;justify-content:flex-end;align-items:center}
+  .vb-qform__foot .vb-abtn{height:30px;padding:0 14px;font-size:12.5px}
+  .vb-qform__foot .vb-qform__cancel{font-size:12px;color:var(--v2-text-muted);
+    background:none;border:0;padding:4px 8px;border-radius:var(--v3-radius-xs);
+    cursor:pointer;font-family:inherit}
+  .vb-qform__foot .vb-qform__cancel:hover{color:var(--v2-danger);background:var(--v2-danger-50)}
+
+  /* Contact delete-btn на каждом ЛПР */
+  .vb-contact{position:relative}
+  .vb-contact__x{position:absolute;right:0;top:8px;opacity:0;transition:opacity .12s;
+    background:none;border:0;padding:3px 5px;cursor:pointer;color:var(--v2-text-muted);
+    font-size:13px;line-height:1;border-radius:var(--v3-radius-xs);font-family:inherit}
+  .vb-contact:hover .vb-contact__x{opacity:1}
+  .vb-contact__x:hover{color:var(--v2-danger);background:var(--v2-danger-50)}
+
+  .vb-deal{position:relative}
+  .vb-deal__x{position:absolute;right:6px;top:6px;opacity:0;transition:opacity .12s;
+    background:none;border:0;padding:2px 5px;cursor:pointer;color:var(--v2-text-muted);
+    font-size:13px;line-height:1;border-radius:var(--v3-radius-xs);font-family:inherit}
+  .vb-deal:hover .vb-deal__x{opacity:1}
+  .vb-deal__x:hover{color:var(--v2-danger);background:var(--v2-danger-50)}
+
+  /* ─── «⋯ меню» ─── */
+  .vb-more-menu{position:absolute;top:calc(100% + 4px);right:0;z-index:40;
+    background:var(--v2-bg);border:1px solid var(--v2-border-strong);
+    border-radius:var(--v2-radius);box-shadow:var(--v2-shadow-lg);
+    padding:4px;min-width:240px;display:flex;flex-direction:column;gap:1px;
+    animation:v3-pop-in .12s ease}
+  .vb-more-menu button,.vb-more-menu a{display:block;text-align:left;
+    padding:7px 12px;font-size:13px;color:var(--v2-text);background:none;
+    border:0;cursor:pointer;font-family:inherit;text-decoration:none;
+    border-radius:var(--v3-radius-xs);transition:background .1s}
+  .vb-more-menu button:hover,.vb-more-menu a:hover{background:var(--v2-bg-soft);color:var(--v2-primary)}
+  .vb-more-menu button.is-danger{color:var(--v2-danger)}
+  .vb-more-menu button.is-danger:hover{background:var(--v2-danger-50);color:var(--v2-danger)}
+  .vb-more-menu__sep{height:1px;background:var(--v2-border);margin:3px 0}
+
+  /* Task row: кликабельность */
+  .vb-task{cursor:pointer}
+  .vb-task__chk{cursor:pointer}
+  .vb-task__chk:hover{border-color:var(--v2-primary)}
+  .vb-task__chk--done{background:var(--v2-primary);border-color:var(--v2-primary);
+    display:flex;align-items:center;justify-content:center}
+  .vb-task__chk--done::before{content:"✓";color:#fff;font-size:10px;font-weight:700}
+
+  /* Timeline load-more */
+  .vb-tl-more{padding:10px 0;text-align:center}
+  .vb-tl-more .vb-abtn{height:30px;padding:0 16px;font-size:12.5px}
 
   /* ═════════════ PREVIEW BANNER ═════════════ */
   .v3-banner{background:var(--v2-bg);color:var(--v2-text);padding:8px 22px;font-size:13px;
@@ -408,26 +501,38 @@
     </div>
 
     <div class="vb-hero__actions">
-      <button class="vb-abtn vb-abtn--primary" data-act="new-task">
+      <button class="vb-abtn vb-abtn--primary"
+              data-v2-modal-open="{% url 'ui_v2_task_create_partial' %}?company={{ company.id }}"
+              data-v2-modal-title="Новая задача">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
         Задача
       </button>
-      <button class="vb-abtn" data-act="new-note">
+      <button class="vb-abtn" data-act="focus-note">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
         Заметка
-      </button>
-      <button class="vb-abtn" data-act="new-call">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.37 1.9.72 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0122 16.92z"/></svg>
-        Звонок
       </button>
       <button class="vb-abtn" data-act="new-deal">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
         Сделка
       </button>
-      <span class="vb-abtn--spacer"></span>
-      <button class="vb-abtn vb-abtn--icon" title="Ещё действия" data-act="more">
-        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+      <button class="vb-abtn" data-act="new-contact">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0116 0"/></svg>
+        ЛПР
       </button>
+      <span class="vb-abtn--spacer"></span>
+      <div style="position:relative" id="vbMoreAnchor">
+        <button class="vb-abtn vb-abtn--icon" title="Ещё действия" id="vbMoreBtn" aria-haspopup="menu" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+        </button>
+        <div class="vb-more-menu" id="vbMoreMenu" hidden>
+          <button type="button" data-v2-modal-open="/companies/{{ company.id }}/transfer-modal/v3/"
+                  data-v2-modal-title="Передать компанию">Передать менеджеру…</button>
+          <button type="button" data-act="copy-link">Копировать ссылку</button>
+          <a href="{{ classic_url }}?classic=1">Открыть старую карточку</a>
+          <div class="vb-more-menu__sep"></div>
+          <button type="button" class="is-danger" data-act="delete-company">Удалить компанию…</button>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -525,12 +630,28 @@
       <div class="vb-sec">
         <div class="vb-sec__h">
           <span class="vb-sec__t"><b>ЛПР</b><span class="vb-sec__cnt">{{ contacts|length }}</span></span>
-          <button class="vb-sec__add" title="Добавить контактное лицо">+</button>
+          <button class="vb-sec__add" data-v3-toggle-form="vbContactForm" title="Добавить ЛПР">+</button>
         </div>
+
+        <form class="vb-qform vb-qform--hidden" id="vbContactForm" method="post"
+              action="{% url 'contact_create' company_id=company.id %}">
+          {% csrf_token %}
+          <input type="text" class="vb-qform__in" name="name" placeholder="ФИО" required>
+          <input type="text" class="vb-qform__in" name="position" placeholder="Должность (необязательно)">
+          <div class="vb-qform__row">
+            <input type="tel" class="vb-qform__in" name="phone" placeholder="Телефон">
+            <input type="email" class="vb-qform__in" name="email" placeholder="Email">
+          </div>
+          <div class="vb-qform__foot">
+            <button type="button" class="vb-qform__cancel" data-v3-close-form="vbContactForm">Отмена</button>
+            <button type="submit" class="vb-abtn vb-abtn--primary">Создать</button>
+          </div>
+        </form>
+
         {% for c in contacts %}
-        <div class="vb-contact">
+        <div class="vb-contact" data-contact-id="{{ c.id }}">
           <div class="vb-contact__top">
-            <span class="vb-contact__name" contenteditable="true">{{ c.name|default:"—" }}</span>
+            <span class="vb-contact__name">{{ c.name|default:"—" }}</span>
             {% if c.position %}<span class="vb-contact__pos">{{ c.position }}</span>{% endif %}
           </div>
           <div class="vb-contact__row">
@@ -544,9 +665,13 @@
               <a href="mailto:{{ em.value }}">{{ em.value }}</a>
             {% endfor %}
           </div>
+          <button class="vb-contact__x" title="Удалить контакт"
+                  data-v3-delete
+                  data-delete-url="/contacts/{{ c.id }}/delete/"
+                  data-delete-confirm="Удалить контакт «{{ c.name }}»?">×</button>
         </div>
         {% empty %}
-        <div class="vb-empty">Ещё нет ЛПР. <a href="#" data-act="new-contact">+ добавить</a></div>
+        <div class="vb-empty">Ещё нет ЛПР. <a href="#" data-v3-toggle-form="vbContactForm">+ добавить</a></div>
         {% endfor %}
       </div>
     </section>
@@ -560,7 +685,8 @@
       </div>
 
       <div data-tab-panel="activity">
-        <div class="vb-tl">
+        <div class="vb-tl" id="vbTimeline" data-company-id="{{ company.id }}"
+             data-offset="{{ timeline|length }}">
           {% for it in timeline %}
           <div class="vb-tl__i vb-tl__i--{{ it.kind }}">
             <div class="vb-tl__dot">{{ it.icon }}</div>
@@ -577,12 +703,22 @@
           <div class="vb-empty">Пока пусто — нет активности по компании</div>
           {% endfor %}
         </div>
+        {% if timeline|length >= 5 %}
+        <div class="vb-tl-more">
+          <button type="button" class="vb-abtn" id="vbTimelineMore">Показать ещё</button>
+        </div>
+        {% endif %}
       </div>
 
       <div data-tab-panel="tasks" hidden>
         {% for t in open_tasks %}
-        <div class="vb-task">
-          <span class="vb-task__chk {% if t.is_urgent %}vb-task__chk--urgent{% endif %}"></span>
+        <div class="vb-task"
+             data-v2-modal-open="/tasks/v2/{{ t.id }}/partial/"
+             data-v2-modal-title="Задача">
+          <span class="vb-task__chk {% if t.is_urgent %}vb-task__chk--urgent{% endif %}"
+                data-v3-task-done
+                data-task-id="{{ t.id }}"
+                title="Отметить выполненной"></span>
           <div class="vb-task__body">
             <div class="vb-task__title">{% if t.type %}{{ t.type.name }}{% if t.title and t.title|lower != t.type.name|lower %} · {{ t.title }}{% endif %}{% else %}{{ t.title|default:"Без названия" }}{% endif %}</div>
             <div class="vb-task__sub">{{ t.assigned_to|full_name|default:"—" }}{% if t.is_urgent %} · срочная{% endif %}</div>
@@ -590,22 +726,53 @@
           <span class="vb-task__due {% if t.due_at and t.due_at < now %}vb-task__due--overdue{% endif %}">{% if t.due_at %}{{ t.due_at|date:"d.m H:i" }}{% else %}без срока{% endif %}</span>
         </div>
         {% empty %}
-        <div class="vb-empty">Активных задач нет. <a href="#" data-act="new-task">+ задача</a></div>
+        <div class="vb-empty">Активных задач нет.
+          <a href="#" data-v2-modal-open="{% url 'ui_v2_task_create_partial' %}?company={{ company.id }}"
+             data-v2-modal-title="Новая задача">+ задача</a>
+        </div>
         {% endfor %}
       </div>
 
-      <div data-tab-panel="notes" hidden>
+      <div data-tab-panel="notes" hidden id="vbNotesPanel">
         {% for n in recent_notes %}
-        <div class="vb-note">
-          <div class="vb-note__text">{{ n.text|truncatechars:240|linebreaksbr }}</div>
+        <div class="vb-note {% if n.is_pinned %}vb-note--pinned{% endif %}" data-note-id="{{ n.id }}">
+          <div class="vb-note__text">{% if n.is_pinned %}<span class="vb-note__pin-ic">📌</span>{% endif %}{{ n.text|default:"— без текста —"|linebreaksbr }}</div>
           <div class="vb-note__meta">
             <span>{{ n.author|full_name|default:"—" }}</span>
             <span>{{ n.created_at|date:"d.m.Y H:i" }}</span>
+            <div class="vb-note__actions">
+              <button class="vb-note__btn" title="{% if n.is_pinned %}Открепить{% else %}Закрепить{% endif %}"
+                      data-v3-note-pin
+                      data-note-url="{% url 'company_note_pin_toggle' company_id=company.id note_id=n.id %}">📌</button>
+              <button class="vb-note__btn vb-note__btn--danger" title="Удалить заметку"
+                      data-v3-note-delete
+                      data-note-url="{% url 'company_note_delete' company_id=company.id note_id=n.id %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+              </button>
+            </div>
           </div>
         </div>
         {% empty %}
-        <div class="vb-empty">Ещё нет заметок. <a href="#" data-act="new-note">+ заметка</a></div>
+        <div class="vb-empty" id="vbNotesEmpty">Ещё нет заметок. Напишите первую ↓</div>
         {% endfor %}
+
+        {# Inline-форма добавления заметки с вложениями #}
+        <form class="vb-note-form" method="post" enctype="multipart/form-data"
+              action="{% url 'company_note_add' company_id=company.id %}"
+              id="vbNoteAddForm">
+          {% csrf_token %}
+          <textarea class="vb-note-form__ta" name="text"
+                    placeholder="Напишите заметку — что обсуждали, что решили..."></textarea>
+          <div class="vb-note-form__foot">
+            <label class="vb-file" title="Прикрепить файлы">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+              Файлы
+              <input type="file" name="attachments" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.pdf,.doc,.docx,.xls,.xlsx,.txt">
+            </label>
+            <span class="files-hint" id="vbNoteFilesHint"></span>
+            <button type="submit" class="vb-abtn vb-abtn--primary">Сохранить</button>
+          </div>
+        </form>
       </div>
     </section>
 
@@ -642,8 +809,20 @@
       <div class="vb-sec">
         <div class="vb-sec__h">
           <span class="vb-sec__t"><b>Сделки</b><span class="vb-sec__cnt">{{ deals|length }}</span></span>
-          <button class="vb-sec__add" title="Новая сделка">+</button>
+          <button class="vb-sec__add" data-v3-toggle-form="vbDealForm" title="Новая сделка">+</button>
         </div>
+
+        <form class="vb-qform vb-qform--hidden" id="vbDealForm" method="post"
+              action="{% url 'company_deal_add' company_id=company.id %}">
+          {% csrf_token %}
+          <textarea class="vb-qform__in" name="program" rows="2"
+                    placeholder="Название сделки / программа обучения" required></textarea>
+          <div class="vb-qform__foot">
+            <button type="button" class="vb-qform__cancel" data-v3-close-form="vbDealForm">Отмена</button>
+            <button type="submit" class="vb-abtn vb-abtn--primary">Создать</button>
+          </div>
+        </form>
+
         {% for d in deals %}
         <div class="vb-deal" data-deal-id="{{ d.id }}">
           <div class="vb-deal__ico">₽</div>
@@ -651,9 +830,13 @@
             <div class="vb-deal__title">{{ d.program|default:"Сделка"|truncatechars:80 }}</div>
             <div class="vb-deal__meta">{{ d.created_at|date:"d.m.Y" }}</div>
           </div>
+          <button class="vb-deal__x" title="Удалить сделку"
+                  data-v3-delete
+                  data-delete-url="{% url 'company_deal_delete' company_id=company.id deal_id=d.id %}"
+                  data-delete-confirm="Удалить сделку?">×</button>
         </div>
         {% empty %}
-        <div class="vb-empty">Сделок ещё нет. <a href="#" data-act="new-deal">+ сделка</a></div>
+        <div class="vb-empty">Сделок ещё нет. <a href="#" data-v3-toggle-form="vbDealForm">+ сделка</a></div>
         {% endfor %}
       </div>
 
@@ -682,9 +865,35 @@
   </div>
 </div>
 
+{% include "ui/_v2/v2_modal.html" %}
+
 <script nonce="{{ request.csp_nonce|default:'' }}">
 (function(){
-  // Tabs в центральной колонке
+  'use strict';
+  const COMPANY_ID = "{{ company.id }}";
+  const CSRF = (document.cookie.match('(?:^|; )csrftoken=([^;]*)') || [])[1] || '';
+  function toast(msg, type){
+    if(window.V2Toast){ V2Toast.show(msg, {type: type||'ok'}); }
+    else if(window.uiToast){ window.uiToast(msg, type||'success'); }
+    else console.log('[toast]', msg);
+  }
+  async function postForm(url, body){
+    const b = new URLSearchParams(body || {}).toString();
+    const r = await fetch(url, {
+      method:'POST',
+      headers:{
+        'X-CSRFToken':CSRF,
+        'Content-Type':'application/x-www-form-urlencoded',
+        'X-Requested-With':'XMLHttpRequest',
+      },
+      body:b,
+      credentials:'same-origin',
+    });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    return r;
+  }
+
+  // ── Tabs в центральной колонке ──
   document.querySelectorAll('.vb-tabs__t').forEach(function(tab){
     tab.addEventListener('click', function(){
       const name = tab.getAttribute('data-tab');
@@ -693,6 +902,213 @@
         p.hidden = p.getAttribute('data-tab-panel') !== name;
       });
     });
+  });
+
+  // ── Переключение на таб «Заметки» + фокус в textarea по кнопке в hero ──
+  document.querySelectorAll('[data-act="focus-note"]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      const notesTab = document.querySelector('.vb-tabs__t[data-tab="notes"]');
+      if(notesTab) notesTab.click();
+      const ta = document.querySelector('#vbNoteAddForm textarea[name="text"]');
+      if(ta){ ta.focus(); ta.scrollIntoView({behavior:'smooth', block:'nearest'}); }
+    });
+  });
+
+  // ── Toggle «+ форма» для сделок и контактов ──
+  document.querySelectorAll('[data-v3-toggle-form]').forEach(function(btn){
+    btn.addEventListener('click', function(e){
+      e.preventDefault();
+      const id = btn.getAttribute('data-v3-toggle-form');
+      const form = document.getElementById(id);
+      if(!form) return;
+      form.classList.toggle('vb-qform--hidden');
+      if(!form.classList.contains('vb-qform--hidden')){
+        const firstIn = form.querySelector('input,textarea');
+        if(firstIn) firstIn.focus();
+      }
+    });
+  });
+  document.querySelectorAll('[data-v3-close-form]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      const id = btn.getAttribute('data-v3-close-form');
+      const form = document.getElementById(id);
+      if(form) form.classList.add('vb-qform--hidden');
+    });
+  });
+
+  // ── Task чекбокс: mark done ──
+  document.querySelectorAll('[data-v3-task-done]').forEach(function(chk){
+    chk.addEventListener('click', async function(e){
+      e.stopPropagation();  // не открывать модалку
+      const taskId = chk.getAttribute('data-task-id');
+      if(!taskId) return;
+      if(!confirm('Отметить задачу выполненной?')) return;
+      chk.classList.add('vb-task__chk--done');
+      try {
+        await postForm('/tasks/' + taskId + '/set-status/', {status:'done'});
+        toast('Задача выполнена', 'ok');
+        // row плавно скрываем
+        const row = chk.closest('.vb-task');
+        if(row){ row.style.transition = 'opacity .3s'; row.style.opacity = '0.3'; }
+        setTimeout(function(){ location.reload(); }, 400);
+      } catch(err){
+        chk.classList.remove('vb-task__chk--done');
+        toast('Ошибка: ' + err.message, 'err');
+      }
+    });
+  });
+
+  // ── Note pin ──
+  document.addEventListener('click', async function(e){
+    const btn = e.target.closest('[data-v3-note-pin]');
+    if(!btn) return;
+    e.stopPropagation();
+    const url = btn.getAttribute('data-note-url');
+    try {
+      await postForm(url, {});
+      location.reload();
+    } catch(err){ toast('Ошибка: ' + err.message, 'err'); }
+  });
+
+  // ── Note delete ──
+  document.addEventListener('click', async function(e){
+    const btn = e.target.closest('[data-v3-note-delete]');
+    if(!btn) return;
+    e.stopPropagation();
+    if(!confirm('Удалить заметку? Это действие необратимо.')) return;
+    const url = btn.getAttribute('data-note-url');
+    try {
+      await postForm(url, {});
+      const note = btn.closest('.vb-note');
+      if(note){
+        note.style.transition = 'opacity .25s';
+        note.style.opacity = '0';
+        setTimeout(function(){ note.remove(); }, 250);
+      }
+      toast('Заметка удалена', 'ok');
+    } catch(err){ toast('Ошибка: ' + err.message, 'err'); }
+  });
+
+  // ── Universal delete (для сделок, контактов) ──
+  document.addEventListener('click', async function(e){
+    const btn = e.target.closest('[data-v3-delete]');
+    if(!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const url = btn.getAttribute('data-delete-url');
+    const msg = btn.getAttribute('data-delete-confirm') || 'Удалить?';
+    if(!confirm(msg)) return;
+    try {
+      await postForm(url, {});
+      // Ищем родительский блок: .vb-deal, .vb-contact, .vb-note...
+      const row = btn.closest('.vb-deal, .vb-contact, .vb-note');
+      if(row){
+        row.style.transition = 'opacity .25s';
+        row.style.opacity = '0';
+        setTimeout(function(){ row.remove(); }, 250);
+      } else { location.reload(); }
+      toast('Удалено', 'ok');
+    } catch(err){ toast('Ошибка: ' + err.message, 'err'); }
+  });
+
+  // ── Files counter в форме заметки ──
+  (function(){
+    const fileIn = document.querySelector('#vbNoteAddForm input[type="file"]');
+    const hint = document.getElementById('vbNoteFilesHint');
+    if(!fileIn || !hint) return;
+    fileIn.addEventListener('change', function(){
+      const n = fileIn.files.length;
+      hint.textContent = n ? (n + ' файл(ов)') : '';
+    });
+  })();
+
+  // ── «⋯» меню в hero ──
+  (function(){
+    const btn = document.getElementById('vbMoreBtn');
+    const menu = document.getElementById('vbMoreMenu');
+    if(!btn || !menu) return;
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      const open = !menu.hidden;
+      menu.hidden = open;
+      btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+    });
+    document.addEventListener('click', function(e){
+      if(!menu.hidden && !menu.contains(e.target) && e.target !== btn){
+        menu.hidden = true;
+        btn.setAttribute('aria-expanded', 'false');
+      }
+    });
+    document.addEventListener('keydown', function(e){
+      if(e.key === 'Escape' && !menu.hidden){
+        menu.hidden = true;
+        btn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  })();
+
+  // ── Copy link в «⋯» меню ──
+  document.querySelectorAll('[data-act="copy-link"]').forEach(function(btn){
+    btn.addEventListener('click', async function(){
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        toast('Ссылка скопирована', 'ok');
+      } catch(err){ toast('Не удалось скопировать', 'err'); }
+      const menu = document.getElementById('vbMoreMenu');
+      if(menu) menu.hidden = true;
+    });
+  });
+
+  // ── Delete company в «⋯» меню ──
+  document.querySelectorAll('[data-act="delete-company"]').forEach(function(btn){
+    btn.addEventListener('click', async function(){
+      if(!confirm('Запросить удаление компании? Запрос попадёт администратору на одобрение.')) return;
+      try {
+        await postForm('/companies/' + COMPANY_ID + '/delete-request/create/', {});
+        toast('Запрос на удаление отправлен', 'ok');
+        setTimeout(function(){ location.reload(); }, 600);
+      } catch(err){ toast('Ошибка: ' + err.message, 'err'); }
+    });
+  });
+
+  // ── Timeline «Показать ещё» ──
+  (function(){
+    const btn = document.getElementById('vbTimelineMore');
+    const tl = document.getElementById('vbTimeline');
+    if(!btn || !tl) return;
+    const companyId = tl.getAttribute('data-company-id');
+    btn.addEventListener('click', async function(){
+      if(btn.dataset.busy === '1') return;
+      btn.dataset.busy = '1';
+      const origText = btn.textContent;
+      btn.textContent = 'Загрузка…';
+      const offset = parseInt(tl.getAttribute('data-offset') || '0', 10);
+      try {
+        const r = await fetch('/companies/' + companyId + '/timeline/items/?offset=' + offset + '&limit=10', {
+          headers: {'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin'
+        });
+        if(!r.ok) throw new Error('HTTP ' + r.status);
+        const html = await r.text();
+        // Backend возвращает <li>...</li>, а у нас div-ы .vb-tl__i.
+        // Но на MVP просто inject как есть — для v3 можно adapter написать позже.
+        // Пока используем общий partial (items в старом формате), просто показываем.
+        tl.insertAdjacentHTML('beforeend', html);
+        tl.setAttribute('data-offset', offset + 10);
+        btn.dataset.busy = '0';
+        btn.textContent = origText;
+        if(!html.trim()){ btn.remove(); }
+      } catch(err){
+        btn.dataset.busy = '0';
+        btn.textContent = origText;
+        toast('Ошибка: ' + err.message, 'err');
+      }
+    });
+  })();
+
+  // ── V2Modal saved → reload ──
+  window.addEventListener('v2-modal:saved', function(){
+    toast('Сохранено', 'ok');
+    setTimeout(function(){ location.reload(); }, 400);
   });
 })();
 </script>
