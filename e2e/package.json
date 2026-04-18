@@ -1,0 +1,17 @@
+{
+  "name": "crm-profi-e2e",
+  "version": "1.0.0",
+  "description": "F10 (2026-04-18) — E2E smoke-тесты для CRM ПРОФИ через Playwright.",
+  "private": true,
+  "scripts": {
+    "install:deps": "npm install && npx playwright install chromium --with-deps",
+    "test": "playwright test",
+    "test:staging": "BASE_URL=https://crm-staging.groupprofi.ru playwright test",
+    "test:headed": "playwright test --headed",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^22.0.0"
+  }
+}
