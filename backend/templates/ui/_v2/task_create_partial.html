@@ -48,6 +48,27 @@
   .v2f-foot button[type="submit"]{background:var(--v2-primary);color:#fff;border-color:var(--v2-primary)}
   .v2f-foot button[type="submit"]:hover{background:var(--v2-primary-dark,#017e79)}
   .v2f-foot button[type="submit"][disabled]{opacity:.6;cursor:not-allowed}
+
+  /* Company autocomplete (v2f-company-picker) */
+  .v2f-company-picker{position:relative}
+  .v2f-company-picker__chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;
+    background:#ccfbf1;color:#115e59;border:1px solid #99f6e4;border-radius:8px;font-size:13px;font-weight:500;max-width:100%}
+  .v2f-company-picker__chip-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:420px}
+  .v2f-company-picker__chip-clear{margin-left:4px;padding:0;width:18px;height:18px;border:0;background:transparent;
+    color:#0f766e;cursor:pointer;font-size:16px;line-height:1;border-radius:50%}
+  .v2f-company-picker__chip-clear:hover{background:rgba(15,118,110,.15)}
+  .v2f-company-picker__dropdown{position:absolute;top:100%;left:0;right:0;z-index:10;margin-top:4px;
+    background:#fff;border:1px solid var(--v2-border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.08);
+    max-height:280px;overflow-y:auto}
+  .v2f-company-picker__item{padding:8px 10px;cursor:pointer;font-size:13px;border-bottom:1px solid #f1f5f9;
+    display:flex;flex-direction:column;gap:2px}
+  .v2f-company-picker__item:last-child{border-bottom:0}
+  .v2f-company-picker__item:hover,.v2f-company-picker__item.is-active{background:#f0fdf9}
+  .v2f-company-picker__item-name{font-weight:500;color:var(--v2-text)}
+  .v2f-company-picker__item-meta{font-size:11px;color:var(--v2-text-muted)}
+  .v2f-company-picker__empty{padding:10px;font-size:12px;color:var(--v2-text-muted);text-align:center}
+  .v2f-company-picker__loading{padding:10px;font-size:12px;color:var(--v2-text-muted);text-align:center}
+  .v2f-company-picker mark{background:#fef08a;color:inherit;padding:0 1px;border-radius:2px}
 </style>
 
 <form data-v2-modal-form method="post" action="{% url 'ui_v2_task_create_partial' %}">
@@ -96,18 +117,21 @@
     {% if form.type.errors %}<div class="v2f-errors">{{ form.type.errors|join:" " }}</div>{% endif %}
   </div>
 
-  <!-- Компания -->
+  <!-- Компания: AJAX-combobox, ищет по имени/ИНН/адресу/телефону/email -->
   <div class="v2f-row">
-    <label for="v2f_company">Компания</label>
-    <select id="v2f_company" name="company">
-      <option value="">— не выбрана —</option>
-      {% for c in companies_for_picker %}
-        <option value="{{ c.id }}"
-          {% if preselect_company_id == c.id|stringformat:"s" or form.company.value|stringformat:"s" == c.id|stringformat:"s" %}selected{% endif %}>
-          {{ c.name }}
-        </option>
-      {% endfor %}
-    </select>
+    <label for="v2f_company_search">Компания</label>
+    <div class="v2f-company-picker" id="v2CompanyPicker"
+         data-autocomplete-url="{% url 'company_autocomplete' %}"
+         data-preselect-id="{{ preselect_company_id|default:form.company.value|default:'' }}">
+      <input type="text" id="v2f_company_search" class="v2f-company-picker__search"
+             placeholder="Начните вводить название, ИНН, телефон или email…"
+             autocomplete="off" role="combobox" aria-autocomplete="list"
+             aria-expanded="false" aria-controls="v2f_company_dropdown" />
+      <input type="hidden" id="v2f_company" name="company"
+             value="{{ preselect_company_id|default:form.company.value|default:'' }}" />
+      <div class="v2f-company-picker__dropdown" id="v2f_company_dropdown" role="listbox" hidden></div>
+    </div>
+    <div class="v2f-hint">Мин. 2 символа. Поиск по всем полям компании.</div>
     {% if form.company.errors %}<div class="v2f-errors">{{ form.company.errors|join:" " }}</div>{% endif %}
   </div>
 
@@ -161,16 +185,191 @@
 
 <script>
 (function(){
-  // Подсветка выбранной плашки TaskType
+  // === TaskType плашки ===
   const grid = document.getElementById('v2TtGrid');
-  if(!grid) return;
-  function refresh(){
-    grid.querySelectorAll('.v2-tt-card').forEach(function(card){
-      const input = card.querySelector('input[type=radio]');
-      card.classList.toggle('is-selected', !!(input && input.checked));
+  if(grid){
+    function refresh(){
+      grid.querySelectorAll('.v2-tt-card').forEach(function(card){
+        const input = card.querySelector('input[type=radio]');
+        card.classList.toggle('is-selected', !!(input && input.checked));
+      });
+    }
+    grid.addEventListener('change', refresh);
+    refresh();
+  }
+
+  // === Company combobox (AJAX autocomplete) ===
+  const picker = document.getElementById('v2CompanyPicker');
+  if(!picker) return;
+  const url = picker.getAttribute('data-autocomplete-url') || '/companies/autocomplete/';
+  const searchInput = picker.querySelector('#v2f_company_search');
+  const hiddenInput = picker.querySelector('#v2f_company');
+  const dropdown = picker.querySelector('#v2f_company_dropdown');
+  const preselectId = picker.getAttribute('data-preselect-id') || '';
+
+  let activeIndex = -1;
+  let currentItems = [];
+  let debounceTimer = null;
+  let abortController = null;
+  let cache = new Map();  // q → items (на время жизни модалки)
+
+  function escHtml(s){
+    return String(s||'').replace(/[&<>"']/g, function(ch){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
     });
   }
-  grid.addEventListener('change', refresh);
-  refresh();
+  function highlight(text, query){
+    if(!query || !text) return escHtml(text);
+    const q = query.toLowerCase();
+    const lower = text.toLowerCase();
+    const idx = lower.indexOf(q);
+    if(idx < 0) return escHtml(text);
+    return escHtml(text.slice(0, idx)) +
+      '<mark>' + escHtml(text.slice(idx, idx + q.length)) + '</mark>' +
+      escHtml(text.slice(idx + q.length));
+  }
+
+  function openDropdown(){
+    dropdown.hidden = false;
+    searchInput.setAttribute('aria-expanded', 'true');
+  }
+  function closeDropdown(){
+    dropdown.hidden = true;
+    searchInput.setAttribute('aria-expanded', 'false');
+    activeIndex = -1;
+  }
+  function renderLoading(){
+    dropdown.innerHTML = '<div class="v2f-company-picker__loading">Поиск…</div>';
+    openDropdown();
+  }
+  function renderEmpty(){
+    dropdown.innerHTML = '<div class="v2f-company-picker__empty">Ничего не найдено</div>';
+    openDropdown();
+  }
+  function renderItems(items, query){
+    currentItems = items;
+    activeIndex = -1;
+    if(!items.length){ renderEmpty(); return; }
+    const html = items.map(function(it, i){
+      const meta = [it.inn ? 'ИНН '+escHtml(it.inn) : '', escHtml(it.address||''), escHtml(it.phone||''), escHtml(it.email||'')]
+        .filter(Boolean).join(' · ');
+      return '<div class="v2f-company-picker__item" role="option" data-idx="'+i+'" data-id="'+escHtml(it.id)+'" data-name="'+escHtml(it.name)+'">' +
+        '<div class="v2f-company-picker__item-name">'+highlight(it.name, query)+'</div>' +
+        (meta ? '<div class="v2f-company-picker__item-meta">'+meta+'</div>' : '') +
+        '</div>';
+    }).join('');
+    dropdown.innerHTML = html;
+    openDropdown();
+  }
+  function selectCurrent(id, name){
+    hiddenInput.value = id || '';
+    if(id && name){
+      // Показываем имя в поле (пользователь может продолжить ввод, чтобы сменить)
+      searchInput.value = name;
+    } else {
+      searchInput.value = '';
+    }
+    closeDropdown();
+  }
+
+  async function doSearch(q){
+    // Кэш на время жизни модалки
+    if(cache.has(q)){ renderItems(cache.get(q), q); return; }
+
+    if(abortController) abortController.abort();
+    abortController = new AbortController();
+    renderLoading();
+    try{
+      const resp = await fetch(url + '?q=' + encodeURIComponent(q), {
+        credentials: 'same-origin',
+        headers: {'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json'},
+        signal: abortController.signal
+      });
+      if(!resp.ok) throw new Error('HTTP '+resp.status);
+      const data = await resp.json();
+      const items = (data && data.items) ? data.items : [];
+      cache.set(q, items);
+      renderItems(items, q);
+    } catch(err){
+      if(err.name === 'AbortError') return;
+      dropdown.innerHTML = '<div class="v2f-company-picker__empty">Ошибка поиска</div>';
+      openDropdown();
+    }
+  }
+
+  // Debounced input
+  searchInput.addEventListener('input', function(){
+    const q = searchInput.value.trim();
+    // Если пользователь стёр всё — сбрасываем выбор
+    if(!q){ hiddenInput.value = ''; closeDropdown(); return; }
+    // Если пользователь меняет текст — сбрасываем выбранный id (он выберет заново)
+    hiddenInput.value = '';
+    if(q.length < 2){ closeDropdown(); return; }
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(function(){ doSearch(q); }, 220);
+  });
+
+  // Keyboard navigation
+  searchInput.addEventListener('keydown', function(e){
+    const items = dropdown.querySelectorAll('.v2f-company-picker__item');
+    if(e.key === 'ArrowDown'){
+      e.preventDefault();
+      if(dropdown.hidden && searchInput.value.trim().length >= 2){
+        doSearch(searchInput.value.trim()); return;
+      }
+      if(!items.length) return;
+      activeIndex = (activeIndex + 1) % items.length;
+      updateActive(items);
+    } else if(e.key === 'ArrowUp'){
+      e.preventDefault();
+      if(!items.length) return;
+      activeIndex = activeIndex <= 0 ? items.length - 1 : activeIndex - 1;
+      updateActive(items);
+    } else if(e.key === 'Enter'){
+      if(activeIndex >= 0 && items[activeIndex]){
+        e.preventDefault();
+        const el = items[activeIndex];
+        selectCurrent(el.getAttribute('data-id'), el.getAttribute('data-name'));
+      }
+    } else if(e.key === 'Escape'){
+      closeDropdown();
+    }
+  });
+  function updateActive(items){
+    items.forEach(function(it, i){
+      it.classList.toggle('is-active', i === activeIndex);
+      if(i === activeIndex) it.scrollIntoView({block:'nearest'});
+    });
+  }
+
+  // Клик по пункту
+  dropdown.addEventListener('mousedown', function(e){
+    const item = e.target.closest('.v2f-company-picker__item');
+    if(!item) return;
+    e.preventDefault();
+    selectCurrent(item.getAttribute('data-id'), item.getAttribute('data-name'));
+  });
+
+  // Клик вне — закрываем dropdown
+  document.addEventListener('mousedown', function(e){
+    if(!picker.contains(e.target)) closeDropdown();
+  });
+  // Focus → если уже что-то введено 2+ — снова покажем dropdown
+  searchInput.addEventListener('focus', function(){
+    const q = searchInput.value.trim();
+    if(q.length >= 2 && currentItems.length) openDropdown();
+  });
+
+  // Preselect: если был id из контекста — подгружаем имя через ?id=
+  if(preselectId){
+    fetch(url + '?id=' + encodeURIComponent(preselectId), {
+      credentials: 'same-origin',
+      headers: {'X-Requested-With': 'XMLHttpRequest', 'Accept':'application/json'}
+    }).then(function(r){return r.ok ? r.json() : null;})
+      .then(function(data){
+        const item = data && data.items && data.items[0];
+        if(item){ searchInput.value = item.name; hiddenInput.value = item.id; }
+      }).catch(function(){});
+  }
 })();
 </script>

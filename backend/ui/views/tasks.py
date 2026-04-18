@@ -2002,19 +2002,20 @@ def task_edit(request: HttpRequest, task_id) -> HttpResponse:
 # ============================================================================
 
 def _v2_task_create_get(request: HttpRequest) -> HttpResponse:
-    """GET v2 partial: отдаёт форму создания задачи без заголовка/RRULE."""
+    """GET v2 partial: отдаёт форму создания задачи без заголовка/RRULE.
+
+    Компания — через AJAX-combobox (/companies/autocomplete/),
+    список `companies_for_picker` больше не загружаем (экономия
+    ~500 строк и 1 DB-запрос).
+    """
     user: User = request.user
     form = TaskForm()
     _set_assigned_to_queryset(form, user)
-    # type_choices — для кастомного рендера плашек (вместо <select>)
     task_types = list(TaskType.objects.only("id", "name", "icon", "color").all())
-    # Preselect company из ?company=<id>
     preselect_company_id = (request.GET.get("company") or "").strip()
-    companies_qs = _editable_company_qs(user).order_by("name")[:500]
     return render(request, "ui/_v2/task_create_partial.html", {
         "form": form,
         "task_types": task_types,
-        "companies_for_picker": companies_qs,
         "preselect_company_id": preselect_company_id,
     })
 
@@ -2049,7 +2050,6 @@ def task_create_v2_partial(request: HttpRequest) -> HttpResponse:
         html = render(request, "ui/_v2/task_create_partial.html", {
             "form": form,
             "task_types": task_types,
-            "companies_for_picker": _editable_company_qs(user).order_by("name")[:500],
             "preselect_company_id": (request.POST.get("company") or "").strip(),
         }).content.decode("utf-8")
         return HttpResponse(html, status=422)
