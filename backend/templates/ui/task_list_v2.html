@@ -6,33 +6,34 @@
   {% include "ui/_v2/v2_styles.html" %}
   {% include "ui/_v2/v3_styles.html" %}
   <style>
-    /* Bulk actions — выровнены по высоте 36px (как .v2-btn / .v2-input / .v2-select).
-       Группы ячеек собраны в pill-контейнер с inner-label сверху. */
-    .v2-bulk{align-items:stretch}
+    /* Bulk actions — плоская toolbar без вложенных borders.
+       Все интерактивные элементы на одной высоте 36px. */
+    .v2-bulk{align-items:center;flex-wrap:wrap;gap:8px 12px}
     .v2-bulk__selection{display:inline-flex;align-items:center;gap:8px;padding:0 12px;height:36px;
-      background:var(--v2-bg-soft);border:1px solid var(--v2-border);border-radius:8px;
+      background:rgba(1,148,142,.08);border-radius:8px;
       font-size:13px;font-weight:500;color:var(--v2-text);white-space:nowrap}
-    .v2-bulk__selection-ic{width:16px;height:16px;color:var(--v2-text-muted);flex:0 0 auto}
+    .v2-bulk__selection-ic{width:16px;height:16px;color:var(--v2-primary);flex:0 0 auto}
     .v2-bulk__selection b{color:var(--v2-primary);font-weight:700;min-width:1ch;display:inline-block;text-align:center}
+    .v2-bulk__selection.is-empty{background:#f1f5f9;color:var(--v2-text-muted)}
+    .v2-bulk__selection.is-empty .v2-bulk__selection-ic{color:var(--v2-text-muted)}
     .v2-bulk__selection.is-empty b{color:var(--v2-text-muted)}
-    .v2-bulk__divider{width:1px;align-self:stretch;background:var(--v2-border);margin:0 2px}
+    .v2-bulk__divider{width:1px;height:24px;background:var(--v2-border);margin:0 2px;flex:0 0 auto}
 
-    .v2-bulk__group{display:inline-flex;align-items:center;gap:6px;height:36px;
-      padding:0 4px 0 12px;background:#fff;border:1px solid var(--v2-border-strong);
-      border-radius:8px;transition:border-color .15s}
-    .v2-bulk__group:focus-within{border-color:var(--v2-primary)}
+    /* Группа label + input/select + кнопка — в одну линию, без коробки */
+    .v2-bulk__group{display:inline-flex;align-items:center;gap:8px;flex-wrap:nowrap}
     .v2-bulk__group-label{font-size:12px;font-weight:600;color:var(--v2-text-muted);
-      letter-spacing:.01em;white-space:nowrap;padding-right:2px}
-    .v2-bulk__group .v2-select,.v2-bulk__group .v2-input{
-      height:28px;min-width:180px;padding:0 8px;font-size:13px;
-      border:1px solid transparent;background:transparent;
-      border-radius:6px}
-    .v2-bulk__group .v2-input[type="datetime-local"]{min-width:170px}
-    .v2-bulk__group .v2-select:focus,.v2-bulk__group .v2-input:focus{
-      border-color:var(--v2-primary);background:#fff}
-    .v2-bulk__group .v2-btn{height:28px;padding:0 12px;font-size:13px;border-radius:6px}
+      letter-spacing:.02em;white-space:nowrap;text-transform:uppercase}
+    .v2-bulk__group .v2-select,
+    .v2-bulk__group .v2-input{height:36px;min-width:200px;font-size:13px}
+    .v2-bulk__group .v2-input[type="datetime-local"]{min-width:200px}
+    .v2-bulk__group .v2-btn{height:36px;padding:0 14px;font-size:13px}
     .v2-bulk__group .v2-btn[disabled]{opacity:.45;cursor:not-allowed}
-    .v2-bulk__clear{margin-left:auto}
+    .v2-bulk__clear{margin-left:auto;height:36px}
+    @media (max-width: 980px){
+      .v2-bulk__group{width:100%}
+      .v2-bulk__group .v2-select,.v2-bulk__group .v2-input{flex:1;min-width:0}
+      .v2-bulk__clear{margin-left:0;width:100%}
+    }
 
     /* Confirm modal body */
     .v2-bulk-confirm{font-size:14px;color:var(--v2-text);line-height:1.5}
@@ -62,6 +63,17 @@
     .v2-tz-badge{display:inline-flex;align-items:center;gap:3px;margin-top:3px;
       padding:1px 6px;border-radius:999px;font-size:10px;font-weight:600;
       background:var(--v2-warn-50);color:#8B3A0A;border:1px solid #FFCB94}
+
+    /* Название компании в строке задачи: до 2 строк, обрывается …,
+       полное имя — через title-tooltip при hover. Увеличенная max-width на
+       широких экранах (>1280px) чтобы реже приходилось открывать тултип. */
+    .v2-cell-company{line-height:1.3;min-width:0;max-width:100%}
+    .v2-cell-company__name{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+      overflow:hidden;text-overflow:ellipsis;word-break:break-word;
+      font-size:13px;color:var(--v2-text);cursor:default}
+    .v2-cell-company__link{color:inherit;text-decoration:none;border-bottom:1px dashed transparent;
+      transition:border-color .12s,color .12s}
+    .v2-cell-company__link:hover{color:var(--v2-primary);border-bottom-color:var(--v2-primary)}
   </style>
 {% endblock %}
 
@@ -328,8 +340,10 @@
           </div>
           <div class="v2-td v2-item__meta" style="min-width:0">
             {% if t.company %}
-              <div style="line-height:1.3;min-width:0">
-                <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.company.name }}</div>
+              <div class="v2-cell-company">
+                <div class="v2-cell-company__name" title="{{ t.company.name }}">
+                  <a href="/companies/{{ t.company.id }}/" class="v2-cell-company__link">{{ t.company.name }}</a>
+                </div>
                 {% with guessed=t.company.address|guess_ru_tz %}
                 {% with tz=t.company.work_timezone|default:guessed %}
                   {% if tz %}
