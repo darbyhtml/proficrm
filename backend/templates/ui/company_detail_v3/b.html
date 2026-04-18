@@ -721,7 +721,7 @@
           <div class="vb-p__k" data-v3-edit
                data-edit-url="{% url 'company_phone_comment_update' company_phone_id=p.id %}"
                data-edit-kind="phone-note"
-               title="Комментарий к номеру">{{ p.note|default:"Ещё"|truncatechars:12 }}</div>
+               title="Комментарий к номеру{% if p.comment %}: {{ p.comment }}{% endif %}">{{ p.comment|default:"Ещё"|truncatechars:12 }}</div>
           <div class="vb-p__v">
             <a href="tel:{{ p.value }}">{{ p.value|format_phone }}</a>
             <a href="tel:{{ p.value }}" class="vb-call" title="Позвонить">

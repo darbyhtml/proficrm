@@ -184,7 +184,7 @@
       let body = {};
       if(kind === 'inline') body = {field: field, value: newText};
       else if(kind === 'phone-value') body = {value: newText};
-      else if(kind === 'phone-note') body = {note: newText};
+      else if(kind === 'phone-note') body = {comment: newText};
       else if(kind === 'email-value') body = {value: newText};
       else if(kind === 'main-phone') body = {phone: newText};
       else if(kind === 'main-email') body = {email: newText};
