@@ -1,0 +1,477 @@
+{% extends "ui/base.html" %}
+{% load ui_extras accounts_extras %}
+{% block title %}{{ company.name }} — CRM ПРОФИ{% endblock %}
+
+{% block extra_head %}
+<style nonce="{{ request.csp_nonce|default:'' }}">
+  /* ═══════════════════════════════════════════════════════════════
+     Variant B — Linear/Height dashboard
+     Эстетика: tech-dashboard, почти-чёрный hero с крупным именем
+     + KPI-пилюли, ниже 3 колонки плотной сетки. Монохром с teal-акцентом.
+  ═══════════════════════════════════════════════════════════════ */
+
+  .vb{--ink:#0a0a0b;--ink-2:#18181b;--muted:#71717a;--soft:#a1a1aa;
+    --hairline:#e4e4e7;--hairline-2:#d4d4d8;
+    --paper:#fafafa;--paper-hi:#ffffff;
+    --accent:#01948e;--accent-2:#027c77;--accent-soft:#ccf0ed;
+    --danger:#dc2626;--warn:#d97706;--ok:#16a34a;
+    --font-sans:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI Variable','Segoe UI',Roboto,sans-serif;
+    --font-mono:'SF Mono','JetBrains Mono','Cascadia Mono',Monaco,'Courier New',monospace;
+    color:var(--ink);font-family:var(--font-sans);background:var(--paper);
+    font-feature-settings:'ss01','cv11','tnum';letter-spacing:-0.011em}
+  .vb *{box-sizing:border-box}
+
+  /* ── Hero ── */
+  .vb-hero{background:linear-gradient(135deg,#0a0a0b 0%,#18181b 100%);
+    color:#fafafa;padding:28px 40px 24px;position:relative;overflow:hidden}
+  .vb-hero::before{content:"";position:absolute;inset:0;
+    background:radial-gradient(ellipse 600px 300px at 85% 110%,rgba(1,148,142,.25),transparent 60%);
+    pointer-events:none}
+  .vb-hero__crumb{font-size:11px;color:#71717a;margin-bottom:10px;
+    font-family:var(--font-mono);letter-spacing:.06em;text-transform:uppercase;position:relative}
+  .vb-hero__crumb a{color:#a1a1aa;text-decoration:none}
+  .vb-hero__crumb a:hover{color:#fafafa}
+  .vb-hero__row{display:flex;align-items:flex-end;gap:28px;position:relative;flex-wrap:wrap}
+  .vb-hero__name-box{flex:1;min-width:0}
+  .vb-hero__name{font-size:34px;font-weight:600;letter-spacing:-0.028em;line-height:1.05;
+    color:#fafafa;margin:0;cursor:text;outline:none;padding:2px 6px;margin-left:-6px;
+    border-radius:4px;transition:background .12s}
+  .vb-hero__name:hover,.vb-hero__name:focus{background:rgba(255,255,255,.06)}
+  .vb-hero__meta{display:flex;gap:14px;align-items:center;margin-top:8px;
+    font-size:12px;color:#a1a1aa;font-family:var(--font-mono);letter-spacing:.02em;flex-wrap:wrap}
+  .vb-hero__meta-dot{width:3px;height:3px;border-radius:50%;background:#52525b}
+  .vb-hero__meta span[contenteditable]:hover{background:rgba(255,255,255,.06);
+    border-radius:3px;padding:0 3px;margin:0 -3px;cursor:text}
+
+  .vb-hero__kpis{display:flex;gap:10px;flex-wrap:wrap}
+  .vb-kpi{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);
+    border-radius:10px;padding:10px 14px;min-width:140px;backdrop-filter:blur(10px)}
+  .vb-kpi--accent{border-color:rgba(1,148,142,.6);
+    background:linear-gradient(135deg,rgba(1,148,142,.2),rgba(1,148,142,.05))}
+  .vb-kpi--danger{border-color:rgba(220,38,38,.4);
+    background:linear-gradient(135deg,rgba(220,38,38,.15),rgba(220,38,38,.04))}
+  .vb-kpi--warn{border-color:rgba(217,119,6,.4);
+    background:linear-gradient(135deg,rgba(217,119,6,.15),rgba(217,119,6,.04))}
+  .vb-kpi__l{font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;
+    text-transform:uppercase;color:#a1a1aa;margin-bottom:4px}
+  .vb-kpi__v{font-size:20px;font-weight:600;color:#fafafa;letter-spacing:-0.02em;line-height:1.1}
+  .vb-kpi__sub{font-size:10.5px;color:#a1a1aa;font-family:var(--font-mono);
+    letter-spacing:.02em;margin-top:2px}
+
+  .vb-hero__actions{display:flex;gap:8px;margin-top:18px;position:relative;flex-wrap:wrap}
+  .vb-hero__btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;
+    background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);
+    color:#fafafa;border-radius:8px;font-size:12.5px;font-family:inherit;
+    cursor:pointer;text-decoration:none;transition:all .12s}
+  .vb-hero__btn:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.2)}
+  .vb-hero__btn--primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .vb-hero__btn--primary:hover{background:var(--accent-2);border-color:var(--accent-2)}
+  .vb-hero__btn svg{width:13px;height:13px}
+
+  /* ── 3-column grid ── */
+  .vb-grid{display:grid;grid-template-columns:340px minmax(0,1fr) 340px;
+    gap:1px;background:var(--hairline);min-height:calc(100vh - 280px)}
+  .vb-grid>*{background:var(--paper-hi);overflow:hidden}
+  @media (max-width:1280px){.vb-grid{grid-template-columns:1fr;grid-auto-rows:min-content}}
+
+  .vb-col{padding:20px 22px;display:flex;flex-direction:column;gap:20px;overflow-y:auto}
+  .vb-col--center{padding:20px 24px}
+
+  /* Section */
+  .vb-sec{display:flex;flex-direction:column;gap:6px}
+  .vb-sec__h{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+  .vb-sec__t{font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--muted);font-weight:500}
+  .vb-sec__t b{color:var(--ink);font-weight:600;margin-right:4px}
+  .vb-sec__add{border:0;background:none;color:var(--muted);cursor:pointer;
+    font-size:15px;line-height:1;padding:2px 5px;border-radius:4px;font-family:inherit}
+  .vb-sec__add:hover{color:var(--accent);background:var(--accent-soft)}
+
+  /* Property row (flat, tight) */
+  .vb-p{display:flex;align-items:center;gap:10px;padding:7px 0;
+    border-bottom:1px solid var(--hairline);font-size:13px;line-height:1.4;min-width:0}
+  .vb-p:last-child{border-bottom:none}
+  .vb-p__k{color:var(--muted);font-size:11px;min-width:90px;font-family:var(--font-mono);
+    letter-spacing:.02em;flex:0 0 90px}
+  .vb-p__v{flex:1;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;
+    cursor:text;padding:1px 4px;margin:-1px -4px;border-radius:3px;
+    transition:background .12s}
+  .vb-p__v:hover{background:var(--paper)}
+  .vb-p__v a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--hairline)}
+  .vb-p__v a:hover{color:var(--accent);border-bottom-color:var(--accent)}
+  .vb-p__empty{color:var(--soft);font-style:italic}
+
+  .vb-callbtn{display:inline-flex;align-items:center;justify-content:center;
+    width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;
+    text-decoration:none;margin-left:6px;flex:0 0 auto;transition:transform .12s}
+  .vb-callbtn:hover{transform:scale(1.08)}
+  .vb-callbtn svg{width:11px;height:11px}
+
+  /* Contact (ЛПР) */
+  .vb-contact{padding:10px 0;border-bottom:1px solid var(--hairline)}
+  .vb-contact:last-child{border-bottom:none}
+  .vb-contact__top{display:flex;align-items:baseline;gap:8px;margin-bottom:3px;flex-wrap:wrap}
+  .vb-contact__name{font-weight:500;font-size:13px;color:var(--ink)}
+  .vb-contact__pos{font-size:11px;color:var(--muted);font-family:var(--font-mono);letter-spacing:.02em}
+  .vb-contact__row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);
+    flex-wrap:wrap}
+  .vb-contact__row a{color:var(--muted);text-decoration:none;border-bottom:1px solid transparent}
+  .vb-contact__row a:hover{color:var(--accent);border-bottom-color:var(--accent)}
+
+  /* Deal card (left col too but richer) */
+  .vb-deal{padding:10px 12px;background:var(--paper);border:1px solid var(--hairline);
+    border-radius:8px;display:flex;gap:10px;align-items:center;cursor:pointer;
+    transition:border-color .12s,background .12s;margin-bottom:6px}
+  .vb-deal:hover{border-color:var(--accent);background:var(--paper-hi)}
+  .vb-deal__ico{width:30px;height:30px;border-radius:7px;
+    background:linear-gradient(135deg,#34d399,#10b981);color:#fff;
+    display:flex;align-items:center;justify-content:center;flex:0 0 auto;font-weight:600;font-size:13px}
+  .vb-deal__body{flex:1;min-width:0}
+  .vb-deal__title{font-size:12.5px;color:var(--ink);line-height:1.35;font-weight:500;
+    overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
+  .vb-deal__meta{font-size:10.5px;color:var(--muted);margin-top:2px;
+    font-family:var(--font-mono);letter-spacing:.02em}
+
+  .vb-empty{padding:14px 0;text-align:center;color:var(--soft);font-size:12px}
+
+  /* Center: Timeline feed */
+  .vb-tl{display:flex;flex-direction:column;gap:0;position:relative}
+  .vb-tl::before{content:"";position:absolute;left:15px;top:14px;bottom:14px;width:1px;
+    background:var(--hairline)}
+  .vb-tl__item{display:grid;grid-template-columns:32px 1fr auto;gap:12px;
+    padding:12px 0;align-items:flex-start;cursor:pointer;
+    border-bottom:1px solid var(--hairline);position:relative;transition:background .12s;
+    margin:0 -12px;padding-left:12px;padding-right:12px;border-radius:6px}
+  .vb-tl__item:hover{background:var(--paper)}
+  .vb-tl__item:last-child{border-bottom:none}
+  .vb-tl__dot{width:32px;height:32px;border-radius:50%;background:var(--paper-hi);
+    border:1.5px solid var(--hairline-2);display:flex;align-items:center;justify-content:center;
+    font-size:13px;flex:0 0 auto;z-index:1;position:relative}
+  .vb-tl__item--note .vb-tl__dot{border-color:#fbbf24;background:#fef3c7}
+  .vb-tl__item--task .vb-tl__dot{border-color:#a78bfa;background:#ede9fe}
+  .vb-tl__item--deal .vb-tl__dot{border-color:#10b981;background:#d1fae5}
+  .vb-tl__body{min-width:0}
+  .vb-tl__title{font-size:13.5px;font-weight:500;color:var(--ink);line-height:1.4;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+    word-break:break-word}
+  .vb-tl__meta{margin-top:3px;font-size:11px;color:var(--muted);font-family:var(--font-mono);
+    letter-spacing:.02em;display:flex;gap:8px}
+  .vb-tl__meta span:not(:last-child)::after{content:"·";margin-left:8px;color:var(--soft)}
+  .vb-tl__time{font-size:10.5px;color:var(--soft);font-family:var(--font-mono);white-space:nowrap;
+    letter-spacing:.02em}
+
+  /* Task (center) */
+  .vb-task{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;
+    padding:9px 0;border-bottom:1px solid var(--hairline);cursor:pointer;font-size:13px;
+    transition:background .12s;margin:0 -12px;padding-left:12px;padding-right:12px;border-radius:6px}
+  .vb-task:hover{background:var(--paper)}
+  .vb-task:last-child{border-bottom:none}
+  .vb-task__chk{width:14px;height:14px;border:1.5px solid var(--soft);border-radius:4px;flex:0 0 auto}
+  .vb-task__chk--urgent{border-color:var(--danger);background:#fef2f2}
+  .vb-task__body{min-width:0;line-height:1.35}
+  .vb-task__title{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+  .vb-task__sub{font-size:11px;color:var(--muted);font-family:var(--font-mono);letter-spacing:.02em;margin-top:1px}
+  .vb-task__due{font-size:11px;color:var(--muted);white-space:nowrap;font-family:var(--font-mono);letter-spacing:.02em}
+  .vb-task__due--overdue{color:var(--danger);font-weight:500}
+
+  /* Tabs inside center */
+  .vb-tabs{display:flex;gap:0;border-bottom:1px solid var(--hairline);margin-bottom:14px;overflow-x:auto}
+  .vb-tabs__t{padding:8px 14px 10px;font-size:12.5px;color:var(--muted);
+    border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;
+    font-family:var(--font-mono);letter-spacing:.04em;text-transform:uppercase;font-weight:500;
+    background:none;border-left:0;border-right:0;border-top:0}
+  .vb-tabs__t.is-active{color:var(--ink);border-bottom-color:var(--accent)}
+  .vb-tabs__t:hover:not(.is-active){color:var(--ink)}
+  .vb-tabs__t b{background:var(--paper);border:1px solid var(--hairline);color:var(--muted);
+    padding:1px 6px;border-radius:999px;font-size:10px;margin-left:6px;font-weight:400}
+
+  /* Banner */
+  .v3-banner{background:linear-gradient(180deg,#0a0a0b 0%,#18181b 100%);color:#e4e4e7;
+    padding:9px 22px;font-size:12.5px;display:flex;align-items:center;gap:14px;
+    border-bottom:1px solid #27272a;font-family:var(--font-sans)}
+  .v3-banner__label{color:#71717a;font-family:var(--font-mono);font-size:11px;letter-spacing:.06em}
+  .v3-banner__tabs{display:flex;gap:2px;background:#27272a;padding:2px;border-radius:6px}
+  .v3-banner__tabs a{padding:3px 12px;color:#a1a1aa;text-decoration:none;font-size:12px;
+    border-radius:4px;font-family:var(--font-mono);letter-spacing:.04em;transition:all .12s}
+  .v3-banner__tabs a.is-active{background:var(--accent);color:#fff}
+  .v3-banner__tabs a:hover:not(.is-active){color:#fafafa}
+  .v3-banner__note{color:#a1a1aa;flex:1}
+  .v3-banner__back{color:#71717a;text-decoration:none;font-family:var(--font-mono);font-size:11px;letter-spacing:.04em}
+  .v3-banner__back:hover{color:#fafafa}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="vb">
+  {% include "ui/company_detail_v3/_banner.html" %}
+
+  {# ═════════════════════ HERO ═════════════════════ #}
+  <section class="vb-hero">
+    <div class="vb-hero__crumb">
+      <a href="/companies/">COMPANIES</a> &nbsp;/&nbsp; <span>{{ company.name|truncatechars:40 }}</span>
+    </div>
+
+    <div class="vb-hero__row">
+      <div class="vb-hero__name-box">
+        <h1 class="vb-hero__name" contenteditable="true" data-edit-field="name">{{ company.name }}</h1>
+        <div class="vb-hero__meta">
+          <span>ИНН <span contenteditable="true" data-edit-field="inn">{{ company.inn|default:"—" }}</span></span>
+          <span class="vb-hero__meta-dot"></span>
+          {% if company.status %}<span>{{ company.status.name }}</span>
+          {% else %}<span style="color:#71717a">статус не задан</span>{% endif %}
+          <span class="vb-hero__meta-dot"></span>
+          <span>👤 {{ company.responsible|full_name|default:"без ответственного" }}</span>
+          {% if company.branch %}
+            <span class="vb-hero__meta-dot"></span>
+            <span>{{ company.branch.name }}</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="vb-hero__kpis">
+        <div class="vb-kpi {% if contract_level == 'expired' or contract_level == 'danger' %}vb-kpi--danger{% elif contract_level == 'warn' %}vb-kpi--warn{% elif contract_level == 'ok' %}vb-kpi--accent{% endif %}">
+          <div class="vb-kpi__l">Договор</div>
+          {% if company.contract_until %}
+            <div class="vb-kpi__v">{{ company.contract_until|date:"d.m.Y" }}</div>
+            <div class="vb-kpi__sub">
+              {% if contract_level == 'expired' %}истёк {{ contract_days_left|stringformat:"d"|cut:"-" }} дн. назад
+              {% else %}осталось {{ contract_days_left }} дн.{% endif %}
+            </div>
+          {% else %}
+            <div class="vb-kpi__v">—</div>
+            <div class="vb-kpi__sub">не заключён</div>
+          {% endif %}
+        </div>
+        <div class="vb-kpi {% if open_tasks %}vb-kpi--accent{% endif %}">
+          <div class="vb-kpi__l">Активных задач</div>
+          <div class="vb-kpi__v">{{ open_tasks|length }}</div>
+          <div class="vb-kpi__sub">{% if open_tasks %}до {{ open_tasks.0.due_at|date:"d.m.Y"|default:"—" }}{% else %}всё чисто{% endif %}</div>
+        </div>
+        <div class="vb-kpi">
+          <div class="vb-kpi__l">Контактов</div>
+          <div class="vb-kpi__v">{{ contacts|length }}</div>
+          <div class="vb-kpi__sub">ЛПР компании</div>
+        </div>
+        <div class="vb-kpi">
+          <div class="vb-kpi__l">Сделок</div>
+          <div class="vb-kpi__v">{{ deals|length }}</div>
+          <div class="vb-kpi__sub">активные программы</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="vb-hero__actions">
+      <button class="vb-hero__btn vb-hero__btn--primary" data-act="new-task">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        Задача
+      </button>
+      <button class="vb-hero__btn" data-act="new-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+        Заметка
+      </button>
+      <button class="vb-hero__btn" data-act="new-call">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.37 1.9.72 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0122 16.92z"/></svg>
+        Звонок
+      </button>
+      <button class="vb-hero__btn" data-act="new-deal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+        Сделка
+      </button>
+    </div>
+  </section>
+
+  {# ═════════════════════ 3 КОЛОНКИ ═════════════════════ #}
+  <div class="vb-grid">
+    {# ─── LEFT: Контакты + ЛПР ─── #}
+    <section class="vb-col">
+      <div class="vb-sec">
+        <div class="vb-sec__h">
+          <span class="vb-sec__t"><b>Связь</b>с компанией</span>
+          <button class="vb-sec__add" title="Добавить">+</button>
+        </div>
+        {% if company.phone %}
+        <div class="vb-p">
+          <div class="vb-p__k">Телефон</div>
+          <div class="vb-p__v">
+            <a href="tel:{{ company.phone }}">{{ company.phone|format_phone }}</a>
+            <a href="tel:{{ company.phone }}" class="vb-callbtn" title="Позвонить">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>
+            </a>
+          </div>
+        </div>
+        {% endif %}
+        {% for p in company.phones.all|slice:":3" %}
+        <div class="vb-p">
+          <div class="vb-p__k">{{ p.note|default:"Ещё"|truncatechars:14 }}</div>
+          <div class="vb-p__v">
+            <a href="tel:{{ p.value }}">{{ p.value|format_phone }}</a>
+            <a href="tel:{{ p.value }}" class="vb-callbtn" title="Позвонить">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>
+            </a>
+          </div>
+        </div>
+        {% endfor %}
+        {% if company.email %}
+        <div class="vb-p">
+          <div class="vb-p__k">Email</div>
+          <div class="vb-p__v"><a href="mailto:{{ company.email }}">{{ company.email }}</a></div>
+        </div>
+        {% endif %}
+        {% for e in company.emails.all|slice:":2" %}
+        <div class="vb-p">
+          <div class="vb-p__k">{{ e.note|default:"Ещё"|truncatechars:14 }}</div>
+          <div class="vb-p__v"><a href="mailto:{{ e.value }}">{{ e.value }}</a></div>
+        </div>
+        {% endfor %}
+        {% if company.address %}
+        <div class="vb-p">
+          <div class="vb-p__k">Адрес</div>
+          <div class="vb-p__v">{{ company.address|truncatechars:50 }}</div>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="vb-sec">
+        <div class="vb-sec__h">
+          <span class="vb-sec__t"><b>ЛПР</b>· {{ contacts|length }}</span>
+          <button class="vb-sec__add" title="Добавить ЛПР">+</button>
+        </div>
+        {% for c in contacts %}
+        <div class="vb-contact">
+          <div class="vb-contact__top">
+            <span class="vb-contact__name">{{ c.name }}</span>
+            {% if c.position %}<span class="vb-contact__pos">{{ c.position }}</span>{% endif %}
+          </div>
+          <div class="vb-contact__row">
+            {% for ph in c.phones.all|slice:":1" %}
+              <a href="tel:{{ ph.value }}">{{ ph.value|format_phone }}</a>
+              <a href="tel:{{ ph.value }}" class="vb-callbtn" title="Позвонить">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>
+              </a>
+            {% endfor %}
+            {% for em in c.emails.all|slice:":1" %}
+              <a href="mailto:{{ em.value }}">{{ em.value }}</a>
+            {% endfor %}
+          </div>
+        </div>
+        {% empty %}
+        <div class="vb-empty">Контактных лиц ещё нет</div>
+        {% endfor %}
+      </div>
+    </section>
+
+    {# ─── CENTER: Tabs + Timeline + Tasks ─── #}
+    <section class="vb-col vb-col--center">
+      <div class="vb-tabs">
+        <button class="vb-tabs__t is-active" data-tab="activity">Активность<b>{{ timeline|length }}</b></button>
+        <button class="vb-tabs__t" data-tab="tasks">Задачи<b>{{ open_tasks|length }}</b></button>
+        <button class="vb-tabs__t" data-tab="notes">Заметки<b>{{ recent_notes|length }}</b></button>
+      </div>
+
+      <div data-tab-panel="activity">
+        <div class="vb-tl">
+          {% for it in timeline %}
+          <div class="vb-tl__item vb-tl__item--{{ it.kind }}">
+            <div class="vb-tl__dot">{{ it.icon }}</div>
+            <div class="vb-tl__body">
+              <div class="vb-tl__title">{{ it.title }}</div>
+              <div class="vb-tl__meta">
+                {% if it.kind == 'note' %}<span>Заметка</span>{% elif it.kind == 'task' %}<span>Задача</span>{% elif it.kind == 'deal' %}<span>Сделка</span>{% endif %}
+                {% if it.meta %}<span>{{ it.meta }}</span>{% endif %}
+              </div>
+            </div>
+            <span class="vb-tl__time">{{ it.at|date:"d.m.Y H:i" }}</span>
+          </div>
+          {% empty %}
+          <div class="vb-empty" style="padding:40px 0">Лента пуста — ещё не было активности</div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div data-tab-panel="tasks" hidden>
+        {% for t in open_tasks %}
+        <div class="vb-task">
+          <span class="vb-task__chk {% if t.is_urgent %}vb-task__chk--urgent{% endif %}"></span>
+          <div class="vb-task__body">
+            <div class="vb-task__title">{% if t.type %}{{ t.type.name }}{% if t.title and t.title|lower != t.type.name|lower %} · {{ t.title }}{% endif %}{% else %}{{ t.title|default:"Без названия" }}{% endif %}</div>
+            <div class="vb-task__sub">{{ t.assigned_to|full_name|default:"—" }}{% if t.is_urgent %} · СРОЧНО{% endif %}</div>
+          </div>
+          <span class="vb-task__due {% if t.due_at and t.due_at < now %}vb-task__due--overdue{% endif %}">{% if t.due_at %}{{ t.due_at|date:"d.m H:i" }}{% else %}без срока{% endif %}</span>
+        </div>
+        {% empty %}
+        <div class="vb-empty" style="padding:30px 0">Активных задач нет</div>
+        {% endfor %}
+      </div>
+
+      <div data-tab-panel="notes" hidden>
+        {% for n in recent_notes %}
+        <div style="padding:12px 0;border-bottom:1px solid var(--hairline);font-size:13px;line-height:1.5">
+          <div style="color:var(--ink);margin-bottom:4px">{{ n.text|truncatechars:200|linebreaksbr }}</div>
+          <div style="font-size:11px;color:var(--muted);font-family:var(--font-mono);letter-spacing:.02em">
+            {{ n.author|full_name|default:"—" }} · {{ n.created_at|date:"d.m.Y H:i" }}
+          </div>
+        </div>
+        {% empty %}
+        <div class="vb-empty" style="padding:30px 0">Ещё нет заметок</div>
+        {% endfor %}
+      </div>
+    </section>
+
+    {# ─── RIGHT: Сделки + договор ─── #}
+    <section class="vb-col">
+      <div class="vb-sec">
+        <div class="vb-sec__h">
+          <span class="vb-sec__t"><b>Договор</b></span>
+        </div>
+        {% if company.contract_until %}
+        <div class="vb-p">
+          <div class="vb-p__k">Действует до</div>
+          <div class="vb-p__v">{{ company.contract_until|date:"d.m.Y" }}</div>
+        </div>
+        {% if company.contract_type %}
+        <div class="vb-p">
+          <div class="vb-p__k">Тип</div>
+          <div class="vb-p__v">{{ company.contract_type.name }}</div>
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="vb-empty" style="padding:14px 0">Договор не заключён</div>
+        {% endif %}
+      </div>
+
+      <div class="vb-sec">
+        <div class="vb-sec__h">
+          <span class="vb-sec__t"><b>Сделки</b>· {{ deals|length }}</span>
+          <button class="vb-sec__add" title="Новая сделка">+</button>
+        </div>
+        {% for d in deals %}
+        <div class="vb-deal" data-deal-id="{{ d.id }}">
+          <div class="vb-deal__ico">₽</div>
+          <div class="vb-deal__body">
+            <div class="vb-deal__title">{{ d.program|default:"Сделка"|truncatechars:80 }}</div>
+            <div class="vb-deal__meta">{{ d.created_at|date:"d.m.Y" }}</div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="vb-empty" style="padding:14px 0">Сделок ещё нет</div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+</div>
+
+<script nonce="{{ request.csp_nonce|default:'' }}">
+(function(){
+  // Tabs в центральной колонке
+  document.querySelectorAll('.vb-tabs__t').forEach(function(tab){
+    tab.addEventListener('click', function(){
+      const name = tab.getAttribute('data-tab');
+      document.querySelectorAll('.vb-tabs__t').forEach(function(t){ t.classList.toggle('is-active', t === tab); });
+      document.querySelectorAll('[data-tab-panel]').forEach(function(p){
+        p.hidden = p.getAttribute('data-tab-panel') !== name;
+      });
+    });
+  });
+})();
+</script>
+{% endblock %}

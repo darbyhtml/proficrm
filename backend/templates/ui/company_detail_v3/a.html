@@ -1,0 +1,433 @@
+{% extends "ui/base.html" %}
+{% load ui_extras accounts_extras %}
+{% block title %}{{ company.name }} — CRM ПРОФИ{% endblock %}
+
+{% block extra_head %}
+<style nonce="{{ request.csp_nonce|default:'' }}">
+  /* ═══════════════════════════════════════════════════════════════
+     Variant A — Attio/Notion workspace
+     Эстетика: плотная рабочая среда, monospace для IDs и meta,
+     тонкие hairline-разделители, единственный акцент — teal.
+     Inline-edit везде. Sidebar слева — как «properties panel».
+  ═══════════════════════════════════════════════════════════════ */
+
+  .va{--ink:#0f1410;--muted:#6b7168;--soft:#9ba198;--hairline:#e8e6df;
+    --paper:#fbfaf6;--paper-hi:#ffffff;--accent:#01948e;--accent-soft:#e4f3f1;
+    --danger:#c53f3f;--warn:#b97a12;--ok:#2f9a5c;
+    --font-display:'Iowan Old Style','Palatino','Palatino Linotype','Book Antiqua',Georgia,serif;
+    --font-sans:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,sans-serif;
+    --font-mono:'SF Mono','Cascadia Mono','JetBrains Mono',Monaco,'Courier New',monospace;
+    color:var(--ink);font-family:var(--font-sans);background:var(--paper);
+    font-feature-settings:'ss01','cv11';letter-spacing:-0.005em}
+  .va *{box-sizing:border-box}
+  .va-page{display:grid;grid-template-columns:360px 1fr;min-height:calc(100vh - 70px);
+    background:var(--paper)}
+  .va-page>*{border-right:1px solid var(--hairline)}
+  .va-page>*:last-child{border-right:none}
+
+  /* ── Sidebar (properties) ── */
+  .va-sb{padding:20px 22px;display:flex;flex-direction:column;gap:0;
+    background:var(--paper);position:sticky;top:0;
+    max-height:calc(100vh - 70px);overflow-y:auto}
+  .va-sb__crumb{font-size:11px;color:var(--soft);margin-bottom:14px;
+    font-family:var(--font-mono);letter-spacing:.02em}
+  .va-sb__crumb a{color:var(--muted);text-decoration:none;border-bottom:1px dotted transparent}
+  .va-sb__crumb a:hover{color:var(--ink);border-bottom-color:var(--muted)}
+  .va-sb__name{font-family:var(--font-display);font-weight:500;font-size:26px;
+    line-height:1.12;letter-spacing:-0.015em;color:var(--ink);
+    margin:0 0 4px 0;cursor:text;outline:none;
+    border-radius:3px;padding:2px 4px;margin-left:-4px;
+    transition:background .12s}
+  .va-sb__name:hover,.va-sb__name:focus{background:rgba(1,148,142,.05)}
+  .va-sb__inn{font-family:var(--font-mono);font-size:11px;color:var(--muted);
+    letter-spacing:.04em;margin-bottom:18px;display:flex;align-items:center;gap:6px}
+  .va-sb__inn-dot{display:inline-block;width:2px;height:2px;border-radius:50%;
+    background:var(--soft);margin:0 2px}
+
+  .va-sb__sec{padding:14px 0;border-top:1px solid var(--hairline)}
+  .va-sb__sec:first-of-type{border-top:none;padding-top:0}
+  .va-sb__sec-title{font-family:var(--font-mono);font-size:10px;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--soft);
+    margin:0 0 10px 0;display:flex;align-items:center;justify-content:space-between}
+  .va-sb__sec-title button{border:0;background:none;color:var(--soft);cursor:pointer;
+    font:inherit;font-size:14px;line-height:1;padding:0 2px}
+  .va-sb__sec-title button:hover{color:var(--accent)}
+
+  .va-prop{display:grid;grid-template-columns:98px 1fr;gap:10px;
+    padding:5px 0;font-size:13px;align-items:baseline}
+  .va-prop__k{color:var(--muted);font-size:11px;line-height:1.6;
+    font-family:var(--font-mono);letter-spacing:.02em}
+  .va-prop__v{color:var(--ink);line-height:1.5;min-width:0;
+    word-break:break-word;cursor:text;padding:1px 4px;margin:-1px -4px;
+    border-radius:3px;transition:background .12s}
+  .va-prop__v:hover{background:rgba(1,148,142,.05)}
+  .va-prop__v--empty{color:var(--soft);font-style:italic}
+  .va-prop__v a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--hairline)}
+  .va-prop__v a:hover{border-bottom-color:var(--accent);color:var(--accent)}
+
+  .va-chip{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;
+    font-size:11px;font-weight:500;border-radius:999px;
+    background:var(--accent-soft);color:var(--accent);border:1px solid rgba(1,148,142,.2);
+    line-height:1.4}
+  .va-chip--warn{background:#fef4e4;color:#8a5510;border-color:#f3d69f}
+  .va-chip--danger{background:#fde8e8;color:var(--danger);border-color:#f5bdbd}
+  .va-chip--ok{background:#dff4e7;color:var(--ok);border-color:#b7ddc5}
+  .va-chip--muted{background:#efeee9;color:var(--muted);border-color:var(--hairline)}
+
+  .va-pill-call{display:inline-flex;align-items:center;justify-content:center;
+    width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;
+    text-decoration:none;margin-left:6px;flex:0 0 auto;
+    transition:transform .12s}
+  .va-pill-call:hover{transform:scale(1.08)}
+  .va-pill-call svg{width:11px;height:11px}
+
+  .va-contact{padding:8px 0;border-top:1px solid var(--hairline);
+    display:flex;flex-direction:column;gap:2px}
+  .va-contact:first-child{border-top:none;padding-top:0}
+  .va-contact__head{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+  .va-contact__name{font-size:13px;font-weight:500;color:var(--ink)}
+  .va-contact__pos{font-size:11px;color:var(--muted);font-family:var(--font-mono);
+    letter-spacing:.02em}
+  .va-contact__meta{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center;
+    flex-wrap:wrap}
+  .va-contact__meta a{color:var(--muted);text-decoration:none;border-bottom:1px solid transparent}
+  .va-contact__meta a:hover{color:var(--accent);border-bottom-color:var(--accent)}
+
+  /* ── Main feed ── */
+  .va-main{padding:20px 28px 40px;min-width:0;max-width:1100px;display:flex;flex-direction:column;gap:20px}
+  .va-quick{display:flex;gap:6px;align-items:center;padding-bottom:8px}
+  .va-quick__btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
+    background:var(--paper-hi);border:1px solid var(--hairline);border-radius:8px;
+    font-size:12.5px;color:var(--ink);cursor:pointer;font-family:inherit;
+    transition:all .12s}
+  .va-quick__btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+  .va-quick__btn svg{width:13px;height:13px}
+  .va-quick__spacer{flex:1}
+  .va-quick__sw{display:inline-flex;background:var(--paper-hi);border:1px solid var(--hairline);
+    border-radius:8px;padding:2px;gap:2px}
+  .va-quick__sw a{padding:4px 10px;font-size:12px;color:var(--muted);text-decoration:none;
+    border-radius:6px;font-family:var(--font-mono);letter-spacing:.04em}
+  .va-quick__sw a.is-active{background:var(--ink);color:var(--paper-hi)}
+
+  .va-grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media (max-width:1280px){.va-grid2{grid-template-columns:1fr}}
+
+  .va-card{background:var(--paper-hi);border:1px solid var(--hairline);
+    border-radius:10px;overflow:hidden}
+  .va-card__h{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;
+    border-bottom:1px solid var(--hairline);background:rgba(251,250,246,.5)}
+  .va-card__h-title{font-size:12px;font-weight:600;color:var(--ink);
+    letter-spacing:.03em;text-transform:uppercase;
+    font-family:var(--font-mono)}
+  .va-card__h-title b{color:var(--soft);font-weight:400;margin-left:6px}
+  .va-card__h-add{border:0;background:none;color:var(--muted);cursor:pointer;
+    font-size:18px;line-height:1;padding:0 4px;border-radius:4px}
+  .va-card__h-add:hover{color:var(--accent);background:var(--accent-soft)}
+  .va-card__b{padding:4px 0}
+
+  /* Deal row */
+  .va-deal{padding:10px 16px;border-top:1px solid var(--hairline);
+    display:flex;gap:10px;align-items:flex-start;cursor:pointer;
+    transition:background .12s}
+  .va-deal:first-child{border-top:none}
+  .va-deal:hover{background:var(--accent-soft)}
+  .va-deal__mark{width:3px;align-self:stretch;background:var(--accent);border-radius:2px;flex:0 0 3px}
+  .va-deal__body{flex:1;min-width:0}
+  .va-deal__title{font-size:13px;font-weight:500;color:var(--ink);line-height:1.4;margin-bottom:2px}
+  .va-deal__meta{font-size:11px;color:var(--muted);font-family:var(--font-mono);letter-spacing:.02em}
+  .va-deal__empty{padding:20px 16px;text-align:center;color:var(--soft);font-size:12.5px}
+
+  /* Timeline */
+  .va-timeline{padding:6px 0}
+  .va-tli{padding:10px 16px;display:flex;gap:12px;align-items:flex-start;
+    border-top:1px solid var(--hairline);cursor:pointer;transition:background .12s}
+  .va-tli:first-child{border-top:none}
+  .va-tli:hover{background:var(--accent-soft)}
+  .va-tli__dot{width:24px;height:24px;border-radius:50%;background:var(--paper);
+    border:1px solid var(--hairline);display:flex;align-items:center;justify-content:center;
+    font-size:11px;flex:0 0 auto}
+  .va-tli__body{flex:1;min-width:0}
+  .va-tli__title{font-size:13px;color:var(--ink);line-height:1.4;margin:0 0 2px 0;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .va-tli__meta{font-size:11px;color:var(--muted);font-family:var(--font-mono);
+    letter-spacing:.02em;display:flex;gap:6px;align-items:center}
+  .va-tli__meta span:not(:last-child)::after{content:"·";margin-left:6px;color:var(--soft)}
+
+  /* Task row */
+  .va-task{padding:8px 16px;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;
+    border-top:1px solid var(--hairline);font-size:13px;cursor:pointer;transition:background .12s}
+  .va-task:first-child{border-top:none}
+  .va-task:hover{background:var(--accent-soft)}
+  .va-task__chk{width:14px;height:14px;border:1.5px solid var(--soft);border-radius:3px;flex:0 0 auto}
+  .va-task__chk--urgent{border-color:var(--danger)}
+  .va-task__body{min-width:0}
+  .va-task__title{color:var(--ink);line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .va-task__meta{font-size:11px;color:var(--muted);font-family:var(--font-mono);letter-spacing:.02em;
+    display:flex;gap:6px;align-items:center;margin-top:1px}
+  .va-task__due{font-size:11px;color:var(--muted);font-family:var(--font-mono);
+    letter-spacing:.02em;white-space:nowrap}
+  .va-task__due--overdue{color:var(--danger)}
+
+  /* Banner A/B/C switcher */
+  .v3-banner{background:linear-gradient(180deg,#0f1410 0%,#1a201b 100%);color:#ecebe3;
+    padding:9px 22px;font-size:12.5px;display:flex;align-items:center;gap:14px;
+    border-bottom:1px solid #2a2e29;font-family:var(--font-sans)}
+  .v3-banner__label{color:#9aa095;font-family:var(--font-mono);font-size:11px;letter-spacing:.05em}
+  .v3-banner__tabs{display:flex;gap:2px;background:#2a2e29;padding:2px;border-radius:6px}
+  .v3-banner__tabs a{padding:3px 12px;color:#9aa095;text-decoration:none;font-size:12px;
+    border-radius:4px;font-family:var(--font-mono);letter-spacing:.04em;transition:all .12s}
+  .v3-banner__tabs a.is-active{background:var(--accent);color:#fff}
+  .v3-banner__tabs a:hover:not(.is-active){color:#ecebe3}
+  .v3-banner__note{color:#c5c9c0;flex:1}
+  .v3-banner__back{color:#9aa095;text-decoration:none;font-family:var(--font-mono);font-size:11px;
+    letter-spacing:.04em;border-bottom:1px dotted transparent}
+  .v3-banner__back:hover{color:#ecebe3;border-bottom-color:#9aa095}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="va">
+  {% include "ui/company_detail_v3/_banner.html" %}
+
+  <div class="va-page">
+    {# ══════════════════ SIDEBAR ══════════════════ #}
+    <aside class="va-sb">
+      <div class="va-sb__crumb">
+        <a href="/companies/">все компании</a> / <span>карточка</span>
+      </div>
+
+      <h1 class="va-sb__name" contenteditable="true" data-edit-field="name"
+          title="Клик для редактирования имени">{{ company.name }}</h1>
+      <div class="va-sb__inn">
+        ИНН <span contenteditable="true" data-edit-field="inn">{{ company.inn|default:"—" }}</span>
+        <span class="va-sb__inn-dot"></span>
+        создана {{ company.created_at|date:"d.m.Y" }}
+      </div>
+
+      {# ── Ключевые свойства ── #}
+      <section class="va-sb__sec">
+        <h3 class="va-sb__sec-title"><span>Статус</span></h3>
+        <div class="va-prop">
+          <div class="va-prop__k">Статус</div>
+          <div class="va-prop__v">
+            {% if company.status %}
+              <span class="va-chip">{{ company.status.name }}</span>
+            {% else %}<span class="va-prop__v--empty">не задан</span>{% endif %}
+          </div>
+        </div>
+        <div class="va-prop">
+          <div class="va-prop__k">Ответственный</div>
+          <div class="va-prop__v">
+            {% if company.responsible %}{{ company.responsible|full_name }}
+            {% else %}<span class="va-prop__v--empty">нет</span>{% endif %}
+          </div>
+        </div>
+        <div class="va-prop">
+          <div class="va-prop__k">Подразделение</div>
+          <div class="va-prop__v">{{ company.branch.name|default:"—" }}</div>
+        </div>
+        <div class="va-prop">
+          <div class="va-prop__k">Договор до</div>
+          <div class="va-prop__v">
+            {% if company.contract_until %}
+              {{ company.contract_until|date:"d.m.Y" }}
+              {% if contract_level == 'expired' %}<span class="va-chip va-chip--danger">истёк</span>
+              {% elif contract_level == 'danger' %}<span class="va-chip va-chip--danger">{{ contract_days_left }} дн.</span>
+              {% elif contract_level == 'warn' %}<span class="va-chip va-chip--warn">{{ contract_days_left }} дн.</span>
+              {% elif contract_level == 'ok' %}<span class="va-chip va-chip--ok">{{ contract_days_left }} дн.</span>
+              {% endif %}
+            {% else %}<span class="va-prop__v--empty">не заключён</span>{% endif %}
+          </div>
+        </div>
+      </section>
+
+      {# ── Контакты ── #}
+      <section class="va-sb__sec">
+        <h3 class="va-sb__sec-title">
+          <span>Контакты компании</span>
+          <button type="button" title="Добавить" data-add="phone">+</button>
+        </h3>
+        {% if company.phone %}
+        <div class="va-prop">
+          <div class="va-prop__k">Телефон</div>
+          <div class="va-prop__v">
+            <a href="tel:{{ company.phone }}">{{ company.phone|format_phone }}</a>
+            <a href="tel:{{ company.phone }}" class="va-pill-call" title="Позвонить">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>
+            </a>
+          </div>
+        </div>
+        {% endif %}
+        {% for p in company.phones.all|slice:":3" %}
+        <div class="va-prop">
+          <div class="va-prop__k">{{ p.note|default:"Ещё телефон" }}</div>
+          <div class="va-prop__v">
+            <a href="tel:{{ p.value }}">{{ p.value|format_phone }}</a>
+            <a href="tel:{{ p.value }}" class="va-pill-call" title="Позвонить">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>
+            </a>
+          </div>
+        </div>
+        {% endfor %}
+        {% if company.email %}
+        <div class="va-prop">
+          <div class="va-prop__k">Email</div>
+          <div class="va-prop__v"><a href="mailto:{{ company.email }}">{{ company.email }}</a></div>
+        </div>
+        {% endif %}
+        {% for e in company.emails.all|slice:":3" %}
+        <div class="va-prop">
+          <div class="va-prop__k">{{ e.note|default:"Ещё email" }}</div>
+          <div class="va-prop__v"><a href="mailto:{{ e.value }}">{{ e.value }}</a></div>
+        </div>
+        {% endfor %}
+        {% if company.address %}
+        <div class="va-prop">
+          <div class="va-prop__k">Адрес</div>
+          <div class="va-prop__v">{{ company.address }}</div>
+        </div>
+        {% endif %}
+        {% if company.website %}
+        <div class="va-prop">
+          <div class="va-prop__k">Сайт</div>
+          <div class="va-prop__v"><a href="{{ company.website|external_url }}" target="_blank" rel="noopener">{{ company.website }}</a></div>
+        </div>
+        {% endif %}
+      </section>
+
+      {# ── ЛПР ── #}
+      <section class="va-sb__sec">
+        <h3 class="va-sb__sec-title">
+          <span>Контактные лица · {{ contacts|length }}</span>
+          <button type="button" title="Добавить ЛПР" data-add="contact">+</button>
+        </h3>
+        {% for c in contacts %}
+        <div class="va-contact">
+          <div class="va-contact__head">
+            <span class="va-contact__name">{{ c.name|default:"—" }}</span>
+            {% if c.position %}<span class="va-contact__pos">{{ c.position }}</span>{% endif %}
+          </div>
+          <div class="va-contact__meta">
+            {% for ph in c.phones.all|slice:":1" %}
+              <a href="tel:{{ ph.value }}">{{ ph.value|format_phone }}</a>
+              <a href="tel:{{ ph.value }}" class="va-pill-call" title="Позвонить">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/></svg>
+              </a>
+            {% endfor %}
+            {% for em in c.emails.all|slice:":1" %}
+              <a href="mailto:{{ em.value }}">{{ em.value }}</a>
+            {% endfor %}
+          </div>
+        </div>
+        {% empty %}
+        <div class="va-prop__v--empty" style="font-size:12px;padding:4px 0">
+          Ещё нет контактных лиц. <a href="#" data-add="contact" style="color:var(--accent)">+ добавить</a>
+        </div>
+        {% endfor %}
+      </section>
+    </aside>
+
+    {# ══════════════════ MAIN ══════════════════ #}
+    <main class="va-main">
+      <div class="va-quick">
+        <button class="va-quick__btn" data-act="new-task">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          Задача
+        </button>
+        <button class="va-quick__btn" data-act="new-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+          Заметка
+        </button>
+        <button class="va-quick__btn" data-act="new-call">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.37 1.9.72 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0122 16.92z"/></svg>
+          Звонок
+        </button>
+        <button class="va-quick__btn" data-act="new-deal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+          Сделка
+        </button>
+        <div class="va-quick__spacer"></div>
+        <a href="{{ classic_url }}" class="va-quick__btn">Старая карточка</a>
+      </div>
+
+      <div class="va-grid2">
+        {# Задачи #}
+        <div class="va-card">
+          <div class="va-card__h">
+            <span class="va-card__h-title">ЗАДАЧИ <b>{{ open_tasks|length }}</b></span>
+            <button class="va-card__h-add" title="Новая задача">+</button>
+          </div>
+          <div class="va-card__b">
+            {% for t in open_tasks %}
+            <div class="va-task" data-task-id="{{ t.id }}">
+              <span class="va-task__chk {% if t.is_urgent %}va-task__chk--urgent{% endif %}"></span>
+              <div class="va-task__body">
+                <div class="va-task__title">
+                  {% if t.type %}{{ t.type.name }}{% if t.title and t.title|lower != t.type.name|lower %} · {{ t.title }}{% endif %}
+                  {% else %}{{ t.title|default:"Без названия" }}{% endif %}
+                </div>
+                <div class="va-task__meta">
+                  <span>{{ t.assigned_to|full_name|default:"—" }}</span>
+                </div>
+              </div>
+              {% if t.due_at %}
+              <span class="va-task__due {% if t.due_at < now %}va-task__due--overdue{% endif %}">{{ t.due_at|date:"d.m H:i" }}</span>
+              {% endif %}
+            </div>
+            {% empty %}
+            <div class="va-deal__empty">Активных задач нет</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        {# Сделки #}
+        <div class="va-card">
+          <div class="va-card__h">
+            <span class="va-card__h-title">СДЕЛКИ <b>{{ deals|length }}</b></span>
+            <button class="va-card__h-add" title="Новая сделка">+</button>
+          </div>
+          <div class="va-card__b">
+            {% for d in deals %}
+            <div class="va-deal" data-deal-id="{{ d.id }}">
+              <div class="va-deal__mark"></div>
+              <div class="va-deal__body">
+                <div class="va-deal__title">{{ d.program|default:"Сделка"|truncatechars:80 }}</div>
+                <div class="va-deal__meta">{{ d.created_at|date:"d.m.Y" }} · {{ d.created_by|full_name|default:"—" }}</div>
+              </div>
+            </div>
+            {% empty %}
+            <div class="va-deal__empty">Сделок нет</div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      {# Timeline #}
+      <div class="va-card">
+        <div class="va-card__h">
+          <span class="va-card__h-title">ЛЕНТА · ПОСЛЕДНИЕ 5</span>
+        </div>
+        <div class="va-timeline">
+          {% for it in timeline %}
+          <div class="va-tli">
+            <div class="va-tli__dot">{{ it.icon }}</div>
+            <div class="va-tli__body">
+              <div class="va-tli__title">{{ it.title }}</div>
+              <div class="va-tli__meta">
+                {% if it.kind == 'note' %}<span>заметка</span>
+                {% elif it.kind == 'task' %}<span>задача</span>
+                {% elif it.kind == 'deal' %}<span>сделка</span>{% endif %}
+                {% if it.meta %}<span>{{ it.meta }}</span>{% endif %}
+                <span>{{ it.at|date:"d.m.Y H:i" }}</span>
+              </div>
+            </div>
+          </div>
+          {% empty %}
+          <div class="va-deal__empty">Ещё нет активности</div>
+          {% endfor %}
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+{% endblock %}

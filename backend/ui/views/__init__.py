@@ -101,6 +101,9 @@ from ui.views.settings_mail import (
 # F7 R1: ролевые KPI-дашборды v2
 from ui.views.analytics_v2 import analytics_v2_home  # noqa: F401
 
+# F4 R3: preview 3 вариантов редизайна карточки компании
+from ui.views.company_detail_v3 import company_detail_v3_preview  # noqa: F401
+
 # F9 UI: управление APK-билдами CRMProfiDialer
 from ui.views.settings_mobile_apps import (
     settings_mobile_apps,

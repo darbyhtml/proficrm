@@ -37,6 +37,8 @@ urlpatterns = [
     path("companies/<uuid:company_id>/edit/", views.company_edit, name="company_edit"),
     path("companies/<uuid:company_id>/tasks/history/", views.company_tasks_history, name="company_tasks_history"),
     path("companies/<uuid:company_id>/timeline/items/", views.company_timeline_items, name="company_timeline_items"),
+    # F4 R3: preview редизайна карточки компании (a/b/c)
+    path("companies/<uuid:company_id>/v3/<str:variant>/", views.company_detail_v3_preview, name="company_detail_v3_preview"),
     path("companies/<uuid:company_id>/update/", views.company_update, name="company_update"),
     path("companies/<uuid:company_id>/inline/", views.company_inline_update, name="company_inline_update"),
     path("companies/<uuid:company_id>/main-phone/update/", views.company_main_phone_update, name="company_main_phone_update"),
