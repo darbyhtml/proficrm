@@ -867,8 +867,10 @@
     {% block extra_head %}{% endblock %}
   </head>
   <body class="bg-brand-soft/40 text-brand-dark">
-    {# WCAG 2.4.1: skip-link — keyboard-only user пропускает навигацию, сразу в main.
-       Используем CSS :focus вместо inline onfocus — совместимо с прод-CSP (strict-src). #}
+    {% comment %}
+      WCAG 2.4.1: skip-link — keyboard-only user пропускает навигацию, сразу в main.
+      Используем CSS :focus вместо inline onfocus — совместимо с прод-CSP (strict-src).
+    {% endcomment %}
     <style nonce="{{ csp_nonce }}">
       .skip-link{position:absolute;left:-9999px;top:0;z-index:9999;background:#01948E;color:#fff;padding:10px 14px;border-radius:0 0 8px 0;font-weight:600;text-decoration:none}
       .skip-link:focus,.skip-link:focus-visible{left:0;outline:2px solid #fff;outline-offset:2px}

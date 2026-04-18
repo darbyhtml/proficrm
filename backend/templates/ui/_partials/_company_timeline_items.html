@@ -1,11 +1,12 @@
-{# F4 R2 (2026-04-18): партиал timeline-события на карточке компании.
+{% comment %}
+  F4 R2 (2026-04-18): партиал timeline-события на карточке компании.
 
-Используется:
-1. Первый render в company_detail.html — до 50 items.
-2. AJAX endpoint /companies/<id>/timeline/items/ — пагинация ниже.
+  Используется:
+  1. Первый render в company_detail.html — до 50 items.
+  2. AJAX endpoint /companies/<id>/timeline/items/ — пагинация ниже.
 
-Контекст: `items` — список dict {date, kind, obj}.
-#}
+  Контекст: `items` — список dict {date, kind, obj}.
+{% endcomment %}
 {% for item in items %}
   <li class="mb-4 ml-6">
     {% if item.kind == "event" %}
