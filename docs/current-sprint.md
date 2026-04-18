@@ -1,5 +1,38 @@
 # Текущий спринт
 
+**[2026-04-18]** — F9 + F10 + F11 rest: Android endpoint + Playwright E2E + CI/CD hardening ✅
+
+4 ключевых коммита за итерацию.
+
+**F9: MobileAppLatestView** (`e3e49fd4` + `2b839cc4`).
+Endpoint `GET /api/phone/app/latest/` — JWT-защищённый, возвращает
+version_name/version_code/sha256/size_bytes/download_url последней
+активной production-сборки MobileAppBuild. Android-приложение
+CRMProfiDialer (Kotlin + Room) будет вызывать его для auto-update.
+Throttle: `mobile_app_latest` = 10/min. 5/5 тестов зелёные.
+
+**F10: Playwright E2E** (`26ef58f9`). Новый каталог `e2e/` — npm-проект:
+`@playwright/test 1.49`, chromium. 8 smoke-тестов в tests/smoke.spec.ts:
+login → dashboard, companies/tasks list, analytics v2, settings
+«Отсутствие», help FAQ, admin/mail/setup, /health/. Запуск вручную
+(staging-only через BASE_URL env). Не в CI — staging недоступен из
+GitHub Actions без tunnel.
+
+**F11 CI/CD hardening** (`97de56d8` + `479c6e05`). Расширен
+`.github/workflows/ci.yml`: новые jobs `lint` (ruff), `secret-scan`
+(gitleaks с full history), `deps-audit` (pip-audit,
+continue-on-error). Добавлен redis-service для test. test-job
+использует `DJANGO_SETTINGS_MODULE=crm.settings_test`.
+Security hardening settings.py: запрет `*` в ALLOWED_HOSTS (wildcard →
+host-header атака), warning при пустом CSRF_TRUSTED_ORIGINS. Первая
+попытка строгой валидации localhost/127.0.0.1 сломала staging — откатил
+до запрета только `*`.
+
+Остаток: F12 (prod deploy + release notes) + background task
+(23 widget API тестов с Origin 403 — отдельный worktree).
+
+---
+
 **[2026-04-18]** — F4 R2 + F8 R2 + F11 (settings_test) ✅
 
 Три доводящих коммита после большого пакета F5-F7.
