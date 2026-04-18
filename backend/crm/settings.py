@@ -427,6 +427,9 @@ REST_FRAMEWORK = {
         "phone_pull": os.getenv("PHONE_PULL_RATE", "120/min"),
         "phone_heartbeat": os.getenv("PHONE_HEARTBEAT_RATE", "30/min"),
         "phone_telemetry": os.getenv("PHONE_TELEMETRY_RATE", "20/min"),
+        # F9 (2026-04-18): auto-update check из CRMProfiDialer.
+        # Ожидаемая частота: раз в несколько часов. 10/min с запасом.
+        "mobile_app_latest": os.getenv("MOBILE_APP_LATEST_RATE", "10/min"),
     },
 }
 
