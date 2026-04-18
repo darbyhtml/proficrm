@@ -382,6 +382,39 @@
   .vb-tl-more{padding:10px 0;text-align:center}
   .vb-tl-more .vb-abtn{height:30px;padding:0 16px;font-size:12.5px}
 
+  /* ─── Служебный accordion (Этап 5) ─── */
+  .vb-sys{border-top:1px solid var(--v2-border);
+    padding:14px 28px 32px;background:var(--v2-bg-soft)}
+  .vb-sys__toggle{background:none;border:0;padding:4px 0;cursor:pointer;
+    font-size:12px;color:var(--v2-text-muted);font-family:inherit;
+    display:inline-flex;align-items:center;gap:6px;letter-spacing:.02em;
+    font-weight:500;transition:color .12s}
+  .vb-sys__toggle:hover{color:var(--v2-text)}
+  .vb-sys__toggle::before{content:"▸";display:inline-block;font-size:10px;
+    transition:transform .15s}
+  .vb-sys[open] .vb-sys__toggle::before{transform:rotate(90deg)}
+  .vb-sys__body{padding-top:14px;display:grid;grid-template-columns:320px 1fr;
+    gap:28px;font-size:13px;color:var(--v2-text-soft)}
+  @media (max-width:900px){.vb-sys__body{grid-template-columns:1fr}}
+  .vb-sys__col h4{font-size:11px;color:var(--v2-text-muted);font-weight:700;
+    letter-spacing:.06em;text-transform:uppercase;margin:0 0 8px 0}
+  .vb-sys__meta{display:flex;flex-direction:column;gap:6px}
+  .vb-sys__meta-row{display:flex;gap:10px;font-size:12.5px;line-height:1.4}
+  .vb-sys__meta-row dt{color:var(--v2-text-muted);min-width:110px;font-size:11.5px}
+  .vb-sys__meta-row dd{margin:0;color:var(--v2-text);flex:1;word-break:break-all}
+  .vb-sys__meta-row dd code{font-family:inherit;background:var(--v2-bg-muted);
+    padding:1px 6px;border-radius:var(--v3-radius-xs);font-size:11.5px}
+  .vb-sys__log{display:flex;flex-direction:column;gap:0}
+  .vb-sys__log-i{padding:7px 0;border-bottom:1px solid var(--v2-border);
+    display:grid;grid-template-columns:140px 1fr auto;gap:10px;
+    font-size:12.5px;line-height:1.4}
+  .vb-sys__log-i:last-child{border-bottom:none}
+  .vb-sys__log-time{color:var(--v2-text-muted);font-size:11.5px;white-space:nowrap}
+  .vb-sys__log-verb{color:var(--v2-text);font-weight:500}
+  .vb-sys__log-actor{color:var(--v2-text-muted);white-space:nowrap;font-size:11.5px}
+  .vb-sys__empty{padding:12px 0;color:var(--v2-text-faint);
+    font-size:12.5px;font-style:italic;text-align:center}
+
   /* ═════════════ PREVIEW BANNER ═════════════ */
   .v3-banner{background:var(--v2-bg);color:var(--v2-text);padding:8px 22px;font-size:13px;
     display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--v2-border);
@@ -840,30 +873,133 @@
         {% endfor %}
       </div>
 
-      {# ─── Группа компаний: plug (Этап 4 раскроет в данных) ─── #}
+      {# ─── Группа компаний ─── #}
       <div class="vb-sec">
         <div class="vb-sec__h">
           <span class="vb-sec__t"><b>Группа компаний</b></span>
+          <a href="/companies/{{ company.id }}/edit/#head_company" class="vb-sec__add"
+             title="Изменить связки" style="font-size:11px;padding:4px 6px">✎</a>
         </div>
+
         {% if company.head_company %}
-        <div class="vb-group">
-          <div class="vb-group__head">
-            <div class="vb-group__ico">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V7l9-4 9 4v14"/><path d="M9 21V11h6v10"/></svg>
+          {# Это — филиал / дочерняя #}
+          <div class="vb-group">
+            <div class="vb-group__head">
+              <div class="vb-group__ico">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V7l9-4 9 4v14"/><path d="M9 21V11h6v10"/></svg>
+              </div>
+              <div>
+                <div class="vb-group__title">Филиал · Головная:</div>
+              </div>
             </div>
-            <div class="vb-group__title">В группе с</div>
+            <a class="vb-group__parent" href="/companies/{{ company.head_company.id }}/v3/b/">
+              <span style="font-weight:500;color:var(--v2-text)">{{ company.head_company.name }}</span>
+              {% if company.head_company.inn %}
+                <div style="font-size:11px;color:var(--v2-text-muted);margin-top:2px">
+                  ИНН {{ company.head_company.inn }}
+                </div>
+              {% endif %}
+            </a>
           </div>
-          <div class="vb-group__parent">
-            <a href="/companies/{{ company.head_company.id }}/">{{ company.head_company.name }}</a>
+        {% elif client_branches_total %}
+          {# Это — головная компания, есть филиалы #}
+          <div class="vb-group">
+            <div class="vb-group__head">
+              <div class="vb-group__ico">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V7l9-4 9 4v14"/><path d="M9 21V11h6v10"/></svg>
+              </div>
+              <div>
+                <div class="vb-group__title">Головная · {{ client_branches_total }} филиал{{ client_branches_total|pluralize:"а,ов" }}</div>
+              </div>
+            </div>
+            <div class="vb-group__items">
+              {% for b in client_branches %}
+              <a class="vb-group__item" href="/companies/{{ b.id }}/v3/b/">
+                <span style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                  {{ b.name }}
+                </span>
+                {% if b.status %}
+                  <span style="font-size:10px;color:var(--v2-text-muted);margin-top:1px;display:block">
+                    {{ b.status.name }}
+                  </span>
+                {% endif %}
+              </a>
+              {% endfor %}
+              {% if client_branches_total > client_branches|length %}
+                <a class="vb-group__more" href="/companies/?head_company_id={{ company.id }}">
+                  + ещё {{ client_branches_total|add:"-5" }} →
+                </a>
+              {% endif %}
+            </div>
           </div>
-        </div>
         {% else %}
-        <div class="vb-empty">Компания самостоятельная</div>
+          <div class="vb-empty">
+            Компания самостоятельная.
+            <a href="/companies/{{ company.id }}/edit/#head_company">+ привязать</a>
+          </div>
         {% endif %}
       </div>
     </section>
   </div>
 </div>
+
+  {# ═════════════════════ СЛУЖЕБНЫЙ ACCORDION ═════════════════════ #}
+  <details class="vb-sys">
+    <summary class="vb-sys__toggle">Подробности — служебная информация и история</summary>
+    <div class="vb-sys__body">
+      <div class="vb-sys__col">
+        <h4>Метаданные</h4>
+        <dl class="vb-sys__meta">
+          <div class="vb-sys__meta-row">
+            <dt>Создана</dt>
+            <dd>{{ company.created_at|date:"d.m.Y H:i" }}
+              {% if company.created_by %} · {{ company.created_by|full_name }}{% endif %}</dd>
+          </div>
+          <div class="vb-sys__meta-row">
+            <dt>Обновлена</dt>
+            <dd>{{ company.updated_at|date:"d.m.Y H:i" }}</dd>
+          </div>
+          <div class="vb-sys__meta-row">
+            <dt>ID</dt>
+            <dd><code>{{ company.id }}</code></dd>
+          </div>
+          {% if company.legal_name %}
+          <div class="vb-sys__meta-row">
+            <dt>Юр. название</dt>
+            <dd>{{ company.legal_name }}</dd>
+          </div>
+          {% endif %}
+          {% if company.kpp %}
+          <div class="vb-sys__meta-row">
+            <dt>КПП</dt>
+            <dd>{{ company.kpp }}</dd>
+          </div>
+          {% endif %}
+          {% if company.spheres.all %}
+          <div class="vb-sys__meta-row">
+            <dt>Сферы</dt>
+            <dd>{% for s in company.spheres.all %}{{ s.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>
+          </div>
+          {% endif %}
+        </dl>
+      </div>
+
+      <div class="vb-sys__col">
+        <h4>История действий · последние {{ activity_events|length }}</h4>
+        <div class="vb-sys__log">
+          {% for ev in activity_events %}
+          <div class="vb-sys__log-i">
+            <span class="vb-sys__log-time">{{ ev.created_at|date:"d.m.Y H:i" }}</span>
+            <span class="vb-sys__log-verb">{{ ev.message|default:ev.verb|truncatechars:80 }}</span>
+            <span class="vb-sys__log-actor">{{ ev.actor|full_name|default:"—" }}</span>
+          </div>
+          {% empty %}
+          <div class="vb-sys__empty">Действий ещё не было</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </details>
 
 {% include "ui/_v2/v2_modal.html" %}
 

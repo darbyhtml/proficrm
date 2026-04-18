@@ -42,10 +42,31 @@ def company_detail_v3_preview(
 
     company = get_object_or_404(
         Company.objects
-        .select_related("responsible", "branch", "status", "contract_type")
+        .select_related("responsible", "branch", "status", "contract_type", "head_company")
         .prefetch_related("phones", "emails", "spheres"),
         id=company_id,
     )
+
+    # F4 Этап 4: группа компаний — head_company + client_branches (топ-5)
+    client_branches = list(
+        Company.objects
+        .filter(head_company=company)
+        .only("id", "name", "inn", "status_id", "branch_id")
+        .select_related("status", "branch")
+        .order_by("name")[:5]
+    )
+    client_branches_total = Company.objects.filter(head_company=company).count()
+
+    # F4 Этап 5: ActivityEvent для служебного аккордеона — топ-10 событий.
+    try:
+        from audit.models import ActivityEvent
+        activity_events = list(
+            ActivityEvent.objects.filter(company_id=company.id)
+            .select_related("actor")
+            .order_by("-created_at")[:10]
+        )
+    except Exception:
+        activity_events = []
 
     # Контактные лица (ЛПР) — с prefetch phones/emails
     contacts = list(
@@ -183,6 +204,9 @@ def company_detail_v3_preview(
         "contract_days_left": contract_days_left,
         "contract_level": contract_level,
         "classic_url": f"/companies/{company.id}/",
+        "client_branches": client_branches,
+        "client_branches_total": client_branches_total,
+        "activity_events": activity_events,
         # JSON-опции для data-edit-options (dumps с ensure_ascii=False для кириллицы)
         "status_options_json": json.dumps(status_options, ensure_ascii=False),
         "sphere_options_json": json.dumps(sphere_options, ensure_ascii=False),
