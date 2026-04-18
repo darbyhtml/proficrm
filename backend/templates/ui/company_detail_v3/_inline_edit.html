@@ -1,17 +1,18 @@
-{# Этап 2 (2026-04-18): inline-edit engine для карточки компании v3.
-   3 компонента:
-     • ClickToEdit — [contenteditable] для коротких текстов (name/inn/address/
-       phone.value/phone.note/email.value/contact.name/contact.position)
-     • PopoverCombobox — поповер-селект с поиском для статуса/ответственного/
-       подразделения/сферы/тип_договора/регион
-     • DatePopover — <input type="date"> popover для contract_until
+{% comment %}
+  Этап 2 (2026-04-18): inline-edit engine для карточки компании v3.
+  3 компонента:
+    - ClickToEdit: contenteditable для коротких текстов
+      (name/inn/address/phone.value/phone.note/email.value/contact.name/contact.position)
+    - PopoverCombobox: поповер-селект с поиском
+      (статус/ответственный/подразделение/сфера/тип_договора/регион)
+    - DatePopover: popover с input type=date для contract_until
 
-   Все вызывают _v3Save() который:
-     – шлёт POST с CSRF
-     – ждёт JSON или редирект
-     – показывает V2Toast (или fallback alert)
-     – при ошибке восстанавливает прежнее значение
-#}
+  Все вызывают _v3Save который:
+    - шлёт POST с CSRF
+    - ждёт JSON или редирект
+    - показывает V2Toast (или fallback alert)
+    - при ошибке восстанавливает прежнее значение
+{% endcomment %}
 <style nonce="{{ request.csp_nonce|default:'' }}">
   /* Визуал при редактировании */
   [data-v3-edit]:hover{outline:1px dashed var(--v2-primary-100);outline-offset:2px;cursor:text}
