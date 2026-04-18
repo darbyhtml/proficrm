@@ -65,6 +65,7 @@ urlpatterns = [
     path("company-phones/<int:company_phone_id>/cold-call/reset/", views.company_phone_cold_call_reset, name="company_phone_cold_call_reset"),
     path("company-phones/<int:company_phone_id>/comment/", views.company_phone_comment_update, name="company_phone_comment_update"),
     path("company-phones/<int:company_phone_id>/update/", views.company_phone_value_update, name="company_phone_value_update"),
+    path("company-phones/<int:company_phone_id>/delete/", views.company_phone_delete, name="company_phone_delete"),
     path("companies/<uuid:company_id>/phones/create/", views.company_phone_create, name="company_phone_create"),
     path("companies/<uuid:company_id>/main-phone/comment/", views.company_main_phone_comment_update, name="company_main_phone_comment_update"),
     path("company-emails/<int:company_email_id>/update/", views.company_email_value_update, name="company_email_value_update"),

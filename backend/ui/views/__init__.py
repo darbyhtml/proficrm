@@ -34,7 +34,7 @@ from ui.views.company_detail import (
     contact_phone_cold_call_toggle, contact_phone_cold_call_reset,
     company_phone_cold_call_toggle, company_phone_cold_call_reset,
     company_main_phone_update, company_phone_value_update,
-    company_phone_create, company_main_email_update,
+    company_phone_create, company_phone_delete, company_main_email_update,
     company_email_value_update,
     company_main_phone_comment_update, company_phone_comment_update,
     contact_phone_comment_update,

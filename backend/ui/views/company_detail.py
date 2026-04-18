@@ -1410,6 +1410,36 @@ def company_phone_value_update(request: HttpRequest, company_phone_id) -> HttpRe
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:update")
+def company_phone_delete(request: HttpRequest, company_phone_id) -> HttpResponse:
+    """F4 R3: удаление доп. телефона компании (AJAX).
+
+    Classic не содержал отдельного endpoint для удаления одного номера.
+    В v3/b/ popup-меню предлагает действие «Удалить» — добавляем сюда.
+    """
+    if request.method != "POST":
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"success": False, "error": "Метод не разрешен."}, status=405)
+        return redirect("dashboard")
+    user: User = request.user
+    company_phone = get_object_or_404(CompanyPhone.objects.select_related("company"), id=company_phone_id)
+    company = company_phone.company
+    if not _can_edit_company(user, company):
+        return JsonResponse({"success": False, "error": "Нет прав на редактирование этой компании."}, status=403)
+    phone_value = company_phone.value
+    company_phone.delete()
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.DELETE,
+        entity_type="company_phone",
+        entity_id=str(company_phone_id),
+        company_id=company.id,
+        message=f"Удалён дополнительный телефон: {phone_value}",
+    )
+    return JsonResponse({"success": True})
+
+
+@login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
 @require_can_view_company
 def company_phone_create(request: HttpRequest, company_id) -> HttpResponse:
     """Создание дополнительного телефона компании (AJAX)"""
