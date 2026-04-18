@@ -559,7 +559,9 @@
                data-edit-kind="inline">{{ company.inn|default:"—" }}</b>
             {% if company.inn %}
               <button class="vb-copy-btn" data-v3-copy data-copy-text="{{ company.inn }}"
-                      title="Скопировать ИНН">📋</button>
+                      title="Скопировать ИНН" aria-label="Скопировать ИНН">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+              </button>
             {% endif %}
           </span>
           <span class="vb-hero__meta-dot"></span>
@@ -571,8 +573,10 @@
                 data-edit-clearable="1"
                 data-edit-options='{{ status_options_json|escape }}'
                 title="Изменить статус">
-            {% if company.status %}● <span data-v3-combobox-label>{{ company.status.name }}</span>
-            {% else %}○ <span data-v3-combobox-label>без статуса</span>{% endif %}
+            {% if company.status %}<svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg>
+            <span data-v3-combobox-label>{{ company.status.name }}</span>
+            {% else %}<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg>
+            <span data-v3-combobox-label>без статуса</span>{% endif %}
           </span>
           <span class="vb-hero__meta-dot"></span>
           <span>Ведёт
@@ -1149,7 +1153,9 @@
 
         {% for d in deals %}
         <div class="vb-deal" data-deal-id="{{ d.id }}">
-          <div class="vb-deal__ico">₽</div>
+          <div class="vb-deal__ico" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 6h-5a3 3 0 000 6h2a3 3 0 010 6H8"/><path d="M12 3v18"/></svg>
+          </div>
           <div class="vb-deal__body">
             <div class="vb-deal__title">{{ d.program|default:"Сделка"|truncatechars:80 }}</div>
             <div class="vb-deal__meta">{{ d.created_at|date:"d.m.Y" }}</div>
