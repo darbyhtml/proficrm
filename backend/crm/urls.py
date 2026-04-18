@@ -61,7 +61,7 @@ from messenger.widget_api import (
     widget_stream,
     widget_typing,
 )
-from crm.views import robots_txt, security_txt, health_check, sw_push_js
+from crm.views import robots_txt, security_txt, health_check, sw_push_js, metrics_endpoint
 
 handler404 = "crm.views.handler404"
 
@@ -112,6 +112,7 @@ urlpatterns = [
     path("robots.txt", robots_txt, name="robots_txt"),
     path(".well-known/security.txt", security_txt, name="security_txt"),
     path("health/", health_check, name="health_check"),
+    path("metrics", metrics_endpoint, name="metrics"),
     # Service Worker для push-уведомлений — отдаём напрямую (браузеры запрещают SW через redirect)
     path("sw-push.js", sw_push_js, name="sw_push"),
     path("favicon.ico", RedirectView.as_view(url=static("ui/favicon-v2.svg"), permanent=True)),

@@ -76,6 +76,113 @@ def sw_push_js(request):
     return response
 
 
+def metrics_endpoint(request):
+    """F11 (2026-04-18): Prometheus-совместимый /metrics endpoint.
+
+    Формат — plain text exposition format, не требует prometheus_client
+    как зависимости. Prometheus/Victoria Metrics/Grafana Agent парсят
+    этот формат нативно.
+
+    Защита: Bearer-токен из settings.METRICS_TOKEN. Если токен не задан —
+    endpoint возвращает 503 (чтобы в проде не забыть настроить).
+
+    Экспортируем:
+      - crm_up — константа 1 (есть жизнь).
+      - crm_companies_total — всего компаний.
+      - crm_tasks_open — открытых задач (NEW + IN_PROGRESS).
+      - crm_conversations_waiting_offline — off-hours очередь.
+      - crm_conversations_open — открытые диалоги в чате.
+      - crm_users_absent — сейчас в отпуске/больничном.
+      - crm_mobile_app_builds_active — активных APK production.
+    """
+    from django.conf import settings as dj_settings
+    from django.http import HttpResponse
+
+    expected = getattr(dj_settings, "METRICS_TOKEN", "") or ""
+    if not expected:
+        # Если токен не задан в .env — endpoint отключён.
+        return HttpResponse(
+            "# METRICS_TOKEN not configured\n",
+            status=503,
+            content_type="text/plain; charset=utf-8",
+        )
+
+    auth = (request.META.get("HTTP_AUTHORIZATION") or "").strip()
+    prefix = "Bearer "
+    provided = auth[len(prefix):] if auth.startswith(prefix) else ""
+    if provided != expected:
+        return HttpResponse(
+            "# unauthorized\n",
+            status=401,
+            content_type="text/plain; charset=utf-8",
+        )
+
+    lines: list[str] = []
+
+    def gauge(name: str, value: int | float, help_text: str):
+        lines.append(f"# HELP {name} {help_text}")
+        lines.append(f"# TYPE {name} gauge")
+        lines.append(f"{name} {value}")
+
+    # Всегда-1 метрика для UP-check.
+    gauge("crm_up", 1, "Application is up (constant 1)")
+
+    # Бизнес-метрики — best-effort, любая ошибка → не блокирует.
+    try:
+        from companies.models import Company
+        gauge("crm_companies_total", Company.objects.count(), "Total companies")
+    except Exception:
+        pass
+
+    try:
+        from tasksapp.models import Task
+        open_tasks = Task.objects.filter(
+            status__in=[Task.Status.NEW, Task.Status.IN_PROGRESS]
+        ).count()
+        gauge("crm_tasks_open", open_tasks, "Open tasks (NEW + IN_PROGRESS)")
+    except Exception:
+        pass
+
+    try:
+        from messenger.models import Conversation
+        gauge(
+            "crm_conversations_waiting_offline",
+            Conversation.objects.filter(status=Conversation.Status.WAITING_OFFLINE).count(),
+            "Off-hours conversations awaiting contact-back",
+        )
+        gauge(
+            "crm_conversations_open",
+            Conversation.objects.filter(status=Conversation.Status.OPEN).count(),
+            "Open conversations in messenger",
+        )
+    except Exception:
+        pass
+
+    try:
+        from accounts.models import UserAbsence
+        from django.utils import timezone
+        today = timezone.localdate()
+        absent = UserAbsence.objects.filter(
+            start_date__lte=today, end_date__gte=today
+        ).values("user").distinct().count()
+        gauge("crm_users_absent", absent, "Users currently absent (vacation/sick/dayoff)")
+    except Exception:
+        pass
+
+    try:
+        from phonebridge.models import MobileAppBuild
+        gauge(
+            "crm_mobile_app_builds_active",
+            MobileAppBuild.objects.filter(is_active=True, env="production").count(),
+            "Active production APK builds",
+        )
+    except Exception:
+        pass
+
+    body = "\n".join(lines) + "\n"
+    return HttpResponse(body, content_type="text/plain; version=0.0.4; charset=utf-8")
+
+
 def health_check(request):
     """
     Health check endpoint для мониторинга.

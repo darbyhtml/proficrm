@@ -342,6 +342,10 @@ MAILER_MAX_CAMPAIGN_RECIPIENTS = int(os.getenv("MAILER_MAX_CAMPAIGN_RECIPIENTS",
 # Security contact email for security.txt
 SECURITY_CONTACT_EMAIL = os.getenv("SECURITY_CONTACT_EMAIL", "")
 
+# F11 (2026-04-18): токен для /metrics endpoint (Prometheus scraping).
+# Если пусто — endpoint отключён (503). В проде задать через env.
+METRICS_TOKEN = os.getenv("METRICS_TOKEN", "")
+
 AUTH_USER_MODEL = "accounts.User"
 
 # Messenger feature flag и настройки live-chat / widget
