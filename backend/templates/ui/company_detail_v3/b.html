@@ -427,6 +427,12 @@
   .vb-tl-more{padding:10px 0;text-align:center}
   .vb-tl-more .vb-abtn{height:30px;padding:0 16px;font-size:12.5px}
 
+  /* Copy-to-clipboard micro-button */
+  .vb-copy-btn{background:none;border:0;padding:2px 5px;cursor:pointer;
+    font-size:11px;color:var(--v2-text-muted);border-radius:var(--v3-radius-xs);
+    transition:all .12s;opacity:.6;line-height:1;font-family:inherit}
+  .vb-copy-btn:hover{opacity:1;background:var(--v2-primary-50);color:var(--v2-primary-dark)}
+
   /* External-link icon (website) */
   .vb-ext-link{display:inline-flex;align-items:center;justify-content:center;
     width:22px;height:22px;border-radius:50%;background:var(--v2-primary-50);
@@ -523,6 +529,10 @@
                data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
                data-edit-field="inn"
                data-edit-kind="inline">{{ company.inn|default:"—" }}</b>
+            {% if company.inn %}
+              <button class="vb-copy-btn" data-v3-copy data-copy-text="{{ company.inn }}"
+                      title="Скопировать ИНН">📋</button>
+            {% endif %}
           </span>
           <span class="vb-hero__meta-dot"></span>
           <span class="vb-status {% if not company.status %}vb-status--empty{% endif %}"
@@ -869,7 +879,9 @@
         </div>
         {% if timeline|length >= 5 %}
         <div class="vb-tl-more">
-          <button type="button" class="vb-abtn" id="vbTimelineMore">Показать ещё</button>
+          <a href="{{ classic_url }}#companyTimelineList" class="vb-abtn v2-btn--ghost">
+            Вся история →
+          </a>
         </div>
         {% endif %}
       </div>
@@ -1498,39 +1510,25 @@
     });
   });
 
-  // ── Timeline «Показать ещё» ──
-  (function(){
-    const btn = document.getElementById('vbTimelineMore');
-    const tl = document.getElementById('vbTimeline');
-    if(!btn || !tl) return;
-    const companyId = tl.getAttribute('data-company-id');
-    btn.addEventListener('click', async function(){
-      if(btn.dataset.busy === '1') return;
-      btn.dataset.busy = '1';
-      const origText = btn.textContent;
-      btn.textContent = 'Загрузка…';
-      const offset = parseInt(tl.getAttribute('data-offset') || '0', 10);
-      try {
-        const r = await fetch('/companies/' + companyId + '/timeline/items/?offset=' + offset + '&limit=10', {
-          headers: {'X-Requested-With':'XMLHttpRequest'}, credentials:'same-origin'
-        });
-        if(!r.ok) throw new Error('HTTP ' + r.status);
-        const html = await r.text();
-        // Backend возвращает <li>...</li>, а у нас div-ы .vb-tl__i.
-        // Но на MVP просто inject как есть — для v3 можно adapter написать позже.
-        // Пока используем общий partial (items в старом формате), просто показываем.
-        tl.insertAdjacentHTML('beforeend', html);
-        tl.setAttribute('data-offset', offset + 10);
-        btn.dataset.busy = '0';
-        btn.textContent = origText;
-        if(!html.trim()){ btn.remove(); }
-      } catch(err){
-        btn.dataset.busy = '0';
-        btn.textContent = origText;
-        toast('Ошибка: ' + err.message, 'err');
-      }
-    });
-  })();
+  // ── Copy-to-clipboard по [data-v3-copy] ──
+  document.addEventListener('click', async function(e){
+    const btn = e.target.closest('[data-v3-copy]');
+    if(!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const text = btn.getAttribute('data-copy-text') || '';
+    if(!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('Скопировано: ' + text.slice(0, 40), 'ok');
+    } catch(_){
+      // Fallback на старый exec-command
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy'); ta.remove();
+      toast('Скопировано', 'ok');
+    }
+  });
 
   // ── V2Modal saved → reload ──
   window.addEventListener('v2-modal:saved', function(){
