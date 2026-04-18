@@ -233,6 +233,7 @@
       if(kind === 'inline') body = {field: field, value: newText};
       else if(kind === 'phone-value') body = {value: newText};
       else if(kind === 'phone-note') body = {comment: newText};
+      else if(kind === 'main-phone-comment') body = {comment: newText};
       else if(kind === 'email-value') body = {value: newText};
       else if(kind === 'main-phone') body = {phone: newText};
       else if(kind === 'main-email') body = {email: newText};
@@ -363,6 +364,9 @@
     try {
       const body = {};
       body[paramName] = newId;
+      // Дополнительный статичный параметр (например field для inline_update)
+      const extraField = trigger.dataset.editExtraField;
+      if(extraField){ body['field'] = extraField; }
       await _postForm(url, body);
       trigger.dataset.editCurrent = newId;
       // Заменяем только текстовое содержимое, сохраняя вложенные элементы-украшения

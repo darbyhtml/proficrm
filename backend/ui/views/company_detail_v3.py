@@ -207,6 +207,9 @@ def company_detail_v3_preview(
         {"id": str(r.id), "label": r.name}
         for r in Region.objects.order_by("name")
     ]
+    # P1: рабочие часовые пояса (186 правок/период на проде)
+    from core.timezone_utils import RUS_TZ_CHOICES
+    timezone_options = [{"id": v, "label": lbl} for v, lbl in RUS_TZ_CHOICES]
     branch_options = [
         {"id": str(b.id), "label": b.name}
         for b in Branch.objects.order_by("name")
@@ -255,6 +258,7 @@ def company_detail_v3_preview(
         "sphere_options_json": json.dumps(sphere_options, ensure_ascii=False),
         "contract_type_options_json": json.dumps(contract_type_options, ensure_ascii=False),
         "region_options_json": json.dumps(region_options, ensure_ascii=False),
+        "timezone_options_json": json.dumps(timezone_options, ensure_ascii=False),
         "delete_req": delete_req,
         "branch_options_json": json.dumps(branch_options, ensure_ascii=False),
         "responsible_options_json": json.dumps(responsible_options, ensure_ascii=False),

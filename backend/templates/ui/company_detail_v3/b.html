@@ -792,6 +792,11 @@
             {% if company.primary_contact_is_cold_call %}
               <span class="vb-phone__cold-tag" title="{% if company.primary_cold_marked_by %}{{ company.primary_cold_marked_by|full_name }} · {% endif %}{{ company.primary_cold_marked_at|date:'d.m.Y' }}">❄ холодный</span>
             {% endif %}
+            <div class="vb-p__cmt" data-v3-edit
+                 data-edit-url="{% url 'company_main_phone_comment_update' company_id=company.id %}"
+                 data-edit-kind="main-phone-comment"
+                 data-edit-placeholder="+ комментарий (добавочный, ресепшн…)"
+                 title="Комментарий к основному номеру">{{ company.phone_comment|default:"" }}</div>
           </div>
         </div>
         {% for p in company.phones.all|slice:":3" %}
@@ -916,6 +921,35 @@
                   data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
                   data-edit-field="activity_kind"
                   data-edit-kind="inline">{{ company.activity_kind|default:"—" }}</span>
+          </div>
+        </div>
+        <div class="vb-p">
+          <div class="vb-p__k">Часовой пояс</div>
+          <div class="vb-p__v"
+               data-v3-combobox
+               data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+               data-edit-param="value"
+               data-edit-extra-field="work_timezone"
+               data-edit-current="{{ company.work_timezone|default:'' }}"
+               data-edit-clearable="1"
+               data-edit-options='{{ timezone_options_json|escape }}'>
+            <span data-v3-combobox-label>{% if company.work_timezone %}{{ company.work_timezone }}{% else %}—{% endif %}</span>
+          </div>
+        </div>
+        <div class="vb-p">
+          <div class="vb-p__k">Рабочий день</div>
+          <div class="vb-p__v">
+            <span data-v3-edit
+                  data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+                  data-edit-field="workday_start"
+                  data-edit-kind="inline"
+                  style="display:inline-block;min-width:50px">{% if company.workday_start %}{{ company.workday_start|time:"H:i" }}{% else %}—{% endif %}</span>
+            <span style="color:var(--v2-text-muted);margin:0 6px">—</span>
+            <span data-v3-edit
+                  data-edit-url="{% url 'company_inline_update' company_id=company.id %}"
+                  data-edit-field="workday_end"
+                  data-edit-kind="inline"
+                  style="display:inline-block;min-width:50px">{% if company.workday_end %}{{ company.workday_end|time:"H:i" }}{% else %}—{% endif %}</span>
           </div>
         </div>
         <div class="vb-p">
