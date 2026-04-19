@@ -568,6 +568,9 @@ def company_delete_request_approve(request: HttpRequest, company_id, req_id: int
                         "decision": "approved",
                     },
                 )
+            # Hotfix 2026-04-18: явно удаляем задачи ДО company.delete().
+            # Task.company on_delete=SET_NULL — раньше задачи оставались «—» без привязки.
+            _tasks_del_cnt_approve = Task.objects.filter(company_id=company_pk).delete()[0]
             log_event(
                 actor=user,
                 verb=ActivityEvent.Verb.DELETE,
@@ -580,6 +583,7 @@ def company_delete_request_approve(request: HttpRequest, company_id, req_id: int
                     "detached_branches": [str(c.id) for c in detached[:50]],
                     "detached_count": len(detached),
                     "branches_notified": branches_notified,
+                    "tasks_deleted_count": _tasks_del_cnt_approve,
                 },
             )
             company.delete()
@@ -627,6 +631,8 @@ def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
                 head_company=company,
                 detached=detached,
             )
+            # Hotfix 2026-04-18: явно удаляем задачи ДО company.delete().
+            _tasks_del_cnt_direct = Task.objects.filter(company_id=company_pk).delete()[0]
             log_event(
                 actor=user,
                 verb=ActivityEvent.Verb.DELETE,
@@ -639,6 +645,7 @@ def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
                     "detached_branches": [str(c.id) for c in detached[:50]],
                     "detached_count": len(detached),
                     "branches_notified": branches_notified,
+                    "tasks_deleted_count": _tasks_del_cnt_direct,
                 },
             )
             company.delete()

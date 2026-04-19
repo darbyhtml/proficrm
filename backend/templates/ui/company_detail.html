@@ -1820,13 +1820,13 @@
               <div>
                 <div class="font-medium" style="color:#b91c1c">Удалить компанию</div>
                 <div class="text-xs muted-2 mt-1">
-                  Удаление необратимо. Заметки будут удалены, задачи/контакты отвяжутся от компании.
+                  Удаление необратимо. <strong>Все задачи и заметки этой компании будут удалены</strong>, контакты — отвяжутся.
                   Если у компании есть клиентские подразделения — они станут самостоятельными (головными).
                 </div>
               </div>
               <button type="button" class="btn btn-outline btn-sm" data-close-delcompany aria-label="Закрыть" title="Закрыть">✕</button>
             </div>
-            <form method="post" action="/companies/{{ company.id }}/delete/" class="mt-3 space-y-2" onsubmit="return confirm('Точно удалить компанию?');">
+            <form method="post" action="/companies/{{ company.id }}/delete/" class="mt-3 space-y-2" onsubmit="return confirm('Удалить компанию вместе со всеми её задачами и заметками? Это действие необратимо.');">
               {% csrf_token %}
               <div>
                 <label class="block text-xs text-brand-dark/70 mb-1">Комментарий (не обязательно)</label>
