@@ -1,5 +1,46 @@
 # Текущий спринт
 
+**[2026-04-19]** — Аудит актуальности всего проекта + sync prod hotfix'ов ✅
+
+Запущены параллельно 5 агентов-аудиторов (A1 Memory, A2 Docs, A3 Prod-vs-Staging,
+A4 Dependencies, A5 Roles/Permissions). Результаты:
+
+- **Память**: удалено 2 устаревших файла (`feedback_audit_docs.md` — мёртвая
+  ссылка на `.audit/`, `feedback_prod_readonly_2026_04_15.md` — окно закрыто).
+  Переписан `project_prod_state.md` (актуализирован разрыв: 333 коммита, не
+  273). Создано 4 новых: `project_f4_r3_v3b_companies.md`,
+  `feedback_font_size_min_14px.md`, `feedback_popup_menu_click_pattern.md`,
+  `project_prod_hotfix_2026_04_18.md`. Пересобран `MEMORY.md` индекс.
+  Обновлены `project_branch_regions.md` (6 ролей с TENDERIST),
+  `reference_staging_infra.md` (убрана устаревшая feature-ветка).
+
+- **Документация**: добавлены 2 ADR (v3/b single-card design, min 14px
+  font-size policy). Обновлён `current-sprint.md` (этот файл), добавлены
+  3 проблемы в `problems-solved.md` (Django multi-line `{# #}`, phone
+  normalize mishaps, localStorage filter leak).
+
+- **Новые wiki-страницы**: `docs/wiki/01-Архитектура/Роли-и-права.md` (полная
+  матрица 6 ролей × 10 доменов), `docs/wiki/01-Архитектура/Дерево-зависимостей.md`
+  (pip/npm/apps/Celery/integrations), `docs/wiki/04-Статус/Прод-vs-Staging.md`
+  (333 коммита разрыва, 44 миграции, риски деплоя).
+
+- **Sync hotfix**: ручной hotfix прода 2026-04-18 (CASCADE delete tasks +
+  баннер активного фильтра) зеркалирован в main коммитом `b7dcb21a`.
+  Задеплоен на staging, E2E-тест пройден (3 тестовые задачи удалились
+  вместе с компанией, `tasks_deleted_count: 3` в ActivityEvent.meta).
+
+**Ключевые числа (snapshot 2026-04-19):**
+- Prod HEAD ≈ `be569ad` (2026-03-17, образ `667d1a7c93a6`)
+- Main HEAD `b7dcb21a` (2026-04-19 CASCADE)
+- Разрыв main→prod: 333 коммита, 44 миграции, +2 Django apps (channels,
+  messenger), Django 6.0.1→6.0.4, Celery 5.4→5.5.2
+- 6 ролей пользователей (добавлена TENDERIST)
+- 10 Django apps + 66 моделей БД
+- ActivityEvent на проде: 9.5M (на staging 613k) — критично для миграций
+  аудит-таблиц
+
+---
+
 **[2026-04-18]** — F4 R3 v3/b: дотошное Playwright E2E + 5 багфиксов ✅
 
 Продолжение редизайна карточки компании. После предыдущих раундов

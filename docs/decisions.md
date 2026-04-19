@@ -1,5 +1,73 @@
 # Архитектурные решения
 
+## [2026-04-19] Hotfix: Company delete = CASCADE related tasks
+
+**Контекст.** На проде за 60 дней 148 удалений компаний. У модели `Task.company` — `on_delete=SET_NULL`. При удалении компании задачи НЕ удалялись — оставались с `company_id=NULL`, в списке `/tasks/` в колонке «Компания» показывался «—», в карточку зайти нельзя. Пользователи путались («откуда задачи без компании»).
+
+**Альтернативы.**
+1. Изменить схему FK на `on_delete=CASCADE` — миграция БД, рисково на проде с 9.5M ActivityEvent.
+2. **Явное удаление задач ПЕРЕД `company.delete()`** в view-логике (принято) — без миграции, контролируемо.
+3. Оставить SET_NULL и в UI показывать «компания удалена» вместо «—» — не решает проблему «зайти нельзя».
+
+**Решение.** В `company_delete_direct` и `company_delete_request_approve` перед `company.delete()` добавлено:
+```python
+_tasks_del_cnt = Task.objects.filter(company_id=company_pk).delete()[0]
+```
+и `tasks_deleted_count` в `ActivityEvent.meta` для аудита. UI-подтверждение: «Все задачи и заметки этой компании будут удалены, контакты — отвяжутся.»
+
+**Последствия.**
+- Ручной hotfix применён на прод через `docker cp` (2026-04-18), зеркалено в коммите `b7dcb21a` (2026-04-19).
+- Staging E2E-тест: 3 тестовые задачи удалились вместе с компанией, `tasks_deleted_count: 3` в audit.
+- 45 orphan-задач на проде (созданных пользователями без company_id) НЕ тронуты — это содержательная manual-работа, не осиротевшие.
+
+**Связанное решение** (отложено): для проблемы «скрытый `task_filter=week` через localStorage» — на проде добавлен баннер «Активен дополнительный фильтр» в `company_list.html`. При следующем полном деплое main→prod заменится на новый `company_list_v2.html`, где фильтры уже отображаются как `fchip` с ×-кнопкой.
+
+## [2026-04-18] Min font-size 14px — глобальная accessibility политика
+
+**Контекст.** Пользовательская база CRM — менеджеры/РОП/директора 40+ возраста. Мелкий шрифт (11-13px) читать сложно. Пользователь прямо потребовал «самый минимальный шрифт во всём проекте — 14px, пожалуйста, исправь это».
+
+**Альтернативы.**
+1. Только увеличить дефолтный `font_scale` пользователя — не учитывает новых юзеров.
+2. Точечно править компоненты где жалоба — косметика, через месяц та же проблема.
+3. **Жёсткая политика: все основные тексты ≥ 14px везде** (принято).
+
+**Решение.**
+- **284 замены** `font-size:Npx (N<14)` → `14px` в 29 шаблонах (Python-скрипт).
+- **CSS override** в `base.html` для Tailwind-классов:
+  ```css
+  .text-xs { font-size: 14px !important; line-height: 1.4 !important; }
+  [class*="text-[9px]"], [class*="text-[10px]"], [class*="text-[11px]"],
+  [class*="text-[12px]"], [class*="text-[13px]"] { font-size: 14px !important; }
+  .btn-sm, .btn-xs { font-size: 14px !important; }
+  .badge-xxxs, .badge-xxs, .badge-xs, .badge-sm, .badge-md { font-size: 14px !important; }
+  ```
+
+**Коммит:** `5ec5cf3f UI(Global): минимум 14px шрифт во всём проекте (политика user 2026-04-18)`.
+
+**Последствия.**
+- Проверено 6 ключевых страниц (v3/b, dashboard, companies list, tasks list, mail, analytics, settings, messenger) — вёрстка держится.
+- Минор-регрессии: в узких колонках («Рабочий стол», «Действует до», «Компания самостоятельная») текст переносится на 2 строки. Не критично.
+- При любой новой UI-правке: НЕ писать `font-size < 14px`. При конфликте с вёрсткой — расширять колонку или сокращать текст, **не** возвращать мелкий шрифт.
+
+## [2026-04-18] F4 R3 v3/b — single-card редизайн карточки компании
+
+**Контекст.** 3 существующие карточки (classic v1, modern v2, preview v3) — техдолг и путаница. User выбрал vеариант B из 3 preview (A Notion, B Dashboard/Linear, C Editorial). Требуется единая карточка, итерируемая по фидбеку.
+
+**Решение.** Создана `/companies/<id>/v3/b/` preview (будет заменой classic на Этапе 6). Фичи:
+1. **Popup-меню действий по клику** (classic amoCRM-паттерн): Позвонить · Скопировать · Изменить · Открыть в Яндекс.Картах · Отметить холодным · Удалить. См. отдельный ADR-паттерн в памяти `feedback_popup_menu_click_pattern.md`.
+2. **Современная обработка телефонов**: JS `_normalizePhoneRu` + `_formatPhoneRu` (live-форматирование 8→+7, блок букв). Backend валидация `fullmatch(\+\d{10,15})` + null-byte защита.
+3. **Input-like визуал редактирования**: border 1.5px primary + box-shadow glow 3px + placeholder через `:empty::before`.
+4. **Восстановлено из classic**: `region` (combobox), `work_timezone` (13 RU-таймзон combobox), `workday_start/end`, `phone_comment` (для основного номера), `kpp` в hero рядом с ИНН, баннер `CompanyDeletionRequest`, бейдж договора «Срочно/Напомнить/активен/истёк».
+5. **Новый endpoint**: `company_phone_delete` (в classic отсутствовал).
+
+**Последствия.**
+- Classic `/companies/<id>/` остаётся работать параллельно до Этапа 6.
+- v1/v2 → deprecate после стабилизации v3/b на проде.
+- 98 коммитов за 4 дня (16-19.04), 10 unit + Playwright E2E тестов.
+- Аудит 7 агентами параллельно — закрыто 31 пропажа vs classic + 5 security fixes + 3 P1 responsive.
+
+**Коммиты:** `33950339` (F4 R3 start) … `b7dcb21a` (final hotfix). Документация в `docs/wiki/02-Модули/Компании.md` (нужно дополнить).
+
 ## [2026-04-18] F5 R2: Round-Robin per-branch вместо per-inbox
 
 **Контекст.** `MultiBranchRouter.route()` может менять `conversation.branch`
