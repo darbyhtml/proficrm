@@ -6,6 +6,10 @@
 .claude/skills/
 .claude/vendor/
 .claude/worktrees/
+.claude/scheduled_tasks.lock
+
+# Playwright smoke artifacts (локально сохраняются скрины и консоль-логи)
+staging-*.png
 
 # Python virtual environment
 .venv/
