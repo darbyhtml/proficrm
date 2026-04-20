@@ -230,6 +230,17 @@ INSTALLED_APPS = [
     'messenger',
 ]
 
+# Wave 0.0 (2026-04-20): django-extensions подключается только в DEBUG,
+# даёт команды graph_models, show_urls, shell_plus.
+# НЕ попадает в production — зависимость в requirements-dev.txt.
+if DEBUG:
+    try:
+        import django_extensions  # noqa: F401
+        INSTALLED_APPS += ['django_extensions']
+    except ImportError:
+        # Dev-зависимость не установлена — это норма для prod.
+        pass
+
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'core.request_id.RequestIdMiddleware',  # Добавляет request_id для корреляции логов

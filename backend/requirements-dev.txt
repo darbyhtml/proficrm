@@ -6,6 +6,29 @@
 
 -r requirements.txt
 
+# -----------------------------------------------------------------------------
 # Линтер/форматтер — Rust-based, быстрый
 # Используется через .claude/hooks/ruff-fix.py при Edit/Write .py файлов
+# -----------------------------------------------------------------------------
 ruff==0.14.5
+
+# -----------------------------------------------------------------------------
+# Wave 0 (2026-04-20): инфраструктура аудита кодовой базы.
+# Используются в docs/plan/01_wave_0_audit.md — Этап 0.0 bootstrap.
+# -----------------------------------------------------------------------------
+
+# Complexity + maintainability metrics
+radon==6.0.1
+
+# Test coverage (pytest --cov пишет XML/HTML для CI gating)
+coverage==7.13.5
+
+# Django-extensions даёт `manage.py graph_models` для ERD и `show_urls`/`shell_plus`
+django-extensions==3.2.3
+
+# Python-обёртка над Graphviz для graph_models --pygraphviz
+# Требует системный пакет graphviz + libgraphviz-dev
+pygraphviz==1.14
+
+# Known-CVE scanner для Python-deps (Wave 0.2 добавит в CI, пока локально)
+pip-audit==2.9.0
