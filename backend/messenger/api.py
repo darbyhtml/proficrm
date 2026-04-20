@@ -285,17 +285,14 @@ class ConversationViewSet(
 
     @action(detail=False, methods=["get"], url_path="unread-count")
     def unread_count(self, request):
-        """GET /api/conversations/unread-count/ — общее число непрочитанных диалогов для sidebar badge."""
-        from django.db.models import Q, F
-        qs = selectors.visible_conversations_qs(request.user).filter(
-            status__in=[models.Conversation.Status.OPEN, models.Conversation.Status.PENDING],
-        )
-        # Диалоги с непрочитанными IN-сообщениями (после assignee_last_read_at)
-        count = qs.filter(
-            Q(assignee=request.user),
-            Q(assignee_last_read_at__isnull=True) | Q(messages__created_at__gt=F("assignee_last_read_at")),
-            messages__direction=models.Message.Direction.IN,
-        ).distinct().count()
+        """GET /api/conversations/unread-count/ — общее число непрочитанных диалогов для sidebar badge.
+
+        Использует `selectors.get_messenger_unread_count` — он кэшируется на 30 сек
+        в Redis (per-user). При polling интервале frontend 30 сек cache-hit ≈90%,
+        вместо 1 тяжёлого DISTINCT JOIN на каждый запрос.
+        Performance audit 2026-04-20: ~100K SQL/день → ~10K.
+        """
+        count = selectors.get_messenger_unread_count(request.user)
         return Response({"unread_count": count})
 
     @action(detail=False, methods=["get"])

@@ -1005,10 +1005,18 @@ def preferences_mail_signature(request: HttpRequest) -> HttpResponse:
         return redirect("preferences")
 
     user = request.user
-    signature_html = request.POST.get("email_signature_html", "").strip()
-    if len(signature_html) > 10_000:
+    raw_html = request.POST.get("email_signature_html", "").strip()
+    if len(raw_html) > 10_000:
         messages.error(request, "Подпись слишком длинная (максимум 10 000 символов).")
         return redirect("/settings/#mail")
+
+    # SECURITY FIX (2026-04-20, audit P0): раньше HTML сохранялся как есть.
+    # Это позволяло stored XSS: пользователь вводит <script>...</script> в подписи,
+    # админ открывает preview campaign с этой подписью — JS исполняется
+    # в srcdoc iframe (same-origin с CRM). Chain: любой user → session-takeover admin.
+    # sanitize_email_html удаляет <script>, event handlers, javascript: URLs.
+    from mailer.utils import sanitize_email_html
+    signature_html = sanitize_email_html(raw_html)
 
     user.email_signature_html = signature_html
     user.save(update_fields=["email_signature_html"])
