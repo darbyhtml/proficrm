@@ -231,7 +231,7 @@
       {# Настраиваемые колонки списка (ui_cfg.company_list_columns) #}
       <div class="v2-table">
         <div class="v2-tr v2-tr--head"
-             style="grid-template-columns:{% if can_bulk_transfer %}28px {% endif %}minmax(0,1.8fr){% if 'responsible' in company_list_columns %} 160px{% endif %}{% if 'branch' in company_list_columns %} 140px{% endif %}{% if 'region' in company_list_columns %} 120px{% endif %}{% if 'status' in company_list_columns %} 120px{% endif %}{% if 'updated_at' in company_list_columns %} 140px{% endif %} 90px">
+             style="grid-template-columns:{% if can_bulk_transfer %}28px {% endif %}minmax(220px,1.8fr){% if 'responsible' in company_list_columns %} 160px{% endif %}{% if 'branch' in company_list_columns %} 140px{% endif %}{% if 'region' in company_list_columns %} 120px{% endif %}{% if 'status' in company_list_columns %} 120px{% endif %}{% if 'updated_at' in company_list_columns %} 140px{% endif %} 90px">
           {% if can_bulk_transfer %}<div><input type="checkbox" id="v2BulkAll" class="v2-chk" /></div>{% endif %}
           <div>
             <a class="v2-sort {% if sort == 'name' %}v2-sort--active{% endif %}"
@@ -274,7 +274,7 @@
 
         {% for c in page.object_list %}
         <div class="v2-tr {% if c.has_overdue %}v2-tr--overdue{% endif %} v2-company-row" data-company-url="{% url 'company_detail' c.id %}"
-             style="grid-template-columns:{% if can_bulk_transfer %}28px {% endif %}minmax(0,1.8fr){% if 'responsible' in company_list_columns %} 160px{% endif %}{% if 'branch' in company_list_columns %} 140px{% endif %}{% if 'region' in company_list_columns %} 120px{% endif %}{% if 'status' in company_list_columns %} 120px{% endif %}{% if 'updated_at' in company_list_columns %} 140px{% endif %} 90px;cursor:pointer">
+             style="grid-template-columns:{% if can_bulk_transfer %}28px {% endif %}minmax(220px,1.8fr){% if 'responsible' in company_list_columns %} 160px{% endif %}{% if 'branch' in company_list_columns %} 140px{% endif %}{% if 'region' in company_list_columns %} 120px{% endif %}{% if 'status' in company_list_columns %} 120px{% endif %}{% if 'updated_at' in company_list_columns %} 140px{% endif %} 90px;cursor:pointer">
           {% if can_bulk_transfer %}
           <div class="v2-bulk-cell">
             <label style="display:flex;align-items:center;justify-content:center;cursor:pointer">

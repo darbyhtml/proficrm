@@ -337,7 +337,12 @@
   .v2-chk{width:16px;height:16px;accent-color:var(--v2-primary);cursor:pointer}
   .v2-tr--head{background:var(--v2-bg-soft);font-size:14px;text-transform:uppercase;
     letter-spacing:.04em;color:var(--v2-text-muted);font-weight:600}
-  .v2-tr--head > *{padding:10px 8px!important}
+  /* Header cells обязаны обрезать overflow — иначе содержимое (особенно с sort-стрелкой)
+     лезет в следующую колонку. 2026-04-20 — фикс наложения "КОМПАНИЯ"/"ОТВЕТСТВЕННЫЙ"
+     в /companies/ и /tasks/ v2 list. */
+  .v2-tr--head > *{padding:10px 8px!important;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .v2-sort{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .v2-fbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
   .v2-fbar__search{flex:1;min-width:220px}
   .v2-fbar__badge{display:inline-flex;align-items:center;justify-content:center;

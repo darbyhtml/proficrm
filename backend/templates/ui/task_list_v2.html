@@ -267,7 +267,7 @@
       <div class="v2-table">
         {% if page.object_list %}
         <div class="v2-tr v2-tr--head"
-             style="grid-template-columns:{% if show_task_checkboxes %}28px {% endif %}16px minmax(0,1.6fr) minmax(180px,1.3fr) 140px 110px 140px 130px 120px 140px">
+             style="grid-template-columns:{% if show_task_checkboxes %}28px {% endif %}16px minmax(220px,1.6fr) minmax(180px,1.3fr) 140px 110px 140px 130px 120px 140px">
           {% if show_task_checkboxes %}<div><input type="checkbox" id="v2BulkAll" class="v2-chk" /></div>{% endif %}
           <div></div>
           <div>
@@ -319,7 +319,7 @@
 
         {% for t in page.object_list %}
         <div class="v2-tr v2-task-row" data-task-id="{{ t.id }}" data-task-url="/tasks/v2/{{ t.id }}/partial/"
-             style="grid-template-columns:{% if show_task_checkboxes %}28px {% endif %}16px minmax(0,1.6fr) minmax(180px,1.3fr) 140px 110px 140px 130px 120px 140px;cursor:pointer">
+             style="grid-template-columns:{% if show_task_checkboxes %}28px {% endif %}16px minmax(220px,1.6fr) minmax(180px,1.3fr) 140px 110px 140px 130px 120px 140px;cursor:pointer">
           {% if show_task_checkboxes %}
           <div class="v2-bulk-cell">
             <label style="display:flex;align-items:center;justify-content:center;cursor:pointer">
