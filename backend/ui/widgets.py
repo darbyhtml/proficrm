@@ -5,17 +5,17 @@ from django.core.cache import cache
 
 class TaskTypeSelectWidget(forms.Select):
     """Кастомный виджет для выбора типа задачи с data-атрибутами для иконок и цветов."""
-    
+
     def __init__(self, attrs=None, choices=()):
         super().__init__(attrs, choices)
         # Добавляем класс для стилизации и data-атрибут для идентификации
         if attrs is None:
             attrs = {}
-        attrs.setdefault('class', 'w-full rounded-lg border px-3 py-2 task-type-select')
+        attrs.setdefault("class", "w-full rounded-lg border px-3 py-2 task-type-select")
         self.attrs = attrs
         # Кэш для TaskType (загружаем один раз)
         self._task_types_cache = None
-    
+
     # Ключ кэша и TTL — общие для всех инстансов виджета
     _CACHE_KEY = "task_types_all_dict"
     _CACHE_TTL = 300  # 5 минут
@@ -49,11 +49,14 @@ class TaskTypeSelectWidget(forms.Select):
                 except Exception:
                     # Кэш-бэкенд временно недоступен — используем данные без кэша.
                     import logging
+
                     logging.getLogger(__name__).warning(
-                        "TaskTypeSelectWidget: не удалось записать кэш %s", self._CACHE_KEY,
+                        "TaskTypeSelectWidget: не удалось записать кэш %s",
+                        self._CACHE_KEY,
                     )
             except Exception:
                 import logging
+
                 logging.getLogger(__name__).exception(
                     "TaskTypeSelectWidget: не удалось загрузить TaskType"
                 )
@@ -61,34 +64,34 @@ class TaskTypeSelectWidget(forms.Select):
 
         self._task_types_cache = cached_data
         return cached_data
-    
+
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
         """Переопределяем create_option для добавления data-атрибутов."""
         option = super().create_option(name, value, label, selected, index, subindex, attrs)
-        
+
         # Получаем TaskType данные
-        if value and value != '':
+        if value and value != "":
             task_types = self._get_task_types()
             if task_types:
                 task_type_data = task_types.get(str(value))
                 if task_type_data:
-                    icon = task_type_data.get('icon', '') or ''
-                    color = task_type_data.get('color', '') or ''
+                    icon = task_type_data.get("icon", "") or ""
+                    color = task_type_data.get("color", "") or ""
                     # Добавляем data-атрибуты к attrs опции
-                    if 'attrs' not in option:
-                        option['attrs'] = {}
-                    option['attrs']['data-icon'] = icon
-                    option['attrs']['data-color'] = color
+                    if "attrs" not in option:
+                        option["attrs"] = {}
+                    option["attrs"]["data-icon"] = icon
+                    option["attrs"]["data-color"] = color
                     # Обновляем label на name из справочника
-                    if task_type_data.get('name'):
-                        option['label'] = task_type_data.get('name')
-        
+                    if task_type_data.get("name"):
+                        option["label"] = task_type_data.get("name")
+
         return option
 
 
 class UserSelectWithBranchWidget(forms.Select):
     """Кастомный виджет для выбора пользователя с группировкой по городам подразделений."""
-    
+
     def optgroups(self, name, value, attrs=None):
         """Группируем пользователей по городам филиалов."""
         groups = []
@@ -102,42 +105,42 @@ class UserSelectWithBranchWidget(forms.Select):
         else:
             value_list = [str(value)]
         value_set = set(value_list)
-        
+
         # Группируем choices по branch__name
         # Сначала загружаем всех пользователей одним запросом для оптимизации
         from collections import defaultdict
         from accounts.models import User
-        
-        user_ids = [str(opt[0]) for opt in self.choices if opt[0] and opt[0] != '']
+
+        user_ids = [str(opt[0]) for opt in self.choices if opt[0] and opt[0] != ""]
         users_dict = {}
         if user_ids:
             # ВАЖНО: не исключаем администраторов здесь — список доступных пользователей
             # должен определяться queryset'ом поля (в форме/view), а не виджетом.
             users = (
                 User.objects.filter(id__in=user_ids)
-                .select_related('branch')
-                .only('id', 'branch__name', 'role')
+                .select_related("branch")
+                .only("id", "branch__name", "role")
             )
             users_dict = {str(u.id): u for u in users}
-        
+
         grouped = defaultdict(list)
-        
+
         for index, (option_value, option_label) in enumerate(self.choices):
             if option_value is None:
-                option_value = ''
-            
+                option_value = ""
+
             # Получаем пользователя для определения города
             branch_name = "Без филиала"
-            if option_value and option_value != '':
+            if option_value and option_value != "":
                 user = users_dict.get(str(option_value))
                 if user and user.branch:
                     branch_name = user.branch.name
-            
+
             grouped[branch_name].append((index, option_value, option_label))
-            
+
             if str(option_value) in value_set:
                 has_selected = True
-        
+
         # Формируем optgroups. "Без филиала" НЕ показываем по требованию.
         group_index = 0
         # Сортируем филиалы, но исключаем "Без филиала"
@@ -157,12 +160,12 @@ class UserSelectWithBranchWidget(forms.Select):
                     index,
                 )
                 subgroup.append(option)
-            
+
             # Добавляем группу только если в ней есть опции
             if subgroup:
                 groups.append((branch_name, subgroup, group_index))
                 group_index += 1
-        
+
         # Не добавляем группу "Другое" - если значение не найдено, просто не показываем его
-        
+
         return groups

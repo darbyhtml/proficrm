@@ -38,9 +38,7 @@ class WidgetOffHoursRequestTests(TestCase):
     def setUp(self):
         # Сигнал не нужен — тесты проверяют широкий state вручную.
         post_save.disconnect(auto_assign_new_conversation, sender=Conversation)
-        self.addCleanup(
-            post_save.connect, auto_assign_new_conversation, sender=Conversation
-        )
+        self.addCleanup(post_save.connect, auto_assign_new_conversation, sender=Conversation)
         cache.clear()
 
         self.branch = Branch.objects.create(code="offhours_branch", name="Off-hours Branch")
@@ -93,9 +91,7 @@ class WidgetOffHoursRequestTests(TestCase):
         self.assertEqual(resp.data.get("status"), "ok")
 
         self.conversation.refresh_from_db()
-        self.assertEqual(
-            self.conversation.status, Conversation.Status.WAITING_OFFLINE
-        )
+        self.assertEqual(self.conversation.status, Conversation.Status.WAITING_OFFLINE)
         self.assertEqual(self.conversation.off_hours_channel, "call")
         self.assertEqual(self.conversation.off_hours_contact, "+7 999 123-45-67")
         self.assertIn("после 10 утра", self.conversation.off_hours_note)
@@ -103,12 +99,11 @@ class WidgetOffHoursRequestTests(TestCase):
 
     def test_offhours_request_creates_internal_message(self):
         client = APIClient(REMOTE_ADDR="127.0.0.1")
-        client.post("/api/widget/offhours-request/", self._payload(preferred_channel="email", contact_value="client@example.com"))
-        msg = (
-            Message.objects.filter(conversation=self.conversation)
-            .order_by("-id")
-            .first()
+        client.post(
+            "/api/widget/offhours-request/",
+            self._payload(preferred_channel="email", contact_value="client@example.com"),
         )
+        msg = Message.objects.filter(conversation=self.conversation).order_by("-id").first()
         self.assertIsNotNone(msg)
         self.assertEqual(msg.direction, Message.Direction.INTERNAL)
         self.assertTrue(msg.is_private)
@@ -150,16 +145,12 @@ class WidgetOffHoursRequestTests(TestCase):
 class ContactedBackActionTests(TestCase):
     def setUp(self):
         post_save.disconnect(auto_assign_new_conversation, sender=Conversation)
-        self.addCleanup(
-            post_save.connect, auto_assign_new_conversation, sender=Conversation
-        )
+        self.addCleanup(post_save.connect, auto_assign_new_conversation, sender=Conversation)
         self.branch = Branch.objects.create(code="cb_branch", name="CB Branch")
         self.inbox = Inbox.objects.create(
             name="CB Inbox", branch=self.branch, widget_token="cb_t", is_active=True
         )
-        self.contact = Contact.objects.create(
-            external_id="cb_visitor", name="V", email="v@e.com"
-        )
+        self.contact = Contact.objects.create(external_id="cb_visitor", name="V", email="v@e.com")
         self.conv = Conversation.objects.create(
             inbox=self.inbox,
             contact=self.contact,

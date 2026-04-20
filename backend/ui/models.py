@@ -81,7 +81,9 @@ class AmoApiConfig(models.Model):
     Храним одну запись с pk=1.
     """
 
-    domain = models.CharField("Домен amoCRM", max_length=255, blank=True, default="")  # kmrprofi.amocrm.ru
+    domain = models.CharField(
+        "Домен amoCRM", max_length=255, blank=True, default=""
+    )  # kmrprofi.amocrm.ru
     client_id = models.CharField("OAuth Client ID", max_length=255, blank=True, default="")
     client_secret = models.CharField("OAuth Client Secret", max_length=255, blank=True, default="")
     client_secret_enc = models.TextField("Client Secret (зашифрован)", blank=True, default="")
@@ -91,7 +93,9 @@ class AmoApiConfig(models.Model):
     # Используйте свойства get_access_token / set_access_token и т.д.
     access_token_enc = models.TextField("Access token (зашифрован)", blank=True, default="")
     refresh_token_enc = models.TextField("Refresh token (зашифрован)", blank=True, default="")
-    long_lived_token_enc = models.TextField("Долгосрочный токен (зашифрован)", blank=True, default="")
+    long_lived_token_enc = models.TextField(
+        "Долгосрочный токен (зашифрован)", blank=True, default=""
+    )
     token_type = models.CharField("Token type", max_length=32, blank=True, default="Bearer")
     expires_at = models.DateTimeField("Token expires at", null=True, blank=True)
 
@@ -114,6 +118,7 @@ class AmoApiConfig(models.Model):
 
     def _encrypt(self, value: str) -> str:
         from core.crypto import encrypt_str
+
         return encrypt_str(value or "")
 
     def _decrypt(self, value: str) -> str:
@@ -121,6 +126,7 @@ class AmoApiConfig(models.Model):
             return ""
         try:
             from core.crypto import decrypt_str
+
             return decrypt_str(value)
         except Exception:
             # Could be plaintext (fallback) or wrong key — return as-is
@@ -181,7 +187,13 @@ class AmoApiConfig(models.Model):
         # Либо OAuth (access+refresh), либо долгосрочный токен
         if self.long_lived_token and self.domain:
             return True
-        return bool(self.access_token and self.refresh_token and self.domain and self.client_id and self.get_client_secret())
+        return bool(
+            self.access_token
+            and self.refresh_token
+            and self.domain
+            and self.client_id
+            and self.get_client_secret()
+        )
 
 
 class UiUserPreference(models.Model):

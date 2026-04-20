@@ -72,7 +72,9 @@ from ui.views._base import (
     validate_email,
 )
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 @login_required
 @policy_required(resource_type="page", resource="ui:companies:detail")
@@ -94,22 +96,34 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "emails",
             Prefetch(
                 "phones",
-                queryset=CompanyPhone.objects.select_related("cold_marked_by", "cold_marked_call").order_by("order", "value")
+                queryset=CompanyPhone.objects.select_related(
+                    "cold_marked_by", "cold_marked_call"
+                ).order_by("order", "value"),
             ),
         ),
         id=company_id,
     )
     can_edit_company = _can_edit_company(user, company)
-    can_view_activity = bool(user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD))
+    can_view_activity = bool(
+        user.is_superuser
+        or user.role
+        in (
+            User.Role.ADMIN,
+            User.Role.GROUP_MANAGER,
+            User.Role.BRANCH_DIRECTOR,
+            User.Role.SALES_HEAD,
+        )
+    )
     can_delete_company = _can_delete_company(user, company)
     can_request_delete = bool(user.role == User.Role.MANAGER and company.responsible_id == user.id)
     delete_req = (
-        CompanyDeletionRequest.objects.filter(company=company, status=CompanyDeletionRequest.Status.PENDING)
+        CompanyDeletionRequest.objects.filter(
+            company=company, status=CompanyDeletionRequest.Status.PENDING
+        )
         .select_related("requested_by", "decided_by")
         .order_by("-created_at")
         .first()
     )
-
 
     # "Организация" (головная карточка) и "филиалы" (дочерние карточки клиента)
     head = company.head_company or company
@@ -128,8 +142,8 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "emails",
             Prefetch(
                 "phones",
-                queryset=ContactPhone.objects.select_related("cold_marked_by", "cold_marked_call")
-            )
+                queryset=ContactPhone.objects.select_related("cold_marked_by", "cold_marked_call"),
+            ),
         )
         .order_by("last_name", "first_name")[:200]
     )
@@ -143,12 +157,14 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     # Основной контакт (company.phone)
     # Кнопка доступна только если основной контакт еще не отмечен
     primary_cold_available = not company.primary_contact_is_cold_call
-    
+
     # Проверка прав администратора для отката
     is_admin = require_admin(user)
     is_group_manager = user.role == User.Role.GROUP_MANAGER
     pinned_note = (
-        CompanyNote.objects.filter(company=company, is_pinned=True, note_type=CompanyNote.NoteType.NOTE)
+        CompanyNote.objects.filter(
+            company=company, is_pinned=True, note_type=CompanyNote.NoteType.NOTE
+        )
         .select_related("author", "pinned_by")
         .prefetch_related("note_attachments")
         .order_by("-pinned_at", "-created_at")
@@ -171,6 +187,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     local_now = timezone.localtime(now)
     # Индикатор: можно ли звонить (рабочее время компании + часовой пояс)
     from companies.services import get_worktime_status
+
     worktime = get_worktime_status(company)
 
     # ROLE: Тендерист не работает с задачами — только заметки.
@@ -185,11 +202,12 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             .annotate(
                 is_overdue=models.Case(
                     models.When(
-                        models.Q(due_at__lt=now) & ~models.Q(status__in=[Task.Status.DONE, Task.Status.CANCELLED]),
-                        then=models.Value(1)
+                        models.Q(due_at__lt=now)
+                        & ~models.Q(status__in=[Task.Status.DONE, Task.Status.CANCELLED]),
+                        then=models.Value(1),
                     ),
                     default=models.Value(0),
-                    output_field=models.IntegerField()
+                    output_field=models.IntegerField(),
                 )
             )
             .order_by("-is_overdue", "due_at", "-created_at")[:25]
@@ -205,13 +223,16 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         activity = ActivityEvent.objects.filter(company_id=company.id).select_related("actor")[:50]
 
     history_events = list(
-        company.history_events.select_related("actor", "from_user", "to_user").order_by("occurred_at")[:50]
+        company.history_events.select_related("actor", "from_user", "to_user").order_by(
+            "occurred_at"
+        )[:50]
     )
 
     # ===== ПОЛНЫЙ ТАЙМЛАЙН (2026-04-20 Refactor phase 1): вынесено в service =====
     # Эта 50-строчная сборка из 7 источников была продублирована в
     # `company_timeline_items`. Теперь обе функции используют `build_company_timeline()`.
     from companies.services.timeline import build_company_timeline
+
     _all_timeline = build_company_timeline(company=company)
     # F4 R2 (2026-04-18): пагинация timeline — первые 50, остальное по AJAX.
     # Без пагинации на компаниях с длинной историей (~4600 items) страница
@@ -231,6 +252,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
 
     # Подсветка договора: используем настройки из ContractType
     from companies.services import get_contract_alert
+
     contract_alert, contract_days_left = get_contract_alert(company)
 
     # Принудительно загружаем телефоны, чтобы убедиться, что prefetch работает.
@@ -240,7 +262,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     # PII-утечку для audit системы. Убрано. Если нужно диагностировать —
     # установить LEVEL=DEBUG в settings для этого логгера.
     company_phones_list = list(company.phones.all())
-    
+
     # Получаем режим просмотра карточки: из GET параметра, session или preferences (по умолчанию classic)
     detail_view_mode = request.GET.get("view", "").strip().lower()
     if detail_view_mode not in ["classic", "modern"]:
@@ -249,7 +271,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             prefs = UiUserPreference.load_for_user(user)
             detail_view_mode = prefs.company_detail_view_mode or "classic"
             request.session["company_detail_view_mode"] = detail_view_mode
-    
+
     # Подготовка данных для modern layout (pinned/latest note, ближайшие задачи)
     display_note = pinned_note
     if not display_note and notes:
@@ -265,8 +287,9 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
 
     # Ближайшие задачи для modern layout (2-3 по дедлайну, исключая выполненные)
     upcoming_tasks = list(tasks[:3])  # Уже отсортированы: просроченные -> ближайшие
-    
+
     from companies.models import ContractType
+
     contract_types_list = ContractType.objects.all().order_by("order", "name")
     # Сумма договора для input в модалке — всегда с точкой (для type="number")
     contract_amount_value = ""
@@ -312,8 +335,12 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "display_note": display_note,  # Для modern layout: pinned или latest
             "upcoming_tasks": upcoming_tasks,  # Ближайшие 2-3 задачи для modern layout
             "notes_overview_preview": notes_overview_preview,  # Заметки для превью на вкладке «Обзор» (без текущей display_note)
-            "statuses": CompanyStatus.objects.order_by("name"),  # Для быстрого изменения статуса в Modern
-            "contacts_rest": list(contacts)[5:],  # Контакты с 6-го для кнопки «Показать всех» в Modern
+            "statuses": CompanyStatus.objects.order_by(
+                "name"
+            ),  # Для быстрого изменения статуса в Modern
+            "contacts_rest": list(contacts)[
+                5:
+            ],  # Контакты с 6-го для кнопки «Показать всех» в Modern
             "history_events": history_events,  # История передвижений карточки
             "timeline_items": timeline_items,  # Единая лента: звонки + письма + передвижения
         },
@@ -357,11 +384,15 @@ def company_delete_request_create(request: HttpRequest, company_id) -> HttpRespo
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch"), id=company_id
+    )
     if not (user.role == User.Role.MANAGER and company.responsible_id == user.id):
         messages.error(request, "Запрос на удаление может отправить только ответственный менеджер.")
         return redirect("company_detail", company_id=company.id)
-    existing = CompanyDeletionRequest.objects.filter(company=company, status=CompanyDeletionRequest.Status.PENDING).first()
+    existing = CompanyDeletionRequest.objects.filter(
+        company=company, status=CompanyDeletionRequest.Status.PENDING
+    ).first()
     if existing:
         messages.info(request, "Запрос на удаление уже отправлен и ожидает решения.")
         return redirect("company_detail", company_id=company.id)
@@ -386,8 +417,11 @@ def company_delete_request_create(request: HttpRequest, company_id) -> HttpRespo
     # Дополнительно создаём Notification с payload для UI
     from notifications.service import notify as notify_service
     from notifications.models import Notification
+
     branch_leads = User.objects.filter(
-        is_active=True, branch_id=branch_id, role__in=[User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]
+        is_active=True,
+        branch_id=branch_id,
+        role__in=[User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR],
     ).exclude(id=user.id)
     for lead in branch_leads:
         notify_service(
@@ -400,11 +434,14 @@ def company_delete_request_create(request: HttpRequest, company_id) -> HttpRespo
                 "company_id": str(company.id),
                 "request_id": req.id,
                 "requested_by_id": user.id,
-                "requested_by_name": f"{user.last_name} {user.first_name}".strip() or user.get_username(),
+                "requested_by_name": f"{user.last_name} {user.first_name}".strip()
+                or user.get_username(),
                 "reason": note[:500] if note else "",
             },
         )
-    messages.success(request, f"Запрос отправлен на рассмотрение. Уведомлено руководителей: {sent}.")
+    messages.success(
+        request, f"Запрос отправлен на рассмотрение. Уведомлено руководителей: {sent}."
+    )
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.CREATE,
@@ -424,11 +461,17 @@ def company_delete_request_cancel(request: HttpRequest, company_id, req_id: int)
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch"), id=company_id
+    )
     if not _can_delete_company(user, company):
         messages.error(request, "Нет прав на обработку запросов удаления по этой компании.")
         return redirect("company_detail", company_id=company.id)
-    req = get_object_or_404(CompanyDeletionRequest.objects.select_related("requested_by"), id=req_id, company_id_snapshot=company.id)
+    req = get_object_or_404(
+        CompanyDeletionRequest.objects.select_related("requested_by"),
+        id=req_id,
+        company_id_snapshot=company.id,
+    )
     if req.status != CompanyDeletionRequest.Status.PENDING:
         messages.info(request, "Запрос уже обработан.")
         return redirect("company_detail", company_id=company.id)
@@ -452,7 +495,8 @@ def company_delete_request_cancel(request: HttpRequest, company_id, req_id: int)
                 "company_id": str(company.id),
                 "request_id": req.id,
                 "decided_by_id": user.id,
-                "decided_by_name": f"{user.last_name} {user.first_name}".strip() or user.get_username(),
+                "decided_by_name": f"{user.last_name} {user.first_name}".strip()
+                or user.get_username(),
                 "decision": "cancelled",
             },
         )
@@ -476,13 +520,19 @@ def company_delete_request_approve(request: HttpRequest, company_id, req_id: int
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch"), id=company_id
+    )
     # Сохраняем ID компании отдельно — после company.delete() pk на инстансе станет None.
     company_pk = company.id
     if not _can_delete_company(user, company):
         messages.error(request, "Нет прав на удаление этой компании.")
         return redirect("company_detail", company_id=company.id)
-    req = get_object_or_404(CompanyDeletionRequest.objects.select_related("requested_by"), id=req_id, company_id_snapshot=company.id)
+    req = get_object_or_404(
+        CompanyDeletionRequest.objects.select_related("requested_by"),
+        id=req_id,
+        company_id_snapshot=company.id,
+    )
     if req.status != CompanyDeletionRequest.Status.PENDING:
         messages.info(request, "Запрос уже обработан.")
         return redirect("company_detail", company_id=company.id)
@@ -506,13 +556,15 @@ def company_delete_request_approve(request: HttpRequest, company_id, req_id: int
                 "company_id": str(company_pk),
                 "request_id": req.id,
                 "decided_by_id": user.id,
-                "decided_by_name": f"{user.last_name} {user.first_name}".strip() or user.get_username(),
+                "decided_by_name": f"{user.last_name} {user.first_name}".strip()
+                or user.get_username(),
                 "decision": "approved",
             },
         )
 
     # Phase 3 extract: единый workflow удаления.
     from companies.services import execute_company_deletion, CompanyDeletionError
+
     try:
         execute_company_deletion(
             company=company,
@@ -535,7 +587,9 @@ def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch"), id=company_id
+    )
     # Сохраняем исходный ID компании отдельно, т.к. после company.delete() pk на инстансе станет None,
     # а ошибка IntegrityError может возникнуть уже на COMMIT.
     company_pk = company.id
@@ -547,6 +601,7 @@ def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
 
     # Phase 3 extract: единый workflow удаления в companies.services.
     from companies.services import execute_company_deletion, CompanyDeletionError
+
     try:
         execute_company_deletion(
             company=company,
@@ -564,8 +619,6 @@ def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
     return redirect("company_list")
 
 
-
-
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:contract:update")
 @require_can_view_company
@@ -574,7 +627,9 @@ def company_contract_update(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch"), id=company_id
+    )
     if not _can_edit_company(user, company):
         messages.error(request, "Нет прав на изменение договора по этой компании.")
         return redirect("company_detail", company_id=company.id)
@@ -593,6 +648,7 @@ def company_contract_update(request: HttpRequest, company_id) -> HttpResponse:
             if raw_amount:
                 try:
                     from decimal import Decimal
+
                     company.contract_amount = Decimal(raw_amount.replace(",", "."))
                 except (ValueError, TypeError):
                     company.contract_amount = None
@@ -601,7 +657,7 @@ def company_contract_update(request: HttpRequest, company_id) -> HttpResponse:
         else:
             # Для негодовых: очищаем сумму
             company.contract_amount = None
-    
+
     form.save()
     messages.success(request, "Данные договора обновлены.")
     log_event(
@@ -626,10 +682,16 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch", "primary_cold_marked_by"), id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch", "primary_cold_marked_by"),
+        id=company_id,
+    )
     if not _can_edit_company(user, company):
         if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "Нет прав на изменение признака 'Холодный звонок'."}, status=403)
+            return JsonResponse(
+                {"ok": False, "error": "Нет прав на изменение признака 'Холодный звонок'."},
+                status=403,
+            )
         messages.error(request, "Нет прав на изменение признака 'Холодный звонок'.")
         return redirect("company_detail", company_id=company.id)
 
@@ -637,7 +699,9 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
     confirmed = request.POST.get("confirmed") == "1"
     if not confirmed:
         if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "Требуется подтверждение действия."}, status=400)
+            return JsonResponse(
+                {"ok": False, "error": "Требуется подтверждение действия."}, status=400
+            )
         messages.error(request, "Требуется подтверждение действия.")
         return redirect("company_detail", company_id=company.id)
 
@@ -657,18 +721,27 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company.id)
 
     from companies.services import ColdCallService
+
     result = ColdCallService.mark_company(company=company, user=user)
 
     if result.get("no_phone"):
         if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "У компании не задан основной телефон."}, status=400)
+            return JsonResponse(
+                {"ok": False, "error": "У компании не задан основной телефон."}, status=400
+            )
         messages.error(request, "У компании не задан основной телефон.")
         return redirect("company_detail", company_id=company.id)
 
     last_call = result.get("call")
 
     if _is_ajax(request):
-        company.refresh_from_db(fields=["primary_contact_is_cold_call", "primary_cold_marked_at", "primary_cold_marked_by"])
+        company.refresh_from_db(
+            fields=[
+                "primary_contact_is_cold_call",
+                "primary_cold_marked_at",
+                "primary_cold_marked_by",
+            ]
+        )
         return _cold_call_json(
             entity="company",
             entity_id=str(company.id),
@@ -705,14 +778,18 @@ def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
     if request.method != "POST":
         return redirect("dashboard")
     user: User = request.user
-    contact = get_object_or_404(Contact.objects.select_related("company", "cold_marked_by"), id=contact_id)
+    contact = get_object_or_404(
+        Contact.objects.select_related("company", "cold_marked_by"), id=contact_id
+    )
     company = contact.company
     if not company:
         messages.error(request, "Контакт не привязан к компании.")
         return redirect("dashboard")
     if not _can_edit_company(user, company):
         if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "Нет прав на изменение контактов этой компании."}, status=403)
+            return JsonResponse(
+                {"ok": False, "error": "Нет прав на изменение контактов этой компании."}, status=403
+            )
         messages.error(request, "Нет прав на изменение контактов этой компании.")
         return redirect("company_detail", company_id=company.id)
 
@@ -720,7 +797,9 @@ def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
     confirmed = request.POST.get("confirmed") == "1"
     if not confirmed:
         if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "Требуется подтверждение действия."}, status=400)
+            return JsonResponse(
+                {"ok": False, "error": "Требуется подтверждение действия."}, status=400
+            )
         messages.error(request, "Требуется подтверждение действия.")
         return redirect("company_detail", company_id=company.id)
 
@@ -740,6 +819,7 @@ def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
         return redirect("company_detail", company_id=company.id)
 
     from companies.services import ColdCallService
+
     result = ColdCallService.mark_contact(contact=contact, user=user)
     last_call = result.get("call")
 
@@ -784,12 +864,20 @@ def company_cold_call_reset(request: HttpRequest, company_id) -> HttpResponse:
     user: User = request.user
     if not require_admin(user):
         if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "Только администратор может откатить отметку холодного звонка."}, status=403)
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": "Только администратор может откатить отметку холодного звонка.",
+                },
+                status=403,
+            )
         messages.error(request, "Только администратор может откатить отметку холодного звонка.")
         return redirect("company_detail", company_id=company_id)
 
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
-    
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch"), id=company_id
+    )
+
     if not company.primary_contact_is_cold_call:
         if _is_ajax(request):
             return _cold_call_json(
@@ -805,6 +893,7 @@ def company_cold_call_reset(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company.id)
 
     from companies.services import ColdCallService
+
     ColdCallService.reset_company(company=company, user=user)
 
     if _is_ajax(request):
@@ -843,7 +932,13 @@ def contact_cold_call_reset(request: HttpRequest, contact_id) -> HttpResponse:
     user: User = request.user
     if not require_admin(user):
         if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "Только администратор может откатить отметку холодного звонка."}, status=403)
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": "Только администратор может откатить отметку холодного звонка.",
+                },
+                status=403,
+            )
         messages.error(request, "Только администратор может откатить отметку холодного звонка.")
         return redirect("dashboard")
 
@@ -868,6 +963,7 @@ def contact_cold_call_reset(request: HttpRequest, contact_id) -> HttpResponse:
         return redirect("company_detail", company_id=company.id)
 
     from companies.services import ColdCallService
+
     ColdCallService.reset_contact(contact=contact, user=user)
 
     if _is_ajax(request):
@@ -904,13 +1000,19 @@ def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> Ht
         return redirect("dashboard")
     user: User = request.user
     import logging
+
     logger = logging.getLogger(__name__)
     try:
-        contact_phone = get_object_or_404(ContactPhone.objects.select_related("contact__company", "cold_marked_by"), id=contact_phone_id)
+        contact_phone = get_object_or_404(
+            ContactPhone.objects.select_related("contact__company", "cold_marked_by"),
+            id=contact_phone_id,
+        )
     except Exception as e:
         logger.error(f"Error finding ContactPhone {contact_phone_id}: {e}", exc_info=True)
         if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "Ошибка: номер телефона не найден."}, status=404)
+            return JsonResponse(
+                {"ok": False, "error": "Ошибка: номер телефона не найден."}, status=404
+            )
         messages.error(request, "Ошибка: номер телефона не найден.")
         return redirect("dashboard")
     contact = contact_phone.contact
@@ -920,7 +1022,9 @@ def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> Ht
         return redirect("dashboard")
     if not _can_edit_company(user, company):
         if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "Нет прав на изменение контактов этой компании."}, status=403)
+            return JsonResponse(
+                {"ok": False, "error": "Нет прав на изменение контактов этой компании."}, status=403
+            )
         messages.error(request, "Нет прав на изменение контактов этой компании.")
         return redirect("company_detail", company_id=company.id)
 
@@ -928,7 +1032,9 @@ def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> Ht
     confirmed = request.POST.get("confirmed") == "1"
     if not confirmed:
         if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "Требуется подтверждение действия."}, status=400)
+            return JsonResponse(
+                {"ok": False, "error": "Требуется подтверждение действия."}, status=400
+            )
         messages.error(request, "Требуется подтверждение действия.")
         return redirect("company_detail", company_id=company.id)
 
@@ -948,6 +1054,7 @@ def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> Ht
         return redirect("company_detail", company_id=company.id)
 
     from companies.services import ColdCallService
+
     result = ColdCallService.mark_contact_phone(contact_phone=contact_phone, user=user)
     last_call = result.get("call")
 
@@ -992,11 +1099,19 @@ def contact_phone_cold_call_reset(request: HttpRequest, contact_phone_id) -> Htt
     user: User = request.user
     if not require_admin(user):
         if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "Только администратор может откатить отметку холодного звонка."}, status=403)
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": "Только администратор может откатить отметку холодного звонка.",
+                },
+                status=403,
+            )
         messages.error(request, "Только администратор может откатить отметку холодного звонка.")
         return redirect("dashboard")
 
-    contact_phone = get_object_or_404(ContactPhone.objects.select_related("contact__company"), id=contact_phone_id)
+    contact_phone = get_object_or_404(
+        ContactPhone.objects.select_related("contact__company"), id=contact_phone_id
+    )
     contact = contact_phone.contact
     company = contact.company if contact else None
     if not company:
@@ -1018,6 +1133,7 @@ def contact_phone_cold_call_reset(request: HttpRequest, contact_phone_id) -> Htt
         return redirect("company_detail", company_id=company.id)
 
     from companies.services import ColdCallService
+
     ColdCallService.reset_contact_phone(contact_phone=contact_phone, user=user)
 
     if _is_ajax(request):
@@ -1054,19 +1170,26 @@ def company_phone_cold_call_toggle(request: HttpRequest, company_phone_id) -> Ht
         return redirect("dashboard")
     user: User = request.user
     import logging
+
     logger = logging.getLogger(__name__)
     try:
-        company_phone = get_object_or_404(CompanyPhone.objects.select_related("company", "cold_marked_by"), id=company_phone_id)
+        company_phone = get_object_or_404(
+            CompanyPhone.objects.select_related("company", "cold_marked_by"), id=company_phone_id
+        )
     except Exception as e:
         logger.error(f"Error finding CompanyPhone {company_phone_id}: {e}", exc_info=True)
         if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "Ошибка: номер телефона не найден."}, status=404)
+            return JsonResponse(
+                {"ok": False, "error": "Ошибка: номер телефона не найден."}, status=404
+            )
         messages.error(request, "Ошибка: номер телефона не найден.")
         return redirect("dashboard")
     company = company_phone.company
     if not _can_edit_company(user, company):
         if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "Нет прав на изменение данных этой компании."}, status=403)
+            return JsonResponse(
+                {"ok": False, "error": "Нет прав на изменение данных этой компании."}, status=403
+            )
         messages.error(request, "Нет прав на изменение данных этой компании.")
         return redirect("company_detail", company_id=company.id)
 
@@ -1074,7 +1197,9 @@ def company_phone_cold_call_toggle(request: HttpRequest, company_phone_id) -> Ht
     confirmed = request.POST.get("confirmed") == "1"
     if not confirmed:
         if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "Требуется подтверждение действия."}, status=400)
+            return JsonResponse(
+                {"ok": False, "error": "Требуется подтверждение действия."}, status=400
+            )
         messages.error(request, "Требуется подтверждение действия.")
         return redirect("company_detail", company_id=company.id)
 
@@ -1094,6 +1219,7 @@ def company_phone_cold_call_toggle(request: HttpRequest, company_phone_id) -> Ht
         return redirect("company_detail", company_id=company.id)
 
     from companies.services import ColdCallService
+
     result = ColdCallService.mark_company_phone(company_phone=company_phone, user=user)
     last_call = result.get("call")
 
@@ -1138,11 +1264,19 @@ def company_phone_cold_call_reset(request: HttpRequest, company_phone_id) -> Htt
     user: User = request.user
     if not require_admin(user):
         if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "Только администратор может откатить отметку холодного звонка."}, status=403)
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": "Только администратор может откатить отметку холодного звонка.",
+                },
+                status=403,
+            )
         messages.error(request, "Только администратор может откатить отметку холодного звонка.")
         return redirect("dashboard")
 
-    company_phone = get_object_or_404(CompanyPhone.objects.select_related("company"), id=company_phone_id)
+    company_phone = get_object_or_404(
+        CompanyPhone.objects.select_related("company"), id=company_phone_id
+    )
     company = company_phone.company
 
     if not company_phone.is_cold_call and not company_phone.cold_marked_at:
@@ -1160,6 +1294,7 @@ def company_phone_cold_call_reset(request: HttpRequest, company_phone_id) -> Htt
         return redirect("company_detail", company_id=company.id)
 
     from companies.services import ColdCallService
+
     ColdCallService.reset_company_phone(company_phone=company_phone, user=user)
 
     if _is_ajax(request):
@@ -1196,15 +1331,20 @@ def company_main_phone_update(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch"), id=company_id
+    )
     if not _can_edit_company(user, company):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            return JsonResponse({"success": False, "error": "Нет прав на редактирование этой компании."}, status=403)
+            return JsonResponse(
+                {"success": False, "error": "Нет прав на редактирование этой компании."}, status=403
+            )
         messages.error(request, "Нет прав на редактирование этой компании.")
         return redirect("company_detail", company_id=company.id)
 
     # Phase 2 extract: валидация и duplicate-check вынесены в companies.services.
     from companies.services import validate_phone_main, check_phone_duplicate
+
     normalized, err = validate_phone_main(request.POST.get("phone") or "")
     if err:
         return JsonResponse({"success": False, "error": err}, status=400)
@@ -1232,11 +1372,19 @@ def company_main_phone_update(request: HttpRequest, company_id) -> HttpResponse:
 
     try:
         from ui.templatetags.ui_extras import phone_local_info  # type: ignore
+
         local_info = phone_local_info(normalized)
     except Exception:
         local_info = ""
 
-    return JsonResponse({"success": True, "phone": normalized, "display": format_phone(normalized) if normalized else "—", "local_info": local_info})
+    return JsonResponse(
+        {
+            "success": True,
+            "phone": normalized,
+            "display": format_phone(normalized) if normalized else "—",
+            "local_info": local_info,
+        }
+    )
 
 
 @login_required
@@ -1249,16 +1397,21 @@ def company_phone_value_update(request: HttpRequest, company_phone_id) -> HttpRe
         return redirect("dashboard")
 
     user: User = request.user
-    company_phone = get_object_or_404(CompanyPhone.objects.select_related("company"), id=company_phone_id)
+    company_phone = get_object_or_404(
+        CompanyPhone.objects.select_related("company"), id=company_phone_id
+    )
     company = company_phone.company
     if not _can_edit_company(user, company):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            return JsonResponse({"success": False, "error": "Нет прав на редактирование этой компании."}, status=403)
+            return JsonResponse(
+                {"success": False, "error": "Нет прав на редактирование этой компании."}, status=403
+            )
         messages.error(request, "Нет прав на редактирование этой компании.")
         return redirect("company_detail", company_id=company.id)
 
     # Phase 2 extract: валидация и duplicate-check в companies.services.
     from companies.services import validate_phone_strict, check_phone_duplicate
+
     normalized, err = validate_phone_strict(request.POST.get("phone") or "")
     if err:
         return JsonResponse({"success": False, "error": err}, status=400)
@@ -1284,11 +1437,19 @@ def company_phone_value_update(request: HttpRequest, company_phone_id) -> HttpRe
 
     try:
         from ui.templatetags.ui_extras import phone_local_info  # type: ignore
+
         local_info = phone_local_info(normalized)
     except Exception:
         local_info = ""
 
-    return JsonResponse({"success": True, "phone": normalized, "display": format_phone(normalized), "local_info": local_info})
+    return JsonResponse(
+        {
+            "success": True,
+            "phone": normalized,
+            "display": format_phone(normalized),
+            "local_info": local_info,
+        }
+    )
 
 
 @login_required
@@ -1304,10 +1465,14 @@ def company_phone_delete(request: HttpRequest, company_phone_id) -> HttpResponse
             return JsonResponse({"success": False, "error": "Метод не разрешен."}, status=405)
         return redirect("dashboard")
     user: User = request.user
-    company_phone = get_object_or_404(CompanyPhone.objects.select_related("company"), id=company_phone_id)
+    company_phone = get_object_or_404(
+        CompanyPhone.objects.select_related("company"), id=company_phone_id
+    )
     company = company_phone.company
     if not _can_edit_company(user, company):
-        return JsonResponse({"success": False, "error": "Нет прав на редактирование этой компании."}, status=403)
+        return JsonResponse(
+            {"success": False, "error": "Нет прав на редактирование этой компании."}, status=403
+        )
     phone_value = company_phone.value
     company_phone.delete()
     log_event(
@@ -1332,9 +1497,13 @@ def company_phone_create(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch"), id=company_id
+    )
     if not _can_edit_company(user, company):
-        return JsonResponse({"success": False, "error": "Нет прав на редактирование этой компании."}, status=403)
+        return JsonResponse(
+            {"success": False, "error": "Нет прав на редактирование этой компании."}, status=403
+        )
 
     # Phase 2 extract: валидация/duplicate/comment-check в companies.services.
     from companies.services import (
@@ -1342,6 +1511,7 @@ def company_phone_create(request: HttpRequest, company_id) -> HttpResponse:
         check_phone_duplicate,
         validate_phone_comment,
     )
+
     normalized, err = validate_phone_strict(request.POST.get("phone") or "")
     if err:
         return JsonResponse({"success": False, "error": err}, status=400)
@@ -1364,11 +1534,18 @@ def company_phone_create(request: HttpRequest, company_id) -> HttpResponse:
         if dup_err:
             return JsonResponse({"success": False, "error": dup_err}, status=400)
 
-        max_order = CompanyPhone.objects.select_for_update().filter(company=company).aggregate(m=Max("order")).get("m")
+        max_order = (
+            CompanyPhone.objects.select_for_update()
+            .filter(company=company)
+            .aggregate(m=Max("order"))
+            .get("m")
+        )
         next_order = int(max_order) + 1 if max_order is not None else 0
 
         company_phone = CompanyPhone.objects.create(
-            company=company, value=normalized, order=next_order,
+            company=company,
+            value=normalized,
+            order=next_order,
             comment=comment_raw,
         )
     log_event(
@@ -1382,11 +1559,20 @@ def company_phone_create(request: HttpRequest, company_id) -> HttpResponse:
 
     try:
         from ui.templatetags.ui_extras import phone_local_info  # type: ignore
+
         local_info = phone_local_info(normalized)
     except Exception:
         local_info = ""
 
-    return JsonResponse({"success": True, "id": company_phone.id, "phone": normalized, "display": format_phone(normalized), "local_info": local_info})
+    return JsonResponse(
+        {
+            "success": True,
+            "id": company_phone.id,
+            "phone": normalized,
+            "display": format_phone(normalized),
+            "local_info": local_info,
+        }
+    )
 
 
 @login_required
@@ -1400,15 +1586,20 @@ def company_main_email_update(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch"), id=company_id
+    )
     if not _can_edit_company(user, company):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            return JsonResponse({"success": False, "error": "Нет прав на редактирование этой компании."}, status=403)
+            return JsonResponse(
+                {"success": False, "error": "Нет прав на редактирование этой компании."}, status=403
+            )
         messages.error(request, "Нет прав на редактирование этой компании.")
         return redirect("company_detail", company_id=company.id)
 
     # Phase 2 extract: company_emails сервис.
     from companies.services import validate_email_value, check_email_duplicate
+
     email, err = validate_email_value(
         request.POST.get("email") or "",
         allow_empty=True,  # Основной email можно очистить
@@ -1447,16 +1638,21 @@ def company_email_value_update(request: HttpRequest, company_email_id) -> HttpRe
         return redirect("dashboard")
 
     user: User = request.user
-    company_email = get_object_or_404(CompanyEmail.objects.select_related("company"), id=company_email_id)
+    company_email = get_object_or_404(
+        CompanyEmail.objects.select_related("company"), id=company_email_id
+    )
     company = company_email.company
     if not _can_edit_company(user, company):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            return JsonResponse({"success": False, "error": "Нет прав на редактирование этой компании."}, status=403)
+            return JsonResponse(
+                {"success": False, "error": "Нет прав на редактирование этой компании."}, status=403
+            )
         messages.error(request, "Нет прав на редактирование этой компании.")
         return redirect("company_detail", company_id=company.id)
 
     # Phase 2 extract: company_emails сервис.
     from companies.services import validate_email_value, check_email_duplicate
+
     email, err = validate_email_value(request.POST.get("email") or "")
     if err:
         return JsonResponse({"success": False, "error": err}, status=400)
@@ -1492,7 +1688,7 @@ def company_main_phone_comment_update(request: HttpRequest, company_id) -> HttpR
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return JsonResponse({"error": "Метод не разрешен."}, status=405)
         return redirect("company_detail", company_id=company_id)
-    
+
     user: User = request.user
     try:
         company = Company.objects.select_related("responsible", "branch").get(id=company_id)
@@ -1500,17 +1696,17 @@ def company_main_phone_comment_update(request: HttpRequest, company_id) -> HttpR
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return JsonResponse({"error": "Компания не найдена."}, status=404)
         raise Http404("Компания не найдена")
-    
+
     if not _can_edit_company(user, company):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return JsonResponse({"error": "Нет прав на редактирование этой компании."}, status=403)
         messages.error(request, "Нет прав на редактирование этой компании.")
         return redirect("company_detail", company_id=company.id)
-    
+
     comment = (request.POST.get("comment") or "").strip()[:255]
     company.phone_comment = comment
     company.save(update_fields=["phone_comment"])
-    
+
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.UPDATE,
@@ -1519,10 +1715,10 @@ def company_main_phone_comment_update(request: HttpRequest, company_id) -> HttpR
         company_id=company.id,
         message=f"Обновлен комментарий к основному телефону: {comment[:50] if comment else '(удален)'}",
     )
-    
+
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return JsonResponse({"success": True, "comment": comment})
-    
+
     messages.success(request, "Комментарий обновлен.")
     return redirect("company_detail", company_id=company.id)
 
@@ -1535,7 +1731,7 @@ def company_phone_comment_update(request: HttpRequest, company_phone_id) -> Http
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return JsonResponse({"error": "Метод не разрешен."}, status=405)
         return redirect("dashboard")
-    
+
     user: User = request.user
     try:
         company_phone = CompanyPhone.objects.select_related("company").get(id=company_phone_id)
@@ -1543,18 +1739,18 @@ def company_phone_comment_update(request: HttpRequest, company_phone_id) -> Http
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return JsonResponse({"error": "Номер телефона не найден."}, status=404)
         raise Http404("Номер телефона не найден")
-    
+
     company = company_phone.company
     if not _can_edit_company(user, company):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return JsonResponse({"error": "Нет прав на редактирование этой компании."}, status=403)
         messages.error(request, "Нет прав на редактирование этой компании.")
         return redirect("company_detail", company_id=company.id)
-    
+
     comment = (request.POST.get("comment") or "").strip()[:255]
     company_phone.comment = comment
     company_phone.save(update_fields=["comment"])
-    
+
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.UPDATE,
@@ -1563,10 +1759,10 @@ def company_phone_comment_update(request: HttpRequest, company_phone_id) -> Http
         company_id=company.id,
         message=f"Обновлен комментарий к телефону {company_phone.value}: {comment[:50] if comment else '(удален)'}",
     )
-    
+
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return JsonResponse({"success": True, "comment": comment})
-    
+
     messages.success(request, "Комментарий обновлен.")
     return redirect("company_detail", company_id=company.id)
 
@@ -1579,15 +1775,17 @@ def contact_phone_comment_update(request: HttpRequest, contact_phone_id) -> Http
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return JsonResponse({"error": "Метод не разрешен."}, status=405)
         return redirect("dashboard")
-    
+
     user: User = request.user
     try:
-        contact_phone = ContactPhone.objects.select_related("contact__company").get(id=contact_phone_id)
+        contact_phone = ContactPhone.objects.select_related("contact__company").get(
+            id=contact_phone_id
+        )
     except ContactPhone.DoesNotExist:
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return JsonResponse({"error": "Номер телефона не найден."}, status=404)
         raise Http404("Номер телефона не найден")
-    
+
     contact = contact_phone.contact
     company = contact.company if contact else None
     if not company:
@@ -1595,17 +1793,17 @@ def contact_phone_comment_update(request: HttpRequest, contact_phone_id) -> Http
             return JsonResponse({"error": "Контакт не привязан к компании."}, status=400)
         messages.error(request, "Контакт не привязан к компании.")
         return redirect("dashboard")
-    
+
     if not _can_edit_company(user, company):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return JsonResponse({"error": "Нет прав на редактирование этой компании."}, status=403)
         messages.error(request, "Нет прав на редактирование этой компании.")
         return redirect("company_detail", company_id=company.id)
-    
+
     comment = (request.POST.get("comment") or "").strip()[:255]
     contact_phone.comment = comment
     contact_phone.save(update_fields=["comment"])
-    
+
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.UPDATE,
@@ -1614,10 +1812,10 @@ def contact_phone_comment_update(request: HttpRequest, contact_phone_id) -> Http
         company_id=company.id,
         message=f"Обновлен комментарий к телефону {contact_phone.value}: {comment[:50] if comment else '(удален)'}",
     )
-    
+
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return JsonResponse({"success": True, "comment": comment})
-    
+
     messages.success(request, "Комментарий обновлен.")
     return redirect("company_detail", company_id=company.id)
 
@@ -1630,12 +1828,16 @@ def company_note_pin_toggle(request: HttpRequest, company_id, note_id: int) -> H
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch"), id=company_id
+    )
     if not _can_edit_company(user, company):
         messages.error(request, "Нет прав на закрепление заметок по этой компании.")
         return redirect("company_detail", company_id=company.id)
 
-    note = get_object_or_404(CompanyNote.objects.select_related("company"), id=note_id, company_id=company.id)
+    note = get_object_or_404(
+        CompanyNote.objects.select_related("company"), id=note_id, company_id=company.id
+    )
     now = timezone.now()
 
     if note.is_pinned:
@@ -1655,7 +1857,9 @@ def company_note_pin_toggle(request: HttpRequest, company_id, note_id: int) -> H
         return redirect("company_detail", company_id=company.id)
 
     # Закрепляем: снимаем закрепление с других заметок (одна закреплённая на компанию)
-    CompanyNote.objects.filter(company=company, is_pinned=True).exclude(id=note.id).update(is_pinned=False, pinned_at=None, pinned_by=None)
+    CompanyNote.objects.filter(company=company, is_pinned=True).exclude(id=note.id).update(
+        is_pinned=False, pinned_at=None, pinned_by=None
+    )
     note.is_pinned = True
     note.pinned_at = now
     note.pinned_by = user
@@ -1672,6 +1876,7 @@ def company_note_pin_toggle(request: HttpRequest, company_id, note_id: int) -> H
     )
     return redirect("company_detail", company_id=company.id)
 
+
 @login_required
 @policy_required(resource_type="page", resource="ui:companies:detail")
 @require_can_view_note_company
@@ -1680,12 +1885,17 @@ def company_note_attachment_open(request: HttpRequest, company_id, note_id: int)
     Открыть вложение заметки в новом окне (inline). Доступ: всем пользователям (как просмотр компании).
     """
     company = get_object_or_404(Company.objects.all(), id=company_id)
-    note = get_object_or_404(CompanyNote.objects.select_related("company"), id=note_id, company_id=company.id)
+    note = get_object_or_404(
+        CompanyNote.objects.select_related("company"), id=note_id, company_id=company.id
+    )
     if not note.attachment:
         raise Http404("Файл не найден")
     ctype = (note.attachment_content_type or "").strip()
     if not ctype:
-        ctype = mimetypes.guess_type(note.attachment_name or note.attachment.name)[0] or "application/octet-stream"
+        ctype = (
+            mimetypes.guess_type(note.attachment_name or note.attachment.name)[0]
+            or "application/octet-stream"
+        )
     try:
         return FileResponse(
             open(note.attachment.path, "rb"),
@@ -1700,14 +1910,22 @@ def company_note_attachment_open(request: HttpRequest, company_id, note_id: int)
 @login_required
 @policy_required(resource_type="page", resource="ui:companies:detail")
 @require_can_view_note_company
-def company_note_attachment_by_id_open(request: HttpRequest, company_id, note_id: int, attachment_id: int) -> HttpResponse:
+def company_note_attachment_by_id_open(
+    request: HttpRequest, company_id, note_id: int, attachment_id: int
+) -> HttpResponse:
     """Открыть одно из вложений заметки (CompanyNoteAttachment) по id."""
     company = get_object_or_404(Company.objects.all(), id=company_id)
-    note = get_object_or_404(CompanyNote.objects.select_related("company"), id=note_id, company_id=company.id)
+    note = get_object_or_404(
+        CompanyNote.objects.select_related("company"), id=note_id, company_id=company.id
+    )
     att = get_object_or_404(CompanyNoteAttachment.objects.filter(note=note), id=attachment_id)
     if not att.file:
         raise Http404("Файл не найден")
-    ctype = (att.content_type or "").strip() or mimetypes.guess_type(att.file_name or att.file.name)[0] or "application/octet-stream"
+    ctype = (
+        (att.content_type or "").strip()
+        or mimetypes.guess_type(att.file_name or att.file.name)[0]
+        or "application/octet-stream"
+    )
     try:
         return FileResponse(
             open(att.file.path, "rb"),
@@ -1722,14 +1940,22 @@ def company_note_attachment_by_id_open(request: HttpRequest, company_id, note_id
 @login_required
 @policy_required(resource_type="page", resource="ui:companies:detail")
 @require_can_view_note_company
-def company_note_attachment_by_id_download(request: HttpRequest, company_id, note_id: int, attachment_id: int) -> HttpResponse:
+def company_note_attachment_by_id_download(
+    request: HttpRequest, company_id, note_id: int, attachment_id: int
+) -> HttpResponse:
     """Скачать одно из вложений заметки (CompanyNoteAttachment) по id."""
     company = get_object_or_404(Company.objects.all(), id=company_id)
-    note = get_object_or_404(CompanyNote.objects.select_related("company"), id=note_id, company_id=company.id)
+    note = get_object_or_404(
+        CompanyNote.objects.select_related("company"), id=note_id, company_id=company.id
+    )
     att = get_object_or_404(CompanyNoteAttachment.objects.filter(note=note), id=attachment_id)
     if not att.file:
         raise Http404("Файл не найден")
-    ctype = (att.content_type or "").strip() or mimetypes.guess_type(att.file_name or att.file.name)[0] or "application/octet-stream"
+    ctype = (
+        (att.content_type or "").strip()
+        or mimetypes.guess_type(att.file_name or att.file.name)[0]
+        or "application/octet-stream"
+    )
     try:
         return FileResponse(
             open(att.file.path, "rb"),
@@ -1744,17 +1970,24 @@ def company_note_attachment_by_id_download(request: HttpRequest, company_id, not
 @login_required
 @policy_required(resource_type="page", resource="ui:companies:detail")
 @require_can_view_note_company
-def company_note_attachment_download(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
+def company_note_attachment_download(
+    request: HttpRequest, company_id, note_id: int
+) -> HttpResponse:
     """
     Скачать вложение заметки (attachment). Доступ: всем пользователям (как просмотр компании).
     """
     company = get_object_or_404(Company.objects.all(), id=company_id)
-    note = get_object_or_404(CompanyNote.objects.select_related("company"), id=note_id, company_id=company.id)
+    note = get_object_or_404(
+        CompanyNote.objects.select_related("company"), id=note_id, company_id=company.id
+    )
     if not note.attachment:
         raise Http404("Файл не найден")
     ctype = (note.attachment_content_type or "").strip()
     if not ctype:
-        ctype = mimetypes.guess_type(note.attachment_name or note.attachment.name)[0] or "application/octet-stream"
+        ctype = (
+            mimetypes.guess_type(note.attachment_name or note.attachment.name)[0]
+            or "application/octet-stream"
+        )
     try:
         return FileResponse(
             open(note.attachment.path, "rb"),
@@ -1771,7 +2004,9 @@ def company_note_attachment_download(request: HttpRequest, company_id, note_id: 
 @require_can_view_company
 def company_edit(request: HttpRequest, company_id) -> HttpResponse:
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch", "status"), id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch", "status"), id=company_id
+    )
     if not _can_edit_company(user, company):
         messages.error(request, "Нет прав на редактирование данных компании.")
         return redirect("company_detail", company_id=company.id)
@@ -1812,7 +2047,7 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
 
             # Валидация телефонов: проверка на дубликаты и использование в других контактах
             from companies.normalizers import normalize_phone as _normalize_phone
-            
+
             # Собираем все телефоны (основной + дополнительные)
             all_phones = []
             main_phone = (form.cleaned_data.get("phone") or "").strip()
@@ -1820,17 +2055,20 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
                 normalized_main = _normalize_phone(main_phone)
                 if normalized_main:
                     all_phones.append(normalized_main)
-            
+
             normalized_phones = []
             for _, phone_value in new_company_phones:
                 normalized = _normalize_phone(phone_value)
                 if normalized:
                     normalized_phones.append(normalized)
                     all_phones.append(normalized)
-            
+
             # Проверка на дубликаты в самой форме (включая основной телефон)
             if len(all_phones) != len(set(all_phones)):
-                form.add_error(None, "Есть повторяющиеся телефоны (основной телефон не должен совпадать с дополнительными).")
+                form.add_error(
+                    None,
+                    "Есть повторяющиеся телефоны (основной телефон не должен совпадать с дополнительными).",
+                )
                 # Восстанавливаем введённые значения для отображения ошибки
                 for key, value in request.POST.items():
                     if key.startswith("company_emails_"):
@@ -1844,9 +2082,14 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
                 return render(
                     request,
                     "ui/company_edit.html",
-                    {"company": company, "form": form, "company_emails": company_emails, "company_phones": company_phones},
+                    {
+                        "company": company,
+                        "form": form,
+                        "company_emails": company_emails,
+                        "company_phones": company_phones,
+                    },
                 )
-            
+
             # Сохраняем форму (включая основной телефон)
             form.save()
 
@@ -1860,7 +2103,9 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
             for order, phone_value in sorted(new_company_phones, key=lambda x: x[0]):
                 # Нормализуем телефон перед сохранением
                 normalized = _normalize_phone(phone_value)
-                CompanyPhone.objects.create(company=company, value=normalized if normalized else phone_value, order=order)
+                CompanyPhone.objects.create(
+                    company=company, value=normalized if normalized else phone_value, order=order
+                )
 
             messages.success(request, "Данные компании обновлены.")
             log_event(
@@ -1912,7 +2157,9 @@ def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch"), id=company_id
+    )
 
     new_resp_id = (request.POST.get("responsible_id") or "").strip()
     if not new_resp_id:
@@ -1923,6 +2170,7 @@ def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
 
     from companies.services import CompanyService
     from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
+
     try:
         CompanyService.transfer(company=company, user=user, new_responsible=new_resp)
     except DjangoPermissionDenied:
@@ -1944,9 +2192,14 @@ def company_update(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch"), id=company_id
+    )
     if not _can_edit_company(user, company):
-        messages.error(request, "Редактирование доступно только создателю/ответственному/директору филиала/управляющему.")
+        messages.error(
+            request,
+            "Редактирование доступно только создателю/ответственному/директору филиала/управляющему.",
+        )
         return redirect("company_detail", company_id=company.id)
 
     form = CompanyQuickEditForm(request.POST, instance=company)
@@ -1987,7 +2240,9 @@ def company_inline_update(request: HttpRequest, company_id) -> HttpResponse:
     )
     if not _can_edit_company(user, company):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            return JsonResponse({"ok": False, "error": "Нет прав на редактирование этой компании."}, status=403)
+            return JsonResponse(
+                {"ok": False, "error": "Нет прав на редактирование этой компании."}, status=403
+            )
         messages.error(request, "Нет прав на редактирование этой компании.")
         return redirect("company_detail", company_id=company.id)
 
@@ -1999,7 +2254,9 @@ def company_inline_update(request: HttpRequest, company_id) -> HttpResponse:
     data = {field: value}
     form = CompanyInlineEditForm(data=data, instance=company, field=field)
     if not form.is_valid():
-        return JsonResponse({"ok": False, "errors": form.errors, "error": "Проверь значение поля."}, status=400)
+        return JsonResponse(
+            {"ok": False, "errors": form.errors, "error": "Проверь значение поля."}, status=400
+        )
 
     form.save()
 
@@ -2036,7 +2293,9 @@ def company_inline_update(request: HttpRequest, company_id) -> HttpResponse:
             from core.timezone_utils import RUS_TZ_CHOICES, guess_ru_timezone_from_address
 
             guessed = guess_ru_timezone_from_address(company.address or "")
-            effective_tz = (((company.work_timezone or "").strip()) or guessed or "Europe/Moscow").strip()
+            effective_tz = (
+                ((company.work_timezone or "").strip()) or guessed or "Europe/Moscow"
+            ).strip()
             label_map = {tz: lbl for tz, lbl in (RUS_TZ_CHOICES or [])}
             effective_label = label_map.get(effective_tz, effective_tz)
             now_hhmm = timezone.now().astimezone(ZoneInfo(effective_tz)).strftime("%H:%M")
@@ -2064,7 +2323,9 @@ def company_inline_update(request: HttpRequest, company_id) -> HttpResponse:
 @policy_required(resource_type="action", resource="ui:companies:update")
 def contact_create(request: HttpRequest, company_id) -> HttpResponse:
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch"), id=company_id
+    )
     if not _can_edit_company(user, company):
         messages.error(request, "Нет прав на добавление контактов в эту компанию.")
         return redirect("company_detail", company_id=company.id)
@@ -2102,9 +2363,16 @@ def contact_create(request: HttpRequest, company_id) -> HttpResponse:
             return redirect("company_detail", company_id=company.id)
         if is_modal:
             from django.template.loader import render_to_string
+
             html = render_to_string(
                 "ui/contact_form_modal.html",
-                {"company": company, "form": form, "email_fs": email_fs, "phone_fs": phone_fs, "mode": "create"},
+                {
+                    "company": company,
+                    "form": form,
+                    "email_fs": email_fs,
+                    "phone_fs": phone_fs,
+                    "mode": "create",
+                },
                 request=request,
             )
             return JsonResponse({"ok": False, "html": html}, status=400)
@@ -2130,7 +2398,10 @@ def contact_create(request: HttpRequest, company_id) -> HttpResponse:
 @policy_required(resource_type="action", resource="ui:companies:update")
 def contact_edit(request: HttpRequest, contact_id) -> HttpResponse:
     user: User = request.user
-    contact = get_object_or_404(Contact.objects.select_related("company", "company__responsible", "company__branch"), id=contact_id)
+    contact = get_object_or_404(
+        Contact.objects.select_related("company", "company__responsible", "company__branch"),
+        id=contact_id,
+    )
     company = contact.company
     if not company:
         messages.error(request, "Контакт не привязан к компании.")
@@ -2169,9 +2440,17 @@ def contact_edit(request: HttpRequest, contact_id) -> HttpResponse:
             return redirect("company_detail", company_id=company.id)
         if is_modal:
             from django.template.loader import render_to_string
+
             html = render_to_string(
                 "ui/contact_form_modal.html",
-                {"company": company, "contact": contact, "form": form, "email_fs": email_fs, "phone_fs": phone_fs, "mode": "edit"},
+                {
+                    "company": company,
+                    "contact": contact,
+                    "form": form,
+                    "email_fs": email_fs,
+                    "phone_fs": phone_fs,
+                    "mode": "edit",
+                },
                 request=request,
             )
             return JsonResponse({"ok": False, "html": html}, status=400)
@@ -2203,21 +2482,23 @@ def contact_delete(request: HttpRequest, contact_id) -> HttpResponse:
     """
     if request.method != "POST":
         return redirect("dashboard")
-    
+
     user: User = request.user
-    contact = get_object_or_404(Contact.objects.select_related("company", "company__responsible"), id=contact_id)
+    contact = get_object_or_404(
+        Contact.objects.select_related("company", "company__responsible"), id=contact_id
+    )
     company = contact.company
     if not company:
         messages.error(request, "Контакт не привязан к компании.")
         return redirect("company_list")
-    
+
     if not _can_edit_company(user, company):
         messages.error(request, "Нет прав на удаление контактов этой компании.")
         return redirect("company_detail", company_id=company.id)
-    
+
     contact_name = str(contact)
     contact.delete()
-    
+
     messages.success(request, f"Контакт '{contact_name}' удалён.")
     log_event(
         actor=user,
@@ -2240,7 +2521,9 @@ def company_note_add(request: HttpRequest, company_id) -> HttpResponse:
     from companies.services import CompanyService
 
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch"), id=company_id
+    )
 
     # Заметки по карточке: доступно всем, кто имеет доступ к просмотру карточки (в проекте это все пользователи).
     form = CompanyNoteForm(request.POST, request.FILES)
@@ -2254,7 +2537,11 @@ def company_note_add(request: HttpRequest, company_id) -> HttpResponse:
             attachment=note_data.attachment or None,
             extra_files=extra_files or None,
         )
-    elif extra_files and not (request.POST.get("text") or "").strip() and not request.FILES.get("attachment"):
+    elif (
+        extra_files
+        and not (request.POST.get("text") or "").strip()
+        and not request.FILES.get("attachment")
+    ):
         # Только несколько файлов без текста и без одного attachment — создаём заметку вручную
         CompanyService.add_note(
             company=company,
@@ -2283,10 +2570,14 @@ def company_note_edit(request: HttpRequest, company_id, note_id: int) -> HttpRes
     # - админ/суперпользователь/управляющий: любые
     # - остальные: только свои ИЛИ заметки без автора (author=None), если пользователь - ответственный за компанию
     if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
-        note = get_object_or_404(CompanyNote.objects.select_related("author"), id=note_id, company_id=company.id)
+        note = get_object_or_404(
+            CompanyNote.objects.select_related("author"), id=note_id, company_id=company.id
+        )
     else:
         # Обычные пользователи могут редактировать свои заметки или заметки без автора, если они ответственные за компанию
-        note_qs = CompanyNote.objects.select_related("author").filter(id=note_id, company_id=company.id)
+        note_qs = CompanyNote.objects.select_related("author").filter(
+            id=note_id, company_id=company.id
+        )
         if company.responsible_id == user.id:
             # Ответственный может редактировать свои заметки и заметки без автора
             note = get_object_or_404(note_qs.filter(Q(author_id=user.id) | Q(author__isnull=True)))
@@ -2313,15 +2604,26 @@ def company_note_edit(request: HttpRequest, company_id, note_id: int) -> HttpRes
     if new_file:
         note.attachment = new_file
         try:
-            note.attachment_name = (getattr(new_file, "name", "") or "").split("/")[-1].split("\\")[-1]
-            note.attachment_ext = (note.attachment_name.rsplit(".", 1)[-1].lower() if "." in note.attachment_name else "")[:16]
+            note.attachment_name = (
+                (getattr(new_file, "name", "") or "").split("/")[-1].split("\\")[-1]
+            )
+            note.attachment_ext = (
+                note.attachment_name.rsplit(".", 1)[-1].lower()
+                if "." in note.attachment_name
+                else ""
+            )[:16]
             note.attachment_size = int(getattr(new_file, "size", 0) or 0)
-            note.attachment_content_type = (getattr(new_file, "content_type", "") or "").strip()[:120]
+            note.attachment_content_type = (getattr(new_file, "content_type", "") or "").strip()[
+                :120
+            ]
         except Exception as e:
             logger.warning(
                 f"Ошибка при извлечении метаданных нового вложения заметки: {e}",
                 exc_info=True,
-                extra={"company_id": str(company.id), "note_id": note.id if hasattr(note, "id") else None},
+                extra={
+                    "company_id": str(company.id),
+                    "note_id": note.id if hasattr(note, "id") else None,
+                },
             )
 
     # Доп. вложения: удалить отмеченные
@@ -2355,9 +2657,7 @@ def company_note_edit(request: HttpRequest, company_id, note_id: int) -> HttpRes
             )
 
     has_attachments = (
-        note.attachment
-        or note.note_attachments.exists()
-        or request.FILES.getlist("attachments")
+        note.attachment or note.note_attachments.exists() or request.FILES.getlist("attachments")
     )
     if not text and not has_attachments:
         messages.error(request, "Заметка не может быть пустой (нужен текст или файл).")
@@ -2370,14 +2670,22 @@ def company_note_edit(request: HttpRequest, company_id, note_id: int) -> HttpRes
     # Удаляем старый файл из storage, если он был удалён/заменён
     try:
         new_name = getattr(note.attachment, "name", "") if note.attachment else ""
-        should_delete_old = bool(old_file and old_name and (remove_attachment or (new_file is not None)) and old_name != new_name)
+        should_delete_old = bool(
+            old_file
+            and old_name
+            and (remove_attachment or (new_file is not None))
+            and old_name != new_name
+        )
         if should_delete_old:
             old_file.delete(save=False)
     except Exception as e:
         logger.warning(
             f"Ошибка при удалении старого файла вложения заметки: {e}",
             exc_info=True,
-            extra={"company_id": str(company.id), "note_id": note.id if hasattr(note, "id") else None},
+            extra={
+                "company_id": str(company.id),
+                "note_id": note.id if hasattr(note, "id") else None,
+            },
         )
 
     messages.success(request, "Заметка обновлена.")
@@ -2409,10 +2717,14 @@ def company_note_delete(request: HttpRequest, company_id, note_id: int) -> HttpR
     # - админ/суперпользователь/управляющий: любые
     # - остальные: только свои ИЛИ заметки без автора (author=None), если пользователь - ответственный за компанию
     if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
-        note = get_object_or_404(CompanyNote.objects.select_related("author"), id=note_id, company_id=company.id)
+        note = get_object_or_404(
+            CompanyNote.objects.select_related("author"), id=note_id, company_id=company.id
+        )
     else:
         # Обычные пользователи могут удалять свои заметки или заметки без автора, если они ответственные за компанию
-        note_qs = CompanyNote.objects.select_related("author").filter(id=note_id, company_id=company.id)
+        note_qs = CompanyNote.objects.select_related("author").filter(
+            id=note_id, company_id=company.id
+        )
         if company.responsible_id == user.id:
             # Ответственный может удалять свои заметки и заметки без автора
             note = get_object_or_404(note_qs.filter(Q(author_id=user.id) | Q(author__isnull=True)))
@@ -2454,7 +2766,9 @@ def company_deal_add(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch"), id=company_id
+    )
     if not _can_edit_company(user, company):
         messages.error(request, "Нет прав на добавление сделок по этой компании.")
         return redirect("company_detail", company_id=company.id)
@@ -2512,12 +2826,16 @@ def company_deal_delete(request: HttpRequest, company_id, deal_id: int) -> HttpR
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch"), id=company_id
+    )
     if not _can_edit_company(user, company):
         messages.error(request, "Нет прав на удаление сделок по этой компании.")
         return redirect("company_detail", company_id=company.id)
 
-    deal = get_object_or_404(CompanyDeal.objects.select_related("company"), id=deal_id, company_id=company.id)
+    deal = get_object_or_404(
+        CompanyDeal.objects.select_related("company"), id=deal_id, company_id=company.id
+    )
     deal.delete()
 
     messages.success(request, "Сделка удалена.")
@@ -2556,14 +2874,14 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
     # Нормализация номера телефона к формату +7XXXXXXXXXX
     # Убираем все пробелы, дефисы, скобки
     raw = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-    
+
     # Если номер уже в правильном формате +7XXXXXXXXXX (12 символов), оставляем как есть
     if raw.startswith("+7") and len(raw) == 12 and raw[2:].isdigit():
         normalized = raw
     else:
         # Извлекаем только цифры
         digits = "".join(ch for ch in raw if ch.isdigit())
-        
+
         # Приводим к формату +7XXXXXXXXXX для российских номеров
         if digits.startswith("8") and len(digits) == 11:
             # 8XXXXXXXXXX => +7XXXXXXXXXX
@@ -2592,10 +2910,9 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
     # НО: если предыдущий запрос уже был получен телефоном (CONSUMED), создаём новый, чтобы можно было позвонить повторно.
     now = timezone.now()
     recent = now - timedelta(seconds=60)
-    existing = (
-        CallRequest.objects.filter(created_by=user, phone_raw=normalized, created_at__gte=recent)
-        .exclude(status=CallRequest.Status.CANCELLED)
-    )
+    existing = CallRequest.objects.filter(
+        created_by=user, phone_raw=normalized, created_at__gte=recent
+    ).exclude(status=CallRequest.Status.CANCELLED)
     if company_id:
         existing = existing.filter(company_id=company_id)
     else:
@@ -2608,7 +2925,9 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
     # Если есть предыдущий запрос И он еще не был получен телефоном (PENDING) - возвращаем его
     # Если он уже CONSUMED - создаём новый, чтобы можно было позвонить повторно
     if prev_call and prev_call.status == CallRequest.Status.PENDING:
-        return JsonResponse({"ok": True, "id": str(prev_call.id), "phone": normalized, "dedup": True})
+        return JsonResponse(
+            {"ok": True, "id": str(prev_call.id), "phone": normalized, "dedup": True}
+        )
 
     call = CallRequest.objects.create(
         user=user,
@@ -2618,12 +2937,14 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
         phone_raw=normalized,
         note="UI click",
     )
-    
+
     # Логируем для отладки
     import logging
+
     logger = logging.getLogger(__name__)
     # Маскируем номер телефона для логов (защита от утечки персональных данных)
     from phonebridge.api import mask_phone, send_fcm_call_command_notification
+
     masked_phone = mask_phone(normalized) if normalized else "N/A"
     logger.info(
         "phone_call_create: created CallRequest %s for user %s, phone %s, device check: %s",
@@ -2640,8 +2961,10 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
         for device in devices_with_fcm:
             send_fcm_call_command_notification(device, reason="new_call")
     except Exception as e:
-        logger.warning("phone_call_create: failed to send FCM notifications for CallRequest %s: %s", call.id, e)
-    
+        logger.warning(
+            "phone_call_create: failed to send FCM notifications for CallRequest %s: %s", call.id, e
+        )
+
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.CREATE,
@@ -2652,9 +2975,6 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
         meta={"phone": normalized, "contact_id": contact_id or None},
     )
     return JsonResponse({"ok": True, "id": str(call.id), "phone": normalized})
-
-
-
 
 
 @login_required
@@ -2671,28 +2991,28 @@ def company_timeline_items(request: HttpRequest, company_id) -> HttpResponse:
     был продублирован с `company_detail` view (~50 строк одинаковой логики).
     """
     try:
-        offset = max(0, int(request.GET.get('offset', 50)))
+        offset = max(0, int(request.GET.get("offset", 50)))
     except (TypeError, ValueError):
         offset = 50
     try:
-        limit = max(1, min(100, int(request.GET.get('limit', 50))))
+        limit = max(1, min(100, int(request.GET.get("limit", 50))))
     except (TypeError, ValueError):
         limit = 50
 
     company = get_object_or_404(Company, id=company_id)
 
     from companies.services.timeline import build_company_timeline
+
     all_items = build_company_timeline(company=company)
-    items_slice = all_items[offset:offset + limit]
+    items_slice = all_items[offset : offset + limit]
     has_more = len(all_items) > offset + limit
     return render(
         request,
-        'ui/_partials/_company_timeline_items.html',
+        "ui/_partials/_company_timeline_items.html",
         {
-            'items': items_slice,
-            'has_more': has_more,
-            'next_offset': offset + limit,
-            'total': len(all_items),
+            "items": items_slice,
+            "has_more": has_more,
+            "next_offset": offset + limit,
+            "total": len(all_items),
         },
     )
-

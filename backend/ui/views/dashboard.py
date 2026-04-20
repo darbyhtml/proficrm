@@ -39,16 +39,27 @@ from ui.views._base import (
 from django.utils.http import url_has_allowed_host_and_scheme
 from audit.service import log_event
 import logging
+
 logger = logging.getLogger(__name__)
 
 
 def _safe_redirect_url(request, url, fallback="/"):
-    if url and url_has_allowed_host_and_scheme(url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+    if url and url_has_allowed_host_and_scheme(
+        url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
         return url
     return fallback
 
 
-def _log_view_as_event(actor: User, action: str, *, target_user: User | None = None, role: str = "", branch_id: int | None = None, ip: str = "") -> None:
+def _log_view_as_event(
+    actor: User,
+    action: str,
+    *,
+    target_user: User | None = None,
+    role: str = "",
+    branch_id: int | None = None,
+    ip: str = "",
+) -> None:
     """Пишет audit-событие о включении/изменении/сбросе режима «просмотр как».
 
     Critical для compliance: без лога невозможно ответить на вопрос
@@ -86,13 +97,16 @@ def _log_view_as_event(actor: User, action: str, *, target_user: User | None = N
     except Exception:
         # Аудит не должен ронять основную функциональность,
         # но обязан оставлять след при сбое.
-        logger.exception("Failed to write view-as audit event for actor=%s", getattr(actor, "id", None))
+        logger.exception(
+            "Failed to write view-as audit event for actor=%s", getattr(actor, "id", None)
+        )
 
 
 def _client_ip(request: HttpRequest) -> str:
     """Безопасное извлечение IP для audit-meta (без модификации логики security)."""
     try:
         from accounts.security import get_client_ip
+
         return get_client_ip(request) or ""
     except Exception:
         return request.META.get("REMOTE_ADDR", "") or ""
@@ -114,7 +128,9 @@ def view_as_update(request: HttpRequest) -> HttpResponse:
 
     view_user_id = (request.POST.get("view_user_id") or "").strip()
     view_role = (request.POST.get("view_role") or "").strip()
-    view_branch_id = (request.POST.get("view_as_branch_id") or request.POST.get("view_branch_id") or "").strip()
+    view_branch_id = (
+        request.POST.get("view_as_branch_id") or request.POST.get("view_branch_id") or ""
+    ).strip()
 
     ip = _client_ip(request)
 
@@ -129,7 +145,11 @@ def view_as_update(request: HttpRequest) -> HttpResponse:
             if view_as_user and view_as_user.is_superuser and not user.is_superuser:
                 messages.error(request, "Нельзя включить просмотр как суперпользователь.")
                 _log_view_as_event(user, "denied_superuser_target", target_user=view_as_user, ip=ip)
-                return redirect(_safe_redirect_url(request, request.POST.get("next") or request.META.get("HTTP_REFERER")))
+                return redirect(
+                    _safe_redirect_url(
+                        request, request.POST.get("next") or request.META.get("HTTP_REFERER")
+                    )
+                )
             if view_as_user:
                 request.session["view_as_user_id"] = user_id
                 # Автоматически устанавливаем роль и филиал из выбранного пользователя
@@ -138,7 +158,10 @@ def view_as_update(request: HttpRequest) -> HttpResponse:
                     request.session["view_as_branch_id"] = view_as_user.branch_id
                 else:
                     request.session.pop("view_as_branch_id", None)
-                messages.success(request, f"Режим просмотра: от лица пользователя {view_as_user.get_full_name() or view_as_user.username}")
+                messages.success(
+                    request,
+                    f"Режим просмотра: от лица пользователя {view_as_user.get_full_name() or view_as_user.username}",
+                )
                 # AUDIT: имперсонация — обязательна для аудит-трейла
                 _log_view_as_event(user, "set_user", target_user=view_as_user, ip=ip)
             else:
@@ -176,7 +199,9 @@ def view_as_update(request: HttpRequest) -> HttpResponse:
         if view_role or resolved_bid:
             _log_view_as_event(user, "set_filter", role=view_role, branch_id=resolved_bid, ip=ip)
 
-    next_url = _safe_redirect_url(request, request.POST.get("next") or request.META.get("HTTP_REFERER"))
+    next_url = _safe_redirect_url(
+        request, request.POST.get("next") or request.META.get("HTTP_REFERER")
+    )
     return redirect(next_url)
 
 
@@ -211,9 +236,9 @@ def view_as_reset(request: HttpRequest) -> HttpResponse:
 # Константы дашборда — единственный источник правды для подстраиваемых лимитов
 # ---------------------------------------------------------------------------
 
-DASHBOARD_PREVIEW_LIMIT = 3          # задач на карточку «Сегодня/Просрочено/…»
-DASHBOARD_WEEK_PREVIEW_LIMIT = 3     # задач в карточке «Ближайшие 7 дней» (унифицировано с остальными)
-DASHBOARD_STALE_COMPANIES_LIMIT = 10 # компаний без задач
+DASHBOARD_PREVIEW_LIMIT = 3  # задач на карточку «Сегодня/Просрочено/…»
+DASHBOARD_WEEK_PREVIEW_LIMIT = 3  # задач в карточке «Ближайшие 7 дней» (унифицировано с остальными)
+DASHBOARD_STALE_COMPANIES_LIMIT = 10  # компаний без задач
 DASHBOARD_DELETION_REQUESTS_LIMIT = 10
 TASK_TYPE_CACHE_KEY = "task_types_by_name"
 TASK_TYPE_CACHE_TTL = 300  # 5 минут
@@ -273,12 +298,28 @@ def _fetch_active_tasks(user: User):
         .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
         .select_related("company", "created_by", "assigned_to", "type")
         .only(
-            "id", "title", "status", "due_at", "created_at", "description", "type_id",
+            "id",
+            "title",
+            "status",
+            "due_at",
+            "created_at",
+            "description",
+            "type_id",
             "is_urgent",
-            "assigned_to__id", "assigned_to__first_name", "assigned_to__last_name",
-            "company__id", "company__name", "company__address", "company__work_timezone",
-            "created_by__id", "created_by__first_name", "created_by__last_name",
-            "type__id", "type__name", "type__color", "type__icon",
+            "assigned_to__id",
+            "assigned_to__first_name",
+            "assigned_to__last_name",
+            "company__id",
+            "company__name",
+            "company__address",
+            "company__work_timezone",
+            "created_by__id",
+            "created_by__first_name",
+            "created_by__last_name",
+            "type__id",
+            "type__name",
+            "type__color",
+            "type__icon",
         )
     )
 
@@ -337,6 +378,7 @@ def _get_task_types_by_name() -> dict:
     (post_save/post_delete TaskType).
     """
     from django.core.cache import cache
+
     cached = cache.get(TASK_TYPE_CACHE_KEY)
     if cached is None:
         cached = {tt.name: tt for tt in TaskType.objects.all()}
@@ -363,7 +405,9 @@ def _annotate_task_permissions(task_lists: list, task_types_by_name: dict, user:
             task.can_delete_task = _can_delete_task_ui(user, task)  # type: ignore[attr-defined]
 
 
-def _get_stale_companies(user: User, limit: int = DASHBOARD_STALE_COMPANIES_LIMIT) -> tuple[list, int]:
+def _get_stale_companies(
+    user: User, limit: int = DASHBOARD_STALE_COMPANIES_LIMIT
+) -> tuple[list, int]:
     """Компании без активных задач (ответственность user).
 
     Оптимизация: fetch [:limit+1] + len вместо отдельного COUNT.
@@ -380,11 +424,13 @@ def _get_stale_companies(user: User, limit: int = DASHBOARD_STALE_COMPANIES_LIMI
         .only("id", "name")
         .order_by("name")
     )
-    fetched = list(qs[:limit + 1])
+    fetched = list(qs[: limit + 1])
     return fetched[:limit], len(fetched)
 
 
-def _get_deletion_requests(user: User, limit: int = DASHBOARD_DELETION_REQUESTS_LIMIT) -> tuple[list, int]:
+def _get_deletion_requests(
+    user: User, limit: int = DASHBOARD_DELETION_REQUESTS_LIMIT
+) -> tuple[list, int]:
     """Запросы на удаление компаний — видны только РОП/директору своего филиала."""
     if user.role not in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR) or not user.branch_id:
         return [], 0
@@ -394,7 +440,7 @@ def _get_deletion_requests(user: User, limit: int = DASHBOARD_DELETION_REQUESTS_
             requested_by_branch_id=user.branch_id,
         )
         .select_related("requested_by", "company")
-        .order_by("-created_at")[:limit + 1]
+        .order_by("-created_at")[: limit + 1]
     )
     fetched = list(qs)
     return fetched[:limit], len(fetched)
@@ -525,8 +571,9 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
       устаревшему таймстампу (DoS vector через `since=0`).
     """
     from datetime import timedelta
+
     user: User = get_effective_user(request)
-    since = request.GET.get('since')
+    since = request.GET.get("since")
 
     if not since:
         return JsonResponse({"updated": True, "timestamp": int(timezone.now().timestamp() * 1000)})
@@ -536,6 +583,7 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
     except (ValueError, TypeError):
         # Битый `since` → 400. Клиент сбросит свой lastPollTs.
         from core.request_id import get_request_id
+
         logger.warning(
             f"Некорректный параметр 'since' в dashboard_poll: {since}",
             extra={"user_id": user.id, "since": since, "request_id": get_request_id()},
@@ -563,6 +611,7 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
     if_none_match = request.META.get("HTTP_IF_NONE_MATCH", "")
     if not has_changes and if_none_match == etag:
         from django.http import HttpResponseNotModified
+
         response = HttpResponseNotModified()
         response["ETag"] = etag
         return response
@@ -573,7 +622,6 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
     return response
 
 
-
 @login_required
 @policy_required(resource_type="page", resource="ui:analytics")
 def analytics(request: HttpRequest) -> HttpResponse:
@@ -581,7 +629,16 @@ def analytics(request: HttpRequest) -> HttpResponse:
     Аналитика по звонкам/отметкам для руководителей.
     Доступ только по реальному пользователю; список и данные — по эффективному (режим просмотра).
     """
-    if not (request.user.is_superuser or request.user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD)):
+    if not (
+        request.user.is_superuser
+        or request.user.role
+        in (
+            User.Role.ADMIN,
+            User.Role.GROUP_MANAGER,
+            User.Role.BRANCH_DIRECTOR,
+            User.Role.SALES_HEAD,
+        )
+    ):
         messages.error(request, "Нет доступа к аналитике.")
         return redirect("dashboard")
 
@@ -604,25 +661,30 @@ def analytics(request: HttpRequest) -> HttpResponse:
     # Кого показываем (админ НЕ отображается как субъект аналитики)
     # Используем get_users_for_lists для исключения администраторов и группировки по филиалам
     if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
-        users_qs = get_users_for_lists(user).filter(role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR])
+        users_qs = get_users_for_lists(user).filter(
+            role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]
+        )
     else:
-        users_qs = get_users_for_lists(user).filter(branch_id=user.branch_id, role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR])
+        users_qs = get_users_for_lists(user).filter(
+            branch_id=user.branch_id,
+            role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR],
+        )
     users_list = list(users_qs)
     user_ids = [u.id for u in users_list]
 
     # Звонки за период (лимит на страницу, чтобы не убить UI)
     # Для консистентности с аналитикой сотрудника считаем только клики "Позвонить с телефона" (note="UI click").
     calls_qs_base = (
-        CallRequest.objects.filter(created_by_id__in=user_ids, created_at__gte=start, created_at__lt=end, note="UI click")
+        CallRequest.objects.filter(
+            created_by_id__in=user_ids, created_at__gte=start, created_at__lt=end, note="UI click"
+        )
         .exclude(status=CallRequest.Status.CANCELLED)
         .select_related("company", "contact", "created_by")
     )
 
     # Полный QS для вычисления холодных звонков (без среза)
     # Учитываем все звонки с is_cold_call=True (включая ручные отметки)
-    cold_call_ids = set(
-        calls_qs_base.filter(is_cold_call=True).values_list("id", flat=True)
-    )
+    cold_call_ids = set(calls_qs_base.filter(is_cold_call=True).values_list("id", flat=True))
 
     # Ограничиваем только отображаемый список
     calls_qs = calls_qs_base.order_by("-created_at")[:5000]
@@ -636,43 +698,39 @@ def analytics(request: HttpRequest) -> HttpResponse:
         stats[uid]["calls_total"] += 1
         if call.id in cold_call_ids:
             stats[uid]["cold_calls"] += 1
-    
+
     # Добавляем ручные отметки в статистику холодных звонков
     # Ручные отметки на компаниях
     manual_companies = Company.objects.filter(
         responsible_id__in=user_ids,
         primary_cold_marked_at__gte=start,
-        primary_cold_marked_at__lt=end
+        primary_cold_marked_at__lt=end,
     ).values_list("responsible_id", flat=True)
     for uid in manual_companies:
         if uid in stats:
             stats[uid]["cold_calls"] += 1
-    
+
     # Ручные отметки на контактах
     manual_contacts = Contact.objects.filter(
-        company__responsible_id__in=user_ids,
-        cold_marked_at__gte=start,
-        cold_marked_at__lt=end
+        company__responsible_id__in=user_ids, cold_marked_at__gte=start, cold_marked_at__lt=end
     ).values_list("company__responsible_id", flat=True)
     for uid in manual_contacts:
         if uid and uid in stats:
             stats[uid]["cold_calls"] += 1
-    
+
     # Ручные отметки на телефонах компаний
     manual_company_phones = CompanyPhone.objects.filter(
-        company__responsible_id__in=user_ids,
-        cold_marked_at__gte=start,
-        cold_marked_at__lt=end
+        company__responsible_id__in=user_ids, cold_marked_at__gte=start, cold_marked_at__lt=end
     ).values_list("company__responsible_id", flat=True)
     for uid in manual_company_phones:
         if uid and uid in stats:
             stats[uid]["cold_calls"] += 1
-    
+
     # Ручные отметки на телефонах контактов
     manual_contact_phones = ContactPhone.objects.filter(
         contact__company__responsible_id__in=user_ids,
         cold_marked_at__gte=start,
-        cold_marked_at__lt=end
+        cold_marked_at__lt=end,
     ).values_list("contact__company__responsible_id", flat=True)
     for uid in manual_contact_phones:
         if uid and uid in stats:
@@ -724,9 +782,7 @@ def preferences(request: HttpRequest) -> HttpResponse:
     prefs = UiUserPreference.load_for_user(user)
     today = timezone.localdate()
     # Сортируем: текущие/будущие сверху (по start_date), прошлые внизу (старые последние)
-    absences = list(
-        UserAbsence.objects.filter(user=user).order_by("-end_date")[:20]
-    )
+    absences = list(UserAbsence.objects.filter(user=user).order_by("-end_date")[:20])
     return render(
         request,
         "ui/preferences.html",
@@ -792,7 +848,9 @@ def preferences_company_detail_view_mode(request: HttpRequest) -> JsonResponse:
     view_mode = (request.POST.get("view_mode") or "").strip().lower()
 
     if view_mode not in ["classic", "modern"]:
-        return JsonResponse({"success": False, "error": "Некорректный режим просмотра."}, status=400)
+        return JsonResponse(
+            {"success": False, "error": "Некорректный режим просмотра."}, status=400
+        )
 
     prefs = UiUserPreference.load_for_user(user)
     prefs.company_detail_view_mode = view_mode
@@ -1016,6 +1074,7 @@ def preferences_mail_signature(request: HttpRequest) -> HttpResponse:
     # в srcdoc iframe (same-origin с CRM). Chain: любой user → session-takeover admin.
     # sanitize_email_html удаляет <script>, event handlers, javascript: URLs.
     from mailer.utils import sanitize_email_html
+
     signature_html = sanitize_email_html(raw_html)
 
     user.email_signature_html = signature_html
@@ -1079,7 +1138,10 @@ def preferences_avatar_upload(request: HttpRequest) -> HttpResponse:
         messages.success(request, "Фото профиля обновлено.")
 
     except Exception:
-        messages.error(request, "Не удалось обработать изображение. Убедитесь, что файл — это JPEG, PNG или WEBP.")
+        messages.error(
+            request,
+            "Не удалось обработать изображение. Убедитесь, что файл — это JPEG, PNG или WEBP.",
+        )
 
     return redirect("/settings/#profile")
 
@@ -1149,7 +1211,16 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
     Страница не хранится в БД: существует пока существует пользователь.
     """
     viewer: User = request.user
-    if not (viewer.is_superuser or viewer.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD)):
+    if not (
+        viewer.is_superuser
+        or viewer.role
+        in (
+            User.Role.ADMIN,
+            User.Role.GROUP_MANAGER,
+            User.Role.BRANCH_DIRECTOR,
+            User.Role.SALES_HEAD,
+        )
+    ):
         messages.error(request, "Нет доступа к аналитике.")
         return redirect("dashboard")
 
@@ -1181,7 +1252,9 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
 
     # Все звонки — только те, что инициированы через кнопку "Позвонить с телефона" (note="UI click")
     calls_qs = (
-        CallRequest.objects.filter(created_by=target, created_at__gte=start, created_at__lt=end, note="UI click")
+        CallRequest.objects.filter(
+            created_by=target, created_at__gte=start, created_at__lt=end, note="UI click"
+        )
         .exclude(status=CallRequest.Status.CANCELLED)
         .select_related("company", "contact")
         .order_by("-created_at")
@@ -1190,11 +1263,7 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
     # Холодные звонки: все звонки с is_cold_call=True (включая ручные отметки)
     # - звонок инициирован через кнопку (note="UI click")
     # - у звонка is_cold_call=True
-    cold_calls_qs = (
-        calls_qs.filter(is_cold_call=True)
-        .order_by("-created_at")
-        .distinct()
-    )
+    cold_calls_qs = calls_qs.filter(is_cold_call=True).order_by("-created_at").distinct()
 
     # Пагинация с выбором per_page (как в company_list)
     per_page_param = request.GET.get("per_page", "").strip()
@@ -1212,7 +1281,9 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
 
     calls_p = Paginator(calls_qs, per_page)
     cold_p = Paginator(cold_calls_qs, per_page)
-    events_qs = ActivityEvent.objects.filter(actor=target, created_at__gte=start, created_at__lt=end).order_by("-created_at")
+    events_qs = ActivityEvent.objects.filter(
+        actor=target, created_at__gte=start, created_at__lt=end
+    ).order_by("-created_at")
     events_p = Paginator(events_qs, per_page)
 
     def _safe_int(v: str, default: int = 1) -> int:
@@ -1234,16 +1305,20 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
         if call.call_duration_seconds:
             minutes = call.call_duration_seconds // 60
             seconds = call.call_duration_seconds % 60
-            call.duration_formatted = f"{minutes} мин. {seconds} сек." if minutes > 0 else f"{seconds} сек."
+            call.duration_formatted = (
+                f"{minutes} мин. {seconds} сек." if minutes > 0 else f"{seconds} сек."
+            )
         else:
             call.duration_formatted = None
-    
+
     # Также для холодных звонков
     for call in cold_page:
         if call.call_duration_seconds:
             minutes = call.call_duration_seconds // 60
             seconds = call.call_duration_seconds % 60
-            call.duration_formatted = f"{minutes} мин. {seconds} сек." if minutes > 0 else f"{seconds} сек."
+            call.duration_formatted = (
+                f"{minutes} мин. {seconds} сек." if minutes > 0 else f"{seconds} сек."
+            )
         else:
             call.duration_formatted = None
 
@@ -1251,9 +1326,10 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
     calls_qs_str = _qs_without_page(request, page_key="calls_page")
     cold_qs = _qs_without_page(request, page_key="cold_page")
     events_qs_str = _qs_without_page(request, page_key="events_page")
-    
+
     if per_page != 25:
         from urllib.parse import urlencode, parse_qs
+
         if calls_qs_str:
             params = parse_qs(calls_qs_str)
             params["per_page"] = [str(per_page)]
@@ -1286,5 +1362,3 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
             "per_page": per_page,
         },
     )
-
-

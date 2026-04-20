@@ -22,4 +22,3 @@ def clean_int_id(value: Any) -> int | None:
     - при этом единая реализация живёт в core.
     """
     return _core_clean_int_id(value)
-

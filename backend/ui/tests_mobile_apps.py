@@ -1,4 +1,5 @@
 """F9 UI tests (2026-04-18): /admin/mobile-apps/ upload + toggle."""
+
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model
@@ -18,19 +19,25 @@ User = get_user_model()
 class MobileAppsUIUploadTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_superuser(
-            username="apk_admin", email="a@k.ru",
+            username="apk_admin",
+            email="a@k.ru",
         )
         self.client.force_login(self.admin)
 
     def _apk(self, version_code=1, name="test.apk"):
         return SimpleUploadedFile(
-            name, b"APK-binary-content-here", content_type="application/vnd.android.package-archive",
+            name,
+            b"APK-binary-content-here",
+            content_type="application/vnd.android.package-archive",
         )
 
     def test_list_page_renders(self):
         MobileAppBuild.objects.create(
-            version_name="1.0.0", version_code=1,
-            file=self._apk(), env="production", uploaded_by=self.admin,
+            version_name="1.0.0",
+            version_code=1,
+            file=self._apk(),
+            env="production",
+            uploaded_by=self.admin,
         )
         resp = self.client.get("/admin/mobile-apps/")
         self.assertEqual(resp.status_code, 200)
@@ -51,8 +58,10 @@ class MobileAppsUIUploadTests(TestCase):
 
     def test_upload_rejects_duplicate_version_code(self):
         MobileAppBuild.objects.create(
-            version_name="1.0.0", version_code=5,
-            file=self._apk(), env="production",
+            version_name="1.0.0",
+            version_code=5,
+            file=self._apk(),
+            env="production",
         )
         resp = self.client.post(
             "/admin/mobile-apps/upload/",
@@ -73,7 +82,9 @@ class MobileAppsUIUploadTests(TestCase):
 
     def test_upload_requires_admin(self):
         regular = User.objects.create_user(
-            username="regular_apk", email="r@k.ru", role=User.Role.MANAGER,
+            username="regular_apk",
+            email="r@k.ru",
+            role=User.Role.MANAGER,
         )
         self.client.force_login(regular)
         resp = self.client.post(
@@ -85,8 +96,11 @@ class MobileAppsUIUploadTests(TestCase):
 
     def test_toggle_flips_is_active(self):
         build = MobileAppBuild.objects.create(
-            version_name="3.0.0", version_code=30,
-            file=self._apk(), env="production", is_active=True,
+            version_name="3.0.0",
+            version_code=30,
+            file=self._apk(),
+            env="production",
+            is_active=True,
         )
         resp = self.client.post(f"/admin/mobile-apps/{build.id}/toggle/")
         self.assertEqual(resp.status_code, 302)

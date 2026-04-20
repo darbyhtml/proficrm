@@ -1,4 +1,5 @@
 """F11 (2026-04-18): тесты /metrics endpoint (Prometheus exposition)."""
+
 from __future__ import annotations
 
 from django.test import TestCase, override_settings

@@ -23,7 +23,7 @@ class MessengerSettingsUISecurityTests(TestCase):
     def setUp(self):
         """Подготовка тестовых данных."""
         self.branch = Branch.objects.create(code="test", name="Тестовый филиал")
-        
+
         # Админ
         self.admin = User.objects.create_user(
             username="admin",
@@ -31,7 +31,7 @@ class MessengerSettingsUISecurityTests(TestCase):
             password="testpass",
             role=User.Role.ADMIN,
         )
-        
+
         # Обычный пользователь (не админ)
         self.user = User.objects.create_user(
             username="user",
@@ -40,7 +40,7 @@ class MessengerSettingsUISecurityTests(TestCase):
             role=User.Role.MANAGER,
             branch=self.branch,
         )
-        
+
         # Inbox для тестов
         self.inbox = Inbox.objects.create(
             name="Test Inbox",

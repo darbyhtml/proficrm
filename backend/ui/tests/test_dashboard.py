@@ -23,12 +23,10 @@ class DashboardViewTestCase(TestCase):
         """Настройка тестовых данных."""
         # Очищаем кэш перед каждым тестом
         cache.clear()
-        
+
         self.client = Client()
         self.user = User.objects.create_user(
-            username="testuser",
-            password="testpass123",
-            role=User.Role.MANAGER
+            username="testuser", password="testpass123", role=User.Role.MANAGER
         )
         self.client.force_login(self.user)
         self.now = timezone.now()
@@ -38,10 +36,7 @@ class DashboardViewTestCase(TestCase):
         self.tomorrow_start = self.today_start + timedelta(days=1)
 
         # Создаём тестовую компанию
-        self.company = Company.objects.create(
-            name="Тестовая компания",
-            responsible=self.user
-        )
+        self.company = Company.objects.create(name="Тестовая компания", responsible=self.user)
 
     def test_dashboard_requires_login(self):
         """Тест: dashboard требует авторизации."""
@@ -82,7 +77,7 @@ class DashboardViewTestCase(TestCase):
             assigned_to=self.user,
             company=self.company,
             due_at=self.today_start + timedelta(hours=10),
-            status=Task.Status.NEW
+            status=Task.Status.NEW,
         )
 
         response = self.client.get("/")
@@ -98,7 +93,7 @@ class DashboardViewTestCase(TestCase):
             assigned_to=self.user,
             company=self.company,
             due_at=self.today_start + timedelta(hours=10),
-            status=Task.Status.DONE
+            status=Task.Status.DONE,
         )
 
         # Создаём задачу на сегодня со статусом CANCELLED
@@ -107,7 +102,7 @@ class DashboardViewTestCase(TestCase):
             assigned_to=self.user,
             company=self.company,
             due_at=self.today_start + timedelta(hours=11),
-            status=Task.Status.CANCELLED
+            status=Task.Status.CANCELLED,
         )
 
         response = self.client.get("/")
@@ -124,7 +119,7 @@ class DashboardViewTestCase(TestCase):
             assigned_to=self.user,
             company=self.company,
             due_at=overdue_time,
-            status=Task.Status.NEW
+            status=Task.Status.NEW,
         )
 
         response = self.client.get("/")
@@ -142,7 +137,7 @@ class DashboardViewTestCase(TestCase):
             assigned_to=self.user,
             company=self.company,
             due_at=overdue_time,
-            status=Task.Status.DONE
+            status=Task.Status.DONE,
         )
 
         response = self.client.get("/")
@@ -158,7 +153,7 @@ class DashboardViewTestCase(TestCase):
             assigned_to=self.user,
             company=self.company,
             due_at=week_task_time,
-            status=Task.Status.NEW
+            status=Task.Status.NEW,
         )
 
         response = self.client.get("/")
@@ -174,7 +169,7 @@ class DashboardViewTestCase(TestCase):
             assigned_to=self.user,
             company=self.company,
             due_at=self.today_start + timedelta(hours=10),
-            status=Task.Status.NEW
+            status=Task.Status.NEW,
         )
 
         response = self.client.get("/")
@@ -191,7 +186,7 @@ class DashboardViewTestCase(TestCase):
             title="Новая задача",
             assigned_to=self.user,
             company=self.company,
-            status=Task.Status.NEW
+            status=Task.Status.NEW,
         )
 
         response = self.client.get("/")
@@ -206,7 +201,7 @@ class DashboardViewTestCase(TestCase):
             title="Задача в работе",
             assigned_to=self.user,
             company=self.company,
-            status=Task.Status.IN_PROGRESS
+            status=Task.Status.IN_PROGRESS,
         )
 
         response = self.client.get("/")
@@ -225,7 +220,7 @@ class DashboardViewTestCase(TestCase):
             name="Компания с договором",
             responsible=self.user,
             contract_until=contract_until,
-            contract_type=contract_type
+            contract_type=contract_type,
         )
 
         response = self.client.get("/")
@@ -235,16 +230,13 @@ class DashboardViewTestCase(TestCase):
 
     def test_contracts_soon_only_for_responsible(self):
         """Тест: договоры показываются только для ответственного."""
-        other_user = User.objects.create_user(
-            username="otheruser",
-            password="testpass123"
-        )
+        other_user = User.objects.create_user(username="otheruser", password="testpass123")
 
         contract_until = self.today_date + timedelta(days=15)
         company = Company.objects.create(
             name="Компания другого пользователя",
             responsible=other_user,  # Другой пользователь
-            contract_until=contract_until
+            contract_until=contract_until,
         )
 
         response = self.client.get("/")
@@ -260,7 +252,7 @@ class DashboardViewTestCase(TestCase):
         Company.objects.create(
             name="Компания с далёким договором",
             responsible=self.user,
-            contract_until=contract_until_far
+            contract_until=contract_until_far,
         )
 
         # Создаём компанию с договором, который истекает через 25 дней (должен показываться)
@@ -268,7 +260,7 @@ class DashboardViewTestCase(TestCase):
         Company.objects.create(
             name="Компания с близким договором",
             responsible=self.user,
-            contract_until=contract_until_near
+            contract_until=contract_until_near,
         )
 
         response = self.client.get("/")
@@ -282,15 +274,20 @@ class DashboardViewTestCase(TestCase):
         """Тест: договоры с менее чем 14 днями имеют уровень 'danger'."""
         contract_until = self.today_date + timedelta(days=10)
         Company.objects.create(
-            name="Срочный договор",
-            responsible=self.user,
-            contract_until=contract_until
+            name="Срочный договор", responsible=self.user, contract_until=contract_until
         )
 
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         context = response.context
-        contract = next((item for item in context["contracts_soon"] if item["company"].name == "Срочный договор"), None)
+        contract = next(
+            (
+                item
+                for item in context["contracts_soon"]
+                if item["company"].name == "Срочный договор"
+            ),
+            None,
+        )
         self.assertIsNotNone(contract)
         self.assertEqual(contract["level"], "danger")
 
@@ -298,15 +295,20 @@ class DashboardViewTestCase(TestCase):
         """Тест: договоры с 14-30 днями имеют уровень 'warn'."""
         contract_until = self.today_date + timedelta(days=20)
         Company.objects.create(
-            name="Договор с предупреждением",
-            responsible=self.user,
-            contract_until=contract_until
+            name="Договор с предупреждением", responsible=self.user, contract_until=contract_until
         )
 
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         context = response.context
-        contract = next((item for item in context["contracts_soon"] if item["company"].name == "Договор с предупреждением"), None)
+        contract = next(
+            (
+                item
+                for item in context["contracts_soon"]
+                if item["company"].name == "Договор с предупреждением"
+            ),
+            None,
+        )
         self.assertIsNotNone(contract)
         self.assertEqual(contract["level"], "warn")
 
@@ -320,9 +322,7 @@ class DashboardViewTestCase(TestCase):
     def test_can_view_cold_call_reports_for_admin(self):
         """Тест: администратор может видеть отчёты по холодным звонкам."""
         admin_user = User.objects.create_user(
-            username="admin",
-            password="testpass123",
-            role=User.Role.ADMIN
+            username="admin", password="testpass123", role=User.Role.ADMIN
         )
         self.client.force_login(admin_user)
 
@@ -349,14 +349,14 @@ class DashboardViewTestCase(TestCase):
             assigned_to=self.user,
             company=self.company,
             due_at=self.today_start + timedelta(hours=15),
-            status=Task.Status.IN_PROGRESS
+            status=Task.Status.IN_PROGRESS,
         )
         task2 = Task.objects.create(
             title="Задача 2 (раньше)",
             assigned_to=self.user,
             company=self.company,
             due_at=self.today_start + timedelta(hours=10),
-            status=Task.Status.IN_PROGRESS
+            status=Task.Status.IN_PROGRESS,
         )
 
         response = self.client.get("/")
@@ -375,7 +375,7 @@ class DashboardViewTestCase(TestCase):
             title="Старая новая задача",
             assigned_to=self.user,
             company=self.company,
-            status=Task.Status.NEW
+            status=Task.Status.NEW,
         )
         # Обновляем created_at для первой задачи (делаем её старше)
         Task.objects.filter(id=task1.id).update(created_at=timezone.now() - timedelta(hours=2))
@@ -384,7 +384,7 @@ class DashboardViewTestCase(TestCase):
             title="Новая новая задача",
             assigned_to=self.user,
             company=self.company,
-            status=Task.Status.NEW
+            status=Task.Status.NEW,
         )
 
         response = self.client.get("/")
@@ -406,7 +406,7 @@ class DashboardViewTestCase(TestCase):
                 assigned_to=self.user,
                 company=self.company,
                 due_at=overdue_time - timedelta(hours=i),
-                status=Task.Status.IN_PROGRESS
+                status=Task.Status.IN_PROGRESS,
             )
 
         response = self.client.get("/")
@@ -427,7 +427,7 @@ class DashboardViewTestCase(TestCase):
                 assigned_to=self.user,
                 company=self.company,
                 due_at=week_task_time + timedelta(hours=i),
-                status=Task.Status.IN_PROGRESS
+                status=Task.Status.IN_PROGRESS,
             )
 
         response = self.client.get("/")
@@ -446,7 +446,7 @@ class DashboardViewTestCase(TestCase):
                 title=f"Новая задача {i}",
                 assigned_to=self.user,
                 company=self.company,
-                status=Task.Status.NEW
+                status=Task.Status.NEW,
             )
 
         response = self.client.get("/")
@@ -471,7 +471,7 @@ class DashboardViewTestCase(TestCase):
             Company.objects.create(
                 name=f"Компания {i:03d}",  # Форматируем с ведущими нулями для правильной сортировки
                 responsible=self.user,
-                contract_until=contract_until
+                contract_until=contract_until,
             )
 
         response = self.client.get("/")
@@ -487,9 +487,7 @@ class DashboardViewTestCase(TestCase):
         """Тест: договоры исключают компании без contract_until."""
         # Создаём компанию без contract_until
         Company.objects.create(
-            name="Компания без договора",
-            responsible=self.user,
-            contract_until=None
+            name="Компания без договора", responsible=self.user, contract_until=None
         )
 
         response = self.client.get("/")
@@ -507,7 +505,7 @@ class DashboardViewTestCase(TestCase):
                 assigned_to=self.user,
                 company=self.company,
                 due_at=self.today_start + timedelta(hours=i),
-                status=Task.Status.IN_PROGRESS
+                status=Task.Status.IN_PROGRESS,
             )
 
         response = self.client.get("/")
@@ -521,7 +519,7 @@ class DashboardViewTestCase(TestCase):
     def test_view_all_links_with_correct_filters(self):
         """Тест: кнопки «Все задачи…» имеют правильные фильтры."""
         for i in range(7):
-            due_at_today = self.local_now + timedelta(hours=i+1)
+            due_at_today = self.local_now + timedelta(hours=i + 1)
             if due_at_today >= self.tomorrow_start:
                 due_at_today = self.tomorrow_start - timedelta(minutes=1)
             Task.objects.create(
@@ -529,31 +527,32 @@ class DashboardViewTestCase(TestCase):
                 assigned_to=self.user,
                 company=self.company,
                 due_at=due_at_today,
-                status=Task.Status.IN_PROGRESS
+                status=Task.Status.IN_PROGRESS,
             )
             Task.objects.create(
                 title=f"Новая задача {i}",
                 assigned_to=self.user,
                 company=self.company,
-                status=Task.Status.NEW
+                status=Task.Status.NEW,
             )
             Task.objects.create(
                 title=f"Просроченная задача {i}",
                 assigned_to=self.user,
                 company=self.company,
-                due_at=self.local_now - timedelta(days=i+1),
-                status=Task.Status.IN_PROGRESS
+                due_at=self.local_now - timedelta(days=i + 1),
+                status=Task.Status.IN_PROGRESS,
             )
 
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        response_text = response.content.decode('utf-8')
+        response_text = response.content.decode("utf-8")
 
         # v2 ссылки фильтруют по текущему пользователю (mine=1), чтобы
         # клик из «моих» задач оставался в контексте «моих».
         # Проверяем оба варианта экранирования амперсанда (& и &amp;).
         def _contains_link(text: str, needle: str) -> bool:
             return needle in text or needle.replace("&", "&amp;") in text
+
         self.assertTrue(_contains_link(response_text, "/tasks/?mine=1&today=1"))
         self.assertTrue(_contains_link(response_text, "/tasks/?mine=1&status=new"))
         self.assertTrue(_contains_link(response_text, "/tasks/?mine=1&overdue=1"))
@@ -565,14 +564,14 @@ class DashboardViewTestCase(TestCase):
             title="Новая задача",
             assigned_to=self.user,
             company=self.company,
-            status=Task.Status.NEW
+            status=Task.Status.NEW,
         )
         Task.objects.create(
             title="Задача в работе",
             assigned_to=self.user,
             company=self.company,
             status=Task.Status.IN_PROGRESS,
-            due_at=self.today_start + timedelta(hours=5)
+            due_at=self.today_start + timedelta(hours=5),
         )
         # Выполненные задачи не должны отображаться на dashboard (исключаются в запросе)
         Task.objects.create(
@@ -580,12 +579,12 @@ class DashboardViewTestCase(TestCase):
             assigned_to=self.user,
             company=self.company,
             status=Task.Status.DONE,
-            due_at=self.today_start + timedelta(hours=3)
+            due_at=self.today_start + timedelta(hours=3),
         )
 
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        
+
         # Проверяем наличие бейджей статусов
         self.assertContains(response, "badge-new")
         self.assertContains(response, "badge-progress")
@@ -595,7 +594,12 @@ class DashboardViewTestCase(TestCase):
         # Проверяем, что выполненные задачи не отображаются
         context = response.context
         all_task_titles = []
-        for task_list in [context["tasks_new"], context["tasks_today"], context["overdue"], context["tasks_week"]]:
+        for task_list in [
+            context["tasks_new"],
+            context["tasks_today"],
+            context["overdue"],
+            context["tasks_week"],
+        ]:
             all_task_titles.extend([t.title for t in task_list])
         self.assertNotIn("Выполненная задача", all_task_titles)
 
@@ -606,7 +610,7 @@ class DashboardViewTestCase(TestCase):
             assigned_to=self.user,
             company=self.company,
             due_at=self.today_start + timedelta(hours=10),
-            status=Task.Status.IN_PROGRESS
+            status=Task.Status.IN_PROGRESS,
         )
 
         response = self.client.get("/")
@@ -622,7 +626,7 @@ class DashboardViewTestCase(TestCase):
             assigned_to=self.user,
             company=self.company,
             due_at=self.local_now - timedelta(days=1),
-            status=Task.Status.IN_PROGRESS
+            status=Task.Status.IN_PROGRESS,
         )
 
         response = self.client.get("/")
@@ -648,7 +652,7 @@ class DashboardViewTestCase(TestCase):
             title="Тестовая задача",
             assigned_to=self.user,
             company=self.company,
-            status=Task.Status.NEW
+            status=Task.Status.NEW,
         )
 
         response = self.client.get("/")

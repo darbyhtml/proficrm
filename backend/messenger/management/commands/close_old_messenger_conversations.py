@@ -56,11 +56,14 @@ class Command(BaseCommand):
         cutoff = timezone.now() - timedelta(days=days)
         from django.db.models import Q
 
-        qs = Conversation.objects.filter(
-            status=Conversation.Status.RESOLVED
-        ).filter(
-            Q(last_activity_at__lt=cutoff) | Q(last_activity_at__isnull=True, created_at__lt=cutoff)
-        ).order_by("id")
+        qs = (
+            Conversation.objects.filter(status=Conversation.Status.RESOLVED)
+            .filter(
+                Q(last_activity_at__lt=cutoff)
+                | Q(last_activity_at__isnull=True, created_at__lt=cutoff)
+            )
+            .order_by("id")
+        )
 
         total = qs.count()
         self.stdout.write(f"Найдено RESOLVED диалогов старше {days} дн.: {total}")
@@ -81,4 +84,3 @@ class Command(BaseCommand):
             except Exception:
                 # Логгер в integrations уже пишет предупреждение; здесь просто продолжаем
                 continue
-

@@ -57,6 +57,7 @@ from tasksapp.models import Task, TaskComment, TaskEvent, TaskType
 from tasksapp.policy import visible_tasks_qs, can_manage_task_status
 from notifications.models import Notification
 from notifications.service import notify
+
 # phonebridge models — lazy import в функциях, где используются (company_detail, settings_integrations)
 import json
 import logging
@@ -147,38 +148,76 @@ __all__ = [
     "_apply_company_filters",
     "_qs_without_page",
     # all imported names that sub-modules need
-    "datetime", "datetime_time", "timedelta",
-    "UUID", "Decimal",
+    "datetime",
+    "datetime_time",
+    "timedelta",
+    "UUID",
+    "Decimal",
     "login_required",
     "messages",
     "Paginator",
-    "Exists", "OuterRef", "Q", "F",
-    "Count", "Max", "Prefetch", "Avg",
-    "models", "transaction", "IntegrityError",
-    "HttpRequest", "HttpResponse",
+    "Exists",
+    "OuterRef",
+    "Q",
+    "F",
+    "Count",
+    "Max",
+    "Prefetch",
+    "Avg",
+    "models",
+    "transaction",
+    "IntegrityError",
+    "HttpRequest",
+    "HttpResponse",
     "StreamingHttpResponse",
     "JsonResponse",
-    "FileResponse", "Http404", "HttpResponseNotFound",
-    "get_object_or_404", "redirect", "render",
+    "FileResponse",
+    "Http404",
+    "HttpResponseNotFound",
+    "get_object_or_404",
+    "redirect",
+    "render",
     "timezone",
     "ValidationError",
     "validate_email",
-    "Branch", "User", "MagicLinkToken",
+    "Branch",
+    "User",
+    "MagicLinkToken",
     "ActivityEvent",
     "log_event",
-    "ContractType", "Company", "CompanyDeal", "CompanyHistoryEvent",
-    "CompanyNote", "CompanyNoteAttachment", "CompanySphere", "CompanyStatus",
-    "Region", "Contact", "ContactEmail", "ContactPhone",
-    "CompanyDeletionRequest", "CompanyEmail", "CompanyPhone",
+    "ContractType",
+    "Company",
+    "CompanyDeal",
+    "CompanyHistoryEvent",
+    "CompanyNote",
+    "CompanyNoteAttachment",
+    "CompanySphere",
+    "CompanyStatus",
+    "Region",
+    "Contact",
+    "ContactEmail",
+    "ContactPhone",
+    "CompanyDeletionRequest",
+    "CompanyEmail",
+    "CompanyPhone",
     "CompanySearchIndex",
     "resolve_target_companies",
-    "can_edit_company_perm", "editable_company_qs_perm",
-    "can_transfer_company", "get_transfer_targets",
-    "get_users_for_lists", "can_transfer_companies",
-    "can_view_company_policy", "visible_companies_qs",
-    "require_can_view_company", "require_can_view_note_company",
-    "Task", "TaskComment", "TaskEvent", "TaskType",
-    "visible_tasks_qs", "can_manage_task_status",
+    "can_edit_company_perm",
+    "editable_company_qs_perm",
+    "can_transfer_company",
+    "get_transfer_targets",
+    "get_users_for_lists",
+    "can_transfer_companies",
+    "can_view_company_policy",
+    "visible_companies_qs",
+    "require_can_view_company",
+    "require_can_view_note_company",
+    "Task",
+    "TaskComment",
+    "TaskEvent",
+    "TaskType",
+    "visible_tasks_qs",
+    "can_manage_task_status",
     "Notification",
     "notify",
     # phonebridge models убраны из __all__ — lazy import
@@ -189,22 +228,39 @@ __all__ = [
     "uuid",
     "_date",
     "cache",
-    "UiGlobalConfig", "AmoApiConfig", "UiUserPreference",
-    "require_admin", "get_effective_user", "get_view_as_user",
+    "UiGlobalConfig",
+    "AmoApiConfig",
+    "UiUserPreference",
+    "require_admin",
+    "get_effective_user",
+    "get_view_as_user",
     "policy_required",
     "policy_decide",
     "PermissionDenied",
     "format_phone",
     "clean_int_id",
-    "CompanyCreateForm", "CompanyQuickEditForm", "CompanyContractForm",
-    "CompanyEditForm", "CompanyInlineEditForm", "CompanyNoteForm",
-    "ContactEmailFormSet", "ContactForm", "ContactPhoneFormSet",
-    "TaskForm", "TaskEditForm",
-    "BranchForm", "CompanySphereForm", "CompanyStatusForm",
-    "ContractTypeForm", "TaskTypeForm",
-    "UserCreateForm", "UserEditForm",
-    "ImportCompaniesForm", "ImportTasksIcsForm",
-    "AmoApiConfigForm", "AmoMigrateFilterForm",
+    "CompanyCreateForm",
+    "CompanyQuickEditForm",
+    "CompanyContractForm",
+    "CompanyEditForm",
+    "CompanyInlineEditForm",
+    "CompanyNoteForm",
+    "ContactEmailFormSet",
+    "ContactForm",
+    "ContactPhoneFormSet",
+    "TaskForm",
+    "TaskEditForm",
+    "BranchForm",
+    "CompanySphereForm",
+    "CompanyStatusForm",
+    "ContractTypeForm",
+    "TaskTypeForm",
+    "UserCreateForm",
+    "UserEditForm",
+    "ImportCompaniesForm",
+    "ImportTasksIcsForm",
+    "AmoApiConfigForm",
+    "AmoMigrateFilterForm",
     "CompanyListColumnsForm",
     # cross-module helpers (used in multiple sub-modules)
     "_can_view_cold_call_reports",
@@ -250,10 +306,6 @@ def _company_branch_id(company: Company):
     return getattr(resp, "branch_id", None)
 
 
-
-
-
-
 def _can_delete_company(user: User, company: Company) -> bool:
     if not user or not user.is_authenticated or not user.is_active:
         return False
@@ -267,7 +319,11 @@ def _can_delete_company(user: User, company: Company) -> bool:
 def _notify_branch_leads(*, branch_id, title: str, body: str, url: str, exclude_user_id=None):
     if not branch_id:
         return 0
-    qs = User.objects.filter(is_active=True, branch_id=branch_id, role__in=[User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR])
+    qs = User.objects.filter(
+        is_active=True,
+        branch_id=branch_id,
+        role__in=[User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR],
+    )
     if exclude_user_id:
         qs = qs.exclude(id=exclude_user_id)
     sent = 0
@@ -283,15 +339,23 @@ def _detach_client_branches(*, head_company: Company) -> list[Company]:
     head_company=NULL.
     Возвращает список "бывших филиалов" (до 200 для сообщений/логов).
     """
-    children_qs = Company.objects.filter(head_company_id=head_company.id).select_related("responsible", "branch").order_by("name")
+    children_qs = (
+        Company.objects.filter(head_company_id=head_company.id)
+        .select_related("responsible", "branch")
+        .order_by("name")
+    )
     children = list(children_qs[:200])
     if children:
         now_ts = timezone.now()
-        Company.objects.filter(head_company_id=head_company.id).update(head_company=None, updated_at=now_ts)
+        Company.objects.filter(head_company_id=head_company.id).update(
+            head_company=None, updated_at=now_ts
+        )
     return children
 
 
-def _notify_head_deleted_with_branches(*, actor: User, head_company: Company, detached: list[Company]):
+def _notify_head_deleted_with_branches(
+    *, actor: User, head_company: Company, detached: list[Company]
+):
     """
     Уведомление о том, что удалили головную компанию клиента, и её филиалы стали самостоятельными.
     По ТЗ уведомляем руководителей (РОП/директор) соответствующего внутреннего филиала.
@@ -319,14 +383,14 @@ def _invalidate_company_count_cache():
     Удаляет все ключи с префиксом 'companies_total_count_*'.
     """
     from django.core.cache import cache
-    
+
     # Для Redis можно использовать delete_pattern, но для LocMemCache нужно удалять по ключам
     # Используем простой подход: удаляем ключи для всех возможных комбинаций user/view_as
     # В реальности лучше использовать Redis с delete_pattern или версионирование ключей
-    
+
     # Удаляем старый глобальный ключ (для обратной совместимости)
     cache.delete("companies_total_count")
-    
+
     # Если используется Redis, можно использовать delete_pattern
     # Для LocMemCache это не работает, поэтому очищаем весь кэш при массовых операциях
     # или используем версионирование ключей
@@ -348,9 +412,8 @@ def _companies_with_overdue_flag(*, now):
         .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
         .values("id")
     )
-    cold_contacts = (
-        Contact.objects.filter(company_id=OuterRef("pk"), is_cold_call=True)
-        .values("id")
+    cold_contacts = Contact.objects.filter(company_id=OuterRef("pk"), is_cold_call=True).values(
+        "id"
     )
     # Скалярная подзапрос-аннотация количества активных задач (не ломает JOIN'ы)
     active_tasks_count_sq = (
@@ -385,7 +448,9 @@ def _normalize_for_search(text: str) -> str:
     if not text:
         return ""
     # Убираем тире, дефисы, пробелы и другие разделители
-    normalized = text.replace("-", "").replace("—", "").replace("–", "").replace(" ", "").replace("_", "")
+    normalized = (
+        text.replace("-", "").replace("—", "").replace("–", "").replace(" ", "").replace("_", "")
+    )
     # Приводим к нижнему регистру для регистронезависимого поиска
     return normalized.lower().strip()
 
@@ -458,7 +523,16 @@ def _dt_label(dt: datetime | None) -> str:
             return ""
 
 
-def _cold_call_json(*, entity: str, entity_id: str, is_cold_call: bool, marked_at: datetime | None, marked_by: str, can_reset: bool, message: str) -> JsonResponse:
+def _cold_call_json(
+    *,
+    entity: str,
+    entity_id: str,
+    is_cold_call: bool,
+    marked_at: datetime | None,
+    marked_by: str,
+    can_reset: bool,
+    message: str,
+) -> JsonResponse:
     return JsonResponse(
         {
             "ok": True,
@@ -473,9 +547,11 @@ def _cold_call_json(*, entity: str, entity_id: str, is_cold_call: bool, marked_a
         }
     )
 
+
 # ---------------------------------------------------------------------------
 # Вспомогательные функции для _apply_company_filters
 # ---------------------------------------------------------------------------
+
 
 def _cf_get_str_param(params: dict, key: str, default: str = "") -> str:
     """Безопасное извлечение строкового значения из params (dict или QueryDict)."""
@@ -548,6 +624,7 @@ def _filter_by_search(qs, q: str):
     # Если запрос похож на ИНН (только цифры, 8–12 символов), ищем по каждому ИНН отдельно
     if q.isdigit() and 8 <= len(q) <= 12:
         from companies.inn_utils import parse_inns
+
         # Парсим все ИНН из запроса (на случай, если введено несколько)
         query_inns = parse_inns(q)
         if query_inns:
@@ -576,6 +653,7 @@ def _filter_by_search(qs, q: str):
         normalized_inn_filters = Q(inn__icontains=normalized_q)
         if normalized_q.isdigit() and 8 <= len(normalized_q) <= 12:
             from companies.inn_utils import parse_inns
+
             query_inns = parse_inns(normalized_q)
             if query_inns:
                 for query_inn in query_inns:
@@ -622,6 +700,7 @@ def _filter_by_search(qs, q: str):
             tok_inn_filters = Q(inn__icontains=tok)
             if tok.isdigit() and 8 <= len(tok) <= 12:
                 from companies.inn_utils import parse_inns
+
                 query_inns = parse_inns(tok)
                 if query_inns:
                     for query_inn in query_inns:
@@ -653,46 +732,28 @@ def _filter_by_search(qs, q: str):
 
         # Дополнительные телефоны компании - используем Exists вместо JOIN (быстрее)
         phone_filters |= Exists(
-            CompanyPhone.objects.filter(
-                company_id=OuterRef('pk'),
-                value=normalized_phone
-            )
+            CompanyPhone.objects.filter(company_id=OuterRef("pk"), value=normalized_phone)
         )
         phone_filters |= Exists(
-            CompanyPhone.objects.filter(
-                company_id=OuterRef('pk'),
-                value__icontains=q
-            )
+            CompanyPhone.objects.filter(company_id=OuterRef("pk"), value__icontains=q)
         )
 
         # Телефоны контактов - используем Exists вместо JOIN (быстрее)
         phone_filters |= Exists(
-            ContactPhone.objects.filter(
-                contact__company_id=OuterRef('pk'),
-                value=normalized_phone
-            )
+            ContactPhone.objects.filter(contact__company_id=OuterRef("pk"), value=normalized_phone)
         )
         phone_filters |= Exists(
-            ContactPhone.objects.filter(
-                contact__company_id=OuterRef('pk'),
-                value__icontains=q
-            )
+            ContactPhone.objects.filter(contact__company_id=OuterRef("pk"), value__icontains=q)
         )
     else:
         # Если нормализация не удалась, ищем как есть
         phone_filters = Q(phone__icontains=q)
         # Используем Exists для связанных таблиц
         phone_filters |= Exists(
-            CompanyPhone.objects.filter(
-                company_id=OuterRef('pk'),
-                value__icontains=q
-            )
+            CompanyPhone.objects.filter(company_id=OuterRef("pk"), value__icontains=q)
         )
         phone_filters |= Exists(
-            ContactPhone.objects.filter(
-                contact__company_id=OuterRef('pk'),
-                value__icontains=q
-            )
+            ContactPhone.objects.filter(contact__company_id=OuterRef("pk"), value__icontains=q)
         )
 
     # --- Поиск по email (с нормализацией) ---
@@ -708,44 +769,28 @@ def _filter_by_search(qs, q: str):
         # Email контактов - используем Exists вместо JOIN (быстрее)
         email_filters |= Exists(
             ContactEmail.objects.filter(
-                contact__company_id=OuterRef('pk'),
-                value__iexact=normalized_email
+                contact__company_id=OuterRef("pk"), value__iexact=normalized_email
             )
         )
         email_filters |= Exists(
-            ContactEmail.objects.filter(
-                contact__company_id=OuterRef('pk'),
-                value__icontains=q
-            )
+            ContactEmail.objects.filter(contact__company_id=OuterRef("pk"), value__icontains=q)
         )
 
         # Дополнительные email компании - используем Exists
         email_filters |= Exists(
-            CompanyEmail.objects.filter(
-                company_id=OuterRef('pk'),
-                value__iexact=normalized_email
-            )
+            CompanyEmail.objects.filter(company_id=OuterRef("pk"), value__iexact=normalized_email)
         )
         email_filters |= Exists(
-            CompanyEmail.objects.filter(
-                company_id=OuterRef('pk'),
-                value__icontains=q
-            )
+            CompanyEmail.objects.filter(company_id=OuterRef("pk"), value__icontains=q)
         )
     else:
         email_filters = Q(email__icontains=q)
         # Используем Exists для связанных таблиц
         email_filters |= Exists(
-            ContactEmail.objects.filter(
-                contact__company_id=OuterRef('pk'),
-                value__icontains=q
-            )
+            ContactEmail.objects.filter(contact__company_id=OuterRef("pk"), value__icontains=q)
         )
         email_filters |= Exists(
-            CompanyEmail.objects.filter(
-                company_id=OuterRef('pk'),
-                value__icontains=q
-            )
+            CompanyEmail.objects.filter(company_id=OuterRef("pk"), value__icontains=q)
         )
 
     # --- Поиск по ФИО в контактах ---
@@ -756,13 +801,12 @@ def _filter_by_search(qs, q: str):
     if len(words) > 1:
         # Если несколько слов, ищем контакты, где ВСЕ слова найдены (в любых полях одного контакта)
         # Используем Exists для проверки, что есть контакт компании, где все слова найдены
-        contact_q = Contact.objects.filter(company_id=OuterRef('pk'))
+        contact_q = Contact.objects.filter(company_id=OuterRef("pk"))
         # Для каждого слова создаём условие, что оно найдено в ФИО контакта
         # И все эти условия должны выполняться для одного контакта
         for word in words:
             contact_q = contact_q.filter(
-                Q(first_name__icontains=word)
-                | Q(last_name__icontains=word)
+                Q(first_name__icontains=word) | Q(last_name__icontains=word)
             )
 
         # Ищем компании, у которых есть такие контакты
@@ -773,28 +817,20 @@ def _filter_by_search(qs, q: str):
     elif len(words) == 1:
         # Одно слово - используем Exists для оптимизации
         word = words[0]
-        contact_q = Contact.objects.filter(
-            company_id=OuterRef('pk')
-        ).filter(
+        contact_q = Contact.objects.filter(company_id=OuterRef("pk")).filter(
             Q(first_name__icontains=word) | Q(last_name__icontains=word)
         )
         fio_filters = Exists(contact_q)
     else:
         # Пустой запрос (не должно быть, но на всякий случай) - используем Exists
-        contact_q = Contact.objects.filter(
-            company_id=OuterRef('pk')
-        ).filter(
+        contact_q = Contact.objects.filter(company_id=OuterRef("pk")).filter(
             Q(first_name__icontains=q) | Q(last_name__icontains=q)
         )
         fio_filters = Exists(contact_q)
 
     # Объединяем все фильтры
     return qs.filter(
-        base_filters
-        | token_filters
-        | phone_filters
-        | email_filters
-        | fio_filters
+        base_filters | token_filters | phone_filters | email_filters | fio_filters
     ).distinct()
 
 
@@ -912,7 +948,10 @@ def _filter_by_tasks(qs, params: dict):
             else:
                 month = local_now.month
                 q_start = (month - 1) // 3 * 3 + 1
-                task_due_q = Q(due_at__year=local_now.year, due_at__month__in=[q_start, q_start + 1, q_start + 2])
+                task_due_q = Q(
+                    due_at__year=local_now.year,
+                    due_at__month__in=[q_start, q_start + 1, q_start + 2],
+                )
             tasks_in_range = (
                 Task.objects.filter(company_id=OuterRef("pk"))
                 .exclude(status__in=active_task_status_exclude)
@@ -948,7 +987,9 @@ def _filter_by_responsible(qs, params: dict, default_responsible_id: int | None)
             qs = qs.filter(responsible_id__in=responsible_ids)
         elif has_none:
             qs = qs.filter(responsible__isnull=True)
-        selected_responsibles = [str(i) for i in responsible_ids] + ([RESPONSIBLE_FILTER_NONE] if has_none else [])
+        selected_responsibles = [str(i) for i in responsible_ids] + (
+            [RESPONSIBLE_FILTER_NONE] if has_none else []
+        )
         responsible = selected_responsibles[0] if selected_responsibles else ""
 
     return qs, responsible, selected_responsibles, responsible_ids, has_none
@@ -957,6 +998,7 @@ def _filter_by_responsible(qs, params: dict, default_responsible_id: int | None)
 # ---------------------------------------------------------------------------
 # Главная функция фильтрации — оркестратор
 # ---------------------------------------------------------------------------
+
 
 def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | None = None):
     """
@@ -985,18 +1027,20 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
     )
 
     # --- Флаг активности хотя бы одного фильтра ---
-    filter_active = any([
-        q,
-        responsible_ids,
-        has_none,
-        selects_ctx["status_ids"],
-        selects_ctx["branch_ids"],
-        selects_ctx["sphere_ids"],
-        selects_ctx["contract_type"],
-        selects_ctx["region_ids"],
-        overdue == "1",
-        bool(task_filter),
-    ])
+    filter_active = any(
+        [
+            q,
+            responsible_ids,
+            has_none,
+            selects_ctx["status_ids"],
+            selects_ctx["branch_ids"],
+            selects_ctx["sphere_ids"],
+            selects_ctx["contract_type"],
+            selects_ctx["region_ids"],
+            overdue == "1",
+            bool(task_filter),
+        ]
+    )
 
     # PERF (2026-04-20 audit): .distinct() применяем ТОЛЬКО когда реально нужен —
     # при M2M-фильтре по spheres или JOIN-фильтрах (overdue/task_filter через Task subquery).
@@ -1004,8 +1048,8 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
     # Остальные фильтры (FK по Company) не дают дублей → distinct лишний.
     needs_distinct = bool(
         selects_ctx["sphere_ids"]  # M2M: spheres
-        or overdue == "1"          # JOIN c tasksapp_task
-        or bool(task_filter)       # JOIN c tasksapp_task
+        or overdue == "1"  # JOIN c tasksapp_task
+        or bool(task_filter)  # JOIN c tasksapp_task
     )
     result_qs = qs.distinct() if needs_distinct else qs
     return {
@@ -1038,6 +1082,7 @@ def _qs_without_page(request: HttpRequest, *, page_key: str = "page") -> str:
         params.pop(page_key, None)
     except Exception as e:
         from core.request_id import get_request_id
+
         logger.warning(
             f"Ошибка при удалении параметра '{page_key}' из URL: {e}",
             exc_info=True,
@@ -1045,18 +1090,27 @@ def _qs_without_page(request: HttpRequest, *, page_key: str = "page") -> str:
         )
     return params.urlencode()
 
+
 # ---------------------------------------------------------------------------
 # Cross-module helpers: defined here so all sub-modules can access them via
 # "from ui.views._base import *"
 # ---------------------------------------------------------------------------
 
+
 def _can_view_cold_call_reports(user):
     if not user or not user.is_authenticated or not user.is_active:
         return False
-    return bool(user.is_superuser or user.role in (
-        User.Role.ADMIN, User.Role.GROUP_MANAGER, User.Role.BRANCH_DIRECTOR,
-        User.Role.SALES_HEAD, User.Role.MANAGER,
-    ))
+    return bool(
+        user.is_superuser
+        or user.role
+        in (
+            User.Role.ADMIN,
+            User.Role.GROUP_MANAGER,
+            User.Role.BRANCH_DIRECTOR,
+            User.Role.SALES_HEAD,
+            User.Role.MANAGER,
+        )
+    )
 
 
 def _cold_call_confirm_q():
@@ -1074,6 +1128,7 @@ def _month_start(d):
 
 def _add_months(d, delta_months):
     import calendar
+
     y = d.year
     m = d.month + int(delta_months)
     while m <= 0:
@@ -1087,8 +1142,18 @@ def _add_months(d, delta_months):
 
 def _month_label(d):
     months = {
-        1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель", 5: "Май", 6: "Июнь",
-        7: "Июль", 8: "Август", 9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь",
+        1: "Январь",
+        2: "Февраль",
+        3: "Март",
+        4: "Апрель",
+        5: "Май",
+        6: "Июнь",
+        7: "Июль",
+        8: "Август",
+        9: "Сентябрь",
+        10: "Октябрь",
+        11: "Ноябрь",
+        12: "Декабрь",
     }
     return f"{months.get(d.month, str(d.month))} {d.year}"
 
@@ -1133,7 +1198,11 @@ def _can_edit_task_ui(user, task):
                 return True
         except Exception:
             pass
-    if user.role in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR) and user.branch_id and task.company_id:
+    if (
+        user.role in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR)
+        and user.branch_id
+        and task.company_id
+    ):
         try:
             if getattr(task.company, "branch_id", None) == user.branch_id:
                 return True
@@ -1165,4 +1234,3 @@ def _can_delete_task_ui(user, task):
             branch_id = getattr(task.assigned_to, "branch_id", None)
         return bool(branch_id and branch_id == user.branch_id)
     return False
-

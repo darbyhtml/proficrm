@@ -3,6 +3,7 @@
 ContactViewSet, CompanyNoteViewSet, базовая аутентификация CompanyViewSet.
 Нормализация CompanyViewSet покрыта в tests.py (CompanyAPITestCase).
 """
+
 from __future__ import annotations
 
 from rest_framework import status
@@ -43,6 +44,7 @@ def _results(data):
 # CompanyViewSet — базовая аутентификация и CRUD
 # ---------------------------------------------------------------------------
 
+
 class CompanyViewSetAuthTest(ApiSetupMixin, TestCase):
 
     def test_unauthenticated_list_returns_401(self):
@@ -70,33 +72,46 @@ class CompanyViewSetAuthTest(ApiSetupMixin, TestCase):
     def test_retrieve_nonexistent_404(self):
         self.client.force_authenticate(user=self.admin)
         import uuid
+
         r = self.client.get(f"/api/v1/companies/{uuid.uuid4()}/")
         self.assertEqual(r.status_code, 404)
 
     def test_create_company(self):
         self.client.force_authenticate(user=self.admin)
-        r = self.client.post("/api/v1/companies/", {
-            "name": "Новая компания API",
-            "inn": "1111111111",
-        }, format="json")
+        r = self.client.post(
+            "/api/v1/companies/",
+            {
+                "name": "Новая компания API",
+                "inn": "1111111111",
+            },
+            format="json",
+        )
         self.assertEqual(r.status_code, 201)
         self.assertTrue(Company.objects.filter(name="Новая компания API").exists())
 
     def test_create_company_invalid_inn(self):
         self.client.force_authenticate(user=self.admin)
-        r = self.client.post("/api/v1/companies/", {
-            "name": "Без ИНН",
-            "inn": "",
-        }, format="json")
+        r = self.client.post(
+            "/api/v1/companies/",
+            {
+                "name": "Без ИНН",
+                "inn": "",
+            },
+            format="json",
+        )
         # Кастомный exception handler скрывает детали поля в prod-режиме,
         # поэтому проверяем только статус 400.
         self.assertEqual(r.status_code, 400)
 
     def test_patch_company(self):
         self.client.force_authenticate(user=self.admin)
-        r = self.client.patch(f"/api/v1/companies/{self.company.id}/", {
-            "name": "Обновлённое название",
-        }, format="json")
+        r = self.client.patch(
+            f"/api/v1/companies/{self.company.id}/",
+            {
+                "name": "Обновлённое название",
+            },
+            format="json",
+        )
         self.assertEqual(r.status_code, 200)
         self.company.refresh_from_db()
         self.assertEqual(self.company.name, "Обновлённое название")
@@ -119,10 +134,15 @@ class CompanyViewSetAuthTest(ApiSetupMixin, TestCase):
 
     def test_phone_normalized_in_response(self):
         self.client.force_authenticate(user=self.admin)
-        r = self.client.post("/api/v1/companies/", {
-            "name": "Телефон тест", "inn": "2222222222",
-            "phone": "8 (999) 111-22-33",
-        }, format="json")
+        r = self.client.post(
+            "/api/v1/companies/",
+            {
+                "name": "Телефон тест",
+                "inn": "2222222222",
+                "phone": "8 (999) 111-22-33",
+            },
+            format="json",
+        )
         self.assertEqual(r.status_code, 201)
         self.assertTrue(r.data["phone"].startswith("+7"))
 
@@ -130,6 +150,7 @@ class CompanyViewSetAuthTest(ApiSetupMixin, TestCase):
 # ---------------------------------------------------------------------------
 # ContactViewSet
 # ---------------------------------------------------------------------------
+
 
 class ContactViewSetTest(ApiSetupMixin, TestCase):
 
@@ -168,19 +189,27 @@ class ContactViewSetTest(ApiSetupMixin, TestCase):
 
     def test_create_contact(self):
         self.client.force_authenticate(user=self.admin)
-        r = self.client.post("/api/v1/contacts/", {
-            "company": str(self.company.id),
-            "first_name": "Пётр",
-            "last_name": "Петров",
-        }, format="json")
+        r = self.client.post(
+            "/api/v1/contacts/",
+            {
+                "company": str(self.company.id),
+                "first_name": "Пётр",
+                "last_name": "Петров",
+            },
+            format="json",
+        )
         self.assertEqual(r.status_code, 201)
         self.assertTrue(Contact.objects.filter(last_name="Петров").exists())
 
     def test_patch_contact(self):
         self.client.force_authenticate(user=self.admin)
-        r = self.client.patch(f"/api/v1/contacts/{self.contact.id}/", {
-            "position": "Менеджер",
-        }, format="json")
+        r = self.client.patch(
+            f"/api/v1/contacts/{self.contact.id}/",
+            {
+                "position": "Менеджер",
+            },
+            format="json",
+        )
         self.assertEqual(r.status_code, 200)
         self.contact.refresh_from_db()
         self.assertEqual(self.contact.position, "Менеджер")
@@ -205,6 +234,7 @@ class ContactViewSetTest(ApiSetupMixin, TestCase):
 # ---------------------------------------------------------------------------
 # CompanyNoteViewSet
 # ---------------------------------------------------------------------------
+
 
 class CompanyNoteViewSetTest(ApiSetupMixin, TestCase):
 
@@ -234,10 +264,14 @@ class CompanyNoteViewSetTest(ApiSetupMixin, TestCase):
 
     def test_create_note_sets_author_to_current_user(self):
         self.client.force_authenticate(user=self.manager)
-        r = self.client.post("/api/v1/company-notes/", {
-            "company": str(self.company.id),
-            "text": "Заметка менеджера",
-        }, format="json")
+        r = self.client.post(
+            "/api/v1/company-notes/",
+            {
+                "company": str(self.company.id),
+                "text": "Заметка менеджера",
+            },
+            format="json",
+        )
         self.assertEqual(r.status_code, 201)
         note = CompanyNote.objects.get(id=r.data["id"])
         self.assertEqual(note.author, self.manager)
@@ -250,18 +284,20 @@ class CompanyNoteViewSetTest(ApiSetupMixin, TestCase):
 
     def test_update_own_note(self):
         self.client.force_authenticate(user=self.admin)
-        r = self.client.patch(f"/api/v1/company-notes/{self.note.id}/", {
-            "text": "Обновлённая заметка",
-        }, format="json")
+        r = self.client.patch(
+            f"/api/v1/company-notes/{self.note.id}/",
+            {
+                "text": "Обновлённая заметка",
+            },
+            format="json",
+        )
         self.assertEqual(r.status_code, 200)
         self.note.refresh_from_db()
         self.assertEqual(self.note.text, "Обновлённая заметка")
 
     def test_delete_own_note(self):
         self.client.force_authenticate(user=self.admin)
-        note = CompanyNote.objects.create(
-            company=self.company, author=self.admin, text="Удаляемая"
-        )
+        note = CompanyNote.objects.create(company=self.company, author=self.admin, text="Удаляемая")
         r = self.client.delete(f"/api/v1/company-notes/{note.id}/")
         self.assertEqual(r.status_code, 204)
         self.assertFalse(CompanyNote.objects.filter(id=note.id).exists())

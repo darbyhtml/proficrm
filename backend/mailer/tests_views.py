@@ -15,6 +15,7 @@
  11. campaign_add_email    — AJAX POST, возвращает JSON
  12. campaign_progress_poll— AJAX GET, возвращает JSON
 """
+
 from __future__ import annotations
 
 import uuid
@@ -37,6 +38,7 @@ from mailer.models import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_user(username, role=User.Role.MANAGER, **kwargs):
     u = User.objects.create_user(username=username, password="pass", role=role, **kwargs)
@@ -69,6 +71,7 @@ def _make_global_smtp(enabled=True):
 # ---------------------------------------------------------------------------
 # 1. Campaigns list
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class CampaignsListViewTest(TestCase):
@@ -105,6 +108,7 @@ class CampaignsListViewTest(TestCase):
 # 2. campaign_create
 # ---------------------------------------------------------------------------
 
+
 @override_settings(SECURE_SSL_REDIRECT=False)
 class CampaignCreateViewTest(TestCase):
     def setUp(self):
@@ -119,16 +123,24 @@ class CampaignCreateViewTest(TestCase):
 
     def test_post_creates_campaign(self):
         self.client.force_login(self.user)
-        r = self.client.post(reverse("campaign_create"), {
-            "name": "My Campaign",
-            "subject": "Hello",
-            "sender_name": "Test Sender",
-            "body_html": "<p>Content</p>",
-        })
-        self.assertEqual(Campaign.objects.filter(created_by=self.user, name="My Campaign").count(), 1)
+        r = self.client.post(
+            reverse("campaign_create"),
+            {
+                "name": "My Campaign",
+                "subject": "Hello",
+                "sender_name": "Test Sender",
+                "body_html": "<p>Content</p>",
+            },
+        )
+        self.assertEqual(
+            Campaign.objects.filter(created_by=self.user, name="My Campaign").count(), 1
+        )
         camp = Campaign.objects.get(created_by=self.user, name="My Campaign")
-        self.assertRedirects(r, reverse("campaign_detail", kwargs={"campaign_id": camp.id}),
-                             fetch_redirect_response=False)
+        self.assertRedirects(
+            r,
+            reverse("campaign_detail", kwargs={"campaign_id": camp.id}),
+            fetch_redirect_response=False,
+        )
 
     def test_post_invalid_form_rerenders(self):
         self.client.force_login(self.user)
@@ -144,6 +156,7 @@ class CampaignCreateViewTest(TestCase):
 # ---------------------------------------------------------------------------
 # 3. campaign_detail
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class CampaignDetailViewTest(TestCase):
@@ -172,6 +185,7 @@ class CampaignDetailViewTest(TestCase):
 # 4. campaign_edit
 # ---------------------------------------------------------------------------
 
+
 @override_settings(SECURE_SSL_REDIRECT=False)
 class CampaignEditViewTest(TestCase):
     def setUp(self):
@@ -187,12 +201,15 @@ class CampaignEditViewTest(TestCase):
 
     def test_post_saves_name(self):
         self.client.force_login(self.user)
-        self.client.post(reverse("campaign_edit", kwargs={"campaign_id": self.camp.id}), {
-            "name": "Updated Name",
-            "subject": "Updated Subject",
-            "sender_name": "Sender",
-            "body_html": "<p>Updated</p>",
-        })
+        self.client.post(
+            reverse("campaign_edit", kwargs={"campaign_id": self.camp.id}),
+            {
+                "name": "Updated Name",
+                "subject": "Updated Subject",
+                "sender_name": "Sender",
+                "body_html": "<p>Updated</p>",
+            },
+        )
         self.camp.refresh_from_db()
         self.assertEqual(self.camp.name, "Updated Name")
 
@@ -205,6 +222,7 @@ class CampaignEditViewTest(TestCase):
 # ---------------------------------------------------------------------------
 # 5. campaign_delete
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class CampaignDeleteViewTest(TestCase):
@@ -230,6 +248,7 @@ class CampaignDeleteViewTest(TestCase):
 # 6. campaign_start — проверка блокирующих условий
 # ---------------------------------------------------------------------------
 
+
 @override_settings(SECURE_SSL_REDIRECT=False)
 class CampaignStartViewTest(TestCase):
     def setUp(self):
@@ -239,8 +258,11 @@ class CampaignStartViewTest(TestCase):
     def test_get_redirects_to_detail(self):
         self.client.force_login(self.user)
         r = self.client.get(reverse("campaign_start", kwargs={"campaign_id": self.camp.id}))
-        self.assertRedirects(r, reverse("campaign_detail", kwargs={"campaign_id": self.camp.id}),
-                             fetch_redirect_response=False)
+        self.assertRedirects(
+            r,
+            reverse("campaign_detail", kwargs={"campaign_id": self.camp.id}),
+            fetch_redirect_response=False,
+        )
 
     def test_smtp_not_configured_blocks_start(self):
         # SMTP is_enabled=False — не должен запускаться
@@ -252,8 +274,11 @@ class CampaignStartViewTest(TestCase):
             r = self.client.post(reverse("campaign_start", kwargs={"campaign_id": self.camp.id}))
         self.camp.refresh_from_db()
         self.assertNotEqual(self.camp.status, Campaign.Status.SENDING)
-        self.assertRedirects(r, reverse("campaign_detail", kwargs={"campaign_id": self.camp.id}),
-                             fetch_redirect_response=False)
+        self.assertRedirects(
+            r,
+            reverse("campaign_detail", kwargs={"campaign_id": self.camp.id}),
+            fetch_redirect_response=False,
+        )
 
     def test_no_pending_recipients_blocks_start(self):
         _make_global_smtp(enabled=True)
@@ -274,6 +299,7 @@ class CampaignStartViewTest(TestCase):
 # ---------------------------------------------------------------------------
 # 7. campaign_pause / campaign_resume
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class CampaignPauseResumeViewTest(TestCase):
@@ -315,6 +341,7 @@ class CampaignPauseResumeViewTest(TestCase):
 # 8. mail_signature
 # ---------------------------------------------------------------------------
 
+
 @override_settings(SECURE_SSL_REDIRECT=False)
 class MailSignatureViewTest(TestCase):
     def setUp(self):
@@ -327,9 +354,12 @@ class MailSignatureViewTest(TestCase):
 
     def test_post_saves_signature(self):
         self.client.force_login(self.user)
-        self.client.post(reverse("mail_signature"), {
-            "signature_html": "<p>My Signature</p>",
-        })
+        self.client.post(
+            reverse("mail_signature"),
+            {
+                "signature_html": "<p>My Signature</p>",
+            },
+        )
         self.user.refresh_from_db()
         self.assertIn("My Signature", self.user.email_signature_html)
 
@@ -341,6 +371,7 @@ class MailSignatureViewTest(TestCase):
 # ---------------------------------------------------------------------------
 # 9. mail_settings — только admin
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class MailSettingsViewTest(TestCase):
@@ -370,6 +401,7 @@ class MailSettingsViewTest(TestCase):
 # 10. unsubscribe — публичная view
 # ---------------------------------------------------------------------------
 
+
 @override_settings(SECURE_SSL_REDIRECT=False)
 class UnsubscribeViewTest(TestCase):
     def test_get_with_valid_token_renders(self):
@@ -395,17 +427,19 @@ class UnsubscribeViewTest(TestCase):
 
     def test_rate_limit_returns_429(self):
         from django.core.cache import cache
+
         ip = "127.0.0.1"
         from mailer.constants import UNSUBSCRIBE_RATE_LIMIT_PER_HOUR
+
         cache.set(f"mailer:unsub_ratelimit:{ip}", UNSUBSCRIBE_RATE_LIMIT_PER_HOUR, 3600)
-        r = self.client.get(reverse("unsubscribe", kwargs={"token": "sometoken"}),
-                            REMOTE_ADDR=ip)
+        r = self.client.get(reverse("unsubscribe", kwargs={"token": "sometoken"}), REMOTE_ADDR=ip)
         self.assertEqual(r.status_code, 429)
 
 
 # ---------------------------------------------------------------------------
 # 11. campaign_add_email — AJAX
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class CampaignAddEmailViewTest(TestCase):
@@ -424,14 +458,17 @@ class CampaignAddEmailViewTest(TestCase):
         self.assertIn("ok", data)
 
     def test_requires_login(self):
-        r = self.client.post(reverse("campaign_add_email"),
-                             {"campaign_id": str(self.camp.id), "email": "x@example.com"})
+        r = self.client.post(
+            reverse("campaign_add_email"),
+            {"campaign_id": str(self.camp.id), "email": "x@example.com"},
+        )
         self.assertNotEqual(r.status_code, 200)
 
 
 # ---------------------------------------------------------------------------
 # 12. campaign_progress_poll — AJAX JSON
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class CampaignProgressPollViewTest(TestCase):
@@ -441,9 +478,7 @@ class CampaignProgressPollViewTest(TestCase):
 
     def test_returns_json_with_progress(self):
         self.client.force_login(self.user)
-        r = self.client.get(
-            reverse("campaign_progress_poll", kwargs={"campaign_id": self.camp.id})
-        )
+        r = self.client.get(reverse("campaign_progress_poll", kwargs={"campaign_id": self.camp.id}))
         self.assertEqual(r.status_code, 200)
         data = r.json()
         self.assertIn("total", data)
@@ -451,7 +486,5 @@ class CampaignProgressPollViewTest(TestCase):
         self.assertIn("failed", data)
 
     def test_requires_login(self):
-        r = self.client.get(
-            reverse("campaign_progress_poll", kwargs={"campaign_id": self.camp.id})
-        )
+        r = self.client.get(reverse("campaign_progress_poll", kwargs={"campaign_id": self.camp.id}))
         self.assertNotEqual(r.status_code, 200)

@@ -80,4 +80,3 @@ class CompanyInlineEditTests(TestCase):
         self.assertEqual(resp.status_code, 400)
         data = resp.json()
         self.assertFalse(data["ok"])
-

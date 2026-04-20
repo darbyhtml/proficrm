@@ -19,7 +19,12 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone as django_timezone
 from django.http import FileResponse, Http404, StreamingHttpResponse
 from rest_framework import status
-from rest_framework.decorators import api_view, authentication_classes, permission_classes, throttle_classes
+from rest_framework.decorators import (
+    api_view,
+    authentication_classes,
+    permission_classes,
+    throttle_classes,
+)
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.exceptions import APIException, ValidationError as DRFValidationError, Throttled
@@ -142,11 +147,11 @@ def widget_bootstrap(request):
 
     widget_token = None
     contact_external_id = None
-    
+
     try:
         # Проверка throttling (выполняется автоматически через декоратор)
         # Если превышен лимит - DRF выбросит Throttled исключение
-        
+
         input_serializer = serializers.WidgetBootstrapSerializer(data=request.data)
         input_serializer.is_valid(raise_exception=True)
 
@@ -183,7 +188,8 @@ def widget_bootstrap(request):
         # Создать или получить Contact (обновляем поля, если переданы новые значения)
         contact = services.create_or_get_contact(
             external_id=contact_external_id,
-            name=input_serializer.validated_data.get("name") or None,  # Передаём None, если пустая строка
+            name=input_serializer.validated_data.get("name")
+            or None,  # Передаём None, если пустая строка
             email=input_serializer.validated_data.get("email") or None,
             phone=input_serializer.validated_data.get("phone") or None,
             update_if_exists=True,  # Обновляем существующий контакт новыми данными
@@ -206,18 +212,19 @@ def widget_bootstrap(request):
             if region_id:
                 try:
                     from companies.models import Region
+
                     region = Region.objects.get(id=region_id)
                 except (Region.DoesNotExist, ValueError, TypeError):
                     pass
 
             if not region:
                 # GeoIP: определяем регион по IP клиента
-                client_ip = (
-                    (request.META.get("HTTP_X_FORWARDED_FOR") or "").split(",")[0].strip()
-                    or request.META.get("REMOTE_ADDR")
-                )
+                client_ip = (request.META.get("HTTP_X_FORWARDED_FOR") or "").split(",")[
+                    0
+                ].strip() or request.META.get("REMOTE_ADDR")
                 if client_ip:
                     from .geoip import get_region_from_ip
+
                     region = get_region_from_ip(client_ip)
                     if region and not contact.region_detected_id:
                         contact.region_detected = region
@@ -232,7 +239,9 @@ def widget_bootstrap(request):
                 branch = inbox.branch
             else:
                 # Глобальный inbox: филиал из правила или дефолтный
-                branch = (routing_rule.branch if routing_rule else None) or services.get_default_branch_for_messenger()
+                branch = (
+                    routing_rule.branch if routing_rule else None
+                ) or services.get_default_branch_for_messenger()
                 if not branch:
                     safe_log_widget_error(
                         widget_logger,
@@ -269,7 +278,9 @@ def widget_bootstrap(request):
             try:
                 dispatch_event("conversation_created", conversation=conversation)
             except Exception:
-                widget_logger.warning("Automation dispatch_event(conversation_created) failed", exc_info=True)
+                widget_logger.warning(
+                    "Automation dispatch_event(conversation_created) failed", exc_info=True
+                )
 
         # Вне рабочих часов (для ответа виджету)
         outside_working_hours = False
@@ -288,8 +299,9 @@ def widget_bootstrap(request):
         offline_mode = False
         offline_message = ""
         if offline_enabled:
-            no_operators = not conversation.assignee_id and not services.has_online_operators_for_branch(
-                conversation.branch_id, inbox.id
+            no_operators = (
+                not conversation.assignee_id
+                and not services.has_online_operators_for_branch(conversation.branch_id, inbox.id)
             )
             if outside_working_hours or no_operators:
                 offline_mode = True
@@ -311,9 +323,11 @@ def widget_bootstrap(request):
         initial_messages = []
 
         # Приватные заметки (is_private=True) не отдаём в виджет клиенту.
-        messages_qs = conversation.messages.exclude(
-            direction=models.Message.Direction.INTERNAL
-        ).filter(is_private=False).order_by("-created_at", "-id")
+        messages_qs = (
+            conversation.messages.exclude(direction=models.Message.Direction.INTERNAL)
+            .filter(is_private=False)
+            .order_by("-created_at", "-id")
+        )
         messages = list(messages_qs[:10])
 
         # Помечаем исходящие сообщения как доставленные при первой выдаче в виджет
@@ -337,19 +351,16 @@ def widget_bootstrap(request):
         # По умолчанию — включена (True) когда текущее время вне рабочих часов.
         # Можно отключить через inbox.settings["off_hours_form"] = {"enabled": False}.
         off_hours_form_cfg = (inbox.settings or {}).get("off_hours_form") or {}
-        off_hours_form_enabled = (
-            outside_working_hours and off_hours_form_cfg.get("enabled", True)
-        )
+        off_hours_form_enabled = outside_working_hours and off_hours_form_cfg.get("enabled", True)
         response_data = {
             "widget_session_token": session.token,
             "conversation_id": conversation.id,
             "initial_messages": initial_messages,
             "outside_working_hours": outside_working_hours,
             "off_hours_form_enabled": off_hours_form_enabled,
-            "off_hours_form_title": off_hours_form_cfg.get("title")
-                or "Сейчас нерабочее время",
+            "off_hours_form_title": off_hours_form_cfg.get("title") or "Сейчас нерабочее время",
             "off_hours_form_subtitle": off_hours_form_cfg.get("subtitle")
-                or "Наши менеджеры свяжутся с вами в рабочее время. Как удобнее связаться?",
+            or "Наши менеджеры свяжутся с вами в рабочее время. Как удобнее связаться?",
             "working_hours_message": working_hours_message,
             "working_hours_display": compact_working_hours_display(
                 _get_working_hours_enabled(inbox),
@@ -362,7 +373,8 @@ def widget_bootstrap(request):
             "color": settings_cfg.get("color") or "#01948E",
             "position": settings_cfg.get("position") or "right",
             "reply_time": settings_cfg.get("reply_time") or "in_a_few_minutes",
-            "welcome_tagline": settings_cfg.get("welcome_tagline") or "Обычно отвечаем в течение нескольких минут",
+            "welcome_tagline": settings_cfg.get("welcome_tagline")
+            or "Обычно отвечаем в течение нескольких минут",
             # privacy: можно задать в настройках inbox, иначе берём глобальные значения
             "privacy_url": (settings_cfg.get("privacy") or {}).get("url")
             or getattr(settings, "MESSENGER_PRIVACY_URL", ""),
@@ -372,13 +384,40 @@ def widget_bootstrap(request):
                 "MESSENGER_PRIVACY_TEXT",
                 "Отправляя сообщение, вы соглашаетесь с обработкой персональных данных.",
             ),
-            "prechat_required": bool((inbox.settings or {}).get("pre_chat_form", {}).get("enabled", True)),
-            "prechat_fields": (inbox.settings or {}).get("pre_chat_form", {}).get("fields", [
-                {"name": "name", "label": "Имя", "type": "text", "required": False, "enabled": True},
-                {"name": "email", "label": "Email", "type": "email", "required": False, "enabled": True},
-                {"name": "phone", "label": "Телефон", "type": "tel", "required": False, "enabled": True},
-            ]),
-            "prechat_message": (inbox.settings or {}).get("pre_chat_form", {}).get("message", "Перед началом диалога"),
+            "prechat_required": bool(
+                (inbox.settings or {}).get("pre_chat_form", {}).get("enabled", True)
+            ),
+            "prechat_fields": (inbox.settings or {})
+            .get("pre_chat_form", {})
+            .get(
+                "fields",
+                [
+                    {
+                        "name": "name",
+                        "label": "Имя",
+                        "type": "text",
+                        "required": False,
+                        "enabled": True,
+                    },
+                    {
+                        "name": "email",
+                        "label": "Email",
+                        "type": "email",
+                        "required": False,
+                        "enabled": True,
+                    },
+                    {
+                        "name": "phone",
+                        "label": "Телефон",
+                        "type": "tel",
+                        "required": False,
+                        "enabled": True,
+                    },
+                ],
+            ),
+            "prechat_message": (inbox.settings or {})
+            .get("pre_chat_form", {})
+            .get("message", "Перед началом диалога"),
         }
         features_cfg = (inbox.settings or {}).get("features") or {}
         response_data["sse_enabled"] = bool(features_cfg.get("sse", True))
@@ -396,14 +435,18 @@ def widget_bootstrap(request):
             widget_logger.warning(
                 "Webhook notify_conversation_created failed",
                 exc_info=True,
-                extra={"widget_token": widget_token, "inbox_id": inbox.id, "conversation_id": conversation.id},
+                extra={
+                    "widget_token": widget_token,
+                    "inbox_id": inbox.id,
+                    "conversation_id": conversation.id,
+                },
             )
 
         response_serializer = serializers.WidgetBootstrapResponseSerializer(response_data)
 
         resp = Response(response_serializer.data, status=status.HTTP_200_OK)
         return _add_widget_cors_headers(request, resp)
-    
+
     except Throttled as e:
         # Превышен лимит запросов
         safe_log_widget_error(
@@ -414,7 +457,7 @@ def widget_bootstrap(request):
         )
         # DRF автоматически вернёт 429 с деталями
         raise
-    
+
     except DRFValidationError as e:
         # Ошибки валидации сериализатора
         safe_log_widget_error(
@@ -644,9 +687,7 @@ def widget_offhours_request(request):
             update_if_exists=True,
         )
     except Exception:
-        widget_logger.warning(
-            "offhours: create_or_get_contact failed", exc_info=True
-        )
+        widget_logger.warning("offhours: create_or_get_contact failed", exc_info=True)
 
     # Сохраняем off-hours поля + переводим диалог в WAITING_OFFLINE.
     # assignee НЕ трогаем — утром менеджер заберёт через «Я связался».
@@ -689,9 +730,7 @@ def widget_offhours_request(request):
             is_private=True,
         )
     except Exception:
-        widget_logger.warning(
-            "offhours: failed to append internal message", exc_info=True
-        )
+        widget_logger.warning("offhours: failed to append internal message", exc_info=True)
 
     resp = Response(
         {
@@ -760,8 +799,12 @@ def widget_send(request):
         widget_session_token = parsed["widget_session_token"]
         body = parsed["body"]
         uploaded_files = parsed["files"]
-        captcha_token = (request.POST.get("captcha_token") or request.data.get("captcha_token") or "").strip()
-        captcha_answer = (request.POST.get("captcha_answer") or request.data.get("captcha_answer") or "").strip()
+        captcha_token = (
+            request.POST.get("captcha_token") or request.data.get("captcha_token") or ""
+        ).strip()
+        captcha_answer = (
+            request.POST.get("captcha_answer") or request.data.get("captcha_answer") or ""
+        ).strip()
 
         # Валидация токенов и body (body обязателен только если нет файлов)
         if not widget_token or not widget_session_token:
@@ -791,6 +834,7 @@ def widget_send(request):
             # Проверка ссылок в body
             if body:
                 import re
+
                 url_pattern = r"(https?://|www\.)[^\s]+"
                 urls = re.findall(url_pattern, body, re.IGNORECASE)
                 if len(urls) > 3:
@@ -801,6 +845,7 @@ def widget_send(request):
 
         # Дополнительная проверка на одинаковые сообщения (через cache)
         from django.core.cache import cache
+
         message_hash_key = f"messenger:spam:send:{widget_session_token[:16]}:{hash(body or str(len(uploaded_files)))}"
         duplicate_count = cache.get(message_hash_key, 0)
         if duplicate_count >= 3:
@@ -866,7 +911,9 @@ def widget_send(request):
                 size = getattr(f, "size", 0) or 0
                 if size > max_bytes:
                     return Response(
-                        {"detail": f"File too large. Maximum size is {max_bytes // (1024*1024)} MB."},
+                        {
+                            "detail": f"File too large. Maximum size is {max_bytes // (1024*1024)} MB."
+                        },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
                 ct = (getattr(f, "content_type", "") or "").strip()
@@ -948,6 +995,7 @@ def widget_send(request):
 
         # Атомарно: сообщение + вложения + last_activity_at
         from django.db import transaction as db_transaction
+
         with db_transaction.atomic():
             message.save()
 
@@ -978,6 +1026,7 @@ def widget_send(request):
         # Browser Push уведомление назначенному оператору
         try:
             from .push import send_push_new_message
+
             send_push_new_message(conversation, message)
         except Exception:
             widget_logger.warning("Push notification failed", exc_info=True)
@@ -985,6 +1034,7 @@ def widget_send(request):
         # Email-уведомление офлайн-оператору (async через Celery)
         try:
             from .tasks import send_offline_email_notification
+
             send_offline_email_notification.delay(conversation.id, message.id)
         except Exception:
             widget_logger.warning("Email notification task dispatch failed", exc_info=True)
@@ -1008,7 +1058,9 @@ def widget_send(request):
         try:
             dispatch_event("message_created", conversation=conversation, message=message)
         except Exception:
-            widget_logger.warning("Automation dispatch_event(message_created) failed", exc_info=True)
+            widget_logger.warning(
+                "Automation dispatch_event(message_created) failed", exc_info=True
+            )
 
         attachments_payload = build_message_attachments_payload(
             message, request, widget_token, widget_session_token
@@ -1022,7 +1074,7 @@ def widget_send(request):
             }
         )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
-    
+
     except Throttled as e:
         # Превышен лимит запросов
         safe_log_widget_error(
@@ -1033,7 +1085,7 @@ def widget_send(request):
             session_token=widget_session_token,
         )
         raise
-    
+
     except DRFValidationError as e:
         # Ошибки валидации сериализатора
         safe_log_widget_error(
@@ -1196,6 +1248,7 @@ def widget_poll(request):
             result.append(payload)
 
         from .typing import get_typing_status
+
         typing_status = get_typing_status(conversation.id)
 
         # Оценка: запросить у контакта, если диалог закрыт/решён и ещё не оценен
@@ -1203,32 +1256,41 @@ def widget_poll(request):
         rating_type = "stars"
         rating_max_score = 5
         rating_cfg = (inbox.settings or {}).get("rating") or {}
-        if rating_cfg.get("enabled") and conversation.status in (
-            models.Conversation.Status.RESOLVED,
-            models.Conversation.Status.CLOSED,
-        ) and conversation.rating_score is None:
+        if (
+            rating_cfg.get("enabled")
+            and conversation.status
+            in (
+                models.Conversation.Status.RESOLVED,
+                models.Conversation.Status.CLOSED,
+            )
+            and conversation.rating_score is None
+        ):
             rating_requested = True
             rating_type = rating_cfg.get("type", "stars")
             rating_max_score = int(rating_cfg.get("max_score", 5)) if rating_type == "stars" else 10
 
         # Последний IN-месседж, прочитанный оператором (для чекмарков в виджете)
         operator_read_up_to = (
-            conversation.messages
-            .filter(direction=models.Message.Direction.IN, read_at__isnull=False)
+            conversation.messages.filter(
+                direction=models.Message.Direction.IN, read_at__isnull=False
+            )
             .order_by("-id")
             .values_list("id", flat=True)
             .first()
         )
 
-        return Response({
-            "messages": result,
-            "operator_typing": typing_status["operator_typing"],
-            "operator_read_up_to": operator_read_up_to,
-            "rating_requested": rating_requested,
-            "rating_type": rating_type,
-            "rating_max_score": rating_max_score,
-        }, status=status.HTTP_200_OK)
-    
+        return Response(
+            {
+                "messages": result,
+                "operator_typing": typing_status["operator_typing"],
+                "operator_read_up_to": operator_read_up_to,
+                "rating_requested": rating_requested,
+                "rating_type": rating_type,
+                "rating_max_score": rating_max_score,
+            },
+            status=status.HTTP_200_OK,
+        )
+
     except Throttled as e:
         # Превышен лимит запросов
         safe_log_widget_error(
@@ -1265,14 +1327,15 @@ def widget_stream(request):
 
     SSE-стрим обновлений для виджета (замена частого poll).
     Работает короткими соединениями (≈25 секунд), затем клиент переподключается.
-    
+
     Используется обычный Django view вместо DRF, чтобы избежать проблем с content negotiation для text/event-stream.
     """
     ensure_messenger_enabled_api()
-    
+
     # CORS preflight для EventSource
     if request.method == "OPTIONS":
         from django.http import HttpResponse
+
         resp = HttpResponse(status=200)
         return _add_widget_cors_headers(request, resp)
 
@@ -1282,6 +1345,7 @@ def widget_stream(request):
 
     if not widget_token or not widget_session_token:
         from django.http import JsonResponse
+
         resp = JsonResponse(
             {"detail": "widget_token and widget_session_token are required."},
             status=400,
@@ -1303,6 +1367,7 @@ def widget_stream(request):
     session = get_widget_session(widget_session_token, client_ip=get_client_ip(request))
     if not session or session.inbox_id != inbox.id:
         from django.http import JsonResponse
+
         resp = JsonResponse(
             {"detail": "Invalid or expired widget_session_token."},
             status=401,
@@ -1323,6 +1388,7 @@ def widget_stream(request):
         last_id = int(since_id) if since_id is not None else 0
     except ValueError:
         from django.http import JsonResponse
+
         resp = JsonResponse({"detail": "Invalid since_id format."}, status=400)
         return _add_widget_cors_headers(request, resp)
 
@@ -1333,10 +1399,15 @@ def widget_stream(request):
         rating_type = "stars"
         rating_max_score = 5
         rating_cfg = (inbox.settings or {}).get("rating") or {}
-        if rating_cfg.get("enabled") and conversation.status in (
-            models.Conversation.Status.RESOLVED,
-            models.Conversation.Status.CLOSED,
-        ) and conversation.rating_score is None:
+        if (
+            rating_cfg.get("enabled")
+            and conversation.status
+            in (
+                models.Conversation.Status.RESOLVED,
+                models.Conversation.Status.CLOSED,
+            )
+            and conversation.rating_score is None
+        ):
             rating_requested = True
             rating_type = rating_cfg.get("type", "stars")
             rating_max_score = int(rating_cfg.get("max_score", 5)) if rating_type == "stars" else 10
@@ -1400,8 +1471,9 @@ def widget_stream(request):
             if now - last_read_check >= 5:
                 last_read_check = now
                 current_read_up_to = (
-                    conversation.messages
-                    .filter(direction=models.Message.Direction.IN, read_at__isnull=False)
+                    conversation.messages.filter(
+                        direction=models.Message.Direction.IN, read_at__isnull=False
+                    )
                     .order_by("-id")
                     .values_list("id", flat=True)
                     .first()
@@ -1444,7 +1516,7 @@ def widget_stream(request):
     resp = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
     resp["Cache-Control"] = "no-cache"
     resp["X-Accel-Buffering"] = "no"  # nginx: не буферизовать SSE
-    
+
     # Добавить CORS заголовки для SSE вручную (StreamingHttpResponse не поддерживает _add_widget_cors_headers напрямую)
     origin = (request.META.get("HTTP_ORIGIN") or "").strip()
     if origin:
@@ -1453,7 +1525,7 @@ def widget_stream(request):
     resp["Access-Control-Allow-Credentials"] = "true"
     resp["Access-Control-Allow-Headers"] = "Cache-Control"
     resp["Access-Control-Expose-Headers"] = "Content-Type"
-    
+
     return resp
 
 
@@ -1488,7 +1560,9 @@ def widget_attachment_download(request, attachment_id):
             status=status.HTTP_401_UNAUTHORIZED,
         )
     try:
-        attachment = models.MessageAttachment.objects.select_related("message").get(pk=attachment_id)
+        attachment = models.MessageAttachment.objects.select_related("message").get(
+            pk=attachment_id
+        )
     except models.MessageAttachment.DoesNotExist:
         raise Http404("Attachment not found.")
     if attachment.message.conversation_id != session.conversation_id:
@@ -1498,6 +1572,7 @@ def widget_attachment_download(request, attachment_id):
     raw_filename = attachment.original_name or os.path.basename(attachment.file.name)
     # Sanitize filename: strip path separators, control chars, quotes
     import re as _re
+
     safe_filename = os.path.basename(raw_filename)
     safe_filename = _re.sub(r'[\x00-\x1f\x7f"\\;]', "_", safe_filename)
     safe_filename = safe_filename.strip(". ") or "attachment"
@@ -1505,9 +1580,14 @@ def widget_attachment_download(request, attachment_id):
         f = attachment.file.open("rb")
     except Exception:
         raise Http404("File not available.")
-    response = FileResponse(f, filename=safe_filename, content_type=attachment.content_type or "application/octet-stream")
+    response = FileResponse(
+        f,
+        filename=safe_filename,
+        content_type=attachment.content_type or "application/octet-stream",
+    )
     # Use RFC 5987 encoding for safe Content-Disposition
     from urllib.parse import quote
+
     encoded_filename = quote(safe_filename, safe="")
     response["Content-Disposition"] = f"inline; filename*=UTF-8''{encoded_filename}"
     return response
@@ -1526,7 +1606,9 @@ def widget_typing(request):
     """
     ensure_messenger_enabled_api()
     widget_token = request.data.get("widget_token") or request.query_params.get("widget_token")
-    widget_session_token = request.data.get("widget_session_token") or request.query_params.get("widget_session_token")
+    widget_session_token = request.data.get("widget_session_token") or request.query_params.get(
+        "widget_session_token"
+    )
     if not widget_token or not widget_session_token:
         return Response(
             {"detail": "widget_token and widget_session_token are required."},
@@ -1535,7 +1617,10 @@ def widget_typing(request):
     try:
         inbox = models.Inbox.objects.get(widget_token=widget_token, is_active=True)
     except models.Inbox.DoesNotExist:
-        return Response({"detail": "Invalid widget_token or inbox is inactive."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"detail": "Invalid widget_token or inbox is inactive."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
 
     enforce_widget_origin_allowed(request, inbox)
     session = get_widget_session(widget_session_token, client_ip=get_client_ip(request))
@@ -1549,6 +1634,7 @@ def widget_typing(request):
     except models.Conversation.DoesNotExist:
         return Response({"detail": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
     from .typing import set_contact_typing
+
     set_contact_typing(conversation.id)
     return Response({"status": "ok"}, status=status.HTTP_200_OK)
 
@@ -1567,7 +1653,9 @@ def widget_mark_read(request):
     """
     ensure_messenger_enabled_api()
     widget_token = request.data.get("widget_token") or request.query_params.get("widget_token")
-    widget_session_token = request.data.get("widget_session_token") or request.query_params.get("widget_session_token")
+    widget_session_token = request.data.get("widget_session_token") or request.query_params.get(
+        "widget_session_token"
+    )
     if not widget_token or not widget_session_token:
         return Response(
             {"detail": "widget_token and widget_session_token are required."},
@@ -1576,7 +1664,10 @@ def widget_mark_read(request):
     try:
         inbox = models.Inbox.objects.get(widget_token=widget_token, is_active=True)
     except models.Inbox.DoesNotExist:
-        return Response({"detail": "Invalid widget_token or inbox is inactive."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"detail": "Invalid widget_token or inbox is inactive."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
 
     enforce_widget_origin_allowed(request, inbox)
     session = get_widget_session(widget_session_token, client_ip=get_client_ip(request))
@@ -1591,6 +1682,7 @@ def widget_mark_read(request):
         return Response({"detail": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
 
     from django.utils import timezone
+
     now = timezone.now()
     last_message_id = request.data.get("last_message_id")
     message_ids = request.data.get("message_ids")
@@ -1604,10 +1696,14 @@ def widget_mark_read(request):
                 id__lte=last_id,
             ).update(read_at=now)
         except (ValueError, TypeError):
-            return Response({"detail": "Invalid last_message_id."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Invalid last_message_id."}, status=status.HTTP_400_BAD_REQUEST
+            )
     elif message_ids is not None:
         if not isinstance(message_ids, list):
-            return Response({"detail": "message_ids must be a list."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "message_ids must be a list."}, status=status.HTTP_400_BAD_REQUEST
+            )
         ids_ok = [int(x) for x in message_ids if isinstance(x, (int, str)) and str(x).isdigit()]
         if ids_ok:
             conversation.messages.filter(
@@ -1636,7 +1732,9 @@ def widget_rate(request):
     """
     ensure_messenger_enabled_api()
     widget_token = request.data.get("widget_token") or request.query_params.get("widget_token")
-    widget_session_token = request.data.get("widget_session_token") or request.query_params.get("widget_session_token")
+    widget_session_token = request.data.get("widget_session_token") or request.query_params.get(
+        "widget_session_token"
+    )
     if not widget_token or not widget_session_token:
         return Response(
             {"detail": "widget_token and widget_session_token are required."},
@@ -1645,7 +1743,10 @@ def widget_rate(request):
     try:
         inbox = models.Inbox.objects.get(widget_token=widget_token, is_active=True)
     except models.Inbox.DoesNotExist:
-        return Response({"detail": "Invalid widget_token or inbox is inactive."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"detail": "Invalid widget_token or inbox is inactive."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
 
     enforce_widget_origin_allowed(request, inbox)
     session = get_widget_session(widget_session_token, client_ip=get_client_ip(request))
@@ -1668,7 +1769,9 @@ def widget_rate(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
     if conversation.rating_score is not None:
-        return Response({"detail": "Conversation already rated."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"detail": "Conversation already rated."}, status=status.HTTP_400_BAD_REQUEST
+        )
 
     rating_cfg = (inbox.settings or {}).get("rating") or {}
     rating_type = rating_cfg.get("type", "stars")
@@ -1687,6 +1790,7 @@ def widget_rate(request):
 
     comment = (request.data.get("comment") or "").strip()[:2000]
     from django.utils import timezone
+
     now = timezone.now()
     conversation.rating_score = score
     conversation.rating_comment = comment
@@ -1714,7 +1818,8 @@ def widget_campaigns(request):
         return Response({"detail": "Invalid widget_token"}, status=status.HTTP_404_NOT_FOUND)
 
     campaigns = models.Campaign.objects.filter(
-        inbox=inbox, status=models.Campaign.Status.ACTIVE,
+        inbox=inbox,
+        status=models.Campaign.Status.ACTIVE,
     ).values("id", "title", "message", "url_pattern", "time_on_page", "only_during_business_hours")
 
     resp = Response(list(campaigns))

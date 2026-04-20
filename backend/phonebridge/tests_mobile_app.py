@@ -4,6 +4,7 @@ CRMProfiDialer auto-update.
 GET /api/phone/app/latest/ → JSON с version_name/code/sha256/size/
 download_url последней активной production-сборки.
 """
+
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model

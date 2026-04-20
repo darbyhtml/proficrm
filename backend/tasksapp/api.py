@@ -48,7 +48,7 @@ class TaskSerializer(serializers.ModelSerializer):
         write_only=True,
         help_text="Если включено и у компании есть организация (головная/филиалы), задача будет создана по всей организации.",
     )
-    
+
     def validate_recurrence_rrule(self, value):
         """Валидация строки RRULE (iCalendar RFC 5545).
 
@@ -77,8 +77,7 @@ class TaskSerializer(serializers.ModelSerializer):
         freq_part = value_upper.split(";")[0].replace("FREQ=", "")
         if freq_part not in valid_freqs:
             raise serializers.ValidationError(
-                f"Недопустимое значение FREQ={freq_part}. "
-                f"Допустимые: {', '.join(valid_freqs)}"
+                f"Недопустимое значение FREQ={freq_part}. " f"Допустимые: {', '.join(valid_freqs)}"
             )
 
         # Защита от DoS: ограничиваем COUNT и проверяем, что правило вообще
@@ -100,6 +99,7 @@ class TaskSerializer(serializers.ModelSerializer):
         try:
             from dateutil.rrule import rrulestr
             from django.utils import timezone as _tz
+
             rrulestr(value, dtstart=_tz.now())
         except Exception as exc:
             raise serializers.ValidationError(f"Некорректное правило RRULE: {exc}")
@@ -172,7 +172,9 @@ class TaskViewSet(viewsets.ModelViewSet):
                 # Защита от случайного дублирования задач при повторном запросе:
                 # если за последние несколько секунд уже есть такая же задача по этой компании,
                 # просто возвращаемся к существующей.
-                title_value = data.get("title") or (data.get("type").name if data.get("type") else "")
+                title_value = data.get("title") or (
+                    data.get("type").name if data.get("type") else ""
+                )
                 recent_cutoff = timezone.now() - timedelta(seconds=10)
                 duplicate_qs = Task.objects.filter(
                     created_by=user,
@@ -203,7 +205,9 @@ class TaskViewSet(viewsets.ModelViewSet):
                 created_tasks.append(task)
 
             if not created_tasks:
-                raise PermissionDenied("Не удалось создать задачи по организации (нет прав ни по одной компании).")
+                raise PermissionDenied(
+                    "Не удалось создать задачи по организации (нет прав ни по одной компании)."
+                )
 
             # Для DRF важно вернуть один объект — берём первую созданную задачу как "представителя".
             serializer.instance = created_tasks[0]
@@ -251,5 +255,3 @@ class TaskViewSet(viewsets.ModelViewSet):
                     raise PermissionDenied("Можно переназначать задачи только внутри филиала.")
 
         serializer.save()
-
-

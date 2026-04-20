@@ -5,6 +5,7 @@ ArrayField defaults).
 
 ТОЛЬКО для фазы setup_databases — тесты по-прежнему работают со стандартной обработкой ошибок.
 """
+
 import logging
 from django.test.runner import DiscoverRunner
 
@@ -23,6 +24,7 @@ class SQLiteCompatibleTestRunner(DiscoverRunner):
 
     def setup_databases(self, **kwargs):
         from django.db import connection
+
         if connection.vendor != "sqlite":
             return super().setup_databases(**kwargs)
 
@@ -38,21 +40,32 @@ class SQLiteCompatibleTestRunner(DiscoverRunner):
             try:
                 return _orig_execute(self_cursor, sql, params)
             except (
-                _sqlite3.OperationalError, _sqlite3.ProgrammingError,
-                OperationalError, ProgrammingError, DatabaseError,
+                _sqlite3.OperationalError,
+                _sqlite3.ProgrammingError,
+                OperationalError,
+                ProgrammingError,
+                DatabaseError,
             ) as exc:
                 sql_lower = (sql or "").lower().strip()
                 # Разрешаем любую CREATE TABLE / INSERT / UPDATE / SELECT — не пропускаем их
                 safe_to_skip_verbs = (
-                    "create extension", "create index", "drop index",
-                    "alter index", "alter table", "drop table",
-                    "create trigger", "drop trigger", "create function",
-                    "drop function", "create or replace function",
+                    "create extension",
+                    "create index",
+                    "drop index",
+                    "alter index",
+                    "alter table",
+                    "drop table",
+                    "create trigger",
+                    "drop trigger",
+                    "create function",
+                    "drop function",
+                    "create or replace function",
                 )
                 if any(sql_lower.startswith(v) for v in safe_to_skip_verbs):
                     logger.debug(
                         "SQLiteCompatibleTestRunner: skipping PG-only SQL: %s... (%s)",
-                        sql[:80], exc,
+                        sql[:80],
+                        exc,
                     )
                     return  # Пропускаем: PostgreSQL-специфичная операция
                 raise  # Остальные ошибки пробрасываем
@@ -67,7 +80,10 @@ class SQLiteCompatibleTestRunner(DiscoverRunner):
                 field_type = type(field).__name__
                 logger.debug(
                     "SQLiteCompatibleTestRunner: skipping PG-only add_field (%s.%s: %s) — %s",
-                    model.__name__, field.name, field_type, exc,
+                    model.__name__,
+                    field.name,
+                    field_type,
+                    exc,
                 )
                 return  # Пропускаем: PostgreSQL-специфичное поле (ArrayField и т.д.)
 

@@ -35,19 +35,23 @@ def _get_bell_data(user, now):
 
     reminder_items = []
     for t in overdue:
-        reminder_items.append({
-            "title": f"Просрочено: {t.title}",
-            "subtitle": (t.company.name if t.company else ""),
-            "url": "/tasks/?overdue=1",
-            "kind": "overdue",
-        })
+        reminder_items.append(
+            {
+                "title": f"Просрочено: {t.title}",
+                "subtitle": (t.company.name if t.company else ""),
+                "url": "/tasks/?overdue=1",
+                "kind": "overdue",
+            }
+        )
     for t in today:
-        reminder_items.append({
-            "title": f"На сегодня: {t.title}",
-            "subtitle": (t.company.name if t.company else ""),
-            "url": "/tasks/?today=1",
-            "kind": "today",
-        })
+        reminder_items.append(
+            {
+                "title": f"На сегодня: {t.title}",
+                "subtitle": (t.company.name if t.company else ""),
+                "url": "/tasks/?today=1",
+                "kind": "today",
+            }
+        )
     reminder_count = len(overdue) + len(today)
 
     # Contract reminders — read-only, тоже попадает в кэш.
@@ -62,6 +66,7 @@ def _get_bell_data(user, now):
         try:
             from companies.models import ContractType
             from django.db.models import Max
+
             max_warning = ContractType.objects.aggregate(max_warning=Max("warning_days"))
             if max_warning["max_warning"]:
                 max_warning_days = max(max_warning["max_warning"], 30)
@@ -127,5 +132,3 @@ def notifications_panel(request):
         "reminder_items": reminder_items,
         "bell_count": notif_unread_count + reminder_count,
     }
-
-

@@ -26,9 +26,19 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--contact-id", required=True, help="UUID контакта messenger")
-        parser.add_argument("--dry-run", action="store_true", help="Показать что будет сделано, без изменений.")
-        parser.add_argument("--redact-messages", action="store_true", help="Заменить body у IN сообщений контакта на '[redacted]'.")
-        parser.add_argument("--delete-attachments", action="store_true", help="Удалить вложения (и файлы) у IN сообщений контакта.")
+        parser.add_argument(
+            "--dry-run", action="store_true", help="Показать что будет сделано, без изменений."
+        )
+        parser.add_argument(
+            "--redact-messages",
+            action="store_true",
+            help="Заменить body у IN сообщений контакта на '[redacted]'.",
+        )
+        parser.add_argument(
+            "--delete-attachments",
+            action="store_true",
+            help="Удалить вложения (и файлы) у IN сообщений контакта.",
+        )
 
     def handle(self, *args, **options):
         contact_id_raw = options["contact_id"]
@@ -52,7 +62,9 @@ class Command(BaseCommand):
         new_external_id = f"anon:{pseudo}"
 
         conv_ids = list(Conversation.objects.filter(contact=contact).values_list("id", flat=True))
-        in_msg_qs = Message.objects.filter(conversation_id__in=conv_ids, direction=Message.Direction.IN, sender_contact=contact)
+        in_msg_qs = Message.objects.filter(
+            conversation_id__in=conv_ids, direction=Message.Direction.IN, sender_contact=contact
+        )
 
         self.stdout.write(f"Контакт: {contact.id}")
         self.stdout.write(f"Диалогов: {len(conv_ids)}")
@@ -80,7 +92,11 @@ class Command(BaseCommand):
 
             # 3) Опционально удаляем вложения (и файлы)
             if delete_attachments:
-                atts = list(MessageAttachment.objects.filter(message__in=in_msg_qs).select_related("message"))
+                atts = list(
+                    MessageAttachment.objects.filter(message__in=in_msg_qs).select_related(
+                        "message"
+                    )
+                )
                 for att in atts:
                     try:
                         # удаляем файл из storage
@@ -91,4 +107,3 @@ class Command(BaseCommand):
                 MessageAttachment.objects.filter(id__in=[a.id for a in atts]).delete()
 
         self.stdout.write(self.style.SUCCESS("Анонимизация выполнена."))
-

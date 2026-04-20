@@ -13,9 +13,10 @@ class UiGlobalConfigAdmin(admin.ModelAdmin):
 class AmoApiConfigAdmin(admin.ModelAdmin):
     list_display = ("domain", "is_connected", "updated_at")
     readonly_fields = ("id", "updated_at")
-    
+
     def is_connected(self, obj):
         return obj.is_connected()
+
     is_connected.boolean = True
     is_connected.short_description = "Подключено"
 

@@ -178,7 +178,7 @@ def import_amocrm_ics(
             if dt_start and dt_start.year < 2026:
                 res.skipped_old_tasks += 1
                 continue
-            
+
             company_name = _extract_company(contact, desc, summary)
             company = find_company(company_name)
             if company:
@@ -252,5 +252,3 @@ def import_amocrm_ics(
 
     _run()
     return res
-
-

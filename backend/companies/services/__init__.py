@@ -19,6 +19,7 @@
 
 См. `docs/decisions.md` (ADR 2026-04-20 «Companies services package»).
 """
+
 from __future__ import annotations
 
 # Обратная совместимость: все публичные имена из company_core.py

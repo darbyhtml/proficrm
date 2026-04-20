@@ -1,6 +1,7 @@
 """
 Views для управления получателями кампаний.
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,8 +33,17 @@ def campaign_pick(request: HttpRequest) -> JsonResponse:
     Поддерживает поиск (?q=...) и пагинацию (?page=N, page_size=25/50).
     """
     user: User = request.user
-    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:pick", context={"path": request.path, "method": request.method})
-    qs = Campaign.objects.filter(is_template=False).only("id", "name", "status").order_by("-created_at")
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:campaigns:pick",
+        context={"path": request.path, "method": request.method},
+    )
+    qs = (
+        Campaign.objects.filter(is_template=False)
+        .only("id", "name", "status")
+        .order_by("-created_at")
+    )
     if user.role == User.Role.MANAGER:
         qs = qs.filter(created_by=user)
     elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
@@ -46,6 +56,7 @@ def campaign_pick(request: HttpRequest) -> JsonResponse:
         qs = qs.filter(name__icontains=q)
 
     from django.core.paginator import Paginator as _Paginator
+
     try:
         page_size = min(int(request.GET.get("page_size") or 25), 50)
     except (ValueError, TypeError):
@@ -60,21 +71,28 @@ def campaign_pick(request: HttpRequest) -> JsonResponse:
     page = paginator.get_page(page_num)
 
     items = [{"id": str(c.id), "name": c.name, "status": c.status} for c in page.object_list]
-    return JsonResponse({
-        "ok": True,
-        "campaigns": items,
-        "total": paginator.count,
-        "num_pages": paginator.num_pages,
-        "page": page.number,
-        "has_next": page.has_next(),
-    })
+    return JsonResponse(
+        {
+            "ok": True,
+            "campaigns": items,
+            "total": paginator.count,
+            "num_pages": paginator.num_pages,
+            "page": page.number,
+            "has_next": page.has_next(),
+        }
+    )
 
 
 @login_required
 def campaign_add_email(request: HttpRequest) -> JsonResponse:
     """Добавить email в выбранную кампанию (AJAX)."""
     user: User = request.user
-    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:add_email", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:campaigns:add_email",
+        context={"path": request.path, "method": request.method},
+    )
     if request.method != "POST":
         return JsonResponse({"ok": False, "error": "Метод не разрешен."}, status=405)
 
@@ -90,9 +108,17 @@ def campaign_add_email(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"ok": False, "error": "Нет прав на эту кампанию."}, status=403)
 
     now = timezone.now()
-    cd = EmailCooldown.objects.filter(created_by=user, email__iexact=email, until_at__gt=now).first()
+    cd = EmailCooldown.objects.filter(
+        created_by=user, email__iexact=email, until_at__gt=now
+    ).first()
     if cd:
-        return JsonResponse({"ok": False, "error": f"Этот email временно нельзя использовать (до {cd.until_at:%d.%m.%Y %H:%M})."}, status=400)
+        return JsonResponse(
+            {
+                "ok": False,
+                "error": f"Этот email временно нельзя использовать (до {cd.until_at:%d.%m.%Y %H:%M}).",
+            },
+            status=400,
+        )
 
     if Unsubscribe.objects.filter(email__iexact=email).exists():
         CampaignRecipient.objects.get_or_create(
@@ -100,12 +126,19 @@ def campaign_add_email(request: HttpRequest) -> JsonResponse:
             email=email,
             defaults={"status": CampaignRecipient.Status.UNSUBSCRIBED},
         )
-        return JsonResponse({"ok": True, "status": "unsubscribed", "message": "Email в отписках — добавлен как «Отписался»."})
+        return JsonResponse(
+            {
+                "ok": True,
+                "status": "unsubscribed",
+                "message": "Email в отписках — добавлен как «Отписался».",
+            }
+        )
 
     company_uuid = None
     if company_id:
         try:
             from uuid import UUID
+
             company_uuid = UUID(company_id)
         except Exception:
             company_uuid = None
@@ -122,15 +155,38 @@ def campaign_add_email(request: HttpRequest) -> JsonResponse:
             if company_uuid and not r.company_id:
                 r.company_id = company_uuid
             r.save(update_fields=["status", "last_error", "company_id", "updated_at"])
-            return JsonResponse({"ok": True, "status": "pending", "message": "Email был с ошибкой — возвращён в очередь."})
-        return JsonResponse({"ok": True, "status": r.status, "message": "Email уже есть в кампании. Повторная отправка не выполняется автоматически."})
+            return JsonResponse(
+                {
+                    "ok": True,
+                    "status": "pending",
+                    "message": "Email был с ошибкой — возвращён в очередь.",
+                }
+            )
+        return JsonResponse(
+            {
+                "ok": True,
+                "status": r.status,
+                "message": "Email уже есть в кампании. Повторная отправка не выполняется автоматически.",
+            }
+        )
 
-    return JsonResponse({"ok": True, "status": r.status, "message": "Email добавлен." if created else "Email уже был в кампании."})
+    return JsonResponse(
+        {
+            "ok": True,
+            "status": r.status,
+            "message": "Email добавлен." if created else "Email уже был в кампании.",
+        }
+    )
 
 
 @login_required
 def campaign_recipient_add(request: HttpRequest, campaign_id) -> HttpResponse:
-    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:recipients:add", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:campaigns:recipients:add",
+        context={"path": request.path, "method": request.method},
+    )
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
@@ -150,9 +206,14 @@ def campaign_recipient_add(request: HttpRequest, campaign_id) -> HttpResponse:
         return redirect("campaign_detail", campaign_id=camp.id)
 
     now = timezone.now()
-    cd = EmailCooldown.objects.filter(created_by=user, email__iexact=email, until_at__gt=now).first()
+    cd = EmailCooldown.objects.filter(
+        created_by=user, email__iexact=email, until_at__gt=now
+    ).first()
     if cd:
-        messages.error(request, f"Этот email временно нельзя использовать для рассылки (до {cd.until_at:%d.%m.%Y %H:%M}).")
+        messages.error(
+            request,
+            f"Этот email временно нельзя использовать для рассылки (до {cd.until_at:%d.%m.%Y %H:%M}).",
+        )
         return redirect("campaign_detail", campaign_id=camp.id)
 
     if Unsubscribe.objects.filter(email__iexact=email).exists():
@@ -165,9 +226,7 @@ def campaign_recipient_add(request: HttpRequest, campaign_id) -> HttpResponse:
         return redirect("campaign_detail", campaign_id=camp.id)
 
     recipient, created = CampaignRecipient.objects.get_or_create(
-        campaign=camp,
-        email=email,
-        defaults={"status": CampaignRecipient.Status.PENDING}
+        campaign=camp, email=email, defaults={"status": CampaignRecipient.Status.PENDING}
     )
     if not created and recipient.status != CampaignRecipient.Status.PENDING:
         if recipient.status == CampaignRecipient.Status.FAILED:
@@ -176,7 +235,10 @@ def campaign_recipient_add(request: HttpRequest, campaign_id) -> HttpResponse:
             recipient.save(update_fields=["status", "last_error", "updated_at"])
             messages.success(request, f"Получатель был с ошибкой: {email} (возвращён в очередь)")
         else:
-            messages.info(request, f"Получатель уже есть: {email} (статус: {recipient.get_status_display()}). Повторная отправка не включена.")
+            messages.info(
+                request,
+                f"Получатель уже есть: {email} (статус: {recipient.get_status_display()}). Повторная отправка не включена.",
+            )
     elif created:
         messages.success(request, f"Добавлен получатель: {email}")
     else:
@@ -186,7 +248,12 @@ def campaign_recipient_add(request: HttpRequest, campaign_id) -> HttpResponse:
 
 @login_required
 def campaign_recipient_delete(request: HttpRequest, campaign_id, recipient_id) -> HttpResponse:
-    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:recipients:delete", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:campaigns:recipients:delete",
+        context={"path": request.path, "method": request.method},
+    )
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
@@ -205,7 +272,12 @@ def campaign_recipient_delete(request: HttpRequest, campaign_id, recipient_id) -
 @login_required
 def campaign_recipients_bulk_delete(request: HttpRequest, campaign_id) -> HttpResponse:
     """Массовое удаление получателей."""
-    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:recipients:bulk_delete", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:campaigns:recipients:bulk_delete",
+        context={"path": request.path, "method": request.method},
+    )
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
@@ -221,6 +293,7 @@ def campaign_recipients_bulk_delete(request: HttpRequest, campaign_id) -> HttpRe
 
     try:
         from uuid import UUID
+
         valid_ids = [UUID(rid) for rid in recipient_ids]
     except (ValueError, TypeError):
         messages.error(request, "Некорректные ID получателей.")
@@ -238,7 +311,13 @@ def campaign_recipients_bulk_delete(request: HttpRequest, campaign_id) -> HttpRe
 
     recipients.delete()
     messages.success(request, f"Удалено получателей: {count}")
-    log_event(actor=user, verb=ActivityEvent.Verb.DELETE, entity_type="campaign", entity_id=camp.id, message=f"Массовое удаление получателей: {count}")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.DELETE,
+        entity_type="campaign",
+        entity_id=camp.id,
+        message=f"Массовое удаление получателей: {count}",
+    )
     return redirect("campaign_detail", campaign_id=camp.id)
 
 
@@ -247,7 +326,12 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
     """
     Генерируем получателей из email контактов + основного email компании.
     """
-    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:recipients:generate", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:campaigns:recipients:generate",
+        context={"path": request.path, "method": request.method},
+    )
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
@@ -284,7 +368,10 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
     if not branch and user.branch_id:
         branch = str(user.branch_id)
 
-    if user.role in (User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR) and user.branch_id:
+    if (
+        user.role in (User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR)
+        and user.branch_id
+    ):
         if branch and branch != str(user.branch_id):
             messages.error(request, "Вы можете выбрать только свой филиал.")
             return redirect("campaign_detail", campaign_id=camp.id)
@@ -350,7 +437,9 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
             company_ids = valid_company_ids
 
     if not branch and user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
-        messages.warning(request, "Филиал: «Любой». В рассылку могут попасть компании из других регионов.")
+        messages.warning(
+            request, "Филиал: «Любой». В рассылку могут попасть компании из других регионов."
+        )
 
     created = 0
     skipped_cooldown = 0
@@ -358,7 +447,9 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
     now = timezone.now()
     cooldown_emails = {
         (e or "").strip().lower()
-        for e in EmailCooldown.objects.filter(created_by=user, until_at__gt=now).values_list("email", flat=True)
+        for e in EmailCooldown.objects.filter(created_by=user, until_at__gt=now).values_list(
+            "email", flat=True
+        )
     }
 
     candidates: dict[str, tuple[str | None, str | None]] = {}
@@ -367,16 +458,23 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
         emails_qs = ContactEmail.objects.filter(contact__company_id__in=company_ids)
         if contact_email_types:
             emails_qs = emails_qs.filter(type__in=contact_email_types)
-        for value, contact_id, company_id in emails_qs.values_list("value", "contact_id", "contact__company_id").iterator():
+        for value, contact_id, company_id in emails_qs.values_list(
+            "value", "contact_id", "contact__company_id"
+        ).iterator():
             email = (value or "").strip().lower()
             if not email or email in candidates:
                 continue
-            candidates[email] = (str(contact_id) if contact_id else None, str(company_id) if company_id else None)
+            candidates[email] = (
+                str(contact_id) if contact_id else None,
+                str(company_id) if company_id else None,
+            )
             if len(candidates) >= (limit * 3):
                 break
 
     if include_company_email and company_ids:
-        for email_value, company_id in Company.objects.filter(id__in=company_ids).values_list("email", "id").iterator():
+        for email_value, company_id in (
+            Company.objects.filter(id__in=company_ids).values_list("email", "id").iterator()
+        ):
             email = (email_value or "").strip().lower()
             if not email or email in candidates:
                 continue
@@ -385,7 +483,12 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
                 break
 
         from companies.models import CompanyEmail
-        for email_value, company_id in CompanyEmail.objects.filter(company_id__in=company_ids).values_list("value", "company_id").iterator():
+
+        for email_value, company_id in (
+            CompanyEmail.objects.filter(company_id__in=company_ids)
+            .values_list("value", "company_id")
+            .iterator()
+        ):
             email = (email_value or "").strip().lower()
             if not email or email in candidates:
                 continue
@@ -401,11 +504,17 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
                 skipped_cooldown += 1
                 candidates.pop(e, None)
 
-        unsub_set = set(Unsubscribe.objects.filter(email__in=list(candidates.keys())).values_list("email", flat=True))
+        unsub_set = set(
+            Unsubscribe.objects.filter(email__in=list(candidates.keys())).values_list(
+                "email", flat=True
+            )
+        )
         unsub_set = {(e or "").strip().lower() for e in unsub_set if (e or "").strip()}
 
         existing_set = set(
-            CampaignRecipient.objects.filter(campaign=camp, email__in=list(candidates.keys())).values_list("email", flat=True)
+            CampaignRecipient.objects.filter(
+                campaign=camp, email__in=list(candidates.keys())
+            ).values_list("email", flat=True)
         )
         existing_set = {(e or "").strip().lower() for e in existing_set if (e or "").strip()}
 
@@ -415,7 +524,11 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
                 break
             if email in existing_set:
                 continue
-            status = CampaignRecipient.Status.UNSUBSCRIBED if email in unsub_set else CampaignRecipient.Status.PENDING
+            status = (
+                CampaignRecipient.Status.UNSUBSCRIBED
+                if email in unsub_set
+                else CampaignRecipient.Status.PENDING
+            )
             to_create.append(
                 CampaignRecipient(
                     campaign=camp,
@@ -460,7 +573,14 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
     if skipped_cooldown:
         msg += f" (пропущено из-за паузы: {skipped_cooldown})"
     messages.success(request, msg)
-    log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Сгенерированы получатели", meta={"added": created})
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="campaign",
+        entity_id=camp.id,
+        message="Сгенерированы получатели",
+        meta={"added": created},
+    )
     return redirect("campaign_detail", campaign_id=camp.id)
 
 
@@ -485,29 +605,61 @@ def campaign_recipients_reset(request: HttpRequest, campaign_id) -> HttpResponse
         return redirect("campaign_detail", campaign_id=camp.id)
 
     if scope == "failed":
-        enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:recipients:reset_failed", context={"path": request.path, "method": request.method})
+        enforce(
+            user=request.user,
+            resource_type="action",
+            resource="ui:mail:campaigns:recipients:reset_failed",
+            context={"path": request.path, "method": request.method},
+        )
         qs = camp.recipients.filter(status=CampaignRecipient.Status.FAILED)
         updated = qs.update(status=CampaignRecipient.Status.PENDING, last_error="")
-        messages.success(request, f"Возвращено в очередь (только ошибки): {updated}. Нажмите «Старт», чтобы снова запустить рассылку.")
-        log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Сброс статусов получателей (только ошибки)", meta={"reset": updated, "scope": "failed"})
+        messages.success(
+            request,
+            f"Возвращено в очередь (только ошибки): {updated}. Нажмите «Старт», чтобы снова запустить рассылку.",
+        )
+        log_event(
+            actor=user,
+            verb=ActivityEvent.Verb.UPDATE,
+            entity_type="campaign",
+            entity_id=camp.id,
+            message="Сброс статусов получателей (только ошибки)",
+            meta={"reset": updated, "scope": "failed"},
+        )
     else:
-        enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:recipients:reset_all", context={"path": request.path, "method": request.method})
+        enforce(
+            user=request.user,
+            resource_type="action",
+            resource="ui:mail:campaigns:recipients:reset_all",
+            context={"path": request.path, "method": request.method},
+        )
         if user.role != User.Role.ADMIN and not user.is_superuser:
             messages.error(request, "Недостаточно прав для повторной отправки всем.")
             return redirect("campaign_detail", campaign_id=camp.id)
-        qs = camp.recipients.filter(status__in=[CampaignRecipient.Status.SENT, CampaignRecipient.Status.FAILED])
+        qs = camp.recipients.filter(
+            status__in=[CampaignRecipient.Status.SENT, CampaignRecipient.Status.FAILED]
+        )
         updated = qs.update(status=CampaignRecipient.Status.PENDING, last_error="")
         messages.success(
             request,
             f"Возвращено в очередь (включая отправленные): {updated}. "
             f"Нажмите «Старт», чтобы снова запустить рассылку. ВНИМАНИЕ: письма могут уйти повторно.",
         )
-        log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Сброс статусов получателей (включая отправленные)", meta={"reset": updated, "scope": "all"})
+        log_event(
+            actor=user,
+            verb=ActivityEvent.Verb.UPDATE,
+            entity_type="campaign",
+            entity_id=camp.id,
+            message="Сброс статусов получателей (включая отправленные)",
+            meta={"reset": updated, "scope": "all"},
+        )
 
     camp.status = Campaign.Status.DRAFT
     camp.save(update_fields=["status", "updated_at"])
     queue_entry = getattr(camp, "queue_entry", None)
-    if queue_entry and queue_entry.status in (CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING):
+    if queue_entry and queue_entry.status in (
+        CampaignQueue.Status.PENDING,
+        CampaignQueue.Status.PROCESSING,
+    ):
         queue_entry.status = CampaignQueue.Status.CANCELLED
         queue_entry.completed_at = timezone.now()
         queue_entry.save(update_fields=["status", "completed_at"])
@@ -517,7 +669,12 @@ def campaign_recipients_reset(request: HttpRequest, campaign_id) -> HttpResponse
 @login_required
 def campaign_clear(request: HttpRequest, campaign_id) -> HttpResponse:
     """Очистить кампанию от получателей. Перед очисткой ставим cooldown на email."""
-    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:clear", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:campaigns:clear",
+        context={"path": request.path, "method": request.method},
+    )
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
@@ -547,11 +704,24 @@ def campaign_clear(request: HttpRequest, campaign_id) -> HttpResponse:
         camp.save(update_fields=["status", "updated_at"])
 
         queue_entry = getattr(camp, "queue_entry", None)
-        if queue_entry and queue_entry.status in (CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING):
+        if queue_entry and queue_entry.status in (
+            CampaignQueue.Status.PENDING,
+            CampaignQueue.Status.PROCESSING,
+        ):
             queue_entry.status = CampaignQueue.Status.CANCELLED
             queue_entry.completed_at = timezone.now()
             queue_entry.save(update_fields=["status", "completed_at"])
 
-    messages.success(request, f"Кампания очищена. Удалено получателей: {removed}. Повторно эти email можно использовать через {COOLDOWN_DAYS_DEFAULT} дн.")
-    log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Очищена кампания", meta={"removed": removed, "cooldown_days": COOLDOWN_DAYS_DEFAULT})
+    messages.success(
+        request,
+        f"Кампания очищена. Удалено получателей: {removed}. Повторно эти email можно использовать через {COOLDOWN_DAYS_DEFAULT} дн.",
+    )
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="campaign",
+        entity_id=camp.id,
+        message="Очищена кампания",
+        meta={"removed": removed, "cooldown_days": COOLDOWN_DAYS_DEFAULT},
+    )
     return redirect("campaign_detail", campaign_id=camp.id)

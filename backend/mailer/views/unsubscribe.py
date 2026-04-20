@@ -1,6 +1,7 @@
 """
 Views для управления отписками (публичная отписка + управление списком).
 """
+
 from __future__ import annotations
 
 import json
@@ -27,13 +28,20 @@ def unsubscribe(request: HttpRequest, token: str) -> HttpResponse:
     не несёт CSRF-токен. Защита от перебора — rate limit по IP.
     """
     from accounts.security import get_client_ip
+
     ip = get_client_ip(request)
     throttle_key = f"mailer:unsub_ratelimit:{ip}"
     try:
         from django.core.cache import cache as _cache
+
         current = _cache.get(throttle_key, 0)
         if current >= UNSUBSCRIBE_RATE_LIMIT_PER_HOUR:
-            return render(request, "ui/mail/unsubscribe.html", {"email": None, "rate_limited": True}, status=429)
+            return render(
+                request,
+                "ui/mail/unsubscribe.html",
+                {"email": None, "rate_limited": True},
+                status=429,
+            )
         _cache.set(throttle_key, current + 1, timeout=3600)
     except Exception:
         pass  # fail-open: не блокируем при ошибке Redis
@@ -57,7 +65,12 @@ def unsubscribe(request: HttpRequest, token: str) -> HttpResponse:
 def mail_unsubscribes_list(request: HttpRequest) -> JsonResponse:
     """Список отписок (для админского модального окна в разделе "Почта")."""
     user: User = request.user
-    enforce(user=request.user, resource_type="action", resource="ui:mail:unsubscribes:list", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:unsubscribes:list",
+        context={"path": request.path, "method": request.method},
+    )
     if user.role != User.Role.ADMIN:
         return JsonResponse({"ok": False, "error": "forbidden"}, status=403)
 
@@ -80,8 +93,9 @@ def mail_unsubscribes_list(request: HttpRequest) -> JsonResponse:
 
     total = qs.count()
     rows = list(
-        qs.order_by("-last_seen_at", "-created_at")
-        .values("email", "source", "reason", "last_seen_at", "created_at")[offset: offset + limit]
+        qs.order_by("-last_seen_at", "-created_at").values(
+            "email", "source", "reason", "last_seen_at", "created_at"
+        )[offset : offset + limit]
     )
 
     def _dt_iso(v):
@@ -100,14 +114,21 @@ def mail_unsubscribes_list(request: HttpRequest) -> JsonResponse:
         }
         for r in rows
     ]
-    return JsonResponse({"ok": True, "total": total, "limit": limit, "offset": offset, "data": data})
+    return JsonResponse(
+        {"ok": True, "total": total, "limit": limit, "offset": offset, "data": data}
+    )
 
 
 @login_required
 def mail_unsubscribes_delete(request: HttpRequest) -> JsonResponse:
     """Удаление выбранных email из списка отписок (админ)."""
     user: User = request.user
-    enforce(user=request.user, resource_type="action", resource="ui:mail:unsubscribes:delete", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:unsubscribes:delete",
+        context={"path": request.path, "method": request.method},
+    )
     if user.role != User.Role.ADMIN:
         return JsonResponse({"ok": False, "error": "forbidden"}, status=403)
     if request.method != "POST":
@@ -138,7 +159,12 @@ def mail_unsubscribes_delete(request: HttpRequest) -> JsonResponse:
 def mail_unsubscribes_clear(request: HttpRequest) -> JsonResponse:
     """Полная очистка списка отписок (админ)."""
     user: User = request.user
-    enforce(user=request.user, resource_type="action", resource="ui:mail:unsubscribes:clear", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:unsubscribes:clear",
+        context={"path": request.path, "method": request.method},
+    )
     if user.role != User.Role.ADMIN:
         return JsonResponse({"ok": False, "error": "forbidden"}, status=403)
     if request.method != "POST":

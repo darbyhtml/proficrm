@@ -12,13 +12,22 @@ class NotificationAdmin(admin.ModelAdmin):
 
 from .models import CrmAnnouncement, CrmAnnouncementRead
 
+
 @admin.register(CrmAnnouncement)
 class CrmAnnouncementAdmin(admin.ModelAdmin):
-    list_display = ("created_at", "announcement_type", "title", "created_by", "is_active", "read_count")
+    list_display = (
+        "created_at",
+        "announcement_type",
+        "title",
+        "created_by",
+        "is_active",
+        "read_count",
+    )
     list_filter = ("announcement_type", "is_active")
     search_fields = ("title", "body")
     readonly_fields = ("created_at", "created_by")
 
     def read_count(self, obj):
         return obj.reads.count()
+
     read_count.short_description = "Прочитали"

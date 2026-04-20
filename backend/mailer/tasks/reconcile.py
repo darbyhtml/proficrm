@@ -1,6 +1,7 @@
 """
 Celery-задача сверки очереди рассылок (reconcile).
 """
+
 from __future__ import annotations
 
 import logging

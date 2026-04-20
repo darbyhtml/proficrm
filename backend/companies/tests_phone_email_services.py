@@ -9,6 +9,7 @@
 Покрывают все правила валидации, которые раньше жили в трёх местах
 ``ui/views/company_detail.py``.
 """
+
 from __future__ import annotations
 
 from django.test import TestCase

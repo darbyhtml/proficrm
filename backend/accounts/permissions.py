@@ -4,6 +4,7 @@
 Перенесено из crm/utils.py — это доменная логика авторизации,
 а не конфигурация проекта.
 """
+
 from __future__ import annotations
 
 from accounts.models import User

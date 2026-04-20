@@ -127,7 +127,9 @@ class Command(BaseCommand):
 
         total_changes = sum(total_fixed.values())
         self.stdout.write(
-            self.style.SUCCESS(f"normalize_companies_data: всего исправлено значений: {total_changes}")
+            self.style.SUCCESS(
+                f"normalize_companies_data: всего исправлено значений: {total_changes}"
+            )
         )
 
         # После успешной нормализации — перестроение индекса (только для PostgreSQL).
@@ -137,7 +139,9 @@ class Command(BaseCommand):
             self.stdout.write("normalize_companies_data: запускаем rebuild_company_search_index...")
             call_command("rebuild_company_search_index", chunk=batch_size)
             self.stdout.write(
-                self.style.SUCCESS("normalize_companies_data: rebuild_company_search_index завершён.")
+                self.style.SUCCESS(
+                    "normalize_companies_data: rebuild_company_search_index завершён."
+                )
             )
         else:
             self.stdout.write(
@@ -185,4 +189,3 @@ class Command(BaseCommand):
             updated_count += len(buffer)
 
         return updated_count, scanned_count
-

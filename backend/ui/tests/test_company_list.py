@@ -98,10 +98,13 @@ class CompanyListViewTestCase(TestCase):
         """POST /companies/new/ создаёт компанию и редиректит на карточку."""
         url = reverse("company_create")
         count_before = Company.objects.count()
-        response = self.client.post(url, {
-            "name": "Новая компания",
-            "inn": "9876543210",
-        })
+        response = self.client.post(
+            url,
+            {
+                "name": "Новая компания",
+                "inn": "9876543210",
+            },
+        )
         self.assertIn(response.status_code, [302, 200])
         if response.status_code == 302:
             self.assertEqual(Company.objects.count(), count_before + 1)
@@ -140,15 +143,16 @@ class CompanyListViewTestCase(TestCase):
         # Имитируем created_at = сейчас (уже в пределах 10 сек)
         count_before = Company.objects.count()
         url = reverse("company_create")
-        response = self.client.post(url, {
-            "name": "Дубликат компания",
-            "inn": "1111111111",
-        })
+        response = self.client.post(
+            url,
+            {
+                "name": "Дубликат компания",
+                "inn": "1111111111",
+            },
+        )
         # Не должна быть создана новая компания
         self.assertIn(response.status_code, [302, 200])
-        self.assertEqual(
-            Company.objects.filter(name="Дубликат компания").count(), 1
-        )
+        self.assertEqual(Company.objects.filter(name="Дубликат компания").count(), 1)
 
     # ------------------------------------------------------------------
     # 6. company_autocomplete — подсказки

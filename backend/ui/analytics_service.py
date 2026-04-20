@@ -13,6 +13,7 @@
 - ✅ GROUP_MANAGER (get_group_manager_dashboard) — агрегат по всем филиалам.
 - ✅ TENDERIST (get_tenderist_dashboard) — read-only обзор компаний.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -30,6 +31,7 @@ from tasksapp.models import Task
 @dataclass(frozen=True)
 class Period:
     """Определение периода аналитики — начало (включительно) и конец (исключительно)."""
+
     start: datetime
     end: datetime
     label: str
@@ -87,9 +89,7 @@ def _tasks_on_time_ratio(user: User, period: Period) -> dict:
     if total == 0:
         return {"total": 0, "on_time": 0, "ratio": None}
 
-    on_time = done_qs.filter(
-        Q(due_at__isnull=True) | Q(due_at__gte=F("updated_at"))
-    ).count()
+    on_time = done_qs.filter(Q(due_at__isnull=True) | Q(due_at__gte=F("updated_at"))).count()
     return {
         "total": total,
         "on_time": on_time,
@@ -100,9 +100,11 @@ def _tasks_on_time_ratio(user: User, period: Period) -> dict:
 def _companies_workload(user: User) -> dict:
     """Компании менеджера: с активными задачами / без активных задач."""
     my_companies = Company.objects.filter(responsible=user)
-    with_active = my_companies.filter(
-        tasks__status__in=[Task.Status.NEW, Task.Status.IN_PROGRESS]
-    ).distinct().count()
+    with_active = (
+        my_companies.filter(tasks__status__in=[Task.Status.NEW, Task.Status.IN_PROGRESS])
+        .distinct()
+        .count()
+    )
     total = my_companies.count()
     return {
         "total": total,
@@ -155,16 +157,12 @@ def _expiring_contracts(user: User, days: int = 30) -> list[dict]:
     """Договоры менеджера, истекающие в ближайшие N дней."""
     today = timezone.localdate()
     deadline = today + timedelta(days=days)
-    qs = (
-        Company.objects
-        .filter(
-            responsible=user,
-            contract_until__isnull=False,
-            contract_until__gte=today,
-            contract_until__lte=deadline,
-        )
-        .order_by("contract_until")[:10]
-    )
+    qs = Company.objects.filter(
+        responsible=user,
+        contract_until__isnull=False,
+        contract_until__gte=today,
+        contract_until__lte=deadline,
+    ).order_by("contract_until")[:10]
     rows = []
     for c in qs:
         days_left = (c.contract_until - today).days
@@ -174,13 +172,15 @@ def _expiring_contracts(user: User, days: int = 30) -> list[dict]:
             level = "warn"
         else:
             level = "info"
-        rows.append({
-            "id": c.id,
-            "name": c.name,
-            "until": c.contract_until,
-            "days_left": days_left,
-            "level": level,
-        })
+        rows.append(
+            {
+                "id": c.id,
+                "name": c.name,
+                "until": c.contract_until,
+                "days_left": days_left,
+                "level": level,
+            }
+        )
     return rows
 
 
@@ -232,31 +232,30 @@ def _managers_leaderboard(branch=None, period: Period = None, limit: int = 10) -
     qs = User.objects.filter(role=User.Role.MANAGER, is_active=True)
     if branch is not None:
         qs = qs.filter(branch=branch)
-    rows = (
-        qs.annotate(
-            done_count=Count(
-                "assigned_tasks",
-                filter=Q(
-                    assigned_tasks__status=Task.Status.DONE,
-                    assigned_tasks__updated_at__gte=period.start,
-                    assigned_tasks__updated_at__lt=period.end,
-                ),
-                distinct=True,
-            )
+    rows = qs.annotate(
+        done_count=Count(
+            "assigned_tasks",
+            filter=Q(
+                assigned_tasks__status=Task.Status.DONE,
+                assigned_tasks__updated_at__gte=period.start,
+                assigned_tasks__updated_at__lt=period.end,
+            ),
+            distinct=True,
         )
-        .order_by("-done_count", "username")[:limit]
-    )
+    ).order_by("-done_count", "username")[:limit]
     result = []
     for idx, u in enumerate(rows, start=1):
-        result.append({
-            "rank": idx,
-            "user_id": u.id,
-            "username": u.username,
-            "full_name": u.get_full_name() or u.username,
-            "done_count": u.done_count,
-            "is_online": bool(getattr(u, "messenger_online", False)),
-            "branch_id": u.branch_id,
-        })
+        result.append(
+            {
+                "rank": idx,
+                "user_id": u.id,
+                "username": u.username,
+                "full_name": u.get_full_name() or u.username,
+                "done_count": u.done_count,
+                "is_online": bool(getattr(u, "messenger_online", False)),
+                "branch_id": u.branch_id,
+            }
+        )
     return result
 
 
@@ -356,6 +355,7 @@ def get_branch_director_dashboard(user: User) -> dict[str, Any]:
 
     # Рейтинг всех подразделений по выполненным задачам за месяц.
     from accounts.models import Branch
+
     branches_rank = []
     for b in Branch.objects.all():
         done = Task.objects.filter(
@@ -364,13 +364,15 @@ def get_branch_director_dashboard(user: User) -> dict[str, Any]:
             updated_at__gte=month_p.start,
             updated_at__lt=month_p.end,
         ).count()
-        branches_rank.append({
-            "id": b.id,
-            "code": b.code,
-            "name": b.name,
-            "done_count": done,
-            "is_mine": b.id == (branch.id if branch else None),
-        })
+        branches_rank.append(
+            {
+                "id": b.id,
+                "code": b.code,
+                "name": b.name,
+                "done_count": done,
+                "is_mine": b.id == (branch.id if branch else None),
+            }
+        )
     branches_rank.sort(key=lambda r: (-r["done_count"], r["name"]))
     for i, row in enumerate(branches_rank, start=1):
         row["rank"] = i
@@ -392,6 +394,7 @@ def get_group_manager_dashboard(user: User) -> dict[str, Any]:
     month_p = period_this_month()
 
     from accounts.models import Branch
+
     branches = list(Branch.objects.all())
     per_branch = []
     total_done = 0
@@ -405,18 +408,18 @@ def get_group_manager_dashboard(user: User) -> dict[str, Any]:
             updated_at__lt=month_p.end,
         ).count()
         online_stats = _online_count(branch=b)
-        new_companies = Company.objects.filter(
-            branch=b, created_at__gte=month_p.start
-        ).count()
-        per_branch.append({
-            "id": b.id,
-            "code": b.code,
-            "name": b.name,
-            "done_count": done,
-            "online": online_stats["online"],
-            "total_managers": online_stats["total"],
-            "new_companies_month": new_companies,
-        })
+        new_companies = Company.objects.filter(branch=b, created_at__gte=month_p.start).count()
+        per_branch.append(
+            {
+                "id": b.id,
+                "code": b.code,
+                "name": b.name,
+                "done_count": done,
+                "online": online_stats["online"],
+                "total_managers": online_stats["total"],
+                "new_companies_month": new_companies,
+            }
+        )
         total_done += done
         total_online += online_stats["online"]
         total_managers += online_stats["total"]
@@ -432,9 +435,7 @@ def get_group_manager_dashboard(user: User) -> dict[str, Any]:
             "online": total_online,
             "total_managers": total_managers,
             "companies_total": Company.objects.count(),
-            "companies_new_month": Company.objects.filter(
-                created_at__gte=month_p.start
-            ).count(),
+            "companies_new_month": Company.objects.filter(created_at__gte=month_p.start).count(),
         },
         "top_managers": _managers_leaderboard(branch=None, period=month_p, limit=10),
         "conversations": _conversations_funnel(branch=None),
@@ -448,9 +449,7 @@ def get_tenderist_dashboard(user: User) -> dict[str, Any]:
     return {
         "user": user,
         "companies_total": Company.objects.count(),
-        "companies_new_week": Company.objects.filter(
-            created_at__gte=last_7
-        ).count(),
+        "companies_new_week": Company.objects.filter(created_at__gte=last_7).count(),
         "contracts_expiring_30": Company.objects.filter(
             contract_until__isnull=False,
             contract_until__gte=today,

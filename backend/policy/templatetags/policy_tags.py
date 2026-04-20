@@ -17,8 +17,9 @@ def policy_can(context, resource: str, resource_type: str = "page") -> bool:
     request = context.get("request")
     user = getattr(request, "user", None) if request is not None else None
     try:
-        d = decide(user=user, resource_type=resource_type, resource=resource, context={"template": True})
+        d = decide(
+            user=user, resource_type=resource_type, resource=resource, context={"template": True}
+        )
         return bool(d.allowed)
     except Exception:
         return False
-

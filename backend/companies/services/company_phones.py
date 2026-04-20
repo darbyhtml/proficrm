@@ -20,6 +20,7 @@ API спроектирован как «pure functions», без HTTPResponse. V
 по-прежнему отвечают за JSON и status codes — это даёт возможность
 протестировать валидацию изолированно и делает view-функции тоньше.
 """
+
 from __future__ import annotations
 
 import re

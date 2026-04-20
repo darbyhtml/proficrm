@@ -92,6 +92,7 @@ class EventDispatcher:
             async_listeners = self._async_listeners.get(event_name, [])
             if async_listeners:
                 from messenger.tasks import dispatch_async_listeners
+
                 # Сериализуем данные для Celery (datetime → ISO string)
                 serializable_data = _serialize_for_celery(data)
                 dispatch_async_listeners.delay(
@@ -130,12 +131,16 @@ def _serialize_for_celery(data: Dict[str, Any]) -> Dict[str, Any]:
     for key, value in data.items():
         if isinstance(value, datetime):
             result[key] = value.isoformat()
-        elif hasattr(value, 'pk'):
+        elif hasattr(value, "pk"):
             # Django model → передаём pk и тип
-            result[key] = {"_model": f"{value.__class__.__module__}.{value.__class__.__name__}", "_pk": value.pk}
+            result[key] = {
+                "_model": f"{value.__class__.__module__}.{value.__class__.__name__}",
+                "_pk": value.pk,
+            }
         else:
             try:
                 import json
+
                 json.dumps(value)
                 result[key] = value
             except (TypeError, ValueError):

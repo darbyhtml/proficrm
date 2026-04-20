@@ -168,9 +168,7 @@ class TaskCreateViewTest(TestCase):
             "due_at": _due_fmt(),
             "description": "",
         }
-        r = self.client.post(
-            reverse("task_create"), data, HTTP_X_REQUESTED_WITH="XMLHttpRequest"
-        )
+        r = self.client.post(reverse("task_create"), data, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         self.assertEqual(r.status_code, 200)
         body = json.loads(r.content)
         self.assertTrue(body.get("ok"))
@@ -185,9 +183,7 @@ class TaskCreateViewTest(TestCase):
             "due_at": _due_fmt(),
             "description": "",
         }
-        r = self.client.post(
-            reverse("task_create"), data, HTTP_X_REQUESTED_WITH="XMLHttpRequest"
-        )
+        r = self.client.post(reverse("task_create"), data, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         # MANAGER всегда получает assigned_to = self
         if r.status_code == 200:
             body = json.loads(r.content)
@@ -219,17 +215,13 @@ class TaskDeleteViewTest(TestCase):
     def test_task_delete_get_redirects(self):
         """GET /tasks/<id>/delete/ → редирект на task_list."""
         self.client.force_login(self.admin)
-        r = self.client.get(
-            reverse("task_delete", kwargs={"task_id": self.task.id})
-        )
+        r = self.client.get(reverse("task_delete", kwargs={"task_id": self.task.id}))
         self.assertIn(r.status_code, [301, 302])
 
     def test_task_delete_post_deletes(self):
         """POST /tasks/<id>/delete/ → задача удалена."""
         self.client.force_login(self.admin)
-        r = self.client.post(
-            reverse("task_delete", kwargs={"task_id": self.task.id})
-        )
+        r = self.client.post(reverse("task_delete", kwargs={"task_id": self.task.id}))
         self.assertIn(r.status_code, [301, 302])
         self.assertFalse(Task.objects.filter(id=self.task.id).exists())
 
@@ -338,7 +330,8 @@ class TaskAddCommentViewTest(TestCase):
     def test_add_comment_creates_comment(self):
         """POST /tasks/<id>/comment/ → комментарий сохранён, JSON {ok: true}."""
         r = self.client.post(
-            self._url(), {"text": "Тестовый комментарий"},
+            self._url(),
+            {"text": "Тестовый комментарий"},
             HTTP_X_REQUESTED_WITH="XMLHttpRequest",
         )
         self.assertEqual(r.status_code, 200)
@@ -349,7 +342,8 @@ class TaskAddCommentViewTest(TestCase):
     def test_add_empty_comment_returns_400(self):
         """POST с пустым текстом → 400."""
         r = self.client.post(
-            self._url(), {"text": "   "},
+            self._url(),
+            {"text": "   "},
             HTTP_X_REQUESTED_WITH="XMLHttpRequest",
         )
         self.assertEqual(r.status_code, 400)

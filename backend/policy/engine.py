@@ -75,7 +75,9 @@ def _default_allowed_for_company_detail(*, user: User, context: dict[str, Any] |
     return can_view_company_id(user, company_id)
 
 
-def baseline_allowed_for_role(*, role: str, resource_type: str, resource_key: str, is_superuser: bool = False) -> bool:
+def baseline_allowed_for_role(
+    *, role: str, resource_type: str, resource_key: str, is_superuser: bool = False
+) -> bool:
     """
     То же, что и _baseline_allowed, но без объекта User.
 
@@ -310,7 +312,9 @@ def _baseline_allowed(*, user: User, resource_type: str, resource_key: str) -> b
     )
 
 
-def decide(*, user: User, resource_type: str, resource: str, context: dict[str, Any] | None = None) -> PolicyDecision:
+def decide(
+    *, user: User, resource_type: str, resource: str, context: dict[str, Any] | None = None
+) -> PolicyDecision:
     """
     Возвращает решение политики (без побочных эффектов).
     """
@@ -341,11 +345,15 @@ def decide(*, user: User, resource_type: str, resource: str, context: dict[str, 
             resource_type=resource_type,
         )
 
-    qs = PolicyRule.objects.filter(enabled=True, resource_type=resource_type, resource=resource).order_by("priority", "id")
+    qs = PolicyRule.objects.filter(
+        enabled=True, resource_type=resource_type, resource=resource
+    ).order_by("priority", "id")
 
     # Сначала user-specific, затем role
     user_rules = qs.filter(subject_type=PolicyRule.SubjectType.USER, user_id=user.id)
-    role_rules = qs.filter(subject_type=PolicyRule.SubjectType.ROLE, role=(getattr(user, "role", "") or ""))
+    role_rules = qs.filter(
+        subject_type=PolicyRule.SubjectType.ROLE, role=(getattr(user, "role", "") or "")
+    )
 
     for rule in list(user_rules) + list(role_rules):
         if rule.effect == PolicyRule.Effect.ALLOW:
@@ -354,7 +362,9 @@ def decide(*, user: User, resource_type: str, resource: str, context: dict[str, 
                 mode=mode,
                 matched_rule_id=rule.id,
                 matched_effect=rule.effect,
-                default_allowed=_baseline_allowed(user=user, resource_type=resource_type, resource_key=resource),
+                default_allowed=_baseline_allowed(
+                    user=user, resource_type=resource_type, resource_key=resource
+                ),
                 resource=resource,
                 resource_type=resource_type,
             )
@@ -364,13 +374,17 @@ def decide(*, user: User, resource_type: str, resource: str, context: dict[str, 
                 mode=mode,
                 matched_rule_id=rule.id,
                 matched_effect=rule.effect,
-                default_allowed=_baseline_allowed(user=user, resource_type=resource_type, resource_key=resource),
+                default_allowed=_baseline_allowed(
+                    user=user, resource_type=resource_type, resource_key=resource
+                ),
                 resource=resource,
                 resource_type=resource_type,
             )
 
     # Нет правил — применяем дефолт по ресурсу
-    default_allowed = _baseline_allowed(user=user, resource_type=resource_type, resource_key=resource)
+    default_allowed = _baseline_allowed(
+        user=user, resource_type=resource_type, resource_key=resource
+    )
 
     # Для ui:tasks:detail и ui:companies:detail используем "умный" дефолт,
     # основанный на видимости задач/компаний и override-ролях.
@@ -390,7 +404,9 @@ def decide(*, user: User, resource_type: str, resource: str, context: dict[str, 
     )
 
 
-def _log_decision(*, user: User, decision: PolicyDecision, context: dict[str, Any] | None = None) -> None:
+def _log_decision(
+    *, user: User, decision: PolicyDecision, context: dict[str, Any] | None = None
+) -> None:
     """
     Логируем решение в audit (чтобы видеть расхождения и понимать реальное использование).
 
@@ -431,7 +447,14 @@ def _log_decision(*, user: User, decision: PolicyDecision, context: dict[str, An
         pass
 
 
-def enforce(*, user: User, resource_type: str, resource: str, context: dict[str, Any] | None = None, log: bool = True) -> PolicyDecision:
+def enforce(
+    *,
+    user: User,
+    resource_type: str,
+    resource: str,
+    context: dict[str, Any] | None = None,
+    log: bool = True,
+) -> PolicyDecision:
     """
     Применяет режим policy:\n
     - observe_only: не блокирует, но логирует\n
@@ -450,4 +473,3 @@ def enforce(*, user: User, resource_type: str, resource: str, context: dict[str,
         raise PermissionDenied(f"Доступ запрещён: {resource}")
 
     return decision
-

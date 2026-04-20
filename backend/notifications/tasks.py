@@ -1,6 +1,7 @@
 """
 Celery-задачи для очистки и генерации уведомлений.
 """
+
 from __future__ import annotations
 
 import logging

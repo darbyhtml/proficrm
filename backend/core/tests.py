@@ -26,7 +26,12 @@ from datetime import datetime, time, timezone
 from cryptography.fernet import Fernet
 from django.test import RequestFactory, TestCase, override_settings
 from rest_framework import status
-from rest_framework.exceptions import AuthenticationFailed, NotFound, PermissionDenied, ValidationError
+from rest_framework.exceptions import (
+    AuthenticationFailed,
+    NotFound,
+    PermissionDenied,
+    ValidationError,
+)
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
@@ -34,6 +39,7 @@ from rest_framework.test import APIRequestFactory
 # ────────────────────────────────────────────────────────────────────────────
 # Вспомогательная утилита для генерации валидного Fernet-ключа
 # ────────────────────────────────────────────────────────────────────────────
+
 
 def _new_fernet_key() -> str:
     """Генерирует случайный, валидный URL-safe base64 Fernet-ключ (32 байта)."""
@@ -43,6 +49,7 @@ def _new_fernet_key() -> str:
 # ============================================================================
 # crypto.py
 # ============================================================================
+
 
 class CryptoEncryptDecryptTest(TestCase):
     """Базовые тесты round-trip шифрования."""
@@ -54,6 +61,7 @@ class CryptoEncryptDecryptTest(TestCase):
     def _clear_cache(self):
         """Сбрасываем lru_cache _fernet() между тестами."""
         from core.crypto import _fernet
+
         _fernet.cache_clear()
 
     def setUp(self):
@@ -68,6 +76,7 @@ class CryptoEncryptDecryptTest(TestCase):
         with override_settings(MAILER_FERNET_KEY=key, MAILER_FERNET_KEYS_OLD=""):
             self._clear_cache()
             from core.crypto import decrypt_str, encrypt_str
+
             original = "super-secret-password-123"
             token = encrypt_str(original)
             self.assertIsInstance(token, str)
@@ -80,6 +89,7 @@ class CryptoEncryptDecryptTest(TestCase):
         with override_settings(MAILER_FERNET_KEY=key, MAILER_FERNET_KEYS_OLD=""):
             self._clear_cache()
             from core.crypto import decrypt_str, encrypt_str
+
             original = "Привет, мир! 🔐"
             self.assertEqual(decrypt_str(encrypt_str(original)), original)
 
@@ -89,6 +99,7 @@ class CryptoEncryptDecryptTest(TestCase):
         with override_settings(MAILER_FERNET_KEY=key, MAILER_FERNET_KEYS_OLD=""):
             self._clear_cache()
             from core.crypto import decrypt_str, encrypt_str
+
             token = encrypt_str("")
             # токен должен быть непустым — Fernet шифрует даже пустой plaintext
             self.assertTrue(len(token) > 0)
@@ -100,6 +111,7 @@ class CryptoEncryptDecryptTest(TestCase):
         with override_settings(MAILER_FERNET_KEY=key, MAILER_FERNET_KEYS_OLD=""):
             self._clear_cache()
             from core.crypto import decrypt_str, encrypt_str
+
             token = encrypt_str(None)  # type: ignore[arg-type]
             self.assertEqual(decrypt_str(token), "")
 
@@ -109,6 +121,7 @@ class CryptoEncryptDecryptTest(TestCase):
         with override_settings(MAILER_FERNET_KEY=key, MAILER_FERNET_KEYS_OLD=""):
             self._clear_cache()
             from core.crypto import decrypt_str
+
             self.assertEqual(decrypt_str(""), "")
 
     def test_decrypt_невалидного_токена_возвращает_пусто(self):
@@ -123,6 +136,7 @@ class CryptoEncryptDecryptTest(TestCase):
         with override_settings(MAILER_FERNET_KEY=key, MAILER_FERNET_KEYS_OLD=""):
             self._clear_cache()
             from core.crypto import decrypt_str
+
             self.assertEqual(decrypt_str("это-не-fernet-токен"), "")
 
     def test_отсутствие_ключа_поднимает_RuntimeError(self):
@@ -130,6 +144,7 @@ class CryptoEncryptDecryptTest(TestCase):
         with override_settings(MAILER_FERNET_KEY="", MAILER_FERNET_KEYS_OLD=""):
             self._clear_cache()
             from core.crypto import encrypt_str
+
             with self.assertRaises(RuntimeError):
                 encrypt_str("anything")
 
@@ -145,12 +160,14 @@ class CryptoEncryptDecryptTest(TestCase):
         with override_settings(MAILER_FERNET_KEY=old_key, MAILER_FERNET_KEYS_OLD=""):
             self._clear_cache()
             from core.crypto import encrypt_str
+
             old_token = encrypt_str("секрет")
 
         # Расшифровываем: новый ключ основной, старый — в KEYS_OLD
         with override_settings(MAILER_FERNET_KEY=new_key, MAILER_FERNET_KEYS_OLD=old_key):
             self._clear_cache()
             from core.crypto import decrypt_str
+
             result = decrypt_str(old_token)
         self.assertEqual(result, "секрет")
 
@@ -169,12 +186,14 @@ class CryptoEncryptDecryptTest(TestCase):
         with override_settings(MAILER_FERNET_KEY=new_key, MAILER_FERNET_KEYS_OLD=old_key):
             self._clear_cache()
             from core.crypto import encrypt_str
+
             new_token = encrypt_str("новый секрет")
 
         # Попытка расшифровать только старым ключом — возвращает пусто (не raise)
         with override_settings(MAILER_FERNET_KEY=old_key, MAILER_FERNET_KEYS_OLD=""):
             self._clear_cache()
             from core.crypto import decrypt_str
+
             self.assertEqual(decrypt_str(new_token), "")
 
 
@@ -183,16 +202,19 @@ class CollectKeysTest(TestCase):
 
     def setUp(self):
         from core.crypto import _fernet
+
         _fernet.cache_clear()
 
     def tearDown(self):
         from core.crypto import _fernet
+
         _fernet.cache_clear()
 
     def test_collect_keys_только_primary(self):
         key = _new_fernet_key()
         with override_settings(MAILER_FERNET_KEY=key, MAILER_FERNET_KEYS_OLD=""):
             from core.crypto import _collect_keys
+
             keys = _collect_keys()
         self.assertEqual(keys, [key])
 
@@ -201,6 +223,7 @@ class CollectKeysTest(TestCase):
         k2 = _new_fernet_key()
         with override_settings(MAILER_FERNET_KEY=k1, MAILER_FERNET_KEYS_OLD=k2):
             from core.crypto import _collect_keys
+
             keys = _collect_keys()
         self.assertEqual(keys[0], k1)
         self.assertIn(k2, keys)
@@ -209,6 +232,7 @@ class CollectKeysTest(TestCase):
         k1 = _new_fernet_key()
         with override_settings(MAILER_FERNET_KEY=k1, MAILER_FERNET_KEYS_OLD=f"{k1},{k1}"):
             from core.crypto import _collect_keys
+
             keys = _collect_keys()
         # k1 не должен встречаться дважды
         self.assertEqual(keys.count(k1), 1)
@@ -216,6 +240,7 @@ class CollectKeysTest(TestCase):
     def test_collect_keys_пустой_primary_не_добавляется(self):
         with override_settings(MAILER_FERNET_KEY="   ", MAILER_FERNET_KEYS_OLD=""):
             from core.crypto import _collect_keys
+
             keys = _collect_keys()
         self.assertEqual(keys, [])
 
@@ -224,32 +249,38 @@ class CollectKeysTest(TestCase):
 # timezone_utils.py
 # ============================================================================
 
+
 class RusTzChoicesTest(TestCase):
     """Тесты константы RUS_TZ_CHOICES."""
 
     def test_choices_непустой_список(self):
         from core.timezone_utils import RUS_TZ_CHOICES
+
         self.assertIsInstance(RUS_TZ_CHOICES, list)
         self.assertGreater(len(RUS_TZ_CHOICES), 0)
 
     def test_choices_состоят_из_двухэлементных_кортежей(self):
         from core.timezone_utils import RUS_TZ_CHOICES
+
         for item in RUS_TZ_CHOICES:
             self.assertIsInstance(item, tuple, msg=f"Элемент {item!r} не кортеж")
             self.assertEqual(len(item), 2, msg=f"Кортеж {item!r} не двухэлементный")
 
     def test_choices_содержат_moscow(self):
         from core.timezone_utils import RUS_TZ_CHOICES
+
         tz_values = [tz for tz, _ in RUS_TZ_CHOICES]
         self.assertIn("Europe/Moscow", tz_values)
 
     def test_choices_содержат_yekaterinburg(self):
         from core.timezone_utils import RUS_TZ_CHOICES
+
         tz_values = [tz for tz, _ in RUS_TZ_CHOICES]
         self.assertIn("Asia/Yekaterinburg", tz_values)
 
     def test_choices_не_содержат_дубликатов_tz(self):
         from core.timezone_utils import RUS_TZ_CHOICES
+
         tz_values = [tz for tz, _ in RUS_TZ_CHOICES]
         self.assertEqual(len(tz_values), len(set(tz_values)))
 
@@ -259,6 +290,7 @@ class GuessRuTimezoneTest(TestCase):
 
     def _guess(self, addr: str) -> str:
         from core.timezone_utils import guess_ru_timezone_from_address
+
         return guess_ru_timezone_from_address(addr)
 
     # --- Известные города ---
@@ -348,6 +380,7 @@ class GuessRuTimezoneTest(TestCase):
 # request_id.py
 # ============================================================================
 
+
 class RequestIdMiddlewareTest(TestCase):
     """Тесты middleware RequestIdMiddleware."""
 
@@ -359,6 +392,7 @@ class RequestIdMiddlewareTest(TestCase):
         # Простой get_response-stub
         def _get_response(req):
             from django.http import HttpResponse
+
             return HttpResponse("ok")
 
         self.middleware = RequestIdMiddleware(_get_response)
@@ -382,6 +416,7 @@ class RequestIdMiddlewareTest(TestCase):
     def test_middleware_устанавливает_заголовок_x_request_id_в_ответе(self):
         """process_response должен добавить X-Request-ID в заголовок ответа."""
         from django.http import HttpResponse
+
         request = self.factory.get("/")
         self.middleware.process_request(request)
         response = HttpResponse("ok")
@@ -392,6 +427,7 @@ class RequestIdMiddlewareTest(TestCase):
     def test_middleware_очищает_thread_local_после_ответа(self):
         """После process_response thread-local не должен содержать request_id."""
         from django.http import HttpResponse
+
         request = self.factory.get("/")
         self.middleware.process_request(request)
         # Убедимся что установился
@@ -403,6 +439,7 @@ class RequestIdMiddlewareTest(TestCase):
     def test_middleware_не_падает_на_запросе_без_request_id(self):
         """process_response не должен падать, если request_id не был установлен."""
         from django.http import HttpResponse
+
         request = self.factory.get("/")
         # Намеренно не вызываем process_request
         response = HttpResponse("ok")
@@ -433,6 +470,7 @@ class RequestIdLoggingFilterTest(TestCase):
 
     def _get_filter(self):
         from core.request_id import RequestIdLoggingFilter
+
         return RequestIdLoggingFilter()
 
     def _make_record(self, msg: str = "test") -> logging.LogRecord:
@@ -449,6 +487,7 @@ class RequestIdLoggingFilterTest(TestCase):
     def test_filter_добавляет_request_id_если_thread_local_установлен(self):
         """Если в thread-local есть request_id — он попадёт в запись."""
         from core.request_id import _thread_local
+
         _thread_local.request_id = "abc12345"
         try:
             flt = self._get_filter()
@@ -463,6 +502,7 @@ class RequestIdLoggingFilterTest(TestCase):
     def test_filter_устанавливает_none_если_thread_local_пуст(self):
         """Если thread-local не содержит request_id — record.request_id = None."""
         from core.request_id import _thread_local
+
         # Убеждаемся, что нет request_id
         if hasattr(_thread_local, "request_id"):
             delattr(_thread_local, "request_id")
@@ -485,12 +525,14 @@ class GetRequestIdTest(TestCase):
 
     def test_get_request_id_возвращает_none_вне_запроса(self):
         from core.request_id import _thread_local, get_request_id
+
         if hasattr(_thread_local, "request_id"):
             delattr(_thread_local, "request_id")
         self.assertIsNone(get_request_id())
 
     def test_get_request_id_возвращает_значение_из_thread_local(self):
         from core.request_id import _thread_local, get_request_id
+
         _thread_local.request_id = "testid1"
         try:
             self.assertEqual(get_request_id(), "testid1")
@@ -500,11 +542,13 @@ class GetRequestIdTest(TestCase):
     def test_get_request_id_потокобезопасность(self):
         """Разные потоки имеют независимые request_id (thread-local изоляция)."""
         from core.request_id import _thread_local, get_request_id
+
         results = {}
 
         def _worker(name: str, rid: str):
             _thread_local.request_id = rid
             import time as _time
+
             _time.sleep(0.01)  # даём другим потокам шанс вмешаться
             results[name] = get_request_id()
 
@@ -523,11 +567,13 @@ class GetRequestIdTest(TestCase):
 # exceptions.py
 # ============================================================================
 
+
 class CustomExceptionHandlerTest(TestCase):
     """Тесты кастомного обработчика исключений DRF."""
 
     def _get_handler(self):
         from core.exceptions import custom_exception_handler
+
         return custom_exception_handler
 
     def _make_context(self):
@@ -629,11 +675,13 @@ class CustomExceptionHandlerTest(TestCase):
 # work_schedule_utils.py
 # ============================================================================
 
+
 class ParseWorkScheduleTest(TestCase):
     """Тесты функции parse_work_schedule."""
 
     def _parse(self, text: str):
         from core.work_schedule_utils import parse_work_schedule
+
         return parse_work_schedule(text)
 
     def test_пустая_строка_возвращает_пустой_словарь(self):
@@ -729,6 +777,7 @@ class NormalizeWorkScheduleTest(TestCase):
 
     def _norm(self, text: str) -> str:
         from core.work_schedule_utils import normalize_work_schedule
+
         return normalize_work_schedule(text)
 
     def test_пустая_строка_возвращает_пустую(self):
@@ -766,6 +815,7 @@ class GetWorktimeStatusTest(TestCase):
 
     def _status(self, schedule_text: str, now: datetime):
         from core.work_schedule_utils import get_worktime_status_from_schedule
+
         return get_worktime_status_from_schedule(schedule_text, now_tz=now)
 
     def _dt(self, weekday: int, hour: int, minute: int = 0) -> datetime:
@@ -773,6 +823,7 @@ class GetWorktimeStatusTest(TestCase):
         # 2025-01-06 — понедельник (weekday=0)
         base = datetime(2025, 1, 6, tzinfo=self._TZ)  # понедельник
         from datetime import timedelta
+
         return base + timedelta(days=weekday, hours=hour, minutes=minute)
 
     def test_неизвестное_расписание_возвращает_unknown(self):
@@ -815,7 +866,8 @@ class GetWorktimeStatusTest(TestCase):
                 now = self._dt(weekday, hour)
                 status, minutes = self._status("24/7", now)
                 self.assertIn(
-                    status, ("ok", "warn_end"),
+                    status,
+                    ("ok", "warn_end"),
                     msg=f"weekday={weekday}, hour={hour}: статус должен быть ok/warn_end",
                 )
 
@@ -838,6 +890,7 @@ class ExpandDaySpecTest(TestCase):
 
     def _expand(self, spec: str):
         from core.work_schedule_utils import _expand_day_spec
+
         return _expand_day_spec(spec)
 
     def test_пн_пт_диапазон(self):
@@ -881,6 +934,7 @@ class ParseTimeTokenTest(TestCase):
 
     def _pt(self, s: str):
         from core.work_schedule_utils import _parse_time_token
+
         return _parse_time_token(s)
 
     def test_9_00(self):
@@ -915,11 +969,13 @@ class ParseTimeTokenTest(TestCase):
 # input_cleaners.py
 # ============================================================================
 
+
 class CleanIntIdTest(TestCase):
     """Тесты функции clean_int_id."""
 
     def _clean(self, value):
         from core.input_cleaners import clean_int_id
+
         return clean_int_id(value)
 
     def test_обычный_int(self):
@@ -979,6 +1035,7 @@ class CleanUuidTest(TestCase):
 
     def _clean(self, value):
         from core.input_cleaners import clean_uuid
+
         return clean_uuid(value)
 
     def test_валидный_uuid_строка(self):
@@ -1022,14 +1079,18 @@ class CleanUuidTest(TestCase):
 # json_formatter.py
 # ============================================================================
 
+
 class JSONFormatterTest(TestCase):
     """Тесты JSON-форматтера структурированного логирования."""
 
     def _make_formatter(self):
         from core.json_formatter import JSONFormatter
+
         return JSONFormatter()
 
-    def _make_record(self, msg: str = "test message", level=logging.INFO, **extra) -> logging.LogRecord:
+    def _make_record(
+        self, msg: str = "test message", level=logging.INFO, **extra
+    ) -> logging.LogRecord:
         record = logging.LogRecord(
             name="test.logger",
             level=level,
@@ -1132,6 +1193,7 @@ class JSONFormatterTest(TestCase):
             raise ValueError("тестовая ошибка")
         except ValueError:
             import sys
+
             exc_info = sys.exc_info()
 
         record = logging.LogRecord(

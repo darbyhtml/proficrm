@@ -13,6 +13,7 @@
 
 При OBSERVE_ONLY те же actions НЕ блокируются (логируются, но доступ открыт).
 """
+
 from __future__ import annotations
 
 import io

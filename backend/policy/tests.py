@@ -9,6 +9,7 @@
 - enforce(): OBSERVE_ONLY не бросает, ENFORCE бросает PermissionDenied при deny
 - baseline_allowed_for_role(): проверка ключевых resource/role комбинаций
 """
+
 from django.test import TestCase
 from django.core.exceptions import PermissionDenied
 
@@ -20,6 +21,7 @@ from policy.engine import decide, enforce, baseline_allowed_for_role
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_user(username, role, is_superuser=False, is_active=True):
     u = User.objects.create_user(username=username, password="pass", role=role)
@@ -65,6 +67,7 @@ def _deny_rule(subject_type, resource, resource_type, *, role=None, user=None, p
 # decide() — базовые случаи
 # ---------------------------------------------------------------------------
 
+
 class DecideBasicTest(TestCase):
     def setUp(self):
         _set_mode(PolicyConfig.Mode.ENFORCE)
@@ -77,6 +80,7 @@ class DecideBasicTest(TestCase):
 
     def test_unauthenticated_denied(self):
         from django.contrib.auth.models import AnonymousUser
+
         anon = AnonymousUser()
         d = decide(user=anon, resource_type=PolicyRule.ResourceType.PAGE, resource="ui:dashboard")
         self.assertFalse(d.allowed)
@@ -95,6 +99,7 @@ class DecideBasicTest(TestCase):
 # baseline по ролям — страницы
 # ---------------------------------------------------------------------------
 
+
 class BaselinePageTest(TestCase):
     def test_all_roles_can_access_dashboard(self):
         for role in User.Role.values:
@@ -103,7 +108,12 @@ class BaselinePageTest(TestCase):
             self.assertTrue(d.allowed, f"role={role} should access dashboard")
 
     def test_analytics_allowed_for_managers_and_above(self):
-        allowed_roles = [User.Role.ADMIN, User.Role.GROUP_MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD]
+        allowed_roles = [
+            User.Role.ADMIN,
+            User.Role.GROUP_MANAGER,
+            User.Role.BRANCH_DIRECTOR,
+            User.Role.SALES_HEAD,
+        ]
         for role in allowed_roles:
             u = _make_user(f"u_anl_{role}", role)
             d = decide(user=u, resource_type=PolicyRule.ResourceType.PAGE, resource="ui:analytics")
@@ -117,51 +127,93 @@ class BaselinePageTest(TestCase):
     def test_settings_page_admin_only(self):
         u_admin = _make_user("admin_s", User.Role.ADMIN)
         u_mgr = _make_user("mgr_s", User.Role.MANAGER)
-        self.assertTrue(decide(user=u_admin, resource_type=PolicyRule.ResourceType.PAGE, resource="ui:settings").allowed)
-        self.assertFalse(decide(user=u_mgr, resource_type=PolicyRule.ResourceType.PAGE, resource="ui:settings").allowed)
+        self.assertTrue(
+            decide(
+                user=u_admin, resource_type=PolicyRule.ResourceType.PAGE, resource="ui:settings"
+            ).allowed
+        )
+        self.assertFalse(
+            decide(
+                user=u_mgr, resource_type=PolicyRule.ResourceType.PAGE, resource="ui:settings"
+            ).allowed
+        )
 
 
 # ---------------------------------------------------------------------------
 # baseline по ролям — actions
 # ---------------------------------------------------------------------------
 
+
 class BaselineActionTest(TestCase):
     def test_companies_create_allowed_for_manager(self):
         u = _make_user("mgr_cc", User.Role.MANAGER)
-        d = decide(user=u, resource_type=PolicyRule.ResourceType.ACTION, resource="ui:companies:create")
+        d = decide(
+            user=u, resource_type=PolicyRule.ResourceType.ACTION, resource="ui:companies:create"
+        )
         self.assertTrue(d.allowed)
 
     def test_companies_delete_denied_for_manager(self):
         u = _make_user("mgr_cd", User.Role.MANAGER)
-        d = decide(user=u, resource_type=PolicyRule.ResourceType.ACTION, resource="ui:companies:delete")
+        d = decide(
+            user=u, resource_type=PolicyRule.ResourceType.ACTION, resource="ui:companies:delete"
+        )
         self.assertFalse(d.allowed)
 
     def test_companies_delete_allowed_for_admin(self):
         u = _make_user("admin_cd", User.Role.ADMIN)
-        d = decide(user=u, resource_type=PolicyRule.ResourceType.ACTION, resource="ui:companies:delete")
+        d = decide(
+            user=u, resource_type=PolicyRule.ResourceType.ACTION, resource="ui:companies:delete"
+        )
         self.assertTrue(d.allowed)
 
     def test_bulk_reassign_admin_only(self):
         u_admin = _make_user("admin_br", User.Role.ADMIN)
         u_head = _make_user("head_br", User.Role.SALES_HEAD)
-        self.assertTrue(decide(user=u_admin, resource_type=PolicyRule.ResourceType.ACTION, resource="ui:tasks:bulk_reassign").allowed)
-        self.assertFalse(decide(user=u_head, resource_type=PolicyRule.ResourceType.ACTION, resource="ui:tasks:bulk_reassign").allowed)
+        self.assertTrue(
+            decide(
+                user=u_admin,
+                resource_type=PolicyRule.ResourceType.ACTION,
+                resource="ui:tasks:bulk_reassign",
+            ).allowed
+        )
+        self.assertFalse(
+            decide(
+                user=u_head,
+                resource_type=PolicyRule.ResourceType.ACTION,
+                resource="ui:tasks:bulk_reassign",
+            ).allowed
+        )
 
     def test_smtp_settings_admin_only(self):
         u_admin = _make_user("admin_sm", User.Role.ADMIN)
         u_mgr = _make_user("mgr_sm", User.Role.MANAGER)
-        self.assertTrue(decide(user=u_admin, resource_type=PolicyRule.ResourceType.ACTION, resource="ui:mail:smtp_settings").allowed)
-        self.assertFalse(decide(user=u_mgr, resource_type=PolicyRule.ResourceType.ACTION, resource="ui:mail:smtp_settings").allowed)
+        self.assertTrue(
+            decide(
+                user=u_admin,
+                resource_type=PolicyRule.ResourceType.ACTION,
+                resource="ui:mail:smtp_settings",
+            ).allowed
+        )
+        self.assertFalse(
+            decide(
+                user=u_mgr,
+                resource_type=PolicyRule.ResourceType.ACTION,
+                resource="ui:mail:smtp_settings",
+            ).allowed
+        )
 
     def test_phone_endpoints_allowed_for_all_authenticated(self):
         u = _make_user("mgr_ph", User.Role.MANAGER)
-        d = decide(user=u, resource_type=PolicyRule.ResourceType.ACTION, resource="phone:calls:pull")
+        d = decide(
+            user=u, resource_type=PolicyRule.ResourceType.ACTION, resource="phone:calls:pull"
+        )
         self.assertTrue(d.allowed)
 
 
 # ---------------------------------------------------------------------------
 # PolicyRule перекрывает baseline
 # ---------------------------------------------------------------------------
+
 
 class PolicyRuleOverrideTest(TestCase):
     def setUp(self):
@@ -176,7 +228,11 @@ class PolicyRuleOverrideTest(TestCase):
             PolicyRule.ResourceType.ACTION,
             role=User.Role.MANAGER,
         )
-        d = decide(user=self.mgr, resource_type=PolicyRule.ResourceType.ACTION, resource="ui:companies:create")
+        d = decide(
+            user=self.mgr,
+            resource_type=PolicyRule.ResourceType.ACTION,
+            resource="ui:companies:create",
+        )
         self.assertFalse(d.allowed)
 
     def test_allow_rule_overrides_baseline_deny(self):
@@ -187,7 +243,11 @@ class PolicyRuleOverrideTest(TestCase):
             PolicyRule.ResourceType.ACTION,
             role=User.Role.MANAGER,
         )
-        d = decide(user=self.mgr, resource_type=PolicyRule.ResourceType.ACTION, resource="ui:companies:delete")
+        d = decide(
+            user=self.mgr,
+            resource_type=PolicyRule.ResourceType.ACTION,
+            resource="ui:companies:delete",
+        )
         self.assertTrue(d.allowed)
 
     def test_user_rule_takes_priority_over_role_rule(self):
@@ -204,7 +264,11 @@ class PolicyRuleOverrideTest(TestCase):
             PolicyRule.ResourceType.ACTION,
             user=self.mgr,
         )
-        d = decide(user=self.mgr, resource_type=PolicyRule.ResourceType.ACTION, resource="ui:companies:create")
+        d = decide(
+            user=self.mgr,
+            resource_type=PolicyRule.ResourceType.ACTION,
+            resource="ui:companies:create",
+        )
         self.assertTrue(d.allowed)
 
     def test_disabled_rule_ignored(self):
@@ -217,13 +281,18 @@ class PolicyRuleOverrideTest(TestCase):
             effect=PolicyRule.Effect.DENY,
             enabled=False,
         )
-        d = decide(user=self.mgr, resource_type=PolicyRule.ResourceType.ACTION, resource="ui:companies:create")
+        d = decide(
+            user=self.mgr,
+            resource_type=PolicyRule.ResourceType.ACTION,
+            resource="ui:companies:create",
+        )
         self.assertTrue(d.allowed)  # baseline разрешает
 
 
 # ---------------------------------------------------------------------------
 # enforce() — OBSERVE_ONLY vs ENFORCE
 # ---------------------------------------------------------------------------
+
 
 class EnforceTest(TestCase):
     def setUp(self):
@@ -295,26 +364,48 @@ class EnforceTest(TestCase):
 # baseline_allowed_for_role() — публичная функция без User объекта
 # ---------------------------------------------------------------------------
 
+
 class BaselineAllowedForRoleTest(TestCase):
     def test_superuser_always_true(self):
         self.assertTrue(
-            baseline_allowed_for_role(role="", resource_type=PolicyRule.ResourceType.PAGE, resource_key="ui:settings", is_superuser=True)
+            baseline_allowed_for_role(
+                role="",
+                resource_type=PolicyRule.ResourceType.PAGE,
+                resource_key="ui:settings",
+                is_superuser=True,
+            )
         )
 
     def test_manager_cannot_access_settings_page(self):
         self.assertFalse(
-            baseline_allowed_for_role(role=User.Role.MANAGER, resource_type=PolicyRule.ResourceType.PAGE, resource_key="ui:settings")
+            baseline_allowed_for_role(
+                role=User.Role.MANAGER,
+                resource_type=PolicyRule.ResourceType.PAGE,
+                resource_key="ui:settings",
+            )
         )
 
     def test_admin_can_access_settings_page(self):
         self.assertTrue(
-            baseline_allowed_for_role(role=User.Role.ADMIN, resource_type=PolicyRule.ResourceType.PAGE, resource_key="ui:settings")
+            baseline_allowed_for_role(
+                role=User.Role.ADMIN,
+                resource_type=PolicyRule.ResourceType.PAGE,
+                resource_key="ui:settings",
+            )
         )
 
     def test_delete_request_create_manager_only(self):
         self.assertTrue(
-            baseline_allowed_for_role(role=User.Role.MANAGER, resource_type=PolicyRule.ResourceType.ACTION, resource_key="ui:companies:delete_request:create")
+            baseline_allowed_for_role(
+                role=User.Role.MANAGER,
+                resource_type=PolicyRule.ResourceType.ACTION,
+                resource_key="ui:companies:delete_request:create",
+            )
         )
         self.assertFalse(
-            baseline_allowed_for_role(role=User.Role.ADMIN, resource_type=PolicyRule.ResourceType.ACTION, resource_key="ui:companies:delete_request:create")
+            baseline_allowed_for_role(
+                role=User.Role.ADMIN,
+                resource_type=PolicyRule.ResourceType.ACTION,
+                resource_key="ui:companies:delete_request:create",
+            )
         )

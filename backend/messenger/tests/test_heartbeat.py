@@ -45,11 +45,18 @@ class CheckOfflineOperatorsTests(TestCase):
     def setUp(self):
         self.branch = Branch.objects.create(name="Br", code="br")
         self.op_active = User.objects.create_user(
-            "a", password="pw", role=User.Role.MANAGER, branch=self.branch,
-            messenger_online=True, messenger_last_seen=timezone.now(),
+            "a",
+            password="pw",
+            role=User.Role.MANAGER,
+            branch=self.branch,
+            messenger_online=True,
+            messenger_last_seen=timezone.now(),
         )
         self.op_stale = User.objects.create_user(
-            "b", password="pw", role=User.Role.MANAGER, branch=self.branch,
+            "b",
+            password="pw",
+            role=User.Role.MANAGER,
+            branch=self.branch,
             messenger_online=True,
             messenger_last_seen=timezone.now() - timedelta(seconds=120),
         )

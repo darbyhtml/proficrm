@@ -1,6 +1,7 @@
 """
 Views для управления отправкой кампаний: старт, пауза, возобновление, тестовая отправка.
 """
+
 from __future__ import annotations
 
 import logging
@@ -35,7 +36,12 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
         return redirect("campaign_detail", campaign_id=campaign_id)
 
     user: User = request.user
-    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:start", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:campaigns:start",
+        context={"path": request.path, "method": request.method},
+    )
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
         messages.error(request, "Доступ запрещён.")
@@ -47,7 +53,10 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
         return redirect("campaign_detail", campaign_id=camp.id)
 
     if not ((camp.created_by.email if camp.created_by else "") or "").strip():
-        messages.error(request, "У создателя кампании не задан email (Reply-To). Укажите email в профиле создателя кампании.")
+        messages.error(
+            request,
+            "У создателя кампании не задан email (Reply-To). Укажите email в профиле создателя кампании.",
+        )
         return redirect("campaign_detail", campaign_id=camp.id)
 
     pending_count = camp.recipients.filter(status=CampaignRecipient.Status.PENDING).count()
@@ -56,8 +65,11 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
         return redirect("campaign_detail", campaign_id=camp.id)
 
     from django.conf import settings
+
     throttle_limit = getattr(settings, "MAILER_THROTTLE_CAMPAIGN_START_PER_HOUR", 10)
-    is_throttled, current_count, throttle_reason = is_user_throttled(user.id, "campaign_start", max_requests=throttle_limit, window_seconds=3600)
+    is_throttled, current_count, throttle_reason = is_user_throttled(
+        user.id, "campaign_start", max_requests=throttle_limit, window_seconds=3600
+    )
     if is_throttled:
         if throttle_reason == "throttle_backend_unavailable":
             messages.error(request, "Сервис временно недоступен. Попробуйте позже.")
@@ -65,11 +77,12 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
             messages.error(
                 request,
                 f"Превышен лимит запуска кампаний ({throttle_limit} запусков в час). "
-                f"Текущее количество: {current_count}. Попробуйте позже."
+                f"Текущее количество: {current_count}. Попробуйте позже.",
             )
         return redirect("campaign_detail", campaign_id=camp.id)
 
     from mailer.constants import get_max_campaign_recipients
+
     max_recipients = get_max_campaign_recipients()
     total_recipients = camp.recipients.count()
     if total_recipients > max_recipients:
@@ -77,17 +90,18 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
             request,
             f"Кампания слишком большая ({total_recipients} получателей). "
             f"Максимум: {max_recipients} получателей. "
-            f"Разбейте кампанию на несколько частей."
+            f"Разбейте кампанию на несколько частей.",
         )
         return redirect("campaign_detail", campaign_id=camp.id)
 
     from mailer.services.rate_limiter import get_effective_quota_available
+
     emails_available = get_effective_quota_available()
     if emails_available <= 0:
         messages.warning(
             request,
             f"Внимание: глобальная квота исчерпана ({emails_available}). "
-            f"Кампания будет отложена до пополнения квоты."
+            f"Кампания будет отложена до пополнения квоты.",
         )
 
     if camp.status in (Campaign.Status.DRAFT, Campaign.Status.PAUSED, Campaign.Status.STOPPED):
@@ -95,16 +109,20 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
         camp.save(update_fields=["status", "updated_at"])
 
         from mailer.tasks import _is_working_hours
+
         is_working = _is_working_hours()
 
-        active_queues = CampaignQueue.objects.filter(
-            status__in=(CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING),
-            campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING)
-        ).exclude(campaign=camp).count()
+        active_queues = (
+            CampaignQueue.objects.filter(
+                status__in=(CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING),
+                campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING),
+            )
+            .exclude(campaign=camp)
+            .count()
+        )
 
         queue_entry, created = CampaignQueue.objects.get_or_create(
-            campaign=camp,
-            defaults={"status": CampaignQueue.Status.PENDING, "priority": 0}
+            campaign=camp, defaults={"status": CampaignQueue.Status.PENDING, "priority": 0}
         )
         if not created and queue_entry.status != CampaignQueue.Status.PENDING:
             queue_entry.status = CampaignQueue.Status.PENDING
@@ -115,10 +133,14 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
 
         queue_position = None
         if queue_entry.status == CampaignQueue.Status.PENDING:
-            queue_list = list(CampaignQueue.objects.filter(
-                status=CampaignQueue.Status.PENDING,
-                campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING)
-            ).order_by("-priority", "queued_at").values_list("campaign_id", flat=True))
+            queue_list = list(
+                CampaignQueue.objects.filter(
+                    status=CampaignQueue.Status.PENDING,
+                    campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING),
+                )
+                .order_by("-priority", "queued_at")
+                .values_list("campaign_id", flat=True)
+            )
             if camp.id in queue_list:
                 queue_position = queue_list.index(camp.id) + 1
 
@@ -126,19 +148,33 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
             messages.success(request, "Рассылка поставлена в очередь и начнётся в ближайшее время.")
         else:
             if queue_position:
-                messages.success(request, f"Рассылка поставлена в очередь. Ваша позиция: {queue_position}. Вы получите уведомление, когда начнется отправка.")
+                messages.success(
+                    request,
+                    f"Рассылка поставлена в очередь. Ваша позиция: {queue_position}. Вы получите уведомление, когда начнется отправка.",
+                )
             else:
-                messages.success(request, "Рассылка поставлена в очередь. Вы получите уведомление, когда начнется отправка.")
+                messages.success(
+                    request,
+                    "Рассылка поставлена в очередь. Вы получите уведомление, когда начнется отправка.",
+                )
             notify(
                 user=user,
                 kind=Notification.Kind.SYSTEM,
                 title="Рассылка в очереди",
-                body=f"Кампания '{camp.name}' поставлена в очередь" + (f" (позиция: {queue_position})" if queue_position else "") + ". Вы получите уведомление, когда начнется отправка.",
+                body=f"Кампания '{camp.name}' поставлена в очередь"
+                + (f" (позиция: {queue_position})" if queue_position else "")
+                + ". Вы получите уведомление, когда начнется отправка.",
                 url=f"/mail/campaigns/{camp.id}/",
                 dedupe_seconds=900,
             )
 
-        log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Запущена автоматическая рассылка")
+        log_event(
+            actor=user,
+            verb=ActivityEvent.Verb.UPDATE,
+            entity_type="campaign",
+            entity_id=camp.id,
+            message="Запущена автоматическая рассылка",
+        )
 
     return redirect("campaign_detail", campaign_id=camp.id)
 
@@ -150,7 +186,12 @@ def campaign_pause(request: HttpRequest, campaign_id) -> HttpResponse:
         return redirect("campaign_detail", campaign_id=campaign_id)
 
     user: User = request.user
-    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:pause", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:campaigns:pause",
+        context={"path": request.path, "method": request.method},
+    )
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
         messages.error(request, "Доступ запрещён.")
@@ -162,13 +203,24 @@ def campaign_pause(request: HttpRequest, campaign_id) -> HttpResponse:
 
         queue_entry = getattr(camp, "queue_entry", None)
         if queue_entry:
-            if queue_entry.status in (CampaignQueue.Status.PROCESSING, CampaignQueue.Status.PENDING):
+            if queue_entry.status in (
+                CampaignQueue.Status.PROCESSING,
+                CampaignQueue.Status.PENDING,
+            ):
                 queue_entry.status = CampaignQueue.Status.CANCELLED
                 queue_entry.completed_at = timezone.now()
                 queue_entry.save(update_fields=["status", "completed_at"])
 
-        messages.success(request, "Рассылка поставлена на паузу. Очередь перешла на следующую кампанию.")
-        log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Рассылка поставлена на паузу вручную")
+        messages.success(
+            request, "Рассылка поставлена на паузу. Очередь перешла на следующую кампанию."
+        )
+        log_event(
+            actor=user,
+            verb=ActivityEvent.Verb.UPDATE,
+            entity_type="campaign",
+            entity_id=camp.id,
+            message="Рассылка поставлена на паузу вручную",
+        )
 
     return redirect("campaign_detail", campaign_id=camp.id)
 
@@ -180,7 +232,12 @@ def campaign_resume(request: HttpRequest, campaign_id) -> HttpResponse:
         return redirect("campaign_detail", campaign_id=campaign_id)
 
     user: User = request.user
-    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:resume", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:campaigns:resume",
+        context={"path": request.path, "method": request.method},
+    )
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
         messages.error(request, "Доступ запрещён.")
@@ -190,7 +247,10 @@ def campaign_resume(request: HttpRequest, campaign_id) -> HttpResponse:
         pending_count = camp.recipients.filter(status=CampaignRecipient.Status.PENDING).count()
         if pending_count > 0:
             if not ((camp.created_by.email if camp.created_by else "") or "").strip():
-                messages.error(request, "У создателя кампании не задан email (Reply-To). Укажите email в профиле создателя кампании.")
+                messages.error(
+                    request,
+                    "У создателя кампании не задан email (Reply-To). Укажите email в профиле создателя кампании.",
+                )
                 return redirect("campaign_detail", campaign_id=camp.id)
 
             smtp_cfg = GlobalMailAccount.load()
@@ -217,7 +277,16 @@ def campaign_resume(request: HttpRequest, campaign_id) -> HttpResponse:
                 queue_entry.queued_at = timezone.now()
                 queue_entry.deferred_until = next_run
                 queue_entry.defer_reason = DEFER_REASON_DAILY_LIMIT
-                queue_entry.save(update_fields=["status", "started_at", "completed_at", "queued_at", "deferred_until", "defer_reason"])
+                queue_entry.save(
+                    update_fields=[
+                        "status",
+                        "started_at",
+                        "completed_at",
+                        "queued_at",
+                        "deferred_until",
+                        "defer_reason",
+                    ]
+                )
                 camp.status = Campaign.Status.READY
                 camp.save(update_fields=["status", "updated_at"])
                 messages.info(
@@ -225,23 +294,33 @@ def campaign_resume(request: HttpRequest, campaign_id) -> HttpResponse:
                     f"Сегодня лимит исчерпан ({sent_today_user}/{per_user_daily_limit}). "
                     f"Продолжим завтра в {next_run_str} ({next_run_date}).",
                 )
-                log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Resume: лимит исчерпан, отложено на завтра")
+                log_event(
+                    actor=user,
+                    verb=ActivityEvent.Verb.UPDATE,
+                    entity_type="campaign",
+                    entity_id=camp.id,
+                    message="Resume: лимит исчерпан, отложено на завтра",
+                )
                 return redirect("campaign_detail", campaign_id=camp.id)
 
             camp.status = Campaign.Status.READY
             camp.save(update_fields=["status", "updated_at"])
 
             from mailer.tasks import _is_working_hours
+
             is_working = _is_working_hours()
 
-            active_queues = CampaignQueue.objects.filter(
-                status__in=(CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING),
-                campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING)
-            ).exclude(campaign=camp).count()
+            active_queues = (
+                CampaignQueue.objects.filter(
+                    status__in=(CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING),
+                    campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING),
+                )
+                .exclude(campaign=camp)
+                .count()
+            )
 
             queue_entry, created = CampaignQueue.objects.get_or_create(
-                campaign=camp,
-                defaults={"status": CampaignQueue.Status.PENDING, "priority": 0}
+                campaign=camp, defaults={"status": CampaignQueue.Status.PENDING, "priority": 0}
             )
             if not created:
                 queue_entry.status = CampaignQueue.Status.PENDING
@@ -251,34 +330,65 @@ def campaign_resume(request: HttpRequest, campaign_id) -> HttpResponse:
                 queue_entry.deferred_until = None
                 queue_entry.defer_reason = ""
                 queue_entry.consecutive_transient_errors = 0
-                queue_entry.save(update_fields=["status", "queued_at", "started_at", "completed_at", "deferred_until", "defer_reason", "consecutive_transient_errors"])
+                queue_entry.save(
+                    update_fields=[
+                        "status",
+                        "queued_at",
+                        "started_at",
+                        "completed_at",
+                        "deferred_until",
+                        "defer_reason",
+                        "consecutive_transient_errors",
+                    ]
+                )
 
             queue_position = None
             if queue_entry.status == CampaignQueue.Status.PENDING:
-                queue_list = list(CampaignQueue.objects.filter(
-                    status=CampaignQueue.Status.PENDING,
-                    campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING)
-                ).order_by("-priority", "queued_at").values_list("campaign_id", flat=True))
+                queue_list = list(
+                    CampaignQueue.objects.filter(
+                        status=CampaignQueue.Status.PENDING,
+                        campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING),
+                    )
+                    .order_by("-priority", "queued_at")
+                    .values_list("campaign_id", flat=True)
+                )
                 if camp.id in queue_list:
                     queue_position = queue_list.index(camp.id) + 1
 
             if active_queues == 0 and is_working:
-                messages.success(request, "Рассылка возобновлена и поставлена в очередь. Старт — в ближайшее время.")
+                messages.success(
+                    request,
+                    "Рассылка возобновлена и поставлена в очередь. Старт — в ближайшее время.",
+                )
             else:
                 if queue_position:
-                    messages.success(request, f"Рассылка поставлена в очередь. Ваша позиция: {queue_position}. Вы получите уведомление, когда начнется отправка.")
+                    messages.success(
+                        request,
+                        f"Рассылка поставлена в очередь. Ваша позиция: {queue_position}. Вы получите уведомление, когда начнется отправка.",
+                    )
                 else:
-                    messages.success(request, "Рассылка поставлена в очередь. Вы получите уведомление, когда начнется отправка.")
+                    messages.success(
+                        request,
+                        "Рассылка поставлена в очередь. Вы получите уведомление, когда начнется отправка.",
+                    )
                 notify(
                     user=user,
                     kind=Notification.Kind.SYSTEM,
                     title="Рассылка в очереди",
-                    body=f"Кампания '{camp.name}' поставлена в очередь" + (f" (позиция: {queue_position})" if queue_position else "") + ". Вы получите уведомление, когда начнется отправка.",
+                    body=f"Кампания '{camp.name}' поставлена в очередь"
+                    + (f" (позиция: {queue_position})" if queue_position else "")
+                    + ". Вы получите уведомление, когда начнется отправка.",
                     url=f"/mail/campaigns/{camp.id}/",
                     dedupe_seconds=900,
                 )
 
-            log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Рассылка возобновлена")
+            log_event(
+                actor=user,
+                verb=ActivityEvent.Verb.UPDATE,
+                entity_type="campaign",
+                entity_id=camp.id,
+                message="Рассылка возобновлена",
+            )
         else:
             camp.status = Campaign.Status.SENT
             camp.save(update_fields=["status", "updated_at"])
@@ -295,7 +405,12 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
     ВАЖНО: Тестовое письмо НЕ должно менять статус получателей (CampaignRecipient.status).
     """
     user: User = request.user
-    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:test_send", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:campaigns:test_send",
+        context={"path": request.path, "method": request.method},
+    )
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
         messages.error(request, "Доступ запрещён.")
@@ -321,8 +436,11 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
         return redirect("campaign_detail", campaign_id=camp.id)
 
     from django.conf import settings
+
     throttle_limit = getattr(settings, "MAILER_THROTTLE_TEST_EMAIL_PER_HOUR", 5)
-    is_throttled, current_count, throttle_reason = is_user_throttled(user.id, "send_test_email", max_requests=throttle_limit, window_seconds=3600)
+    is_throttled, current_count, throttle_reason = is_user_throttled(
+        user.id, "send_test_email", max_requests=throttle_limit, window_seconds=3600
+    )
     if is_throttled:
         if throttle_reason == "throttle_backend_unavailable":
             messages.error(request, "Сервис временно недоступен. Попробуйте позже.")
@@ -330,7 +448,7 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
             messages.error(
                 request,
                 f"Превышен лимит отправки тестовых писем ({throttle_limit} писем в час). "
-                f"Текущее количество: {current_count}. Попробуйте позже."
+                f"Текущее количество: {current_count}. Попробуйте позже.",
             )
         return redirect("campaign_detail", campaign_id=camp.id)
 
@@ -343,18 +461,28 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
         body_text=(html_to_text(camp.body_html or "") or camp.body_text or ""),
     )
 
-    from mailer.mail_content import ensure_unsubscribe_tokens, build_unsubscribe_url, append_unsubscribe_footer
+    from mailer.mail_content import (
+        ensure_unsubscribe_tokens,
+        build_unsubscribe_url,
+        append_unsubscribe_footer,
+    )
+
     token = ensure_unsubscribe_tokens([to_email]).get(to_email.strip().lower(), "")
     unsub_url = build_unsubscribe_url(token) if token else ""
     if unsub_url:
-        base_html, base_text = append_unsubscribe_footer(body_html=base_html, body_text=base_text, unsubscribe_url=unsub_url)
+        base_html, base_text = append_unsubscribe_footer(
+            body_html=base_html, body_text=base_text, unsubscribe_url=unsub_url
+        )
 
     from mailer.tasks import send_test_email
+
     attachment_path = None
     attachment_original_name = None
     if camp.attachment:
         attachment_path = camp.attachment.name
-        attachment_original_name = camp.attachment_original_name or camp.attachment.name.split("/")[-1]
+        attachment_original_name = (
+            camp.attachment_original_name or camp.attachment.name.split("/")[-1]
+        )
 
     result = send_test_email.delay(
         to_email=to_email,
@@ -378,7 +506,9 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
     # Доп. страховка: убеждаемся, что этот endpoint не меняет статусы получателей синхронно
     recipients_after = list(camp.recipients.values_list("id", "status"))
     if recipients_before != recipients_after:
-        logger.error(f"CRITICAL: recipient statuses changed during test enqueue! Campaign: {camp.id}")
+        logger.error(
+            f"CRITICAL: recipient statuses changed during test enqueue! Campaign: {camp.id}"
+        )
         for r_id, old_status in recipients_before:
             CampaignRecipient.objects.filter(id=r_id).update(status=old_status)
 

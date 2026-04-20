@@ -1,6 +1,7 @@
 """
 Celery-задачи для модуля companies (поиск, индексация).
 """
+
 from __future__ import annotations
 
 import logging
@@ -39,6 +40,8 @@ def reindex_companies_daily():
             call_command("rebuild_company_search_index", chunk=500)
             logger.info("reindex_companies_daily: Postgres CompanySearchIndex OK")
         except Exception as e:
-            logger.exception("reindex_companies_daily: Postgres rebuild_company_search_index: %s", e)
+            logger.exception(
+                "reindex_companies_daily: Postgres rebuild_company_search_index: %s", e
+            )
 
     logger.info("reindex_companies_daily: завершено")

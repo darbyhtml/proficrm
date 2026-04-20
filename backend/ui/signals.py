@@ -18,17 +18,17 @@ def invalidate_dashboard_cache(user_id: int):
     """
     if not user_id:
         return
-    
+
     # Для Redis можно использовать delete_pattern, но для LocMemCache нужно удалять по ключам
     # Используем простой подход: удаляем ключи для сегодняшней и вчерашней даты
     today = timezone.localdate(timezone.now())
     yesterday = today - timezone.timedelta(days=1)
-    
+
     cache_keys = [
         f"dashboard_{user_id}_{today.isoformat()}",
         f"dashboard_{user_id}_{yesterday.isoformat()}",
     ]
-    
+
     for key in cache_keys:
         cache.delete(key)
 

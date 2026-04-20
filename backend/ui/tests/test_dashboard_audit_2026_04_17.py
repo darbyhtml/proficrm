@@ -9,6 +9,7 @@
 - dashboard_poll (400 on bad since, 304 ETag, user-id rate-limit)
 - view_as_update (audit-лог в ActivityEvent, superuser denied)
 """
+
 from __future__ import annotations
 
 from datetime import datetime as dt, timedelta, timezone as stdlib_tz
@@ -122,7 +123,9 @@ class SplitActiveTasksTestCase(TestCase):
         self.ranges = _dashboard_time_ranges(self.now)
 
     def _make_task(self, **kw):
-        defaults = dict(title="T", assigned_to=self.user, company=self.company, status=Task.Status.NEW)
+        defaults = dict(
+            title="T", assigned_to=self.user, company=self.company, status=Task.Status.NEW
+        )
         defaults.update(kw)
         return Task.objects.create(**defaults)
 
@@ -389,10 +392,15 @@ class ViewAsAuditTestCase(TestCase):
     def setUp(self):
         cache.clear()
         self.admin = User.objects.create_user(
-            username="admin1", password="p", role=User.Role.ADMIN, is_staff=True,
+            username="admin1",
+            password="p",
+            role=User.Role.ADMIN,
+            is_staff=True,
         )
         self.target = User.objects.create_user(
-            username="target1", password="p", role=User.Role.MANAGER,
+            username="target1",
+            password="p",
+            role=User.Role.MANAGER,
         )
         self.client = Client()
         self.client.force_login(self.admin)

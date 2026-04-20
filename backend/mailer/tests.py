@@ -60,6 +60,7 @@ class MailerBaseTestCase(TestCase):
 
     def setUp(self):
         from django.core.cache import cache
+
         # Очищаем только mailer-ключи, чтобы не мешать другим приложениям в shared-окружении
         for key in ("mailer:effective_quota_available",):
             try:
@@ -69,6 +70,7 @@ class MailerBaseTestCase(TestCase):
         cache.clear()  # в тестах используется LocMemCache — изолирован по умолчанию
 
         from unittest.mock import patch
+
         self._patches = []
 
         # 1) Рабочее время — всегда True
@@ -77,19 +79,33 @@ class MailerBaseTestCase(TestCase):
 
         # 2) Rate limit — всегда выдаём токен (Redis нет в тестах)
         _token_ok = (True, 1, None)
-        self._patches.append(patch("mailer.tasks.send.reserve_rate_limit_token", return_value=_token_ok))
-        self._patches.append(patch("mailer.tasks.helpers.reserve_rate_limit_token", return_value=_token_ok))
+        self._patches.append(
+            patch("mailer.tasks.send.reserve_rate_limit_token", return_value=_token_ok)
+        )
+        self._patches.append(
+            patch("mailer.tasks.helpers.reserve_rate_limit_token", return_value=_token_ok)
+        )
         self._patches.append(patch("mailer.tasks.reserve_rate_limit_token", return_value=_token_ok))
-        self._patches.append(patch("mailer.services.rate_limiter.reserve_rate_limit_token", return_value=_token_ok))
+        self._patches.append(
+            patch("mailer.services.rate_limiter.reserve_rate_limit_token", return_value=_token_ok)
+        )
 
         # 3) Throttle (daily limit via mailer.throttle)
-        self._throttle_patch = patch("mailer.throttle.is_user_throttled", return_value=(False, 0, None))
+        self._throttle_patch = patch(
+            "mailer.throttle.is_user_throttled", return_value=(False, 0, None)
+        )
         self._patches.append(self._throttle_patch)
 
         # 4) Квота smtp.bz — всегда достаточно
-        self._patches.append(patch("mailer.tasks.send.get_effective_quota_available", return_value=10000))
-        self._patches.append(patch("mailer.tasks.get_effective_quota_available", return_value=10000))
-        self._patches.append(patch("mailer.services.rate_limiter.get_effective_quota_available", return_value=10000))
+        self._patches.append(
+            patch("mailer.tasks.send.get_effective_quota_available", return_value=10000)
+        )
+        self._patches.append(
+            patch("mailer.tasks.get_effective_quota_available", return_value=10000)
+        )
+        self._patches.append(
+            patch("mailer.services.rate_limiter.get_effective_quota_available", return_value=10000)
+        )
 
         started = []
         for p in self._patches:
@@ -139,7 +155,14 @@ class MailerSafetyAndUnsubTests(MailerBaseTestCase):
         self.assertNotIn("<script", form.cleaned_data["signature_html"].lower())
 
     def test_campaign_form_sanitizes_body_html(self):
-        form = CampaignForm(data={"name": "n", "subject": "s", "sender_name": "x", "body_html": "<script>1</script><p>ok</p>"})
+        form = CampaignForm(
+            data={
+                "name": "n",
+                "subject": "s",
+                "sender_name": "x",
+                "body_html": "<script>1</script><p>ok</p>",
+            }
+        )
         self.assertTrue(form.is_valid())
         self.assertIn("<p>ok</p>", form.cleaned_data["body_html"])
         self.assertNotIn("<script", form.cleaned_data["body_html"].lower())
@@ -157,7 +180,10 @@ class MailerSafetyAndUnsubTests(MailerBaseTestCase):
         self.assertIsNotNone(u.last_seen_at)
 
         # POST (one-click)
-        resp = self.client.post(reverse("unsubscribe", kwargs={"token": t.token}), data={"List-Unsubscribe": "One-Click"})
+        resp = self.client.post(
+            reverse("unsubscribe", kwargs={"token": t.token}),
+            data={"List-Unsubscribe": "One-Click"},
+        )
         self.assertEqual(resp.status_code, 200)
         u.refresh_from_db()
         self.assertEqual(u.source, "token")
@@ -168,7 +194,9 @@ class MailerSafetyAndUnsubTests(MailerBaseTestCase):
 @override_settings(SECURE_SSL_REDIRECT=False)
 class MailerQueueConsistencyTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="m", password="pass", role=User.Role.MANAGER, email="m@example.com")
+        self.user = User.objects.create_user(
+            username="m", password="pass", role=User.Role.MANAGER, email="m@example.com"
+        )
         self.client.force_login(self.user)
 
     def _make_campaign(self) -> Campaign:
@@ -184,8 +212,12 @@ class MailerQueueConsistencyTests(TestCase):
 
     def test_campaign_clear_cancels_queue_entry(self):
         camp = self._make_campaign()
-        CampaignRecipient.objects.create(campaign=camp, email="a@example.com", status=CampaignRecipient.Status.PENDING)
-        q = CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PENDING, priority=0)
+        CampaignRecipient.objects.create(
+            campaign=camp, email="a@example.com", status=CampaignRecipient.Status.PENDING
+        )
+        q = CampaignQueue.objects.create(
+            campaign=camp, status=CampaignQueue.Status.PENDING, priority=0
+        )
 
         resp = self.client.post(reverse("campaign_clear", kwargs={"campaign_id": camp.id}))
         self.assertEqual(resp.status_code, 302)
@@ -197,12 +229,23 @@ class MailerQueueConsistencyTests(TestCase):
         camp = self._make_campaign()
         camp.status = Campaign.Status.SENDING
         camp.save(update_fields=["status", "updated_at"])
-        r_sent = CampaignRecipient.objects.create(campaign=camp, email="a@example.com", status=CampaignRecipient.Status.SENT)
-        r_failed = CampaignRecipient.objects.create(campaign=camp, email="b@example.com", status=CampaignRecipient.Status.FAILED, last_error="x")
+        r_sent = CampaignRecipient.objects.create(
+            campaign=camp, email="a@example.com", status=CampaignRecipient.Status.SENT
+        )
+        r_failed = CampaignRecipient.objects.create(
+            campaign=camp,
+            email="b@example.com",
+            status=CampaignRecipient.Status.FAILED,
+            last_error="x",
+        )
         # Имитируем ситуацию, когда кампания могла быть в очереди.
-        q = CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PENDING, priority=0)
+        q = CampaignQueue.objects.create(
+            campaign=camp, status=CampaignQueue.Status.PENDING, priority=0
+        )
 
-        resp = self.client.post(reverse("campaign_recipients_reset", kwargs={"campaign_id": camp.id}))
+        resp = self.client.post(
+            reverse("campaign_recipients_reset", kwargs={"campaign_id": camp.id})
+        )
         self.assertEqual(resp.status_code, 302)
         r_sent.refresh_from_db()
         r_failed.refresh_from_db()
@@ -221,7 +264,9 @@ class MailerQueueConsistencyTests(TestCase):
         camp = self._make_campaign()
         camp.status = Campaign.Status.SENDING
         camp.save(update_fields=["status", "updated_at"])
-        r_sent = CampaignRecipient.objects.create(campaign=camp, email="a@example.com", status=CampaignRecipient.Status.SENT)
+        r_sent = CampaignRecipient.objects.create(
+            campaign=camp, email="a@example.com", status=CampaignRecipient.Status.SENT
+        )
 
         # Менеджер не может сбросить SENT в PENDING через scope=all
         resp = self.client.post(
@@ -233,7 +278,9 @@ class MailerQueueConsistencyTests(TestCase):
         self.assertEqual(r_sent.status, CampaignRecipient.Status.SENT)
 
         # Админ может
-        admin = User.objects.create_user(username="adm", password="pass", role=User.Role.ADMIN, email="adm@example.com")
+        admin = User.objects.create_user(
+            username="adm", password="pass", role=User.Role.ADMIN, email="adm@example.com"
+        )
         self.client.force_login(admin)
         resp = self.client.post(
             reverse("campaign_recipients_reset", kwargs={"campaign_id": camp.id}),
@@ -247,7 +294,9 @@ class MailerQueueConsistencyTests(TestCase):
 @override_settings(SECURE_SSL_REDIRECT=False)
 class MailerCampaignDetailTemplateTest(TestCase):
     def test_campaign_detail_renders(self):
-        user = User.objects.create_user(username="m2", password="pass", role=User.Role.MANAGER, email="m2@example.com")
+        user = User.objects.create_user(
+            username="m2", password="pass", role=User.Role.MANAGER, email="m2@example.com"
+        )
         self.client.force_login(user)
         camp = Campaign.objects.create(
             created_by=user,
@@ -269,7 +318,9 @@ class MailerAttachmentRecoveryTests(TestCase):
         import platform
         from mailer.tasks import _get_campaign_attachment_bytes
 
-        user = User.objects.create_user(username="m3", password="pass", role=User.Role.MANAGER, email="m3@example.com")
+        user = User.objects.create_user(
+            username="m3", password="pass", role=User.Role.MANAGER, email="m3@example.com"
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             with override_settings(MEDIA_ROOT=tmpdir):
                 camp = Campaign.objects.create(
@@ -281,7 +332,9 @@ class MailerAttachmentRecoveryTests(TestCase):
                     sender_name="CRM",
                     status=Campaign.Status.DRAFT,
                 )
-                up = SimpleUploadedFile("Blank_Test_File_GMMyLxa.docx", b"abc", content_type="application/octet-stream")
+                up = SimpleUploadedFile(
+                    "Blank_Test_File_GMMyLxa.docx", b"abc", content_type="application/octet-stream"
+                )
                 camp.attachment.save(up.name, up)
 
                 # Имитируем проблему: в БД имя файла отличается регистром (Linux чувствителен к регистру)
@@ -301,7 +354,9 @@ class MailerAttachmentRecoveryTests(TestCase):
     def test_attachment_missing_returns_error(self):
         from mailer.tasks import _get_campaign_attachment_bytes
 
-        user = User.objects.create_user(username="m4", password="pass", role=User.Role.MANAGER, email="m4@example.com")
+        user = User.objects.create_user(
+            username="m4", password="pass", role=User.Role.MANAGER, email="m4@example.com"
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             with override_settings(MEDIA_ROOT=tmpdir):
                 camp = Campaign.objects.create(
@@ -314,7 +369,9 @@ class MailerAttachmentRecoveryTests(TestCase):
                     status=Campaign.Status.DRAFT,
                 )
                 # Создаем запись на "вложение", но файл не кладём
-                Campaign.objects.filter(id=camp.id).update(attachment="campaign_attachments/2026/01/missing.docx")
+                Campaign.objects.filter(id=camp.id).update(
+                    attachment="campaign_attachments/2026/01/missing.docx"
+                )
                 camp.refresh_from_db()
                 content, name, err = _get_campaign_attachment_bytes(camp)
                 self.assertIsNone(content)
@@ -344,6 +401,7 @@ class MailerDeferDailyLimitTests(TestCase):
     def test_get_next_send_window_start_tomorrow(self):
         from zoneinfo import ZoneInfo
         from datetime import datetime
+
         # 20:00 МСК -> завтра 09:00
         msk = ZoneInfo("Europe/Moscow")
         evening = datetime(2026, 1, 15, 20, 0, 0, tzinfo=msk)
@@ -364,7 +422,9 @@ class MailerDeferDailyLimitTests(TestCase):
             status=Campaign.Status.PAUSED,
         )
         for i in range(3):
-            CampaignRecipient.objects.create(campaign=camp, email=f"r{i}@ex.com", status=CampaignRecipient.Status.PENDING)
+            CampaignRecipient.objects.create(
+                campaign=camp, email=f"r{i}@ex.com", status=CampaignRecipient.Status.PENDING
+            )
         start, end, _ = msk_day_bounds(timezone.now())
         for i in range(100):
             SendLog.objects.create(
@@ -398,7 +458,9 @@ class MailerDeferDailyLimitTests(TestCase):
             status=Campaign.Status.READY,
         )
         for i in range(196):
-            CampaignRecipient.objects.create(campaign=camp, email=f"r{i}@ex.com", status=CampaignRecipient.Status.PENDING)
+            CampaignRecipient.objects.create(
+                campaign=camp, email=f"r{i}@ex.com", status=CampaignRecipient.Status.PENDING
+            )
         CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PENDING, priority=0)
         start, end, _ = msk_day_bounds(timezone.now())
         for i in range(100):
@@ -411,6 +473,7 @@ class MailerDeferDailyLimitTests(TestCase):
                 created_at=start,
             )
         from mailer.tasks import send_pending_emails
+
         with patch("mailer.tasks.send._is_working_hours", return_value=True):
             with patch("mailer.tasks.send.send_via_smtp"):
                 send_pending_emails.run(batch_size=50)
@@ -430,7 +493,10 @@ class MailerDeferQueueServiceTests(MailerBaseTestCase):
     def setUp(self):
         super().setUp()
         self.user = User.objects.create_user(
-            username="defer_svc", password="pass", role=User.Role.MANAGER, email="defer_svc@example.com"
+            username="defer_svc",
+            password="pass",
+            role=User.Role.MANAGER,
+            email="defer_svc@example.com",
         )
         GlobalMailAccount.objects.update_or_create(
             id=1,
@@ -448,11 +514,14 @@ class MailerDeferQueueServiceTests(MailerBaseTestCase):
             sender_name="X",
             status=Campaign.Status.READY,
         )
-        q = CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0)
+        q = CampaignQueue.objects.create(
+            campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0
+        )
         q.started_at = timezone.now()
         q.save()
 
         from datetime import timedelta
+
         next_hour = timezone.now() + timedelta(hours=1)
         defer_queue(q, DEFER_REASON_RATE_HOUR, next_hour, notify=False)
 
@@ -474,9 +543,12 @@ class MailerDeferQueueServiceTests(MailerBaseTestCase):
             sender_name="X",
             status=Campaign.Status.READY,
         )
-        q = CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0)
+        q = CampaignQueue.objects.create(
+            campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0
+        )
 
         from datetime import timedelta
+
         next_check = timezone.now() + timedelta(hours=1)
         defer_queue(q, DEFER_REASON_QUOTA, next_check, notify=False)
 
@@ -511,9 +583,12 @@ class MailerPollEndpointTests(TestCase):
             sender_name="X",
             status=Campaign.Status.READY,
         )
-        CampaignRecipient.objects.create(campaign=camp, email="r@ex.com", status=CampaignRecipient.Status.PENDING)
+        CampaignRecipient.objects.create(
+            campaign=camp, email="r@ex.com", status=CampaignRecipient.Status.PENDING
+        )
 
         from datetime import timedelta
+
         next_run = timezone.now() + timedelta(hours=2)
         q = CampaignQueue.objects.create(
             campaign=camp,
@@ -544,8 +619,12 @@ class MailerPollEndpointTests(TestCase):
             sender_name="X",
             status=Campaign.Status.READY,
         )
-        CampaignRecipient.objects.create(campaign=camp1, email="r1@ex.com", status=CampaignRecipient.Status.PENDING)
-        CampaignQueue.objects.create(campaign=camp1, status=CampaignQueue.Status.PENDING, priority=0)
+        CampaignRecipient.objects.create(
+            campaign=camp1, email="r1@ex.com", status=CampaignRecipient.Status.PENDING
+        )
+        CampaignQueue.objects.create(
+            campaign=camp1, status=CampaignQueue.Status.PENDING, priority=0
+        )
 
         camp2 = Campaign.objects.create(
             created_by=self.user,
@@ -556,8 +635,12 @@ class MailerPollEndpointTests(TestCase):
             sender_name="X",
             status=Campaign.Status.READY,
         )
-        CampaignRecipient.objects.create(campaign=camp2, email="r2@ex.com", status=CampaignRecipient.Status.PENDING)
-        CampaignQueue.objects.create(campaign=camp2, status=CampaignQueue.Status.PENDING, priority=0)
+        CampaignRecipient.objects.create(
+            campaign=camp2, email="r2@ex.com", status=CampaignRecipient.Status.PENDING
+        )
+        CampaignQueue.objects.create(
+            campaign=camp2, status=CampaignQueue.Status.PENDING, priority=0
+        )
 
         resp = self.client.get(reverse("mail_progress_poll"))
         self.assertEqual(resp.status_code, 200)
@@ -601,7 +684,9 @@ class MailerRaceConditionTests(TestCase):
         recipient = CampaignRecipient.objects.create(
             campaign=camp, email="race@ex.com", status=CampaignRecipient.Status.PENDING
         )
-        CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0)
+        CampaignQueue.objects.create(
+            campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0
+        )
 
         # Имитируем два воркера с использованием skip_locked=True (как в реальном коде)
         # Первый воркер берет запись
@@ -656,11 +741,18 @@ class MailerCampaignCompletionTests(MailerBaseTestCase):
             sender_name="X",
             status=Campaign.Status.SENDING,
         )
-        CampaignRecipient.objects.create(campaign=camp, email="sent@ex.com", status=CampaignRecipient.Status.SENT)
         CampaignRecipient.objects.create(
-            campaign=camp, email="failed@ex.com", status=CampaignRecipient.Status.FAILED, last_error="Error"
+            campaign=camp, email="sent@ex.com", status=CampaignRecipient.Status.SENT
         )
-        q = CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0)
+        CampaignRecipient.objects.create(
+            campaign=camp,
+            email="failed@ex.com",
+            status=CampaignRecipient.Status.FAILED,
+            last_error="Error",
+        )
+        q = CampaignQueue.objects.create(
+            campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0
+        )
 
         # Имитируем завершение кампании (нет pending)
         from mailer.tasks import send_pending_emails
@@ -687,6 +779,7 @@ class MailerRateLimiterTests(TestCase):
 
     def setUp(self):
         from django.core.cache import cache
+
         cache.clear()
 
     def test_rate_limit_reserve(self):
@@ -703,7 +796,7 @@ class MailerRateLimiterTests(TestCase):
             reserved, count, _ = reserve_rate_limit_token(max_per_hour=100)
             self.assertTrue(reserved)
             self.assertEqual(count, i + 1)
-        
+
         # 101-й токен не должен быть зарезервирован
         reserved, count, reset_at = reserve_rate_limit_token(max_per_hour=100)
         self.assertFalse(reserved)
@@ -751,7 +844,10 @@ class MailerOutsideHoursDeferTests(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(
-            username="outside_u", password="pass", role=User.Role.MANAGER, email="outside@example.com"
+            username="outside_u",
+            password="pass",
+            role=User.Role.MANAGER,
+            email="outside@example.com",
         )
         GlobalMailAccount.objects.update_or_create(
             id=1,
@@ -765,7 +861,7 @@ class MailerOutsideHoursDeferTests(TestCase):
         from mailer.tasks import send_pending_emails
         from zoneinfo import ZoneInfo
         from datetime import datetime
-        
+
         camp = Campaign.objects.create(
             created_by=self.user,
             name="Outside Camp",
@@ -775,19 +871,23 @@ class MailerOutsideHoursDeferTests(TestCase):
             sender_name="X",
             status=Campaign.Status.READY,
         )
-        CampaignRecipient.objects.create(campaign=camp, email="r@ex.com", status=CampaignRecipient.Status.PENDING)
-        q = CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0)
+        CampaignRecipient.objects.create(
+            campaign=camp, email="r@ex.com", status=CampaignRecipient.Status.PENDING
+        )
+        q = CampaignQueue.objects.create(
+            campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0
+        )
         q.started_at = timezone.now()
         q.save()
 
         # Имитируем вне рабочего времени (20:00 МСК)
         msk = ZoneInfo("Europe/Moscow")
         evening = datetime(2026, 1, 15, 20, 0, 0, tzinfo=msk)
-        
+
         with patch("mailer.tasks.send._is_working_hours", return_value=False):
             with patch("mailer.tasks.send.timezone.now", return_value=evening):
                 send_pending_emails.run(batch_size=50)
-        
+
         q.refresh_from_db()
         self.assertEqual(q.status, CampaignQueue.Status.PENDING)
         self.assertEqual(q.defer_reason, DEFER_REASON_OUTSIDE_HOURS)
@@ -796,6 +896,8 @@ class MailerOutsideHoursDeferTests(TestCase):
         msk_dt = timezone.localtime(q.deferred_until, ZoneInfo("Europe/Moscow"))
         self.assertEqual(msk_dt.hour, 9)
         self.assertEqual(msk_dt.day, 16)
+
+
 @override_settings(SECURE_SSL_REDIRECT=False)
 class MailerTransientErrorDeferTests(MailerBaseTestCase):
     """Тесты для transient_error: использование defer_queue."""
@@ -803,7 +905,10 @@ class MailerTransientErrorDeferTests(MailerBaseTestCase):
     def setUp(self):
         super().setUp()
         self.user = User.objects.create_user(
-            username="transient_u", password="pass", role=User.Role.MANAGER, email="transient@example.com"
+            username="transient_u",
+            password="pass",
+            role=User.Role.MANAGER,
+            email="transient@example.com",
         )
         GlobalMailAccount.objects.update_or_create(
             id=1,
@@ -821,7 +926,7 @@ class MailerTransientErrorDeferTests(MailerBaseTestCase):
     def test_transient_error_uses_defer_queue(self, _del, _add):
         """transient_blocked использует defer_queue с коротким deferred_until."""
         from mailer.tasks import send_pending_emails
-        
+
         camp = Campaign.objects.create(
             created_by=self.user,
             name="Transient Camp",
@@ -831,22 +936,30 @@ class MailerTransientErrorDeferTests(MailerBaseTestCase):
             sender_name="X",
             status=Campaign.Status.READY,
         )
-        CampaignRecipient.objects.create(campaign=camp, email="r@ex.com", status=CampaignRecipient.Status.PENDING)
-        q = CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0)
+        CampaignRecipient.objects.create(
+            campaign=camp, email="r@ex.com", status=CampaignRecipient.Status.PENDING
+        )
+        q = CampaignQueue.objects.create(
+            campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0
+        )
 
         # Имитируем transient error
         # ВАЖНО: патчим rate limit, чтобы он не срабатывал раньше transient error
         with patch("mailer.tasks.helpers.reserve_rate_limit_token", return_value=(True, 1, None)):
             with patch("mailer.tasks.send._is_working_hours", return_value=True):
-                with patch("mailer.tasks.helpers.send_via_smtp", side_effect=Exception("Service temporarily unavailable")):
+                with patch(
+                    "mailer.tasks.helpers.send_via_smtp",
+                    side_effect=Exception("Service temporarily unavailable"),
+                ):
                     send_pending_emails.run(batch_size=50)
-        
+
         q.refresh_from_db()
         self.assertEqual(q.status, CampaignQueue.Status.PENDING)
         self.assertEqual(q.defer_reason, DEFER_REASON_TRANSIENT_ERROR)
         self.assertIsNotNone(q.deferred_until)
         # deferred_until должен быть примерно через 5 минут
         from datetime import timedelta
+
         expected_time = timezone.now() + timedelta(minutes=5)
         self.assertLess(abs((q.deferred_until - expected_time).total_seconds()), 60)  # ±1 минута
 
@@ -857,7 +970,10 @@ class MailerTestEmailTaskTests(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(
-            username="test_task_u", password="pass", role=User.Role.MANAGER, email="test_task@example.com"
+            username="test_task_u",
+            password="pass",
+            role=User.Role.MANAGER,
+            email="test_task@example.com",
         )
         GlobalMailAccount.objects.update_or_create(
             id=1,
@@ -869,14 +985,14 @@ class MailerTestEmailTaskTests(TestCase):
     def test_send_test_email_uses_rate_limiter(self, mock_reserve, mock_send):
         """send_test_email использует rate limiter и не вызывает send_via_smtp напрямую из views."""
         from mailer.tasks import send_test_email
-        
+
         result = send_test_email(
             to_email="test@example.com",
             subject="Test",
             body_html="<p>Test</p>",
             body_text="Test",
         )
-        
+
         self.assertTrue(result["success"])
         mock_reserve.assert_called_once()
         mock_send.assert_called_once()
@@ -886,14 +1002,14 @@ class MailerTestEmailTaskTests(TestCase):
     def test_send_test_email_respects_rate_limit(self, mock_reserve, mock_send):
         """send_test_email не отправляет письмо, если rate limit достигнут."""
         from mailer.tasks import send_test_email
-        
+
         result = send_test_email(
             to_email="test@example.com",
             subject="Test",
             body_html="<p>Test</p>",
             body_text="Test",
         )
-        
+
         self.assertFalse(result["success"])
         self.assertIn("Лимит", result["error"])
         mock_send.assert_not_called()
@@ -907,13 +1023,16 @@ class MailerEnterpriseFinishingTests(MailerBaseTestCase):
         super().setUp()
         # КРИТИЧНО: Для тестов throttling нужно использовать реальную функцию, а не мок
         # Останавливаем патч is_user_throttled из MailerBaseTestCase
-        if hasattr(self, '_throttle_patch'):
+        if hasattr(self, "_throttle_patch"):
             self._throttle_patch.stop()
             if self._throttle_patch in self._patches:
                 self._patches.remove(self._throttle_patch)
-        
+
         self.user = User.objects.create_user(
-            username="enterprise_u", password="pass", role=User.Role.MANAGER, email="enterprise@example.com"
+            username="enterprise_u",
+            password="pass",
+            role=User.Role.MANAGER,
+            email="enterprise@example.com",
         )
         GlobalMailAccount.objects.update_or_create(
             id=1,
@@ -931,12 +1050,14 @@ class MailerEnterpriseFinishingTests(MailerBaseTestCase):
             sender_name="X",
             status=Campaign.Status.READY,
         )
-        q = CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PENDING, priority=0)
-        
+        q = CampaignQueue.objects.create(
+            campaign=camp, status=CampaignQueue.Status.PENDING, priority=0
+        )
+
         # Поле должно существовать и иметь дефолт 0
         self.assertTrue(hasattr(q, "consecutive_transient_errors"))
         self.assertEqual(q.consecutive_transient_errors, 0)
-        
+
         # Можно установить значение
         q.consecutive_transient_errors = 5
         q.save()
@@ -946,16 +1067,20 @@ class MailerEnterpriseFinishingTests(MailerBaseTestCase):
     def test_user_throttling_campaign_start(self):
         """Throttling на campaign_start работает (10/час)."""
         from mailer.throttle import is_user_throttled
-        
+
         # Первые 10 запросов должны проходить
         for i in range(10):
-            is_throttled, count, reason = is_user_throttled(self.user.id, "campaign_start", max_requests=10, window_seconds=3600)
+            is_throttled, count, reason = is_user_throttled(
+                self.user.id, "campaign_start", max_requests=10, window_seconds=3600
+            )
             self.assertFalse(is_throttled, f"Request {i+1} should not be throttled")
             self.assertEqual(count, i + 1)
             self.assertIsNone(reason)
-        
+
         # 11-й запрос должен быть заблокирован
-        is_throttled, count, reason = is_user_throttled(self.user.id, "campaign_start", max_requests=10, window_seconds=3600)
+        is_throttled, count, reason = is_user_throttled(
+            self.user.id, "campaign_start", max_requests=10, window_seconds=3600
+        )
         self.assertTrue(is_throttled)
         self.assertEqual(count, 10)
         self.assertIsNone(reason)
@@ -963,16 +1088,20 @@ class MailerEnterpriseFinishingTests(MailerBaseTestCase):
     def test_user_throttling_send_test_email(self):
         """Throttling на send_test_email работает (5/час)."""
         from mailer.throttle import is_user_throttled
-        
+
         # Первые 5 запросов должны проходить
         for i in range(5):
-            is_throttled, count, reason = is_user_throttled(self.user.id, "send_test_email", max_requests=5, window_seconds=3600)
+            is_throttled, count, reason = is_user_throttled(
+                self.user.id, "send_test_email", max_requests=5, window_seconds=3600
+            )
             self.assertFalse(is_throttled, f"Request {i+1} should not be throttled")
             self.assertEqual(count, i + 1)
             self.assertIsNone(reason)
-        
+
         # 6-й запрос должен быть заблокирован
-        is_throttled, count, reason = is_user_throttled(self.user.id, "send_test_email", max_requests=5, window_seconds=3600)
+        is_throttled, count, reason = is_user_throttled(
+            self.user.id, "send_test_email", max_requests=5, window_seconds=3600
+        )
         self.assertTrue(is_throttled)
         self.assertEqual(count, 5)
         self.assertIsNone(reason)
@@ -982,7 +1111,7 @@ class MailerEnterpriseFinishingTests(MailerBaseTestCase):
         """Старт кампании с >MAX_CAMPAIGN_RECIPIENTS получателей запрещён."""
         from django.test import Client
         from django.urls import reverse
-        
+
         camp = Campaign.objects.create(
             created_by=self.user,
             name="Large Camp",
@@ -992,7 +1121,7 @@ class MailerEnterpriseFinishingTests(MailerBaseTestCase):
             sender_name="X",
             status=Campaign.Status.DRAFT,
         )
-        
+
         # Создаём больше получателей, чем лимит (100 + 1)
         for i in range(101):
             CampaignRecipient.objects.create(
@@ -1000,14 +1129,14 @@ class MailerEnterpriseFinishingTests(MailerBaseTestCase):
                 email=f"r{i}@ex.com",
                 status=CampaignRecipient.Status.PENDING,
             )
-        
+
         client = Client()
         client.force_login(self.user)
-        
+
         # Попытка запустить кампанию должна вернуть ошибку
         response = client.post(reverse("campaign_start", args=[str(camp.id)]))
         self.assertEqual(response.status_code, 302)  # Redirect после ошибки
-        
+
         # Кампания не должна быть запущена
         camp.refresh_from_db()
         self.assertNotEqual(camp.status, Campaign.Status.READY)
@@ -1016,7 +1145,7 @@ class MailerEnterpriseFinishingTests(MailerBaseTestCase):
     def test_structured_logging_email_sent(self, mock_logger):
         """Structured logging для успешной отправки содержит нужные поля и PII-safe."""
         from mailer.tasks import send_pending_emails
-        
+
         camp = Campaign.objects.create(
             created_by=self.user,
             name="Log Test",
@@ -1026,19 +1155,27 @@ class MailerEnterpriseFinishingTests(MailerBaseTestCase):
             sender_name="X",
             status=Campaign.Status.READY,
         )
-        CampaignRecipient.objects.create(campaign=camp, email="test@example.com", status=CampaignRecipient.Status.PENDING)
-        q = CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0)
+        CampaignRecipient.objects.create(
+            campaign=camp, email="test@example.com", status=CampaignRecipient.Status.PENDING
+        )
+        q = CampaignQueue.objects.create(
+            campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0
+        )
         q.started_at = timezone.now()
         q.save()
-        
+
         # Мокаем rate limiter и SMTP
         with patch("mailer.tasks.send.reserve_rate_limit_token", return_value=(True, 1, None)):
             with patch("mailer.tasks.send.send_via_smtp"):
                 with patch("mailer.tasks.send.cache.add", return_value=True):
                     send_pending_emails(batch_size=50)
-        
+
         # Проверяем, что был вызов logger.info с extra полями
-        info_calls = [call for call in mock_logger.info.call_args_list if call[0] and "Email sent successfully" in str(call[0][0])]
+        info_calls = [
+            call
+            for call in mock_logger.info.call_args_list
+            if call[0] and "Email sent successfully" in str(call[0][0])
+        ]
         if info_calls:
             # Проверяем наличие extra полей
             call_kwargs = info_calls[0].kwargs
@@ -1057,7 +1194,7 @@ class MailerEnterpriseFinishingTests(MailerBaseTestCase):
     def test_structured_logging_campaign_finished(self, mock_logger):
         """Structured logging для завершения кампании содержит нужные поля."""
         from mailer.tasks import send_pending_emails
-        
+
         camp = Campaign.objects.create(
             created_by=self.user,
             name="Finish Test",
@@ -1068,16 +1205,24 @@ class MailerEnterpriseFinishingTests(MailerBaseTestCase):
             status=Campaign.Status.SENDING,
         )
         # Все получатели уже отправлены
-        CampaignRecipient.objects.create(campaign=camp, email="r@ex.com", status=CampaignRecipient.Status.SENT)
-        q = CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0)
+        CampaignRecipient.objects.create(
+            campaign=camp, email="r@ex.com", status=CampaignRecipient.Status.SENT
+        )
+        q = CampaignQueue.objects.create(
+            campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0
+        )
         q.started_at = timezone.now() - timezone.timedelta(seconds=100)
         q.save()
-        
+
         with patch("mailer.tasks.send.cache.add", return_value=True):
             send_pending_emails(batch_size=50)
-        
+
         # Проверяем, что был вызов logger.info для завершения кампании
-        info_calls = [call for call in mock_logger.info.call_args_list if call[0] and "Campaign finished" in str(call[0][0])]
+        info_calls = [
+            call
+            for call in mock_logger.info.call_args_list
+            if call[0] and "Campaign finished" in str(call[0][0])
+        ]
         if info_calls:
             call_kwargs = info_calls[0].kwargs
             self.assertIn("extra", call_kwargs)
@@ -1098,10 +1243,12 @@ class MailerApiKeyEncryptionTests(TestCase):
     def setUp(self):
         # Сбрасываем lru_cache чтобы settings изменились
         from core.crypto import _fernet
+
         _fernet.cache_clear()
 
     def tearDown(self):
         from core.crypto import _fernet
+
         _fernet.cache_clear()
 
     def test_set_and_get_api_key_roundtrip(self):
@@ -1149,6 +1296,7 @@ class MailerTransientErrorDetectionTests(TestCase):
 
     def _check(self, msg: str) -> bool:
         from mailer.tasks.helpers import _is_transient_send_error
+
         return _is_transient_send_error(msg)
 
     def test_service_unavailable_is_transient(self):
@@ -1194,22 +1342,27 @@ class MailerTasksPackageStructureTests(TestCase):
 
     def test_send_pending_emails_importable_from_mailer_tasks(self):
         from mailer.tasks import send_pending_emails
+
         self.assertTrue(callable(send_pending_emails))
 
     def test_send_test_email_importable_from_mailer_tasks(self):
         from mailer.tasks import send_test_email
+
         self.assertTrue(callable(send_test_email))
 
     def test_is_working_hours_importable_from_mailer_tasks(self):
         from mailer.tasks import _is_working_hours
+
         self.assertTrue(callable(_is_working_hours))
 
     def test_get_campaign_attachment_bytes_importable(self):
         from mailer.tasks import _get_campaign_attachment_bytes
+
         self.assertTrue(callable(_get_campaign_attachment_bytes))
 
     def test_reconcile_importable(self):
         from mailer.tasks import reconcile_campaign_queue
+
         self.assertTrue(callable(reconcile_campaign_queue))
 
     def test_sync_tasks_importable(self):
@@ -1218,12 +1371,14 @@ class MailerTasksPackageStructureTests(TestCase):
             sync_smtp_bz_quota,
             sync_smtp_bz_unsubscribes,
         )
+
         self.assertTrue(callable(sync_smtp_bz_delivery_events))
         self.assertTrue(callable(sync_smtp_bz_quota))
         self.assertTrue(callable(sync_smtp_bz_unsubscribes))
 
     def test_reserve_rate_limit_token_importable_from_mailer_tasks(self):
         from mailer.tasks import reserve_rate_limit_token
+
         self.assertTrue(callable(reserve_rate_limit_token))
 
 
@@ -1241,17 +1396,20 @@ class MailerSettingsOverrideTests(TestCase):
         user = User.objects.create_user(
             username="bs_user", password="pass", role=User.Role.MANAGER, email="bs@ex.com"
         )
-        GlobalMailAccount.objects.update_or_create(
-            id=1, defaults={"is_enabled": True}
-        )
+        GlobalMailAccount.objects.update_or_create(id=1, defaults={"is_enabled": True})
         camp = Campaign.objects.create(
-            created_by=user, name="BS", subject="S",
-            body_html="<p>x</p>", body_text="x", sender_name="X",
+            created_by=user,
+            name="BS",
+            subject="S",
+            body_html="<p>x</p>",
+            body_text="x",
+            sender_name="X",
             status=Campaign.Status.READY,
         )
         for i in range(20):
             CampaignRecipient.objects.create(
-                campaign=camp, email=f"bs{i}@ex.com",
+                campaign=camp,
+                email=f"bs{i}@ex.com",
                 status=CampaignRecipient.Status.PENDING,
             )
         CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PENDING, priority=0)
@@ -1264,12 +1422,17 @@ class MailerSettingsOverrideTests(TestCase):
             sent_batches.append(1)
 
         with patch("mailer.tasks.helpers.send_via_smtp", side_effect=fake_send):
-            with patch("mailer.tasks.helpers.reserve_rate_limit_token", return_value=(True, 1, None)):
+            with patch(
+                "mailer.tasks.helpers.reserve_rate_limit_token", return_value=(True, 1, None)
+            ):
                 with patch("mailer.tasks.send.get_effective_quota_available", return_value=10000):
                     with patch("mailer.tasks.send._is_working_hours", return_value=True):
                         with patch("mailer.tasks.send.cache.add", return_value=True):
                             with patch("mailer.tasks.send.cache.delete"):
-                                with patch("mailer.throttle.is_user_throttled", return_value=(False, 0, None)):
+                                with patch(
+                                    "mailer.throttle.is_user_throttled",
+                                    return_value=(False, 0, None),
+                                ):
                                     send_pending_emails.run()
 
         # С batch_size=7 и 20 получателями первый батч отправит ≤7 писем
@@ -1279,6 +1442,7 @@ class MailerSettingsOverrideTests(TestCase):
     def test_lock_timeout_from_settings(self):
         """Константа lock_timeout читается из settings.MAILER_SEND_LOCK_TIMEOUT."""
         from django.conf import settings
+
         self.assertEqual(settings.MAILER_SEND_LOCK_TIMEOUT, 60)
 
 
@@ -1293,26 +1457,40 @@ class MailerReconcileTests(TestCase):
 
     def _make_camp(self, status=Campaign.Status.READY):
         return Campaign.objects.create(
-            created_by=self.user, name="RC", subject="S",
-            body_html="<p>x</p>", body_text="x", sender_name="X", status=status,
+            created_by=self.user,
+            name="RC",
+            subject="S",
+            body_html="<p>x</p>",
+            body_text="x",
+            sender_name="X",
+            status=status,
         )
 
     def test_reconcile_completes_empty_active_queue(self):
         """Queue PROCESSING без pending-получателей → статус COMPLETED, кампания SENT."""
         from mailer.tasks import reconcile_campaign_queue
+
         camp = self._make_camp(Campaign.Status.SENDING)
-        q = CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0)
+        q = CampaignQueue.objects.create(
+            campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0
+        )
         reconcile_campaign_queue.run()
-        q.refresh_from_db(); camp.refresh_from_db()
+        q.refresh_from_db()
+        camp.refresh_from_db()
         self.assertEqual(q.status, CampaignQueue.Status.COMPLETED)
         self.assertEqual(camp.status, Campaign.Status.SENT)
 
     def test_reconcile_cancels_invalid_status_queue(self):
         """Queue активна, но кампания в DRAFT → Queue CANCELLED."""
         from mailer.tasks import reconcile_campaign_queue
+
         camp = self._make_camp(Campaign.Status.DRAFT)
-        q = CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PENDING, priority=0)
-        CampaignRecipient.objects.create(campaign=camp, email="a@b.com", status=CampaignRecipient.Status.PENDING)
+        q = CampaignQueue.objects.create(
+            campaign=camp, status=CampaignQueue.Status.PENDING, priority=0
+        )
+        CampaignRecipient.objects.create(
+            campaign=camp, email="a@b.com", status=CampaignRecipient.Status.PENDING
+        )
         reconcile_campaign_queue.run()
         q.refresh_from_db()
         self.assertEqual(q.status, CampaignQueue.Status.CANCELLED)
@@ -1320,22 +1498,35 @@ class MailerReconcileTests(TestCase):
     def test_reconcile_creates_missing_queue_entry(self):
         """Кампания READY с pending-получателями, но без записи в очереди → запись создаётся."""
         from mailer.tasks import reconcile_campaign_queue
+
         camp = self._make_camp(Campaign.Status.READY)
-        CampaignRecipient.objects.create(campaign=camp, email="a@b.com", status=CampaignRecipient.Status.PENDING)
+        CampaignRecipient.objects.create(
+            campaign=camp, email="a@b.com", status=CampaignRecipient.Status.PENDING
+        )
         self.assertFalse(CampaignQueue.objects.filter(campaign=camp).exists())
         reconcile_campaign_queue.run()
-        self.assertTrue(CampaignQueue.objects.filter(campaign=camp, status=CampaignQueue.Status.PENDING).exists())
+        self.assertTrue(
+            CampaignQueue.objects.filter(
+                campaign=camp, status=CampaignQueue.Status.PENDING
+            ).exists()
+        )
 
     def test_reconcile_resets_stuck_processing(self):
         """Queue PROCESSING зависла (started_at давно) → сбрасывается в PENDING."""
         from mailer.tasks import reconcile_campaign_queue
         from mailer.constants import STUCK_CAMPAIGN_TIMEOUT_MINUTES
         from datetime import timedelta
+
         camp = self._make_camp(Campaign.Status.SENDING)
-        CampaignRecipient.objects.create(campaign=camp, email="a@b.com", status=CampaignRecipient.Status.PENDING)
+        CampaignRecipient.objects.create(
+            campaign=camp, email="a@b.com", status=CampaignRecipient.Status.PENDING
+        )
         stuck_time = timezone.now() - timedelta(minutes=STUCK_CAMPAIGN_TIMEOUT_MINUTES + 5)
         q = CampaignQueue.objects.create(
-            campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0, started_at=stuck_time,
+            campaign=camp,
+            status=CampaignQueue.Status.PROCESSING,
+            priority=0,
+            started_at=stuck_time,
         )
         reconcile_campaign_queue.run()
         q.refresh_from_db()
@@ -1354,8 +1545,12 @@ class MailerNotificationHelpersTests(TestCase):
 
     def _make_camp(self):
         return Campaign.objects.create(
-            created_by=self.user, name="NH", subject="S",
-            body_html="<p>x</p>", body_text="x", sender_name="X",
+            created_by=self.user,
+            name="NH",
+            subject="S",
+            body_html="<p>x</p>",
+            body_text="x",
+            sender_name="X",
             status=Campaign.Status.SENDING,
         )
 
@@ -1365,6 +1560,7 @@ class MailerNotificationHelpersTests(TestCase):
             _notify_campaign_finished,
             _notify_circuit_breaker_tripped,
         )
+
         self.assertTrue(callable(_notify_campaign_started))
         self.assertTrue(callable(_notify_campaign_finished))
         self.assertTrue(callable(_notify_circuit_breaker_tripped))
@@ -1372,6 +1568,7 @@ class MailerNotificationHelpersTests(TestCase):
     def test_notify_campaign_finished_does_not_raise(self):
         """Функция не выбрасывает исключение даже если notify упадёт."""
         from mailer.tasks.helpers import _notify_campaign_finished
+
         camp = self._make_camp()
         with patch("notifications.service.notify", side_effect=RuntimeError("boom")):
             # должно подавить ошибку и не упасть
@@ -1380,6 +1577,7 @@ class MailerNotificationHelpersTests(TestCase):
     def test_notify_campaign_started_does_not_raise(self):
         """_notify_campaign_started не выбрасывает исключение при ошибке notify."""
         from mailer.tasks.helpers import _notify_campaign_started
+
         camp = self._make_camp()
         with patch("notifications.service.notify", side_effect=RuntimeError("boom")):
             _notify_campaign_started(self.user, camp)
@@ -1387,6 +1585,7 @@ class MailerNotificationHelpersTests(TestCase):
     def test_notify_attachment_error_importable_and_safe(self):
         """_notify_attachment_error доступна и не падает при ошибке."""
         from mailer.tasks.helpers import _notify_attachment_error
+
         camp = self._make_camp()
         with patch("notifications.service.notify", side_effect=RuntimeError("boom")):
             _notify_attachment_error(camp, error="файл не найден")
@@ -1394,8 +1593,13 @@ class MailerNotificationHelpersTests(TestCase):
     def test_notify_attachment_error_skips_without_owner(self):
         """_notify_attachment_error не делает ничего если у кампании нет created_by."""
         from mailer.tasks.helpers import _notify_attachment_error
+
         camp = Campaign.objects.create(
-            name="No owner", subject="S", body_html="<p>x</p>", body_text="x", sender_name="X",
+            name="No owner",
+            subject="S",
+            body_html="<p>x</p>",
+            body_text="x",
+            sender_name="X",
         )
         with patch("notifications.service.notify") as mock_notify:
             _notify_attachment_error(camp, error="oops")
@@ -1404,6 +1608,7 @@ class MailerNotificationHelpersTests(TestCase):
     def test_process_batch_recipients_importable(self):
         """_process_batch_recipients доступна из helpers."""
         from mailer.tasks.helpers import _process_batch_recipients
+
         self.assertTrue(callable(_process_batch_recipients))
 
     def test_process_batch_recipients_marks_unsubscribed(self):
@@ -1413,14 +1618,20 @@ class MailerNotificationHelpersTests(TestCase):
         from unittest.mock import MagicMock
 
         camp = Campaign.objects.create(
-            created_by=self.user, name="BatchTest", subject="S",
-            body_html="<p>hi</p>", body_text="hi", sender_name="X",
+            created_by=self.user,
+            name="BatchTest",
+            subject="S",
+            body_html="<p>hi</p>",
+            body_text="hi",
+            sender_name="X",
             status=Campaign.Status.SENDING,
         )
         r = CampaignRecipient.objects.create(
             campaign=camp, email="unsub@ex.com", status=CampaignRecipient.Status.PENDING
         )
-        q = CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0)
+        q = CampaignQueue.objects.create(
+            campaign=camp, status=CampaignQueue.Status.PROCESSING, priority=0
+        )
         identity, _ = MailAccount.objects.get_or_create(user=self.user)
         smtp_cfg = MagicMock()
         smtp_cfg.from_email = "from@ex.com"
@@ -1460,20 +1671,42 @@ class MailerViewsPackageTests(TestCase):
         from mailer import views
 
         expected = [
-            "campaigns", "campaign_create", "campaign_edit", "campaign_detail",
+            "campaigns",
+            "campaign_create",
+            "campaign_edit",
+            "campaign_detail",
             "campaign_html_preview",
-            "campaign_attachment_download", "campaign_attachment_delete",
-            "campaign_delete", "campaign_clone", "campaign_retry_failed",
-            "campaign_export_failed", "campaign_save_as_template",
-            "campaign_create_from_template", "campaign_template_delete",
-            "campaign_templates", "mail_signature", "mail_settings",
-            "mail_admin", "mail_quota_poll", "campaign_start",
-            "campaign_pause", "campaign_resume", "campaign_test_send",
-            "campaign_pick", "campaign_add_email", "campaign_recipient_add",
-            "campaign_recipient_delete", "campaign_recipients_bulk_delete",
-            "campaign_generate_recipients", "campaign_recipients_reset",
-            "campaign_clear", "mail_progress_poll", "campaign_progress_poll",
-            "unsubscribe", "mail_unsubscribes_list", "mail_unsubscribes_delete",
+            "campaign_attachment_download",
+            "campaign_attachment_delete",
+            "campaign_delete",
+            "campaign_clone",
+            "campaign_retry_failed",
+            "campaign_export_failed",
+            "campaign_save_as_template",
+            "campaign_create_from_template",
+            "campaign_template_delete",
+            "campaign_templates",
+            "mail_signature",
+            "mail_settings",
+            "mail_admin",
+            "mail_quota_poll",
+            "campaign_start",
+            "campaign_pause",
+            "campaign_resume",
+            "campaign_test_send",
+            "campaign_pick",
+            "campaign_add_email",
+            "campaign_recipient_add",
+            "campaign_recipient_delete",
+            "campaign_recipients_bulk_delete",
+            "campaign_generate_recipients",
+            "campaign_recipients_reset",
+            "campaign_clear",
+            "mail_progress_poll",
+            "campaign_progress_poll",
+            "unsubscribe",
+            "mail_unsubscribes_list",
+            "mail_unsubscribes_delete",
             "mail_unsubscribes_clear",
         ]
         for name in expected:
@@ -1485,16 +1718,25 @@ class MailerViewsPackageTests(TestCase):
     def test_send_step_url_removed(self):
         """URL campaign_send_step удалён из urls.py (был dead code)."""
         from django.urls import reverse, NoReverseMatch
+
         with self.assertRaises(NoReverseMatch):
-            reverse("campaign_send_step", kwargs={"campaign_id": "00000000-0000-0000-0000-000000000000"})
+            reverse(
+                "campaign_send_step", kwargs={"campaign_id": "00000000-0000-0000-0000-000000000000"}
+            )
 
     def test_campaign_detail_uses_new_views_package(self):
         """campaign_detail отдаёт 200 через новый views-пакет."""
-        user = User.objects.create_user(username="vpkg_u", password="p", role=User.Role.MANAGER, email="vpkg@ex.com")
+        user = User.objects.create_user(
+            username="vpkg_u", password="p", role=User.Role.MANAGER, email="vpkg@ex.com"
+        )
         self.client.force_login(user)
         camp = Campaign.objects.create(
-            created_by=user, name="Pkg", subject="S",
-            body_html="<p>x</p>", body_text="x", sender_name="X",
+            created_by=user,
+            name="Pkg",
+            subject="S",
+            body_html="<p>x</p>",
+            body_text="x",
+            sender_name="X",
             status=Campaign.Status.DRAFT,
         )
         resp = self.client.get(reverse("campaign_detail", kwargs={"campaign_id": camp.id}))
@@ -1506,6 +1748,7 @@ class MailerHeaderInjectionTests(TestCase):
 
     def _make_account(self):
         from unittest.mock import MagicMock
+
         acc = MagicMock()
         acc.from_email = "sender@example.com"
         acc.from_name = "Sender"
@@ -1516,6 +1759,7 @@ class MailerHeaderInjectionTests(TestCase):
     def test_crlf_stripped_from_subject(self):
         """CRLF в теме письма удаляются."""
         from mailer.smtp_sender import build_message
+
         acc = self._make_account()
         msg = build_message(
             account=acc,
@@ -1530,6 +1774,7 @@ class MailerHeaderInjectionTests(TestCase):
     def test_crlf_stripped_from_to(self):
         """CRLF в получателе удаляются."""
         from mailer.smtp_sender import build_message
+
         acc = self._make_account()
         msg = build_message(
             account=acc,
@@ -1545,6 +1790,7 @@ class MailerHeaderInjectionTests(TestCase):
     def test_crlf_stripped_from_from_name(self):
         """CRLF в имени отправителя удаляются."""
         from mailer.smtp_sender import build_message
+
         acc = self._make_account()
         msg = build_message(
             account=acc,
@@ -1561,6 +1807,7 @@ class MailerHeaderInjectionTests(TestCase):
     def test_legitimate_subject_preserved(self):
         """Обычная тема без CRLF остаётся неизменной."""
         from mailer.smtp_sender import build_message
+
         acc = self._make_account()
         subject = "Тема рассылки № 42 — важное обновление"
         msg = build_message(
@@ -1611,13 +1858,13 @@ class MailerSendAtSchedulingTests(TestCase):
 
         camp = self._make_campaign_with_recipients(send_at=None)
         now = timezone.now()
-        qs = CampaignQueue.objects.filter(
-            status=CampaignQueue.Status.PENDING,
-            campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING),
-        ).filter(
-            Q(deferred_until__isnull=True) | Q(deferred_until__lte=now)
-        ).filter(
-            Q(campaign__send_at__isnull=True) | Q(campaign__send_at__lte=now)
+        qs = (
+            CampaignQueue.objects.filter(
+                status=CampaignQueue.Status.PENDING,
+                campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING),
+            )
+            .filter(Q(deferred_until__isnull=True) | Q(deferred_until__lte=now))
+            .filter(Q(campaign__send_at__isnull=True) | Q(campaign__send_at__lte=now))
         )
         self.assertEqual(qs.count(), 1)
 
@@ -1630,13 +1877,13 @@ class MailerSendAtSchedulingTests(TestCase):
         future = timezone.now() + timedelta(hours=2)
         camp = self._make_campaign_with_recipients(send_at=future)
         now = timezone.now()
-        qs = CampaignQueue.objects.filter(
-            status=CampaignQueue.Status.PENDING,
-            campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING),
-        ).filter(
-            Q(deferred_until__isnull=True) | Q(deferred_until__lte=now)
-        ).filter(
-            Q(campaign__send_at__isnull=True) | Q(campaign__send_at__lte=now)
+        qs = (
+            CampaignQueue.objects.filter(
+                status=CampaignQueue.Status.PENDING,
+                campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING),
+            )
+            .filter(Q(deferred_until__isnull=True) | Q(deferred_until__lte=now))
+            .filter(Q(campaign__send_at__isnull=True) | Q(campaign__send_at__lte=now))
         )
         self.assertEqual(qs.count(), 0)
 
@@ -1649,19 +1896,20 @@ class MailerSendAtSchedulingTests(TestCase):
         past = timezone.now() - timedelta(hours=1)
         camp = self._make_campaign_with_recipients(send_at=past)
         now = timezone.now()
-        qs = CampaignQueue.objects.filter(
-            status=CampaignQueue.Status.PENDING,
-            campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING),
-        ).filter(
-            Q(deferred_until__isnull=True) | Q(deferred_until__lte=now)
-        ).filter(
-            Q(campaign__send_at__isnull=True) | Q(campaign__send_at__lte=now)
+        qs = (
+            CampaignQueue.objects.filter(
+                status=CampaignQueue.Status.PENDING,
+                campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING),
+            )
+            .filter(Q(deferred_until__isnull=True) | Q(deferred_until__lte=now))
+            .filter(Q(campaign__send_at__isnull=True) | Q(campaign__send_at__lte=now))
         )
         self.assertEqual(qs.count(), 1)
 
     def test_send_at_field_exists_on_campaign_model(self):
         """Поле send_at есть в модели Campaign."""
         from django.db import models as db_models
+
         field = Campaign._meta.get_field("send_at")
         self.assertIsInstance(field, db_models.DateTimeField)
         self.assertTrue(field.null)
@@ -1670,6 +1918,7 @@ class MailerSendAtSchedulingTests(TestCase):
     def test_campaign_form_includes_send_at(self):
         """CampaignForm содержит поле send_at."""
         from mailer.forms import CampaignForm
+
         form = CampaignForm()
         self.assertIn("send_at", form.fields)
 
@@ -1691,6 +1940,7 @@ class MailerSendAtSchedulingTests(TestCase):
     def test_html_preview_url_registered(self):
         """URL campaign_html_preview зарегистрирован."""
         from django.urls import reverse
+
         camp = Campaign.objects.create(
             created_by=self.user,
             name="P2",
@@ -1705,6 +1955,7 @@ class MailerSendAtSchedulingTests(TestCase):
     def test_html_preview_view_exported(self):
         """campaign_html_preview экспортируется из mailer.views."""
         from mailer import views
+
         self.assertTrue(hasattr(views, "campaign_html_preview"))
         self.assertTrue(callable(views.campaign_html_preview))
 
@@ -1728,16 +1979,24 @@ class MailerSendLogIdempotencyTests(TestCase):
         from mailer.models import SendLog
 
         camp = Campaign.objects.create(
-            created_by=self.user, name="Idem", subject="S",
-            body_html="<p>x</p>", body_text="x", status=Campaign.Status.SENDING,
+            created_by=self.user,
+            name="Idem",
+            subject="S",
+            body_html="<p>x</p>",
+            body_text="x",
+            status=Campaign.Status.SENDING,
         )
         recipient = CampaignRecipient.objects.create(
-            campaign=camp, email="idem@ex.com", status=CampaignRecipient.Status.PENDING,
+            campaign=camp,
+            email="idem@ex.com",
+            status=CampaignRecipient.Status.PENDING,
         )
         # Создаём SENT-лог (имитируем ситуацию после crash)
         SendLog.objects.create(
-            campaign=camp, recipient=recipient,
-            provider="smtp_global", status=SendLog.Status.SENT,
+            campaign=camp,
+            recipient=recipient,
+            provider="smtp_global",
+            status=SendLog.Status.SENT,
         )
         # Idempotency-проверка: существует ли SENT-лог для этого получателя?
         already_sent = SendLog.objects.filter(
@@ -1746,28 +2005,46 @@ class MailerSendLogIdempotencyTests(TestCase):
         self.assertTrue(already_sent, "Должен найти уже отправленный SendLog")
         # Recipient должен быть синхронизирован в SENT без повторной отправки
         recipient.refresh_from_db()
-        self.assertEqual(recipient.status, CampaignRecipient.Status.PENDING,
-                         "Статус ещё не обновлён — обновляется в процессе батча")
+        self.assertEqual(
+            recipient.status,
+            CampaignRecipient.Status.PENDING,
+            "Статус ещё не обновлён — обновляется в процессе батча",
+        )
 
     def test_sendlog_bulk_create_with_ignore_conflicts_is_safe(self):
         """bulk_create(..., ignore_conflicts=True) не поднимает исключение при дубле SENT."""
         from mailer.models import SendLog
 
         camp = Campaign.objects.create(
-            created_by=self.user, name="Idem3", subject="S",
-            body_html="<p>x</p>", body_text="x", status=Campaign.Status.READY,
+            created_by=self.user,
+            name="Idem3",
+            subject="S",
+            body_html="<p>x</p>",
+            body_text="x",
+            status=Campaign.Status.READY,
         )
         recipient = CampaignRecipient.objects.create(
-            campaign=camp, email="idem3@ex.com", status=CampaignRecipient.Status.SENT,
+            campaign=camp,
+            email="idem3@ex.com",
+            status=CampaignRecipient.Status.SENT,
         )
         SendLog.objects.create(
-            campaign=camp, recipient=recipient,
-            provider="smtp_global", status=SendLog.Status.SENT,
+            campaign=camp,
+            recipient=recipient,
+            provider="smtp_global",
+            status=SendLog.Status.SENT,
         )
         # Не должно бросать исключение
         try:
             SendLog.objects.bulk_create(
-                [SendLog(campaign=camp, recipient=recipient, provider="smtp_global", status=SendLog.Status.SENT)],
+                [
+                    SendLog(
+                        campaign=camp,
+                        recipient=recipient,
+                        provider="smtp_global",
+                        status=SendLog.Status.SENT,
+                    )
+                ],
                 ignore_conflicts=True,
             )
         except Exception as e:
@@ -1776,6 +2053,7 @@ class MailerSendLogIdempotencyTests(TestCase):
     def test_sendlog_unique_constraint_name(self):
         """UniqueConstraint с нужным именем присутствует в модели SendLog."""
         from mailer.models import SendLog
+
         constraint_names = [c.name for c in SendLog._meta.constraints]
         self.assertIn("mailer_sendlog_unique_sent_per_recipient", constraint_names)
 
@@ -1784,15 +2062,35 @@ class MailerSendLogIdempotencyTests(TestCase):
         from mailer.models import SendLog
 
         camp = Campaign.objects.create(
-            created_by=self.user, name="Idem2", subject="S",
-            body_html="<p>x</p>", body_text="x", status=Campaign.Status.READY,
+            created_by=self.user,
+            name="Idem2",
+            subject="S",
+            body_html="<p>x</p>",
+            body_text="x",
+            status=Campaign.Status.READY,
         )
         recipient = CampaignRecipient.objects.create(
-            campaign=camp, email="idem2@ex.com", status=CampaignRecipient.Status.FAILED,
+            campaign=camp,
+            email="idem2@ex.com",
+            status=CampaignRecipient.Status.FAILED,
         )
-        SendLog.objects.create(campaign=camp, recipient=recipient, provider="smtp_global", status=SendLog.Status.FAILED, error="err1")
-        SendLog.objects.create(campaign=camp, recipient=recipient, provider="smtp_global", status=SendLog.Status.FAILED, error="err2")
-        count = SendLog.objects.filter(campaign=camp, recipient=recipient, status=SendLog.Status.FAILED).count()
+        SendLog.objects.create(
+            campaign=camp,
+            recipient=recipient,
+            provider="smtp_global",
+            status=SendLog.Status.FAILED,
+            error="err1",
+        )
+        SendLog.objects.create(
+            campaign=camp,
+            recipient=recipient,
+            provider="smtp_global",
+            status=SendLog.Status.FAILED,
+            error="err2",
+        )
+        count = SendLog.objects.filter(
+            campaign=camp, recipient=recipient, status=SendLog.Status.FAILED
+        ).count()
         self.assertEqual(count, 2)
 
 
@@ -1801,11 +2099,13 @@ class MailerMimeMagicBytesTests(TestCase):
 
     def _upload(self, content: bytes, filename: str):
         from django.core.files.uploadedfile import SimpleUploadedFile
+
         return SimpleUploadedFile(filename, content)
 
     def test_valid_pdf_accepted(self):
         """Валидный PDF (начинается с %PDF) проходит валидацию."""
         from mailer.forms import CampaignForm
+
         f = self._upload(b"%PDF-1.4 valid content here", "doc.pdf")
         form = CampaignForm(
             data={"name": "n", "subject": "s", "body_html": "<p>x</p>"},
@@ -1817,6 +2117,7 @@ class MailerMimeMagicBytesTests(TestCase):
     def test_pdf_with_wrong_magic_bytes_rejected(self):
         """Файл с расширением .pdf, но неверными magic bytes — отклоняется."""
         from mailer.forms import CampaignForm
+
         f = self._upload(b"\x00\x01NOTPDF content", "fake.pdf")
         form = CampaignForm(
             data={"name": "n", "subject": "s", "body_html": "<p>x</p>"},
@@ -1827,6 +2128,7 @@ class MailerMimeMagicBytesTests(TestCase):
     def test_disallowed_extension_rejected(self):
         """Исполняемый файл .exe отклоняется."""
         from mailer.forms import CampaignForm
+
         f = self._upload(b"MZ executable content", "malware.exe")
         form = CampaignForm(
             data={"name": "n", "subject": "s", "body_html": "<p>x</p>"},
@@ -1837,6 +2139,7 @@ class MailerMimeMagicBytesTests(TestCase):
     def test_oversized_file_rejected(self):
         """Файл размером >15 МБ отклоняется."""
         from mailer.forms import CampaignForm
+
         big = b"%PDF" + b"x" * (15 * 1024 * 1024 + 1)
         f = self._upload(big, "big.pdf")
         form = CampaignForm(
@@ -1868,6 +2171,7 @@ class MailerCampaignPickPaginationTests(TestCase):
 
     def test_campaign_pick_returns_json(self):
         from django.urls import reverse
+
         resp = self.client.get(reverse("campaign_pick"))
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
@@ -1876,6 +2180,7 @@ class MailerCampaignPickPaginationTests(TestCase):
 
     def test_campaign_pick_default_page_size_25(self):
         from django.urls import reverse
+
         resp = self.client.get(reverse("campaign_pick"))
         data = resp.json()
         self.assertLessEqual(len(data["campaigns"]), 25)
@@ -1883,6 +2188,7 @@ class MailerCampaignPickPaginationTests(TestCase):
 
     def test_campaign_pick_page_size_param(self):
         from django.urls import reverse
+
         resp = self.client.get(reverse("campaign_pick") + "?page_size=10")
         data = resp.json()
         self.assertLessEqual(len(data["campaigns"]), 10)
@@ -1890,12 +2196,14 @@ class MailerCampaignPickPaginationTests(TestCase):
 
     def test_campaign_pick_page_2(self):
         from django.urls import reverse
+
         resp = self.client.get(reverse("campaign_pick") + "?page=2&page_size=10")
         data = resp.json()
         self.assertEqual(data["page"], 2)
 
     def test_campaign_pick_search(self):
         from django.urls import reverse
+
         resp = self.client.get(reverse("campaign_pick") + "?q=Camp+001")
         data = resp.json()
         self.assertTrue(data["ok"])
@@ -1915,54 +2223,82 @@ class MailerCampaignsPackageSplitTests(TestCase):
         """mailer.views.campaigns — это пакет (директория с __init__.py)."""
         import sys
         import importlib
+
         # Гарантируем свежую загрузку
         mod = sys.modules.get("mailer.views.campaigns")
         if mod is None:
             mod = importlib.import_module("mailer.views.campaigns")
         import inspect
+
         # Пакет должен иметь атрибут __path__ (модули-файлы его не имеют)
-        self.assertTrue(hasattr(mod, "__path__"), "mailer.views.campaigns должен быть пакетом с __path__")
+        self.assertTrue(
+            hasattr(mod, "__path__"), "mailer.views.campaigns должен быть пакетом с __path__"
+        )
 
     def test_list_detail_submodule_importable(self):
         from mailer.views.campaigns.list_detail import campaigns, campaign_detail
+
         self.assertTrue(callable(campaigns))
         self.assertTrue(callable(campaign_detail))
 
     def test_crud_submodule_importable(self):
         from mailer.views.campaigns.crud import (
-            campaign_create, campaign_edit, campaign_delete, campaign_clone,
+            campaign_create,
+            campaign_edit,
+            campaign_delete,
+            campaign_clone,
         )
+
         for fn in (campaign_create, campaign_edit, campaign_delete, campaign_clone):
             self.assertTrue(callable(fn))
 
     def test_files_submodule_importable(self):
         from mailer.views.campaigns.files import (
-            campaign_html_preview, campaign_attachment_download,
-            campaign_attachment_delete, campaign_export_failed, campaign_retry_failed,
+            campaign_html_preview,
+            campaign_attachment_download,
+            campaign_attachment_delete,
+            campaign_export_failed,
+            campaign_retry_failed,
         )
-        for fn in (campaign_html_preview, campaign_attachment_download,
-                   campaign_attachment_delete, campaign_export_failed, campaign_retry_failed):
+
+        for fn in (
+            campaign_html_preview,
+            campaign_attachment_download,
+            campaign_attachment_delete,
+            campaign_export_failed,
+            campaign_retry_failed,
+        ):
             self.assertTrue(callable(fn))
 
     def test_templates_submodule_importable(self):
         from mailer.views.campaigns.templates_views import (
-            campaign_save_as_template, campaign_create_from_template,
-            campaign_template_delete, campaign_templates,
+            campaign_save_as_template,
+            campaign_create_from_template,
+            campaign_template_delete,
+            campaign_templates,
         )
-        for fn in (campaign_save_as_template, campaign_create_from_template,
-                   campaign_template_delete, campaign_templates):
+
+        for fn in (
+            campaign_save_as_template,
+            campaign_create_from_template,
+            campaign_template_delete,
+            campaign_templates,
+        ):
             self.assertTrue(callable(fn))
 
     def test_package_exports_all_views(self):
         """Пакет campaigns экспортирует все view-функции через __all__."""
         import sys, importlib
+
         mod = sys.modules.get("mailer.views.campaigns")
         if mod is None:
             mod = importlib.import_module("mailer.views.campaigns")
         pkg = mod
         for name in pkg.__all__:
-            self.assertTrue(hasattr(pkg, name) and callable(getattr(pkg, name)),
-                            f"campaigns.{name} не найден или не callable")
+            self.assertTrue(
+                hasattr(pkg, name) and callable(getattr(pkg, name)),
+                f"campaigns.{name} не найден или не callable",
+            )
 
 
 class MailerExponentialBackoffTests(TestCase):
@@ -1972,7 +2308,10 @@ class MailerExponentialBackoffTests(TestCase):
         """Задержка растёт экспоненциально с каждой ошибкой (2^(n-1) * base)."""
         from django.conf import settings
         from mailer.constants import TRANSIENT_RETRY_DELAY_MINUTES
-        base = getattr(settings, "MAILER_TRANSIENT_RETRY_DELAY_MINUTES", TRANSIENT_RETRY_DELAY_MINUTES)
+
+        base = getattr(
+            settings, "MAILER_TRANSIENT_RETRY_DELAY_MINUTES", TRANSIENT_RETRY_DELAY_MINUTES
+        )
         delays = [min(base * (2 ** (e - 1)), 60) for e in range(1, 6)]
         # Каждое последующее значение должно быть >= предыдущего
         for i in range(len(delays) - 1):
@@ -1984,7 +2323,10 @@ class MailerExponentialBackoffTests(TestCase):
         """Задержка не превышает 60 минут при большом числе ошибок."""
         from django.conf import settings
         from mailer.constants import TRANSIENT_RETRY_DELAY_MINUTES
-        base = getattr(settings, "MAILER_TRANSIENT_RETRY_DELAY_MINUTES", TRANSIENT_RETRY_DELAY_MINUTES)
+
+        base = getattr(
+            settings, "MAILER_TRANSIENT_RETRY_DELAY_MINUTES", TRANSIENT_RETRY_DELAY_MINUTES
+        )
         for errors in range(1, 20):
             delay = min(base * (2 ** (errors - 1)), 60)
             self.assertLessEqual(delay, 60)

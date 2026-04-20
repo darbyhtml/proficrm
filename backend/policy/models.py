@@ -14,7 +14,9 @@ class PolicyConfig(models.Model):
         OBSERVE_ONLY = "observe_only", "Наблюдение (не блокировать, только логировать)"
         ENFORCE = "enforce", "Применять (блокировать запрещённые действия)"
 
-    mode = models.CharField(max_length=32, choices=Mode.choices, default=Mode.OBSERVE_ONLY, db_index=True)
+    mode = models.CharField(
+        max_length=32, choices=Mode.choices, default=Mode.OBSERVE_ONLY, db_index=True
+    )
     livechat_escalation = models.JSONField(
         "Пороги эскалации live-chat (минуты)",
         blank=True,
@@ -88,4 +90,3 @@ class PolicyRule(models.Model):
     def __str__(self) -> str:
         subj = self.role if self.subject_type == self.SubjectType.ROLE else f"user:{self.user_id}"
         return f"{self.effect} {self.resource_type}:{self.resource} for {self.subject_type}:{subj}"
-

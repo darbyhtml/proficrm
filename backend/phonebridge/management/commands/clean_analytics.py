@@ -59,7 +59,11 @@ class Command(BaseCommand):
                         datetime.combine(before_date, datetime.min.time())
                     )
                 except ValueError:
-                    self.stdout.write(self.style.ERROR(f"Неверный формат даты: {before_date_str}. Используйте YYYY-MM-DD"))
+                    self.stdout.write(
+                        self.style.ERROR(
+                            f"Неверный формат даты: {before_date_str}. Используйте YYYY-MM-DD"
+                        )
+                    )
                     return
             else:
                 # По умолчанию - до начала текущего месяца
@@ -67,7 +71,9 @@ class Command(BaseCommand):
                 local_now = timezone.localtime(now)
                 before_date = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
                 self.stdout.write(
-                    self.style.WARNING(f"Используется дата по умолчанию: до начала текущего месяца ({before_date.strftime('%d.%m.%Y %H:%M')})")
+                    self.style.WARNING(
+                        f"Используется дата по умолчанию: до начала текущего месяца ({before_date.strftime('%d.%m.%Y %H:%M')})"
+                    )
                 )
 
         # Подсчет и удаление CallRequest
@@ -75,18 +81,16 @@ class Command(BaseCommand):
             calls_qs = CallRequest.objects.filter(note="UI click")
             if not all_data:
                 calls_qs = calls_qs.filter(created_at__lt=before_date)
-            
+
             calls_count = calls_qs.count()
-            
+
             if calls_count > 0:
                 self.stdout.write(
                     self.style.WARNING(f"Найдено CallRequest для удаления: {calls_count}")
                 )
                 if not dry_run:
                     deleted_calls = calls_qs.delete()[0]
-                    self.stdout.write(
-                        self.style.SUCCESS(f"Удалено CallRequest: {deleted_calls}")
-                    )
+                    self.stdout.write(self.style.SUCCESS(f"Удалено CallRequest: {deleted_calls}"))
                 else:
                     self.stdout.write(self.style.WARNING("  [DRY RUN] Не удалено"))
             else:
@@ -97,9 +101,9 @@ class Command(BaseCommand):
             events_qs = ActivityEvent.objects.all()
             if not all_data:
                 events_qs = events_qs.filter(created_at__lt=before_date)
-            
+
             events_count = events_qs.count()
-            
+
             if events_count > 0:
                 self.stdout.write(
                     self.style.WARNING(f"Найдено ActivityEvent для удаления: {events_count}")
@@ -115,5 +119,8 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS("ActivityEvent для удаления не найдено"))
 
         if dry_run:
-            self.stdout.write(self.style.WARNING("\nЭто был DRY RUN. Для реального удаления запустите команду без --dry-run"))
-
+            self.stdout.write(
+                self.style.WARNING(
+                    "\nЭто был DRY RUN. Для реального удаления запустите команду без --dry-run"
+                )
+            )

@@ -8,10 +8,23 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--csv", required=True, help="Путь к CSV файлу экспорта")
-        parser.add_argument("--encoding", default="utf-8-sig", help="Кодировка CSV (по умолчанию utf-8-sig)")
-        parser.add_argument("--dry-run", action="store_true", help="Не писать в БД, только показать статистику")
-        parser.add_argument("--companies-only", action="store_true", help="Импортировать только компании (без контактов)")
-        parser.add_argument("--limit-companies", type=int, default=0, help="Ограничить импорт компаний (например 20)")
+        parser.add_argument(
+            "--encoding", default="utf-8-sig", help="Кодировка CSV (по умолчанию utf-8-sig)"
+        )
+        parser.add_argument(
+            "--dry-run", action="store_true", help="Не писать в БД, только показать статистику"
+        )
+        parser.add_argument(
+            "--companies-only",
+            action="store_true",
+            help="Импортировать только компании (без контактов)",
+        )
+        parser.add_argument(
+            "--limit-companies",
+            type=int,
+            default=0,
+            help="Ограничить импорт компаний (например 20)",
+        )
 
     def handle(self, *args, **options):
         csv_path = options["csv"]
@@ -40,5 +53,3 @@ class Command(BaseCommand):
                 f"companies_only={companies_only}, limit_companies={limit_companies}, dry_run={dry_run}"
             )
         )
-
-

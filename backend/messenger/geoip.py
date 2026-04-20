@@ -49,7 +49,9 @@ def get_region_from_ip(ip: str) -> Optional["Region"]:
         with urllib.request.urlopen(req, timeout=3) as resp:
             data = json.loads(resp.read().decode())
     except Exception as e:
-        logger.warning("GeoIP request failed for %s: %s", ip[:20] + "..." if len(ip) > 20 else ip, e)
+        logger.warning(
+            "GeoIP request failed for %s: %s", ip[:20] + "..." if len(ip) > 20 else ip, e
+        )
         return None
 
     region_name = (data.get("regionName") or "").strip()

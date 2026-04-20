@@ -35,7 +35,9 @@ from ui.views._base import (
 )
 from django.conf import settings
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 @login_required
 def settings_dashboard(request: HttpRequest) -> HttpResponse:
@@ -43,6 +45,7 @@ def settings_dashboard(request: HttpRequest) -> HttpResponse:
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
     from companies.models import Company
+
     ctx = {
         "MESSENGER_ENABLED": getattr(settings, "MESSENGER_ENABLED", False),
         "v2_count_users": User.objects.count(),
@@ -61,6 +64,7 @@ def settings_dashboard(request: HttpRequest) -> HttpResponse:
 def settings_announcements(request: HttpRequest) -> HttpResponse:
     from notifications.models import CrmAnnouncement, CrmAnnouncementRead
     from django.contrib.auth import get_user_model
+
     User = get_user_model()
 
     if not require_admin(request.user):
@@ -76,6 +80,7 @@ def settings_announcements(request: HttpRequest) -> HttpResponse:
             scheduled_at_str = request.POST.get("scheduled_at", "").strip()
             if title and body:
                 import datetime
+
                 scheduled_at = None
                 if scheduled_at_str:
                     try:
@@ -105,20 +110,30 @@ def settings_announcements(request: HttpRequest) -> HttpResponse:
         return redirect("settings_announcements")
 
     total_users = User.objects.filter(is_active=True).count()
-    announcements = CrmAnnouncement.objects.select_related("created_by").prefetch_related("reads").order_by("-created_at")[:50]
+    announcements = (
+        CrmAnnouncement.objects.select_related("created_by")
+        .prefetch_related("reads")
+        .order_by("-created_at")[:50]
+    )
     ann_data = []
     for a in announcements:
-        ann_data.append({
-            "obj": a,
-            "read_count": a.reads.count(),
-            "total_users": total_users,
-        })
+        ann_data.append(
+            {
+                "obj": a,
+                "read_count": a.reads.count(),
+                "total_users": total_users,
+            }
+        )
 
-    return render(request, "ui/settings/announcements.html", {
-        "announcements": ann_data,
-        "total_users": total_users,
-        "type_choices": CrmAnnouncement.Type.choices,
-    })
+    return render(
+        request,
+        "ui/settings/announcements.html",
+        {
+            "announcements": ann_data,
+            "total_users": total_users,
+            "type_choices": CrmAnnouncement.Type.choices,
+        },
+    )
 
 
 @login_required
@@ -138,7 +153,9 @@ def settings_access(request: HttpRequest) -> HttpResponse:
 
     cfg = PolicyConfig.load()
     rules_total = PolicyRule.objects.filter(enabled=True).count()
-    rules_role_total = PolicyRule.objects.filter(enabled=True, subject_type=PolicyRule.SubjectType.ROLE).count()
+    rules_role_total = PolicyRule.objects.filter(
+        enabled=True, subject_type=PolicyRule.SubjectType.ROLE
+    ).count()
 
     if request.method == "POST":
         # Безопасный baseline: запретить sensitive ресурсы менеджеру.
@@ -202,7 +219,9 @@ def settings_access(request: HttpRequest) -> HttpResponse:
             # Важно: не перетираем существующие правила — только добавляем.
             created = 0
             roles = [v for v, _ in User.Role.choices]
-            actions = [r for r in list_resources(resource_type="action") if (r.key or "").startswith("ui:")]
+            actions = [
+                r for r in list_resources(resource_type="action") if (r.key or "").startswith("ui:")
+            ]
 
             for role_value in roles:
                 for res in actions:
@@ -274,7 +293,10 @@ def settings_access(request: HttpRequest) -> HttpResponse:
                         obj.save(update_fields=["effect", "enabled", "updated_at"])
                         changed += 1
 
-            messages.success(request, f"Baseline применён: менеджеру запрещены sensitive ресурсы. Изменений: {changed}.")
+            messages.success(
+                request,
+                f"Baseline применён: менеджеру запрещены sensitive ресурсы. Изменений: {changed}.",
+            )
             return redirect("settings_access")
 
         mode = (request.POST.get("mode") or "").strip()
@@ -337,14 +359,11 @@ def settings_access_role(request: HttpRequest, role: str) -> HttpResponse:
         return redirect("settings_access")
 
     # Текущие правила по этой роли
-    existing = (
-        PolicyRule.objects.filter(
-            enabled=True,
-            subject_type=PolicyRule.SubjectType.ROLE,
-            role=role,
-        )
-        .order_by("priority", "id")
-    )
+    existing = PolicyRule.objects.filter(
+        enabled=True,
+        subject_type=PolicyRule.SubjectType.ROLE,
+        role=role,
+    ).order_by("priority", "id")
     existing_map = {r.resource: r for r in existing}
 
     def _fname(key: str) -> str:
@@ -403,7 +422,9 @@ def settings_access_role(request: HttpRequest, role: str) -> HttpResponse:
                     role=role,
                 ).delete()
                 changed = deleted
-                messages.success(request, f"Готово: всё сброшено в inherit. Удалено правил: {changed}.")
+                messages.success(
+                    request, f"Готово: всё сброшено в inherit. Удалено правил: {changed}."
+                )
                 return redirect("settings_access_role", role=role)
 
             if preset == "deny_sensitive":
@@ -436,7 +457,9 @@ def settings_access_role(request: HttpRequest, role: str) -> HttpResponse:
                             obj2.save(update_fields=["effect", "enabled", "updated_at"])
                             changed += 1
 
-                messages.success(request, f"Готово: sensitive ресурсы запрещены. Изменений: {changed}.")
+                messages.success(
+                    request, f"Готово: sensitive ресурсы запрещены. Изменений: {changed}."
+                )
                 return redirect("settings_access_role", role=role)
 
         # Сохраняем по всем ресурсам
@@ -544,7 +567,9 @@ def settings_branch_edit(request: HttpRequest, branch_id: int) -> HttpResponse:
             return redirect("settings_branches")
     else:
         form = BranchForm(instance=branch)
-    return render(request, "ui/settings/branch_form.html", {"form": form, "mode": "edit", "branch": branch})
+    return render(
+        request, "ui/settings/branch_form.html", {"form": form, "mode": "edit", "branch": branch}
+    )
 
 
 @login_required
@@ -552,10 +577,10 @@ def settings_users(request: HttpRequest) -> HttpResponse:
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
-    
+
     # Проверяем, включён ли режим просмотра администратора
     view_as_enabled = request.session.get("view_as_enabled", False)
-    
+
     # Обработка переключения режима просмотра
     if request.method == "POST" and "toggle_view_as" in request.POST:
         view_as_enabled = request.POST.get("view_as_enabled") == "on"
@@ -565,9 +590,12 @@ def settings_users(request: HttpRequest) -> HttpResponse:
             request.session.pop("view_as_user_id", None)
             request.session.pop("view_as_role", None)
             request.session.pop("view_as_branch_id", None)
-        messages.success(request, f"Режим просмотра администратора {'включён' if view_as_enabled else 'выключен'}.")
+        messages.success(
+            request,
+            f"Режим просмотра администратора {'включён' if view_as_enabled else 'выключен'}.",
+        )
         return redirect("settings_users")
-    
+
     # Получаем queryset пользователей
     users = User.objects.select_related("branch")
 
@@ -600,18 +628,18 @@ def settings_users(request: HttpRequest) -> HttpResponse:
             | Q(last_name__icontains=query)
             | Q(email__icontains=query)
         )
-    
+
     # Получаем информацию об активных сессиях для определения онлайн статуса
     from django.contrib.sessions.models import Session
     from django.contrib.auth import SESSION_KEY
-    
+
     recently_online_threshold = timezone.now() - timedelta(minutes=15)
-    
+
     # Применяем фильтр по онлайн статусу (учитывая и сессии, и last_login)
     if online_filter == "online":
         # Фильтр по онлайн: либо есть активная сессия, либо last_login за последние 15 минут
         # Получаем ID пользователей с активными сессиями (только из текущего queryset)
-        user_ids_in_queryset = set(users.values_list('id', flat=True))
+        user_ids_in_queryset = set(users.values_list("id", flat=True))
         online_user_ids_from_sessions = set()
         if user_ids_in_queryset:
             active_sessions = Session.objects.filter(expire_date__gte=timezone.now())
@@ -623,10 +651,10 @@ def settings_users(request: HttpRequest) -> HttpResponse:
                         online_user_ids_from_sessions.add(int(user_id_from_session))
                 except Exception:
                     pass
-        
+
         # Получаем ID пользователей с недавним last_login из текущего queryset
         users_with_recent_login = set(
-            users.filter(last_login__gte=recently_online_threshold).values_list('id', flat=True)
+            users.filter(last_login__gte=recently_online_threshold).values_list("id", flat=True)
         )
         # Объединяем с пользователями, у которых есть активная сессия
         online_ids = online_user_ids_from_sessions | users_with_recent_login
@@ -637,7 +665,7 @@ def settings_users(request: HttpRequest) -> HttpResponse:
     elif online_filter == "offline":
         # Фильтр по офлайн: нет активной сессии И нет недавнего last_login
         # Получаем ID пользователей с активными сессиями (только из текущего queryset)
-        user_ids_in_queryset = set(users.values_list('id', flat=True))
+        user_ids_in_queryset = set(users.values_list("id", flat=True))
         if not user_ids_in_queryset:
             users = users.none()  # Нет пользователей для фильтрации
         else:
@@ -651,22 +679,24 @@ def settings_users(request: HttpRequest) -> HttpResponse:
                         online_user_ids_from_sessions.add(int(user_id_from_session))
                 except Exception:
                     pass
-            
+
             # Получаем ID пользователей с недавним last_login из текущего queryset
             users_with_recent_login = set(
-                users.filter(last_login__gte=recently_online_threshold).values_list('id', flat=True)
+                users.filter(last_login__gte=recently_online_threshold).values_list("id", flat=True)
             )
             # Офлайн = все пользователи минус онлайн (сессии или недавний вход)
-            offline_ids = user_ids_in_queryset - online_user_ids_from_sessions - users_with_recent_login
+            offline_ids = (
+                user_ids_in_queryset - online_user_ids_from_sessions - users_with_recent_login
+            )
             if offline_ids:
                 users = users.filter(id__in=offline_ids)
             else:
                 users = users.none()  # Нет офлайн пользователей
-    
+
     # Сортировка: читаем из GET или из cookies (ПЕРЕД выполнением queryset!)
     sort_field = (request.GET.get("sort") or "").strip()
     sort_dir = (request.GET.get("dir") or "").strip().lower()
-    
+
     # Если параметры не указаны, читаем из cookies
     if not sort_field:
         cookie_sort = request.COOKIES.get("settings_users_sort", "")
@@ -678,11 +708,11 @@ def settings_users(request: HttpRequest) -> HttpResponse:
                     sort_field, sort_dir = parts[0], parts[1]
             except Exception:
                 pass
-    
+
     # Валидация направления сортировки
     if sort_dir not in ("asc", "desc"):
         sort_dir = "asc"  # По умолчанию asc
-    
+
     # Применяем сортировку ПЕРЕД выполнением queryset
     if sort_field == "username":
         if sort_dir == "asc":
@@ -719,10 +749,12 @@ def settings_users(request: HttpRequest) -> HttpResponse:
         sort_field = "username"
         sort_dir = "asc"
         users = users.order_by("username")
-    
+
     # Получаем ID пользователей с активными сессиями для отображения статуса (ПОСЛЕ сортировки, но ДО выполнения queryset)
     online_user_ids = set()
-    user_ids_for_status = set(users.values_list('id', flat=True))  # Выполняем queryset один раз для получения ID
+    user_ids_for_status = set(
+        users.values_list("id", flat=True)
+    )  # Выполняем queryset один раз для получения ID
     if user_ids_for_status:
         active_sessions = Session.objects.filter(expire_date__gte=timezone.now())
         for session in active_sessions:
@@ -733,15 +765,14 @@ def settings_users(request: HttpRequest) -> HttpResponse:
                     online_user_ids.add(int(user_id_from_session))
             except Exception:
                 pass
-    
+
     # Теперь выполняем queryset и помечаем пользователей как онлайн
     users_list = list(users)  # Выполняем queryset один раз (уже отсортированный)
     for user in users_list:
-        user.is_online = (
-            user.id in online_user_ids
-            or (user.last_login and user.last_login >= recently_online_threshold)
+        user.is_online = user.id in online_user_ids or (
+            user.last_login and user.last_login >= recently_online_threshold
         )
-    
+
     # Формируем строку параметров для сохранения в URL (без sort и dir)
     qs_params = request.GET.copy()
     if "sort" in qs_params:
@@ -749,10 +780,10 @@ def settings_users(request: HttpRequest) -> HttpResponse:
     if "dir" in qs_params:
         del qs_params["dir"]
     qs = qs_params.urlencode()
-    
+
     # Получаем список филиалов для фильтра
     branches = Branch.objects.order_by("name")
-    
+
     # Сохраняем сортировку в cookie, если она была изменена через GET параметры
     response = render(
         request,
@@ -771,12 +802,12 @@ def settings_users(request: HttpRequest) -> HttpResponse:
             "branches": branches,
         },
     )
-    
+
     # Устанавливаем cookie для сохранения сортировки (срок действия 1 год)
     if sort_field:
         cookie_value = f"{sort_field}:{sort_dir}"
         response.set_cookie("settings_users_sort", cookie_value, max_age=31536000)  # 1 год
-    
+
     return response
 
 
@@ -791,12 +822,13 @@ def settings_user_create(request: HttpRequest) -> HttpResponse:
             user = form.save(commit=True, created_by=request.user, request=request)
             # Сохраняем информацию о созданном пользователе в сессии для отображения
             request.session["user_created"] = {"user_id": user.id}
-            
+
             # Если для не-администратора был сгенерирован ключ, но ссылка не была сформирована, формируем её здесь
             if user.role != User.Role.ADMIN and "magic_link_generated" in request.session:
                 session_data = request.session["magic_link_generated"]
                 if not session_data.get("link"):
                     from django.conf import settings as django_settings
+
                     public_base_url = getattr(django_settings, "PUBLIC_BASE_URL", None)
                     if public_base_url:
                         base_url = public_base_url.rstrip("/")
@@ -804,11 +836,15 @@ def settings_user_create(request: HttpRequest) -> HttpResponse:
                         base_url = request.build_absolute_uri("/")[:-1]
                     session_data["link"] = f"{base_url}/auth/magic/{session_data['token']}/"
                     request.session["magic_link_generated"] = session_data
-            
+
             if user.role == User.Role.ADMIN:
-                messages.success(request, f"Пользователь {user} создан. Пароль сгенерирован автоматически.")
+                messages.success(
+                    request, f"Пользователь {user} создан. Пароль сгенерирован автоматически."
+                )
             else:
-                messages.success(request, f"Пользователь {user} создан. Ключ доступа сгенерирован автоматически.")
+                messages.success(
+                    request, f"Пользователь {user} создан. Ключ доступа сгенерирован автоматически."
+                )
             return redirect("settings_user_edit", user_id=user.id)
     else:
         form = UserCreateForm()
@@ -821,7 +857,7 @@ def settings_user_edit(request: HttpRequest, user_id: int) -> HttpResponse:
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
     u = get_object_or_404(User, id=user_id)
-    
+
     # Получаем все токены доступа для отображения истории
     all_tokens = []
     if u.is_active:
@@ -830,17 +866,15 @@ def settings_user_edit(request: HttpRequest, user_id: int) -> HttpResponse:
             .order_by("-created_at")
             .select_related("created_by")
         )
-        
+
         # Получаем дату последней активности для каждого токена (если токен использован)
         from audit.models import ActivityEvent
+
         for token in all_tokens:
             if token.used_at:
                 # Ищем последнюю активность пользователя после использования токена
                 last_activity = (
-                    ActivityEvent.objects.filter(
-                        actor=u,
-                        created_at__gte=token.used_at
-                    )
+                    ActivityEvent.objects.filter(actor=u, created_at__gte=token.used_at)
                     .order_by("-created_at")
                     .first()
                 )
@@ -850,28 +884,28 @@ def settings_user_edit(request: HttpRequest, user_id: int) -> HttpResponse:
                     token.last_activity = token.used_at
             else:
                 token.last_activity = None
-    
+
     # Проверяем, была ли только что сгенерирована ссылка (из сессии)
     magic_link_generated = None
     if "magic_link_generated" in request.session:
         session_data = request.session.pop("magic_link_generated")
         if session_data.get("user_id") == user_id:
             magic_link_generated = session_data
-    
+
     # Проверяем, был ли только что создан пользователь
     user_created = None
     if "user_created" in request.session:
         session_data = request.session.pop("user_created")
         if session_data.get("user_id") == user_id:
             user_created = True
-    
+
     # Проверяем, был ли сгенерирован пароль для администратора
     admin_password_generated = None
     if "admin_password_generated" in request.session:
         session_data = request.session.pop("admin_password_generated")
         if session_data.get("user_id") == user_id:
             admin_password_generated = session_data
-    
+
     if request.method == "POST":
         form = UserEditForm(request.POST, instance=u)
         if form.is_valid():
@@ -880,21 +914,24 @@ def settings_user_edit(request: HttpRequest, user_id: int) -> HttpResponse:
             return redirect("settings_users")
     else:
         form = UserEditForm(instance=u)
-    
+
     # Получаем информацию о сессиях пользователя
     from django.contrib.sessions.models import Session
     from django.contrib.auth import SESSION_KEY
+
     active_sessions = []
     for session in Session.objects.filter(expire_date__gte=timezone.now()):
         session_data = session.get_decoded()
         user_id_from_session = session_data.get(SESSION_KEY)
         if user_id_from_session and int(user_id_from_session) == u.id:
-            active_sessions.append({
-                "session_key": session.session_key,
-                "expire_date": session.expire_date,
-                "last_activity": session.expire_date,  # Приблизительно
-            })
-    
+            active_sessions.append(
+                {
+                    "session_key": session.session_key,
+                    "expire_date": session.expire_date,
+                    "last_activity": session.expire_date,  # Приблизительно
+                }
+            )
+
     return render(
         request,
         "ui/settings/user_form.html",
@@ -921,30 +958,32 @@ def settings_user_magic_link_generate(request: HttpRequest, user_id: int) -> Htt
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
-    
+
     user = get_object_or_404(User, id=user_id, is_active=True)
     admin_user: User = request.user
-    
+
     # Rate limiting: не чаще 1 раза в 10 секунд на пользователя
     from accounts.security import is_ip_rate_limited, get_client_ip
+
     ip = get_client_ip(request)
     cache_key = f"magic_link_generate_rate:{user_id}"
     from django.core.cache import cache
+
     if cache.get(cache_key):
         messages.error(request, "Подождите 10 секунд перед генерацией новой ссылки.")
         return redirect("settings_user_edit", user_id=user_id)
     cache.set(cache_key, True, 10)
-    
+
     # Генерируем токен
     from accounts.models import MagicLinkToken
     from django.conf import settings as django_settings
-    
+
     magic_link, plain_token = MagicLinkToken.create_for_user(
         user=user,
         created_by=admin_user,
         # TTL по умолчанию 24 часа (1440 минут)
     )
-    
+
     # Формируем полную ссылку
     # Используем PUBLIC_BASE_URL если есть, иначе используем request
     public_base_url = getattr(django_settings, "PUBLIC_BASE_URL", None)
@@ -952,9 +991,9 @@ def settings_user_magic_link_generate(request: HttpRequest, user_id: int) -> Htt
         base_url = public_base_url.rstrip("/")
     else:
         base_url = request.build_absolute_uri("/")[:-1]
-    
+
     magic_link_url = f"{base_url}/auth/magic/{plain_token}/"
-    
+
     # Логируем генерацию
     try:
         log_event(
@@ -969,18 +1008,23 @@ def settings_user_magic_link_generate(request: HttpRequest, user_id: int) -> Htt
         logger.warning(
             f"Ошибка при логировании генерации magic link: {e}",
             exc_info=True,
-            extra={"admin_user_id": admin_user.id if admin_user else None, "target_user_id": user.id},
+            extra={
+                "admin_user_id": admin_user.id if admin_user else None,
+                "target_user_id": user.id,
+            },
         )
-    
+
     # Возвращаем JSON с ссылкой (для AJAX) или редиректим с сообщением
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-        return JsonResponse({
-            "success": True,
-            "token": plain_token,
-            "link": magic_link_url,
-            "expires_at": magic_link.expires_at.isoformat(),
-        })
-    
+        return JsonResponse(
+            {
+                "success": True,
+                "token": plain_token,
+                "link": magic_link_url,
+                "expires_at": magic_link.expires_at.isoformat(),
+            }
+        )
+
     # Для обычного запроса сохраняем в сессии и редиректим
     request.session["magic_link_generated"] = {
         "token": plain_token,  # Сохраняем сам ключ для отображения
@@ -988,7 +1032,9 @@ def settings_user_magic_link_generate(request: HttpRequest, user_id: int) -> Htt
         "expires_at": magic_link.expires_at.isoformat(),
         "user_id": user_id,
     }
-    messages.success(request, f"Ссылка входа создана для {user}. Она будет показана на странице редактирования.")
+    messages.success(
+        request, f"Ссылка входа создана для {user}. Она будет показана на странице редактирования."
+    )
     return redirect("settings_user_edit", user_id=user_id)
 
 
@@ -1001,15 +1047,15 @@ def settings_user_logout(request: HttpRequest, user_id: int) -> HttpResponse:
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
-    
+
     target_user = get_object_or_404(User, id=user_id)
     admin_user: User = request.user
-    
+
     if request.method == "POST":
         # Удаляем все сессии пользователя
         from django.contrib.sessions.models import Session
         from django.contrib.auth import SESSION_KEY
-        
+
         sessions_deleted = 0
         for session in Session.objects.filter(expire_date__gte=timezone.now()):
             session_data = session.get_decoded()
@@ -1017,7 +1063,7 @@ def settings_user_logout(request: HttpRequest, user_id: int) -> HttpResponse:
             if user_id_from_session and int(user_id_from_session) == target_user.id:
                 session.delete()
                 sessions_deleted += 1
-        
+
         # Логируем действие
         try:
             log_event(
@@ -1032,12 +1078,17 @@ def settings_user_logout(request: HttpRequest, user_id: int) -> HttpResponse:
             logger.warning(
                 f"Ошибка при логировании разлогинивания пользователя: {e}",
                 exc_info=True,
-                extra={"admin_user_id": admin_user.id if admin_user else None, "target_user_id": target_user.id},
+                extra={
+                    "admin_user_id": admin_user.id if admin_user else None,
+                    "target_user_id": target_user.id,
+                },
             )
-        
-        messages.success(request, f"Пользователь {target_user} разлогинен. Завершено сессий: {sessions_deleted}.")
+
+        messages.success(
+            request, f"Пользователь {target_user} разлогинен. Завершено сессий: {sessions_deleted}."
+        )
         return redirect("settings_users")
-    
+
     return redirect("settings_users")
 
 
@@ -1048,14 +1099,15 @@ def settings_user_form_ajax(request: HttpRequest, user_id: int) -> JsonResponse:
     """
     if not require_admin(request.user):
         return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
-    
+
     user = get_object_or_404(User, id=user_id)
     from ui.forms import UserEditForm
-    
+
     form = UserEditForm(instance=user)
-    
+
     # Рендерим форму в HTML
     from django.template.loader import render_to_string
+
     form_html = render_to_string(
         "ui/settings/user_form_inline.html",
         {
@@ -1064,44 +1116,11 @@ def settings_user_form_ajax(request: HttpRequest, user_id: int) -> JsonResponse:
         },
         request=request,
     )
-    
-    return JsonResponse({
-        "ok": True,
-        "html": form_html,
-        "user": {
-            "id": user.id,
-            "username": user.username,
-            "full_name": str(user),
-            "email": user.email,
-            "role": user.role,
-            "role_display": user.get_role_display(),
-            "branch": str(user.branch) if user.branch else None,
-            "is_active": user.is_active,
-        },
-    })
 
-
-@login_required
-def settings_user_update_ajax(request: HttpRequest, user_id: int) -> JsonResponse:
-    """
-    AJAX endpoint для сохранения изменений пользователя (для модалки).
-    """
-    if not require_admin(request.user):
-        return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
-    
-    if request.method != "POST":
-        return JsonResponse({"ok": False, "error": "Метод не поддерживается."}, status=405)
-    
-    user = get_object_or_404(User, id=user_id)
-    from ui.forms import UserEditForm
-    
-    form = UserEditForm(request.POST, instance=user)
-    
-    if form.is_valid():
-        form.save()
-        return JsonResponse({
+    return JsonResponse(
+        {
             "ok": True,
-            "message": "Пользователь обновлён.",
+            "html": form_html,
             "user": {
                 "id": user.id,
                 "username": user.username,
@@ -1112,9 +1131,47 @@ def settings_user_update_ajax(request: HttpRequest, user_id: int) -> JsonRespons
                 "branch": str(user.branch) if user.branch else None,
                 "is_active": user.is_active,
             },
-        })
+        }
+    )
+
+
+@login_required
+def settings_user_update_ajax(request: HttpRequest, user_id: int) -> JsonResponse:
+    """
+    AJAX endpoint для сохранения изменений пользователя (для модалки).
+    """
+    if not require_admin(request.user):
+        return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
+
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Метод не поддерживается."}, status=405)
+
+    user = get_object_or_404(User, id=user_id)
+    from ui.forms import UserEditForm
+
+    form = UserEditForm(request.POST, instance=user)
+
+    if form.is_valid():
+        form.save()
+        return JsonResponse(
+            {
+                "ok": True,
+                "message": "Пользователь обновлён.",
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "full_name": str(user),
+                    "email": user.email,
+                    "role": user.role,
+                    "role_display": user.get_role_display(),
+                    "branch": str(user.branch) if user.branch else None,
+                    "is_active": user.is_active,
+                },
+            }
+        )
     else:
         from django.template.loader import render_to_string
+
         form_html = render_to_string(
             "ui/settings/user_form_inline.html",
             {
@@ -1123,11 +1180,14 @@ def settings_user_update_ajax(request: HttpRequest, user_id: int) -> JsonRespons
             },
             request=request,
         )
-        return JsonResponse({
-            "ok": False,
-            "errors": form.errors,
-            "html": form_html,
-        }, status=400)
+        return JsonResponse(
+            {
+                "ok": False,
+                "errors": form.errors,
+                "html": form_html,
+            },
+            status=400,
+        )
 
 
 @login_required
@@ -1145,10 +1205,14 @@ def settings_user_delete(request: HttpRequest, user_id: int) -> JsonResponse:
         return JsonResponse({"ok": False, "error": "Нельзя удалить самого себя."}, status=400)
 
     if user.role == User.Role.ADMIN or user.is_superuser:
-        remaining_admins = User.objects.filter(
-            is_active=True,
-            role=User.Role.ADMIN,
-        ).exclude(id=user.id).count()
+        remaining_admins = (
+            User.objects.filter(
+                is_active=True,
+                role=User.Role.ADMIN,
+            )
+            .exclude(id=user.id)
+            .count()
+        )
         if remaining_admins == 0:
             return JsonResponse(
                 {"ok": False, "error": "Нельзя удалить последнего администратора системы."},
@@ -1168,10 +1232,12 @@ def settings_user_delete(request: HttpRequest, user_id: int) -> JsonResponse:
 
     user.delete()
 
-    return JsonResponse({
-        "ok": True,
-        "message": f"Пользователь «{full_name}» удалён.",
-    })
+    return JsonResponse(
+        {
+            "ok": True,
+            "message": f"Пользователь «{full_name}» удалён.",
+        }
+    )
 
 
 @login_required
@@ -1184,7 +1250,9 @@ def settings_dicts(request: HttpRequest) -> HttpResponse:
         "ui/settings/dicts.html",
         {
             "company_statuses": CompanyStatus.objects.order_by("name"),
-            "company_spheres": CompanySphere.objects.annotate(company_count=Count("companies")).order_by("name"),
+            "company_spheres": CompanySphere.objects.annotate(
+                company_count=Count("companies")
+            ).order_by("name"),
             "contract_types": ContractType.objects.order_by("order", "name"),
             "task_types": TaskType.objects.order_by("name"),
         },
@@ -1204,7 +1272,9 @@ def settings_company_status_create(request: HttpRequest) -> HttpResponse:
             return redirect("settings_dicts")
     else:
         form = CompanyStatusForm()
-    return render(request, "ui/settings/dict_form.html", {"form": form, "title": "Новый статус компании"})
+    return render(
+        request, "ui/settings/dict_form.html", {"form": form, "title": "Новый статус компании"}
+    )
 
 
 @login_required
@@ -1220,7 +1290,9 @@ def settings_company_sphere_create(request: HttpRequest) -> HttpResponse:
             return redirect("settings_dicts")
     else:
         form = CompanySphereForm()
-    return render(request, "ui/settings/dict_form.html", {"form": form, "title": "Новая сфера компании"})
+    return render(
+        request, "ui/settings/dict_form.html", {"form": form, "title": "Новая сфера компании"}
+    )
 
 
 @login_required
@@ -1236,7 +1308,9 @@ def settings_contract_type_create(request: HttpRequest) -> HttpResponse:
             return redirect("settings_dicts")
     else:
         form = ContractTypeForm()
-    return render(request, "ui/settings/dict_form.html", {"form": form, "title": "Новый вид договора"})
+    return render(
+        request, "ui/settings/dict_form.html", {"form": form, "title": "Новый вид договора"}
+    )
 
 
 @login_required
@@ -1250,7 +1324,8 @@ def settings_task_type_create(request: HttpRequest) -> HttpResponse:
             form.save()
             # Инвалидируем кэш типов задач
             from django.core.cache import cache
-            cache.delete('task_types_all_dict')
+
+            cache.delete("task_types_all_dict")
             messages.success(request, "Задача добавлена.")
             return redirect("settings_dicts")
     else:
@@ -1274,7 +1349,16 @@ def settings_company_status_edit(request: HttpRequest, status_id: int) -> HttpRe
             return redirect("settings_dicts")
     else:
         form = CompanyStatusForm(instance=status)
-    return render(request, "ui/settings/dict_form_modal.html", {"form": form, "title": "Редактировать статус компании", "dict_type": "company-status", "dict_id": status.id})
+    return render(
+        request,
+        "ui/settings/dict_form_modal.html",
+        {
+            "form": form,
+            "title": "Редактировать статус компании",
+            "dict_type": "company-status",
+            "dict_id": status.id,
+        },
+    )
 
 
 @login_required
@@ -1308,7 +1392,16 @@ def settings_company_sphere_edit(request: HttpRequest, sphere_id: int) -> HttpRe
             return redirect("settings_dicts")
     else:
         form = CompanySphereForm(instance=sphere)
-    return render(request, "ui/settings/dict_form_modal.html", {"form": form, "title": "Редактировать сферу компании", "dict_type": "company-sphere", "dict_id": sphere.id})
+    return render(
+        request,
+        "ui/settings/dict_form_modal.html",
+        {
+            "form": form,
+            "title": "Редактировать сферу компании",
+            "dict_type": "company-sphere",
+            "dict_id": sphere.id,
+        },
+    )
 
 
 @login_required
@@ -1361,12 +1454,23 @@ def settings_contract_type_edit(request: HttpRequest, contract_type_id: int) -> 
         if form.is_valid():
             form.save()
             if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-                return JsonResponse({"ok": True, "id": contract_type.id, "name": contract_type.name})
+                return JsonResponse(
+                    {"ok": True, "id": contract_type.id, "name": contract_type.name}
+                )
             messages.success(request, "Вид договора обновлён.")
             return redirect("settings_dicts")
     else:
         form = ContractTypeForm(instance=contract_type)
-    return render(request, "ui/settings/dict_form_modal.html", {"form": form, "title": "Редактировать вид договора", "dict_type": "contract-type", "dict_id": contract_type.id})
+    return render(
+        request,
+        "ui/settings/dict_form_modal.html",
+        {
+            "form": form,
+            "title": "Редактировать вид договора",
+            "dict_type": "contract-type",
+            "dict_id": contract_type.id,
+        },
+    )
 
 
 @login_required
@@ -1396,14 +1500,32 @@ def settings_task_type_edit(request: HttpRequest, task_type_id: int) -> HttpResp
             form.save()
             # Инвалидируем кэш типов задач
             from django.core.cache import cache
-            cache.delete('task_types_all_dict')
+
+            cache.delete("task_types_all_dict")
             if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-                return JsonResponse({"ok": True, "id": task_type.id, "name": task_type.name, "icon": task_type.icon or "", "color": task_type.color or ""})
+                return JsonResponse(
+                    {
+                        "ok": True,
+                        "id": task_type.id,
+                        "name": task_type.name,
+                        "icon": task_type.icon or "",
+                        "color": task_type.color or "",
+                    }
+                )
             messages.success(request, "Задача обновлена.")
             return redirect("settings_dicts")
     else:
         form = TaskTypeForm(instance=task_type)
-    return render(request, "ui/settings/dict_form_modal.html", {"form": form, "title": "Редактировать задачу", "dict_type": "task-type", "dict_id": task_type.id})
+    return render(
+        request,
+        "ui/settings/dict_form_modal.html",
+        {
+            "form": form,
+            "title": "Редактировать задачу",
+            "dict_type": "task-type",
+            "dict_id": task_type.id,
+        },
+    )
 
 
 @login_required
@@ -1417,7 +1539,8 @@ def settings_task_type_delete(request: HttpRequest, task_type_id: int) -> HttpRe
     task_type.delete()
     # Инвалидируем кэш типов задач
     from django.core.cache import cache
-    cache.delete('task_types_all_dict')
+
+    cache.delete("task_types_all_dict")
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return JsonResponse({"ok": True})
     messages.success(request, "Задача удалена.")
@@ -1436,10 +1559,14 @@ def settings_activity(request: HttpRequest) -> HttpResponse:
         .exclude(entity_type="policy")
         .order_by("-created_at")[:500]
     )
-    return render(request, "ui/settings/activity.html", {
-        "events": events,
-        "can_undo_bulk_reschedule": require_admin(request.user),
-    })
+    return render(
+        request,
+        "ui/settings/activity.html",
+        {
+            "events": events,
+            "can_undo_bulk_reschedule": require_admin(request.user),
+        },
+    )
 
 
 @login_required
@@ -1448,50 +1575,51 @@ def settings_error_log(request: HttpRequest) -> HttpResponse:
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
-    
+
     from audit.models import ErrorLog
     from django.db.models import Q
-    
+
     # Фильтры
     level_filter = request.GET.get("level", "")
     resolved_filter = request.GET.get("resolved", "")
     path_filter = request.GET.get("path", "")
     search_query = request.GET.get("q", "")
-    
+
     # Базовый queryset
     errors = ErrorLog.objects.select_related("user", "resolved_by").order_by("-created_at")
-    
+
     # Применяем фильтры
     if level_filter:
         errors = errors.filter(level=level_filter)
-    
+
     if resolved_filter == "1":
         errors = errors.filter(resolved=True)
     elif resolved_filter == "0":
         errors = errors.filter(resolved=False)
-    
+
     if path_filter:
         errors = errors.filter(path__icontains=path_filter)
-    
+
     if search_query:
         errors = errors.filter(
-            Q(message__icontains=search_query) |
-            Q(exception_type__icontains=search_query) |
-            Q(path__icontains=search_query)
+            Q(message__icontains=search_query)
+            | Q(exception_type__icontains=search_query)
+            | Q(path__icontains=search_query)
         )
-    
+
     # Пагинация
     from django.core.paginator import Paginator
+
     paginator = Paginator(errors, 50)  # 50 ошибок на страницу
     page_number = request.GET.get("page", 1)
     page_obj = paginator.get_page(page_number)
-    
+
     # Статистика
     total_count = ErrorLog.objects.count()
     unresolved_count = ErrorLog.objects.filter(resolved=False).count()
     error_count = ErrorLog.objects.filter(level=ErrorLog.Level.ERROR).count()
     critical_count = ErrorLog.objects.filter(level=ErrorLog.Level.CRITICAL).count()
-    
+
     context = {
         "errors": page_obj,
         "total_count": total_count,
@@ -1504,7 +1632,7 @@ def settings_error_log(request: HttpRequest) -> HttpResponse:
         "search_query": search_query,
         "levels": ErrorLog.Level.choices,
     }
-    
+
     return render(request, "ui/settings/error_log.html", context)
 
 
@@ -1514,12 +1642,12 @@ def settings_error_log_resolve(request: HttpRequest, error_id) -> HttpResponse:
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
-    
+
     from audit.models import ErrorLog
     from django.utils import timezone
-    
+
     error = get_object_or_404(ErrorLog, id=error_id)
-    
+
     if request.method == "POST":
         error.resolved = True
         error.resolved_at = timezone.now()
@@ -1527,7 +1655,7 @@ def settings_error_log_resolve(request: HttpRequest, error_id) -> HttpResponse:
         error.notes = request.POST.get("notes", "")[:1000]
         error.save()
         messages.success(request, "Ошибка отмечена как исправленная.")
-    
+
     return redirect("settings_error_log")
 
 
@@ -1537,16 +1665,16 @@ def settings_error_log_unresolve(request: HttpRequest, error_id) -> HttpResponse
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
-    
+
     from audit.models import ErrorLog
-    
+
     error = get_object_or_404(ErrorLog, id=error_id)
     error.resolved = False
     error.resolved_at = None
     error.resolved_by = None
     error.save()
     messages.success(request, "Отметка об исправлении снята.")
-    
+
     return redirect("settings_error_log")
 
 
@@ -1555,11 +1683,11 @@ def settings_error_log_details(request: HttpRequest, error_id) -> JsonResponse:
     """AJAX endpoint для получения деталей ошибки."""
     if not require_admin(request.user):
         return JsonResponse({"error": "Доступ запрещён."}, status=403)
-    
+
     from audit.models import ErrorLog
-    
+
     error = get_object_or_404(ErrorLog, id=error_id)
-    
+
     data = {
         "created_at": error.created_at.strftime("%d.%m.%Y %H:%M:%S"),
         "level": error.level,
@@ -1575,7 +1703,5 @@ def settings_error_log_details(request: HttpRequest, error_id) -> JsonResponse:
         "request_data": error.request_data,
         "notes": error.notes,
     }
-    
+
     return JsonResponse(data)
-
-

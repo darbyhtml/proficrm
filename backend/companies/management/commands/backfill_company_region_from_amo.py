@@ -4,6 +4,7 @@ Backfill: заполняет Company.region из raw_fields amoCRM по указ
 Используется, если регионы уже были импортированы из amoCRM (raw_fields.amo/custom_fields_values),
 но поле region в Company ещё не заполнено.
 """
+
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
@@ -50,8 +51,6 @@ def _first_text_value(values: list) -> str | None:
     return None
 
 
-
-
 class Command(BaseCommand):
     help = (
         "Backfill: заполняет Company.region на основе raw_fields из amoCRM. "
@@ -59,9 +58,16 @@ class Command(BaseCommand):
     )
 
     def add_arguments(self, parser):
-        parser.add_argument("--field-id", type=int, default=0, help="ID кастомного поля региона в amoCRM (по умолчанию из настроек).")
+        parser.add_argument(
+            "--field-id",
+            type=int,
+            default=0,
+            help="ID кастомного поля региона в amoCRM (по умолчанию из настроек).",
+        )
         parser.add_argument("--limit", type=int, default=0, help="Максимум компаний (0 = все).")
-        parser.add_argument("--dry-run", action="store_true", help="Только показать, без изменений в БД.")
+        parser.add_argument(
+            "--dry-run", action="store_true", help="Только показать, без изменений в БД."
+        )
 
     def handle(self, *args, **options):
         dry_run = bool(options.get("dry_run"))
@@ -73,7 +79,11 @@ class Command(BaseCommand):
             field_id = int(getattr(cfg, "region_custom_field_id", 0) or 0)
 
         if not field_id:
-            self.stdout.write(self.style.ERROR("Не указан field_id и не настроен region_custom_field_id в AmoApiConfig."))
+            self.stdout.write(
+                self.style.ERROR(
+                    "Не указан field_id и не настроен region_custom_field_id в AmoApiConfig."
+                )
+            )
             return
 
         self.stdout.write(f"Backfill Company.region из amoCRM (field_id={field_id})")
@@ -104,7 +114,9 @@ class Command(BaseCommand):
                 if not region:
                     skipped_unknown += 1
                     if dry_run:
-                        self.stdout.write(f"  ⚠️  {comp.name} (inn={comp.inn or '-'}) -> регион '{label}' не найден в БД")
+                        self.stdout.write(
+                            f"  ⚠️  {comp.name} (inn={comp.inn or '-'}) -> регион '{label}' не найден в БД"
+                        )
                     continue
 
                 self.stdout.write(f"  ✓ {comp.name} (inn={comp.inn or '-'}) -> {region.name}")
@@ -123,4 +135,3 @@ class Command(BaseCommand):
                 f"пропущено из-за неизвестного региона: {skipped_unknown}."
             )
         )
-

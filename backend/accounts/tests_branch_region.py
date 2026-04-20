@@ -21,14 +21,10 @@ class BranchRegionTests(TestCase):
             ).exists()
         )
         self.assertTrue(
-            BranchRegion.objects.filter(
-                branch=self.krd, region_name="Краснодарский край"
-            ).exists()
+            BranchRegion.objects.filter(branch=self.krd, region_name="Краснодарский край").exists()
         )
         self.assertTrue(
-            BranchRegion.objects.filter(
-                branch=self.tmn, region_name="Тюменская область"
-            ).exists()
+            BranchRegion.objects.filter(branch=self.tmn, region_name="Тюменская область").exists()
         )
 
     def test_common_pool_created_for_all_branches(self):

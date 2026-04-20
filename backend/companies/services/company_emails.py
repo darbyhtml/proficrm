@@ -10,6 +10,7 @@ Company emails service — валидация и проверка уникаль
 
 API — pure functions, без HTTPResponse. View-обёртки отвечают за JSON.
 """
+
 from __future__ import annotations
 
 from typing import Optional

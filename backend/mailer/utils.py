@@ -66,6 +66,7 @@ def get_next_send_window_start(
         now = dj_timezone.now()
     try:
         from django.conf import settings
+
         tz = ZoneInfo(getattr(settings, "TIME_ZONE", "Europe/Moscow"))
     except Exception:
         tz = ZoneInfo("Europe/Moscow")
@@ -73,6 +74,7 @@ def get_next_send_window_start(
 
     if use_working_hours:
         from mailer.constants import WORKING_HOURS_START
+
         if always_tomorrow:
             return (now_local + timedelta(days=1)).replace(
                 hour=WORKING_HOURS_START, minute=0, second=0, microsecond=0
@@ -98,28 +100,67 @@ _RE_IMG_TAG = re.compile(r"(?is)<\s*img\b[^>]*>")
 _RE_IMG_STYLE = re.compile(r"(?is)\sstyle\s*=\s*(['\"])(.*?)\1")
 
 # Разрешённые HTML теги в теле письма (email-safe whitelist)
-_NH3_ALLOWED_TAGS = frozenset({
-    "a", "b", "blockquote", "br", "caption", "center", "code",
-    "col", "colgroup", "div", "em", "figure", "figcaption",
-    "h1", "h2", "h3", "h4", "h5", "h6", "hr", "i", "img",
-    "li", "ol", "p", "pre", "s", "small", "span", "strike",
-    "strong", "sub", "sup", "table", "tbody", "td", "tfoot", "th", "thead",
-    "tr", "u", "ul",
-})
+_NH3_ALLOWED_TAGS = frozenset(
+    {
+        "a",
+        "b",
+        "blockquote",
+        "br",
+        "caption",
+        "center",
+        "code",
+        "col",
+        "colgroup",
+        "div",
+        "em",
+        "figure",
+        "figcaption",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "hr",
+        "i",
+        "img",
+        "li",
+        "ol",
+        "p",
+        "pre",
+        "s",
+        "small",
+        "span",
+        "strike",
+        "strong",
+        "sub",
+        "sup",
+        "table",
+        "tbody",
+        "td",
+        "tfoot",
+        "th",
+        "thead",
+        "tr",
+        "u",
+        "ul",
+    }
+)
 
 # Общие атрибуты разрешены на всех тегах
 _COMMON_ATTRS = frozenset({"class", "id", "style", "align", "valign", "dir"})
 
 # Разрешённые атрибуты по тегу
 _NH3_ALLOWED_ATTRS: dict[str, frozenset[str]] = {
-    "a":        _COMMON_ATTRS | frozenset({"href", "target", "rel", "name", "title"}),
-    "img":      _COMMON_ATTRS | frozenset({"src", "alt", "title", "width", "height", "border"}),
-    "table":    _COMMON_ATTRS | frozenset({"width", "height", "border", "cellpadding", "cellspacing", "bgcolor", "summary"}),
-    "td":       _COMMON_ATTRS | frozenset({"width", "height", "colspan", "rowspan", "bgcolor", "nowrap"}),
-    "th":       _COMMON_ATTRS | frozenset({"width", "height", "colspan", "rowspan", "bgcolor", "scope"}),
-    "col":      _COMMON_ATTRS | frozenset({"width", "span"}),
+    "a": _COMMON_ATTRS | frozenset({"href", "target", "rel", "name", "title"}),
+    "img": _COMMON_ATTRS | frozenset({"src", "alt", "title", "width", "height", "border"}),
+    "table": _COMMON_ATTRS
+    | frozenset({"width", "height", "border", "cellpadding", "cellspacing", "bgcolor", "summary"}),
+    "td": _COMMON_ATTRS | frozenset({"width", "height", "colspan", "rowspan", "bgcolor", "nowrap"}),
+    "th": _COMMON_ATTRS | frozenset({"width", "height", "colspan", "rowspan", "bgcolor", "scope"}),
+    "col": _COMMON_ATTRS | frozenset({"width", "span"}),
     "colgroup": _COMMON_ATTRS | frozenset({"width", "span"}),
-    "figure":   _COMMON_ATTRS,
+    "figure": _COMMON_ATTRS,
     "figcaption": _COMMON_ATTRS,
     "blockquote": _COMMON_ATTRS | frozenset({"cite"}),
 }
@@ -169,7 +210,7 @@ def _normalize_email_img_tags(html_value: str) -> str:
                     style += ";"
                 style += bit + ";"
                 style_l = style.lower()
-            return _RE_IMG_STYLE.sub(f' style={q}{style}{q}', tag, count=1)
+            return _RE_IMG_STYLE.sub(f" style={q}{style}{q}", tag, count=1)
 
         # style нет — добавим перед закрывающим ">"
         style = ";".join(required_bits) + ";"

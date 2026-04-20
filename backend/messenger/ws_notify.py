@@ -44,7 +44,9 @@ def notify_new_message(conversation, message_data: dict) -> None:
             },
         )
     except Exception:
-        logger.error("WS notify_new_message failed for conversation %s", conversation.id, exc_info=True)
+        logger.error(
+            "WS notify_new_message failed for conversation %s", conversation.id, exc_info=True
+        )
 
     # В канал inbox (для списка диалогов)
     if conversation.inbox_id:
@@ -94,7 +96,11 @@ def notify_conversation_updated(conversation, changes: dict) -> None:
             },
         )
     except Exception:
-        logger.error("WS notify_conversation_updated failed for conversation %s", conversation.id, exc_info=True)
+        logger.error(
+            "WS notify_conversation_updated failed for conversation %s",
+            conversation.id,
+            exc_info=True,
+        )
 
     if conversation.inbox_id:
         try:
@@ -107,7 +113,11 @@ def notify_conversation_updated(conversation, changes: dict) -> None:
                 },
             )
         except Exception:
-            logger.error("WS notify_conversation_updated inbox_%s failed", conversation.inbox_id, exc_info=True)
+            logger.error(
+                "WS notify_conversation_updated inbox_%s failed",
+                conversation.inbox_id,
+                exc_info=True,
+            )
 
 
 def notify_new_conversation(conversation, conversation_data: dict) -> None:

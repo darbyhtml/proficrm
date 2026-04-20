@@ -51,13 +51,17 @@ class Command(BaseCommand):
 
         # Администраторы: роль ADMIN или is_superuser
         admin_ids = set(
-            User.objects.filter(
-                Q(role=User.Role.ADMIN) | Q(is_superuser=True)
-            ).values_list("id", flat=True)
+            User.objects.filter(Q(role=User.Role.ADMIN) | Q(is_superuser=True)).values_list(
+                "id", flat=True
+            )
         )
 
         if not admin_ids:
-            self.stdout.write(self.style.WARNING("В системе нет пользователей с ролью «Администратор» или is_superuser."))
+            self.stdout.write(
+                self.style.WARNING(
+                    "В системе нет пользователей с ролью «Администратор» или is_superuser."
+                )
+            )
             return
 
         self.stdout.write(f"Найдено администраторов: {len(admin_ids)}")
@@ -75,7 +79,11 @@ class Command(BaseCommand):
         total = qs.count()
 
         if total == 0:
-            self.stdout.write(self.style.SUCCESS("Нет задач для обновления (created_by=админ и assigned_to≠created_by)."))
+            self.stdout.write(
+                self.style.SUCCESS(
+                    "Нет задач для обновления (created_by=админ и assigned_to≠created_by)."
+                )
+            )
             return
 
         self.stdout.write(
@@ -108,8 +116,12 @@ class Command(BaseCommand):
         for i in range(0, len(ids), batch_size):
             batch_ids = ids[i : i + batch_size]
             with transaction.atomic():
-                count = Task.objects.filter(id__in=batch_ids).update(created_by_id=F("assigned_to_id"))
+                count = Task.objects.filter(id__in=batch_ids).update(
+                    created_by_id=F("assigned_to_id")
+                )
                 updated += count
             self.stdout.write(f"  Обработано: {updated}/{len(ids)}")
 
-        self.stdout.write(self.style.SUCCESS(f"\nГотово. Перенесено «Кто» на исполнителя: {updated} задач."))
+        self.stdout.write(
+            self.style.SUCCESS(f"\nГотово. Перенесено «Кто» на исполнителя: {updated} задач.")
+        )

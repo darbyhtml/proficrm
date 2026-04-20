@@ -15,26 +15,33 @@ class CannedResponseFieldsTests(TestCase):
 
     def test_defaults(self):
         cr = CannedResponse.objects.create(
-            title="Привет", body="Здравствуйте!",
-            branch=self.branch, created_by=self.user,
+            title="Привет",
+            body="Здравствуйте!",
+            branch=self.branch,
+            created_by=self.user,
         )
         self.assertFalse(cr.is_quick_button)
         self.assertEqual(cr.sort_order, 0)
 
     def test_quick_buttons_ordered_by_sort_order(self):
         CannedResponse.objects.create(
-            title="B", body="b",
-            branch=self.branch, created_by=self.user,
-            is_quick_button=True, sort_order=10,
+            title="B",
+            body="b",
+            branch=self.branch,
+            created_by=self.user,
+            is_quick_button=True,
+            sort_order=10,
         )
         CannedResponse.objects.create(
-            title="A", body="a",
-            branch=self.branch, created_by=self.user,
-            is_quick_button=True, sort_order=5,
+            title="A",
+            body="a",
+            branch=self.branch,
+            created_by=self.user,
+            is_quick_button=True,
+            sort_order=5,
         )
         titles = list(
-            CannedResponse.objects.filter(is_quick_button=True)
-            .values_list("title", flat=True)
+            CannedResponse.objects.filter(is_quick_button=True).values_list("title", flat=True)
         )
         self.assertEqual(titles, ["A", "B"])  # sort_order 5 before 10 через Meta.ordering
 
@@ -53,18 +60,26 @@ class QuickButtonFilterTests(TestCase):
             role=User.Role.ADMIN,
         )
         CannedResponse.objects.create(
-            title="Quick A", body="a",
-            branch=self.branch, created_by=self.user,
-            is_quick_button=True, sort_order=2,
+            title="Quick A",
+            body="a",
+            branch=self.branch,
+            created_by=self.user,
+            is_quick_button=True,
+            sort_order=2,
         )
         CannedResponse.objects.create(
-            title="Quick B", body="b",
-            branch=self.branch, created_by=self.user,
-            is_quick_button=True, sort_order=1,
+            title="Quick B",
+            body="b",
+            branch=self.branch,
+            created_by=self.user,
+            is_quick_button=True,
+            sort_order=1,
         )
         CannedResponse.objects.create(
-            title="Regular", body="r",
-            branch=self.branch, created_by=self.user,
+            title="Regular",
+            body="r",
+            branch=self.branch,
+            created_by=self.user,
             is_quick_button=False,
         )
         self.client = APIClient()

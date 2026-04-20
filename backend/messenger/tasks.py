@@ -5,6 +5,7 @@ Celery-задачи мессенджера (аналог Chatwoot Sidekiq jobs).
 - escalate: переназначение диалогов при таймауте
 - check_offline_operators: перевод операторов в offline по таймауту heartbeat
 """
+
 import logging
 from datetime import timedelta
 
@@ -39,18 +40,23 @@ def auto_resolve_conversations(self):
 
     # 2. OPEN/PENDING -> RESOLVED (после N часов без активности контакта)
     cutoff_resolved = now - timezone.timedelta(hours=auto_resolve_hours)
-    resolved_count = Conversation.objects.filter(
-        status__in=[Conversation.Status.OPEN, Conversation.Status.PENDING],
-        last_activity_at__lt=cutoff_resolved,
-    ).exclude(
-        # Не трогать snoozed
-        snoozed_until__gt=now,
-    ).update(status=Conversation.Status.RESOLVED)
+    resolved_count = (
+        Conversation.objects.filter(
+            status__in=[Conversation.Status.OPEN, Conversation.Status.PENDING],
+            last_activity_at__lt=cutoff_resolved,
+        )
+        .exclude(
+            # Не трогать snoozed
+            snoozed_until__gt=now,
+        )
+        .update(status=Conversation.Status.RESOLVED)
+    )
 
     if closed_count or resolved_count:
         logger.info(
             "Auto-resolve: %d resolved->closed, %d open/pending->resolved",
-            closed_count, resolved_count,
+            closed_count,
+            resolved_count,
         )
 
     return {"closed": closed_count, "resolved": resolved_count}
@@ -110,13 +116,16 @@ def dispatch_async_listeners(self, event_name: str, timestamp_iso: str, data: di
         except Exception:
             logger.error(
                 "Error in async listener %s for event %s",
-                path, event_name,
+                path,
+                event_name,
                 exc_info=True,
             )
 
     logger.info(
         "Async dispatch: event=%s, listeners=%d/%d executed",
-        event_name, executed, len(listener_paths),
+        event_name,
+        executed,
+        len(listener_paths),
     )
     return {"event": event_name, "listeners": executed}
 
@@ -132,7 +141,9 @@ def send_offline_email_notification(self, conversation_id: int, message_id: int)
     from .models import Conversation, Message, AgentProfile
 
     try:
-        conversation = Conversation.objects.select_related("assignee", "contact", "inbox").get(pk=conversation_id)
+        conversation = Conversation.objects.select_related("assignee", "contact", "inbox").get(
+            pk=conversation_id
+        )
         message = Message.objects.get(pk=message_id)
     except (Conversation.DoesNotExist, Message.DoesNotExist):
         return {"status": "not_found"}
@@ -171,12 +182,14 @@ def send_offline_email_notification(self, conversation_id: int, message_id: int)
 
     try:
         from mailer.models import GlobalMailAccount
+
         account = GlobalMailAccount.load()
         if not account.is_enabled or not account.smtp_username:
             logger.info("Email notification skipped: GlobalMailAccount disabled")
             return {"status": "smtp_disabled"}
 
         from mailer.smtp_sender import build_message, send_via_smtp
+
         msg = build_message(
             account=account,
             to_email=assignee.email,
@@ -188,7 +201,8 @@ def send_offline_email_notification(self, conversation_id: int, message_id: int)
         send_via_smtp(account=account, msg=msg)
         logger.info(
             "Sent offline email notification to %s for conversation %d",
-            assignee.email, conversation_id,
+            assignee.email,
+            conversation_id,
         )
         return {"status": "sent"}
     except Exception:
@@ -316,6 +330,7 @@ def check_offline_operators(stale_seconds: int = 90):
     heartbeat (30с × 3). Это страховка от падения клиента без явного logout.
     """
     from accounts.models import User
+
     threshold = timezone.now() - timedelta(seconds=stale_seconds)
     updated = User.objects.filter(
         messenger_online=True,
@@ -342,7 +357,9 @@ def check_offline_operators(stale_seconds: int = 90):
     max_retries=5,
     acks_late=True,
 )
-def send_outbound_webhook(self, *, url: str, body: str, headers: dict, inbox_id: int, event_type: str):
+def send_outbound_webhook(
+    self, *, url: str, body: str, headers: dict, inbox_id: int, event_type: str
+):
     """
     Доставка webhook'а во внешнюю систему. Retry с экспоненциальной паузой.
     SSRF-проверка уже сделана в `_send_webhook_async` до delay().
@@ -354,7 +371,11 @@ def send_outbound_webhook(self, *, url: str, body: str, headers: dict, inbox_id:
     except Exception as exc:
         logger.warning(
             "Webhook delivery failed, retrying",
-            extra={"inbox_id": inbox_id, "event_type": event_type, "attempt": self.request.retries + 1},
+            extra={
+                "inbox_id": inbox_id,
+                "event_type": event_type,
+                "attempt": self.request.retries + 1,
+            },
         )
         raise
     if resp.status_code >= 500:
@@ -387,4 +408,5 @@ def send_push_notification(self, *, subscription_id: int, payload: dict):
     Отправка Web Push одному subscriber'у. Ошибки доставки → retry.
     """
     from .push import _deliver_push_to_subscription
+
     return _deliver_push_to_subscription(subscription_id=subscription_id, payload=payload)

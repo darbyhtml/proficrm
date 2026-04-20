@@ -3,9 +3,9 @@ from django.apps import AppConfig
 
 class UiConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
-    name = 'ui'
+    name = "ui"
     verbose_name = "Интерфейс (UI)"
-    
+
     def ready(self):
         """Подключаем signals при загрузке приложения."""
         import ui.signals  # noqa

@@ -1,6 +1,7 @@
 """
 Декораторы для проверки прав доступа через policy engine.
 """
+
 from __future__ import annotations
 
 import functools
@@ -25,40 +26,41 @@ def policy_required(
 ) -> Callable:
     """
     Декоратор для проверки прав доступа через policy engine.
-    
+
     Использование:
         @login_required
         @policy_required(resource_type="page", resource="ui:dashboard")
         def dashboard(request):
             ...
-    
+
     Args:
         resource_type: Тип ресурса ("page" или "action")
         resource: Имя ресурса (например, "ui:dashboard", "ui:companies:list")
         extract_context: Опциональная функция для извлечения дополнительного контекста
                         из request (например, company_id, task_id)
-    
+
     Returns:
         Декорированная функция, которая проверяет права перед выполнением
     """
+
     def decorator(view_func: Callable) -> Callable:
         @functools.wraps(view_func)
         def wrapper(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
             user: User = request.user
-            
+
             # Базовый контекст из request
             context: dict[str, Any] = {
                 "path": request.path,
                 "method": request.method,
             }
-            
+
             # Добавляем параметры из URL (company_id, task_id и т.д.)
             if kwargs:
                 # Извлекаем важные ID из kwargs
                 for key in ["company_id", "task_id", "contact_id", "user_id", "note_id"]:
                     if key in kwargs:
                         context[key] = str(kwargs[key])
-            
+
             # Добавляем параметры из query string (для фильтров)
             if request.GET:
                 # Берем только важные параметры, чтобы не перегружать контекст
@@ -66,7 +68,7 @@ def policy_required(
                 for param in important_params:
                     if param in request.GET:
                         context[f"param_{param}"] = request.GET[param]
-            
+
             # Дополнительный контекст из пользовательской функции
             if extract_context:
                 try:
@@ -78,7 +80,7 @@ def policy_required(
                         f"Ошибка при извлечении контекста для {resource}: {e}",
                         exc_info=True,
                     )
-            
+
             # Проверяем права
             try:
                 enforce(
@@ -98,9 +100,9 @@ def policy_required(
                 # В режиме observe_only можем продолжить, но логируем
                 # В режиме enforce это не должно происходить
                 raise
-            
+
             return view_func(request, *args, **kwargs)
-        
+
         return wrapper
-    
+
     return decorator

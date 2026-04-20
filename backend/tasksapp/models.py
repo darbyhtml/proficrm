@@ -6,8 +6,12 @@ from django.db import models
 
 class TaskType(models.Model):
     name = models.CharField("Название", max_length=120, unique=True)
-    icon = models.CharField("Иконка", max_length=32, blank=True, default="")  # логический код иконки (phone, mail, alert и т.п.)
-    color = models.CharField("Цвет", max_length=32, blank=True, default="")  # CSS-класс/токен цвета бейджа
+    icon = models.CharField(
+        "Иконка", max_length=32, blank=True, default=""
+    )  # логический код иконки (phone, mail, alert и т.п.)
+    color = models.CharField(
+        "Цвет", max_length=32, blank=True, default=""
+    )  # CSS-класс/токен цвета бейджа
 
     def __str__(self) -> str:
         return self.name
@@ -22,16 +26,44 @@ class Task(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="Создатель", null=True, on_delete=models.SET_NULL, related_name="created_tasks")
-    assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="Ответственный", null=True, on_delete=models.SET_NULL, related_name="assigned_tasks")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Создатель",
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="created_tasks",
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Ответственный",
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="assigned_tasks",
+    )
 
-    company = models.ForeignKey("companies.Company", verbose_name="Компания", null=True, blank=True, on_delete=models.SET_NULL, related_name="tasks")
-    type = models.ForeignKey(TaskType, verbose_name="Тип", null=True, blank=True, on_delete=models.SET_NULL, related_name="tasks")
+    company = models.ForeignKey(
+        "companies.Company",
+        verbose_name="Компания",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="tasks",
+    )
+    type = models.ForeignKey(
+        TaskType,
+        verbose_name="Тип",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="tasks",
+    )
 
     title = models.CharField("Заголовок", max_length=255)
     description = models.TextField("Описание", blank=True, default="")
 
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.NEW, db_index=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.NEW, db_index=True
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -74,13 +106,19 @@ class Task(models.Model):
     )
 
     # Импорт/интеграции (amo и т.п.) — для дедупликации и трассировки источника
-    external_source = models.CharField("Внешний источник", max_length=32, blank=True, default="", db_index=True)
-    external_uid = models.CharField("Внешний UID", max_length=120, blank=True, default="", db_index=True)
+    external_source = models.CharField(
+        "Внешний источник", max_length=32, blank=True, default="", db_index=True
+    )
+    external_uid = models.CharField(
+        "Внешний UID", max_length=120, blank=True, default="", db_index=True
+    )
 
     class Meta:
         indexes = [
             # Составные индексы для основных сценариев фильтрации задач
-            models.Index(fields=["assigned_to", "status", "due_at"], name="task_assignee_status_due_idx"),
+            models.Index(
+                fields=["assigned_to", "status", "due_at"], name="task_assignee_status_due_idx"
+            ),
             models.Index(fields=["company", "status"], name="task_company_status_idx"),
             models.Index(fields=["status", "due_at"], name="task_status_due_idx"),
             # Для dashboard_poll: EXISTS(assigned_to=user, updated_at>since)

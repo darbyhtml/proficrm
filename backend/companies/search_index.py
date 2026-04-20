@@ -96,18 +96,75 @@ def only_digits(s: str) -> str:
 
 # Стоп-токены для текстового поиска: не искать по ним отдельно, чтобы не плодить мусор.
 # ОПФ, аббревиатуры адресов, гео/общие слова.
-_SEARCH_STOP_TOKENS = frozenset({
-    "ооо", "ип", "ао", "зао", "оао", "пао", "нко", "тк",
-    "г", "город", "ул", "улица", "д", "дом", "офис", "кв", "корп", "корпус",
-    "стр", "строение", "компания", "организация", "обл", "область", "респ", "республика",
-    "район", "проспект", "пр", "шоссе", "помещение", "литера", "лит",
-})
+_SEARCH_STOP_TOKENS = frozenset(
+    {
+        "ооо",
+        "ип",
+        "ао",
+        "зао",
+        "оао",
+        "пао",
+        "нко",
+        "тк",
+        "г",
+        "город",
+        "ул",
+        "улица",
+        "д",
+        "дом",
+        "офис",
+        "кв",
+        "корп",
+        "корпус",
+        "стр",
+        "строение",
+        "компания",
+        "организация",
+        "обл",
+        "область",
+        "респ",
+        "республика",
+        "район",
+        "проспект",
+        "пр",
+        "шоссе",
+        "помещение",
+        "литера",
+        "лит",
+    }
+)
 # Дополнительные стоп-токены только для запросов типа "адрес" (сильнее отсекаем служебные слова).
-_ADDRESS_EXTRA_STOP = frozenset({
-    "г", "город", "ул", "улица", "д", "дом", "корп", "корпус", "стр", "строение",
-    "офис", "кв", "помещение", "обл", "область", "респ", "республика", "район",
-    "проспект", "пр", "шоссе", "пер", "переулок", "наб", "набережная", "бул", "бульвар",
-})
+_ADDRESS_EXTRA_STOP = frozenset(
+    {
+        "г",
+        "город",
+        "ул",
+        "улица",
+        "д",
+        "дом",
+        "корп",
+        "корпус",
+        "стр",
+        "строение",
+        "офис",
+        "кв",
+        "помещение",
+        "обл",
+        "область",
+        "респ",
+        "республика",
+        "район",
+        "проспект",
+        "пр",
+        "шоссе",
+        "пер",
+        "переулок",
+        "наб",
+        "набережная",
+        "бул",
+        "бульвар",
+    }
+)
 
 # Тип текстового запроса для поле-зависимого ранжирования.
 TEXT_QUERY_WEBSITE = "website"
@@ -145,12 +202,31 @@ def classify_text_query(raw: str, text_tokens: tuple[str, ...]) -> str:
     # Похож на домен/сайт: точка, нет пробелов, или начинается с http(s)
     if r.startswith("http://") or r.startswith("https://"):
         return TEXT_QUERY_WEBSITE
-    if "." in r and " " not in r and not any(c.isdigit() for c in r[:r.index(".")]):
+    if "." in r and " " not in r and not any(c.isdigit() for c in r[: r.index(".")]):
         return TEXT_QUERY_WEBSITE
     # Похож на адрес: ключевые слова
     addr_keywords = (
-        "ул", "улица", "пр-т", "проспект", "пр ", "дом", " д ", "кв", "оф", "корп", "строение",
-        "г ", "город", "обл", "область", "респ", "район", "шоссе", "переулок", "наб", "бульвар",
+        "ул",
+        "улица",
+        "пр-т",
+        "проспект",
+        "пр ",
+        "дом",
+        " д ",
+        "кв",
+        "оф",
+        "корп",
+        "строение",
+        "г ",
+        "город",
+        "обл",
+        "область",
+        "респ",
+        "район",
+        "шоссе",
+        "переулок",
+        "наб",
+        "бульвар",
     )
     if any(kw in r_lower for kw in addr_keywords):
         return TEXT_QUERY_ADDRESS
@@ -266,6 +342,7 @@ def _parse_inn_list(inn_str: str | None) -> list[str]:
     совпадал с тем, что хранится в поле, и поиск по normalized_inns работал для всех форматов.
     """
     from companies.inn_utils import parse_inns
+
     return parse_inns(inn_str)
 
 
@@ -298,7 +375,9 @@ def build_company_index_payload(company: Company) -> dict[str, str | list[str]]:
         hyphen_word_re = re.compile(r"[A-Za-zА-Яа-яЁё]+-[A-Za-zА-Яа-яЁё]+")
         for m in hyphen_word_re.finditer(company.name):
             segment = m.group(0)
-            glued = "".join(fold_text(p).strip() for p in segment.split("-") if fold_text(p).strip())
+            glued = "".join(
+                fold_text(p).strip() for p in segment.split("-") if fold_text(p).strip()
+            )
             if glued and len(glued) <= 48:
                 name_parts.append(f"название_дефис_склейка: {glued}")
 
@@ -327,7 +406,11 @@ def build_company_index_payload(company: Company) -> dict[str, str | list[str]]:
         f"график: {company.work_schedule}" if (company.work_schedule or "").strip() else "",
         f"email_осн: {company.email}" if (company.email or "").strip() else "",
         f"телефон_осн: {company.phone}" if (company.phone or "").strip() else "",
-        f"коммент_тел_осн: {company.phone_comment}" if (company.phone_comment or "").strip() else "",
+        (
+            f"коммент_тел_осн: {company.phone_comment}"
+            if (company.phone_comment or "").strip()
+            else ""
+        ),
     ]
 
     # Доп. телефоны/почты компании
@@ -430,7 +513,11 @@ def build_company_index_payload(company: Company) -> dict[str, str | list[str]]:
         for cp in getattr(c, "phones", []).all():
             if cp.value:
                 phone_norm = normalize_phone(cp.value)
-                if phone_norm and phone_norm.startswith("+") and phone_norm not in normalized_phones:
+                if (
+                    phone_norm
+                    and phone_norm.startswith("+")
+                    and phone_norm not in normalized_phones
+                ):
                     normalized_phones.append(phone_norm)
 
     # Email: Company.email + CompanyEmail + ContactEmail
@@ -494,7 +581,9 @@ def rebuild_company_search_index(company_id: UUID) -> None:
 
     payload = build_company_index_payload(company)
     with transaction.atomic():
-        obj, _created = CompanySearchIndex.objects.select_for_update().get_or_create(company=company)
+        obj, _created = CompanySearchIndex.objects.select_for_update().get_or_create(
+            company=company
+        )
         obj.t_ident = payload["t_ident"]
         obj.t_name = payload["t_name"]
         obj.t_contacts = payload["t_contacts"]
@@ -519,4 +608,3 @@ def rebuild_company_search_index(company_id: UUID) -> None:
                 "updated_at",
             ]
         )
-

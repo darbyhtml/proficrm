@@ -60,8 +60,7 @@ class MultiBranchRouter:
         region = (conversation.client_region or "").strip()
         if region:
             exact = (
-                BranchRegion.objects
-                .select_related("branch")
+                BranchRegion.objects.select_related("branch")
                 .filter(region_name=region, is_common_pool=False)
                 .first()
             )
@@ -70,8 +69,7 @@ class MultiBranchRouter:
 
             # Общий пул: через values_list, чтобы не зависеть от related_name.
             pool_branch_ids = (
-                BranchRegion.objects
-                .filter(region_name=region, is_common_pool=True)
+                BranchRegion.objects.filter(region_name=region, is_common_pool=True)
                 .values_list("branch_id", flat=True)
                 .distinct()
             )

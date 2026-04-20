@@ -7,6 +7,7 @@ Call these from services/views when:
 - Conversation resolved
 - Conversation opened
 """
+
 from __future__ import annotations
 
 import logging
@@ -49,8 +50,9 @@ def record_reply_time(conversation: Conversation, message: Message) -> None:
     """
     try:
         last_incoming = (
-            conversation.messages
-            .filter(direction=Message.Direction.IN, created_at__lt=message.created_at)
+            conversation.messages.filter(
+                direction=Message.Direction.IN, created_at__lt=message.created_at
+            )
             .order_by("-created_at")
             .values_list("created_at", flat=True)
             .first()

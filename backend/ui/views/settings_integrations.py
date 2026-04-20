@@ -35,6 +35,7 @@ from ui.views._base import (
     uuid,
 )
 import logging
+
 logger = logging.getLogger(__name__)
 
 # amocrm is imported here (and only here) so that other view modules don't
@@ -103,7 +104,10 @@ def settings_import(request: HttpRequest) -> HttpResponse:
                 if dry_run:
                     messages.success(request, "Проверка (dry-run) выполнена.")
                 else:
-                    messages.success(request, f"Импорт выполнен: добавлено {result.created_companies}, обновлено {result.updated_companies}.")
+                    messages.success(
+                        request,
+                        f"Импорт выполнен: добавлено {result.created_companies}, обновлено {result.updated_companies}.",
+                    )
             finally:
                 try:
                     Path(tmp_path).unlink(missing_ok=True)
@@ -185,7 +189,13 @@ def settings_amocrm(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = AmoApiConfigForm(request.POST)
         if form.is_valid():
-            cfg.domain = (form.cleaned_data.get("domain") or "").strip().replace("https://", "").replace("http://", "").strip("/")
+            cfg.domain = (
+                (form.cleaned_data.get("domain") or "")
+                .strip()
+                .replace("https://", "")
+                .replace("http://", "")
+                .strip("/")
+            )
             cfg.client_id = (form.cleaned_data.get("client_id") or "").strip()
             secret = (form.cleaned_data.get("client_secret") or "").strip()
             if secret:
@@ -203,7 +213,7 @@ def settings_amocrm(request: HttpRequest) -> HttpResponse:
                 update_fields=[
                     "domain",
                     "client_id",
-                    "client_secret",       # очищается set_client_secret()
+                    "client_secret",  # очищается set_client_secret()
                     "client_secret_enc",
                     "redirect_uri",
                     "long_lived_token_enc",
@@ -219,7 +229,8 @@ def settings_amocrm(request: HttpRequest) -> HttpResponse:
                 "domain": cfg.domain or "kmrprofi.amocrm.ru",
                 "client_id": cfg.client_id,
                 "client_secret": cfg.get_client_secret(),
-                "redirect_uri": cfg.redirect_uri or request.build_absolute_uri("/admin/amocrm/callback/"),
+                "redirect_uri": cfg.redirect_uri
+                or request.build_absolute_uri("/admin/amocrm/callback/"),
                 "long_lived_token": cfg.long_lived_token,
                 "region_custom_field_id": getattr(cfg, "region_custom_field_id", None),
             }
@@ -234,11 +245,16 @@ def settings_amocrm(request: HttpRequest) -> HttpResponse:
 
     # Вычисляем redirect_uri для отображения в шаблоне
     redirect_uri_display = cfg.redirect_uri or request.build_absolute_uri("/admin/amocrm/callback/")
-    
+
     return render(
         request,
         "ui/settings/amocrm.html",
-        {"form": form, "cfg": cfg, "auth_url": auth_url, "redirect_uri_display": redirect_uri_display},
+        {
+            "form": form,
+            "cfg": cfg,
+            "auth_url": auth_url,
+            "redirect_uri_display": redirect_uri_display,
+        },
     )
 
 
@@ -257,14 +273,17 @@ def settings_amocrm_callback(request: HttpRequest) -> HttpResponse:
     # Нужно использовать этот поддомен для обмена кода на токен
     referer = (request.GET.get("referer") or "").strip()
     state = (request.GET.get("state") or "").strip()
-    
+
     cfg = AmoApiConfig.load()
-    
+
     # Логируем все параметры для отладки
     import logging
+
     logger = logging.getLogger(__name__)
-    logger.info(f"AmoCRM OAuth callback: code={'present' if code else 'missing'}, referer={referer}, state={state}, current_domain={cfg.domain}")
-    
+    logger.info(
+        f"AmoCRM OAuth callback: code={'present' if code else 'missing'}, referer={referer}, state={state}, current_domain={cfg.domain}"
+    )
+
     # Если получен referer, обновляем domain (но сохраняем старый, если referer пустой)
     if referer:
         # referer может быть в формате "subdomain.amocrm.ru" или полный URL
@@ -275,22 +294,24 @@ def settings_amocrm_callback(request: HttpRequest) -> HttpResponse:
             cfg.save(update_fields=["domain", "updated_at"])
     else:
         logger.warning(f"No referer parameter received. Using existing domain: {cfg.domain}")
-    
+
     # Проверяем наличие обязательных параметров
     if not cfg.client_id:
         messages.error(request, "Client ID не настроен. Проверьте настройки AmoCRM.")
         return redirect("settings_amocrm")
-    
+
     if not cfg.get_client_secret():
         messages.error(request, "Client Secret не настроен. Проверьте настройки AmoCRM.")
         return redirect("settings_amocrm")
-    
+
     if not cfg.redirect_uri:
         messages.error(request, "Redirect URI не настроен. Проверьте настройки AmoCRM.")
         return redirect("settings_amocrm")
-    
+
     try:
-        logger.info(f"Exchanging code for token. Domain: {cfg.domain}, Client ID: {cfg.client_id[:10]}..., Redirect URI: {cfg.redirect_uri}")
+        logger.info(
+            f"Exchanging code for token. Domain: {cfg.domain}, Client ID: {cfg.client_id[:10]}..., Redirect URI: {cfg.redirect_uri}"
+        )
         AmoClient(cfg).exchange_code(code)
         messages.success(request, "amoCRM подключен. Токены сохранены.")
     except AmoApiError as e:
@@ -298,7 +319,7 @@ def settings_amocrm_callback(request: HttpRequest) -> HttpResponse:
         logger.error(f"AmoCRM token exchange failed: {error_msg}")
         cfg.last_error = error_msg
         cfg.save(update_fields=["last_error", "updated_at"])
-        
+
         # Более детальное сообщение об ошибке
         if "403" in error_msg:
             messages.error(
@@ -308,18 +329,19 @@ def settings_amocrm_callback(request: HttpRequest) -> HttpResponse:
                 f"- Неправильный Client Secret\n"
                 f"- Неправильный Redirect URI (должен точно совпадать с настройками интеграции)\n"
                 f"- Domain: {cfg.domain}\n"
-                f"Ошибка: {error_msg}"
+                f"Ошибка: {error_msg}",
             )
         else:
             messages.error(request, f"Ошибка подключения amoCRM: {error_msg}")
     except Exception as e:
         import traceback
+
         error_details = traceback.format_exc()
         logger.error(f"Unexpected error during AmoCRM token exchange: {error_details}")
         cfg.last_error = str(e)
         cfg.save(update_fields=["last_error", "updated_at"])
         messages.error(request, f"Неожиданная ошибка: {str(e)}. Проверьте логи.")
-    
+
     return redirect("settings_amocrm")
 
 
@@ -334,7 +356,16 @@ def settings_amocrm_disconnect(request: HttpRequest) -> HttpResponse:
     cfg.long_lived_token = ""
     cfg.expires_at = None
     cfg.last_error = ""
-    cfg.save(update_fields=["access_token_enc", "refresh_token_enc", "long_lived_token_enc", "expires_at", "last_error", "updated_at"])
+    cfg.save(
+        update_fields=[
+            "access_token_enc",
+            "refresh_token_enc",
+            "long_lived_token_enc",
+            "expires_at",
+            "last_error",
+            "updated_at",
+        ]
+    )
     messages.success(request, "amoCRM отключен (токены удалены).")
     return redirect("settings_amocrm")
 
@@ -350,12 +381,15 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
         cfg = AmoApiConfig.load()
     except Exception as e:
         import traceback
+
         error_details = traceback.format_exc()
         logger.error("AMOCRM_MIGRATE_ERROR: Failed to load AmoApiConfig: %s", error_details)
-        messages.error(request, f"Ошибка загрузки настроек amoCRM: {str(e)}. Проверьте логи сервера.")
+        messages.error(
+            request, f"Ошибка загрузки настроек amoCRM: {str(e)}. Проверьте логи сервера."
+        )
         # Создаём пустой объект для рендера
         cfg = AmoApiConfig(domain="kmrprofi.amocrm.ru")
-    
+
     if not cfg.is_connected():
         messages.error(request, "Сначала подключите amoCRM (OAuth).")
         return redirect("settings_amocrm")
@@ -374,7 +408,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                 "Не удалось получить список пользователей AmoCRM. "
                 "Long-lived token может не иметь прав на доступ к /api/v4/users. "
                 "Для полного доступа используйте OAuth токен (переавторизуйтесь). "
-                "Миграция будет работать, но выбор ответственного пользователя может быть ограничен."
+                "Миграция будет работать, но выбор ответственного пользователя может быть ограничен.",
             )
         else:
             # Список пользователей amoCRM для выбора ответственного (без филиалов).
@@ -393,16 +427,19 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
             messages.warning(
                 request,
                 f"Не удалось получить список пользователей: {e}. "
-                "Миграция будет работать, но выбор ответственного пользователя может быть ограничен."
+                "Миграция будет работать, но выбор ответственного пользователя может быть ограничен.",
             )
     except Exception as e:
         import traceback
+
         error_details = traceback.format_exc()
         logger.error("AMOCRM_MIGRATE_INIT_ERROR: %s", error_details)
         messages.error(request, f"Ошибка инициализации: {str(e)}. Проверьте логи сервера.")
         if not client:
             # Возвращаем страницу с пустыми данными, но с формой
-            form = AmoMigrateFilterForm(initial={"dry_run": True, "limit_companies": 10, "offset": 0})
+            form = AmoMigrateFilterForm(
+                initial={"dry_run": True, "limit_companies": 10, "offset": 0}
+            )
             return render(
                 request,
                 "ui/settings/amocrm_migrate.html",
@@ -433,13 +470,16 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
             result = None  # Явно очищаем результаты для нового импорта
         if form.is_valid():
             if not client:
-                messages.error(request, "Ошибка: клиент amoCRM не инициализирован. Проверьте настройки подключения.")
+                messages.error(
+                    request,
+                    "Ошибка: клиент amoCRM не инициализирован. Проверьте настройки подключения.",
+                )
             else:
                 try:
                     # Проверяем, была ли нажата кнопка "Dry-run"
                     action = request.POST.get("action", "")
                     is_dry_run_button = action == "dry_run"
-                    
+
                     # Используем размер пачки, указанный пользователем
                     # Если нажата кнопка "Dry-run", принудительно устанавливаем 10 компаний
                     if is_dry_run_button:
@@ -450,25 +490,35 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                         if batch_size <= 0:
                             batch_size = 10  # дефолт, если не указано
                         dry_run = bool(form.cleaned_data.get("dry_run"))
-                    
+
                     migrate_all = bool(form.cleaned_data.get("migrate_all_companies", False))
                     custom_field_id = form.cleaned_data.get("custom_field_id") or 0
-                    
+
                     # Ответственный — только один (single select); при массиве — 400
                     raw_ids = request.POST.getlist("responsible_user_id")
                     if len(raw_ids) > 1:
                         messages.error(request, "Выберите только одного менеджера. Передан массив.")
                     else:
-                        val = request.POST.get("responsible_user_id") or (form.cleaned_data.get("responsible_user_id") if form.cleaned_data else None)
+                        val = request.POST.get("responsible_user_id") or (
+                            form.cleaned_data.get("responsible_user_id")
+                            if form.cleaned_data
+                            else None
+                        )
                         if not val:
                             messages.error(request, "Выберите ответственного пользователя.")
                         else:
                             try:
-                                responsible_user_id = int(val) if isinstance(val, (int, str)) else int(str(val).strip().split(",")[0])
+                                responsible_user_id = (
+                                    int(val)
+                                    if isinstance(val, (int, str))
+                                    else int(str(val).strip().split(",")[0])
+                                )
                             except (ValueError, TypeError):
                                 responsible_user_id = None
                             if not responsible_user_id:
-                                messages.error(request, "Некорректный идентификатор ответственного.")
+                                messages.error(
+                                    request, "Некорректный идентификатор ответственного."
+                                )
                             else:
                                 # Запрет параллельного импорта: блокировка per-user (два админа не мешали друг другу).
                                 # migrate_filtered синхронный, не пишет промежуточный прогресс; общее состояние — ключ amocrm_import_run.
@@ -476,36 +526,60 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                                 # импортов предпочтительнее background job (Celery), иначе обрывы и «упал до finally».
                                 lock_key = f"amocrm_import_run:{request.user.id}"
                                 run_id = str(uuid.uuid4())
-                                lock_payload = json.dumps({
-                                    "run_id": run_id,
-                                    "status": "running",
-                                    "started_at": datetime.now().isoformat(),
-                                })
+                                lock_payload = json.dumps(
+                                    {
+                                        "run_id": run_id,
+                                        "status": "running",
+                                        "started_at": datetime.now().isoformat(),
+                                    }
+                                )
                                 lock_acquired = cache.add(lock_key, lock_payload, timeout=3600)
                                 if not lock_acquired:
-                                    messages.error(request, "Импорт уже выполняется. Дождитесь завершения.")
+                                    messages.error(
+                                        request, "Импорт уже выполняется. Дождитесь завершения."
+                                    )
                                     result = None
                                     run_id = None
                                 else:
                                     try:
-                                        import_history_only = bool(form.cleaned_data.get("import_history"))
-                                        target_responsible = form.cleaned_data.get("target_responsible")
+                                        import_history_only = bool(
+                                            form.cleaned_data.get("import_history")
+                                        )
+                                        target_responsible = form.cleaned_data.get(
+                                            "target_responsible"
+                                        )
 
                                         if import_history_only:
                                             # Режим «только история» — не меняем данные карточек
-                                            sphere_field_id_hist = int(custom_field_id) if custom_field_id else 0
-                                            company_amo_ids, amo_created_by = fetch_matched_amo_company_ids(
-                                                client,
-                                                responsible_user_id=responsible_user_id,
-                                                sphere_field_id=sphere_field_id_hist,
-                                                sphere_option_id=form.cleaned_data.get("custom_value_enum_id") or None,
-                                                sphere_label=form.cleaned_data.get("custom_value_label") or None,
-                                                skip_field_filter=migrate_all,
+                                            sphere_field_id_hist = (
+                                                int(custom_field_id) if custom_field_id else 0
+                                            )
+                                            company_amo_ids, amo_created_by = (
+                                                fetch_matched_amo_company_ids(
+                                                    client,
+                                                    responsible_user_id=responsible_user_id,
+                                                    sphere_field_id=sphere_field_id_hist,
+                                                    sphere_option_id=form.cleaned_data.get(
+                                                        "custom_value_enum_id"
+                                                    )
+                                                    or None,
+                                                    sphere_label=form.cleaned_data.get(
+                                                        "custom_value_label"
+                                                    )
+                                                    or None,
+                                                    skip_field_filter=migrate_all,
+                                                )
                                             )
                                             history_offset = int(request.POST.get("offset") or 0)
-                                            history_limit = int(form.cleaned_data.get("limit_companies") or 0)
-                                            prev_created = int(request.POST.get("prev_events_created") or 0)
-                                            prev_skipped = int(request.POST.get("prev_events_skipped") or 0)
+                                            history_limit = int(
+                                                form.cleaned_data.get("limit_companies") or 0
+                                            )
+                                            prev_created = int(
+                                                request.POST.get("prev_events_created") or 0
+                                            )
+                                            prev_skipped = int(
+                                                request.POST.get("prev_events_skipped") or 0
+                                            )
                                             result = import_company_histories(
                                                 client,
                                                 actor=request.user,
@@ -519,21 +593,23 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                                             result.events_created += prev_created
                                             result.events_skipped += prev_skipped
                                             # companies_processed = сколько обработано всего (offset + текущая пачка)
-                                            result.companies_processed = result.companies_next_offset
+                                            result.companies_processed = (
+                                                result.companies_next_offset
+                                            )
                                             migrate_responsible_user_id = responsible_user_id
                                             if dry_run:
                                                 messages.success(
                                                     request,
                                                     f"Dry-run: компаний в пачке {result.companies_processed} "
                                                     f"(из {result.companies_total}), "
-                                                    f"событий для создания: {result.events_created}."
+                                                    f"событий для создания: {result.events_created}.",
                                                 )
                                             else:
                                                 messages.success(
                                                     request,
                                                     f"История импортирована: создано {result.events_created} событий, "
                                                     f"пропущено {result.events_skipped} (дубликаты). "
-                                                    f"Обработано {result.companies_processed} из {result.companies_total} компаний."
+                                                    f"Обработано {result.companies_processed} из {result.companies_total} компаний.",
                                                 )
                                         else:
                                             result = _amo_migrate_filtered(
@@ -541,22 +617,39 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                                                 actor=request.user,
                                                 responsible_user_id=responsible_user_id,
                                                 sphere_field_id=int(custom_field_id),
-                                                sphere_option_id=form.cleaned_data.get("custom_value_enum_id") or None,
-                                                sphere_label=form.cleaned_data.get("custom_value_label") or None,
+                                                sphere_option_id=form.cleaned_data.get(
+                                                    "custom_value_enum_id"
+                                                )
+                                                or None,
+                                                sphere_label=form.cleaned_data.get(
+                                                    "custom_value_label"
+                                                )
+                                                or None,
                                                 limit_companies=batch_size,
                                                 offset=int(form.cleaned_data.get("offset") or 0),
                                                 dry_run=dry_run,
-                                                import_tasks=bool(form.cleaned_data.get("import_tasks")),
-                                                import_notes=bool(form.cleaned_data.get("import_notes")),
-                                                import_contacts=bool(form.cleaned_data.get("import_contacts")),
+                                                import_tasks=bool(
+                                                    form.cleaned_data.get("import_tasks")
+                                                ),
+                                                import_notes=bool(
+                                                    form.cleaned_data.get("import_notes")
+                                                ),
+                                                import_contacts=bool(
+                                                    form.cleaned_data.get("import_contacts")
+                                                ),
                                                 company_fields_meta=fields,
                                                 skip_field_filter=migrate_all,
-                                                region_field_id=getattr(cfg, "region_custom_field_id", None) or None,
+                                                region_field_id=getattr(
+                                                    cfg, "region_custom_field_id", None
+                                                )
+                                                or None,
                                                 target_responsible=target_responsible,
                                             )
                                             migrate_responsible_user_id = responsible_user_id
                                             if dry_run:
-                                                messages.success(request, "Проверка (dry-run) выполнена.")
+                                                messages.success(
+                                                    request, "Проверка (dry-run) выполнена."
+                                                )
                                             else:
                                                 messages.success(request, "Импорт выполнен.")
                                     finally:
@@ -567,8 +660,11 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                 except Exception as e:
                     # Логируем полную ошибку для отладки
                     import traceback
+
                     error_details = traceback.format_exc()
-                    messages.error(request, f"Ошибка миграции: {str(e)}. Проверьте логи сервера для деталей.")
+                    messages.error(
+                        request, f"Ошибка миграции: {str(e)}. Проверьте логи сервера для деталей."
+                    )
                     # В продакшене можно логировать в файл или sentry
                     logger.error("AMOCRM_MIGRATE_ERROR: %s", error_details)
     else:
@@ -599,10 +695,13 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
             )
         except Exception as e:
             import traceback
+
             error_details = traceback.format_exc()
             logger.error("AMOCRM_MIGRATE_ERROR: Failed to create form: %s", error_details)
             # Создаём минимальную форму
-            form = AmoMigrateFilterForm(initial={"dry_run": True, "limit_companies": 10, "offset": 0})
+            form = AmoMigrateFilterForm(
+                initial={"dry_run": True, "limit_companies": 10, "offset": 0}
+            )
 
     try:
         return render(
@@ -620,11 +719,16 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
         )
     except Exception as e:
         import traceback
+
         error_details = traceback.format_exc()
         logger.error("AMOCRM_MIGRATE_ERROR: Failed to render template: %s", error_details)
         # Возвращаем простую страницу с ошибкой
         from django.http import HttpResponse
-        return HttpResponse(f"Ошибка рендеринга страницы миграции: {str(e)}. Проверьте логи сервера для деталей.", status=500)
+
+        return HttpResponse(
+            f"Ошибка рендеринга страницы миграции: {str(e)}. Проверьте логи сервера для деталей.",
+            status=500,
+        )
 
 
 @login_required
@@ -659,9 +763,11 @@ def settings_amocrm_migrate_progress(request: HttpRequest) -> HttpResponse:
     if status not in ("running",):
         cache.delete(lock_key)
         return JsonResponse({"active_run": None})
-    return JsonResponse({
-        "active_run": {"run_id": data.get("run_id"), "status": data.get("status", "running")},
-    })
+    return JsonResponse(
+        {
+            "active_run": {"run_id": data.get("run_id"), "status": data.get("status", "running")},
+        }
+    )
 
 
 @login_required
@@ -688,10 +794,14 @@ def settings_amocrm_contacts_dry_run(request: HttpRequest) -> HttpResponse:
         return redirect("settings_amocrm_migrate")
 
     # Получаем параметры из GET или POST
-    responsible_user_id = request.GET.get("responsible_user_id") or request.POST.get("responsible_user_id")
-    limit_companies = int(request.GET.get("limit_companies", 250) or request.POST.get("limit_companies", 250))
+    responsible_user_id = request.GET.get("responsible_user_id") or request.POST.get(
+        "responsible_user_id"
+    )
+    limit_companies = int(
+        request.GET.get("limit_companies", 250) or request.POST.get("limit_companies", 250)
+    )
     offset = int(request.GET.get("offset", 0) or request.POST.get("offset", 0))
-    
+
     if not responsible_user_id:
         messages.error(request, "Не указан ответственный пользователь.")
         return redirect("settings_amocrm_migrate")
@@ -732,6 +842,7 @@ def settings_amocrm_contacts_dry_run(request: HttpRequest) -> HttpResponse:
         return redirect("settings_amocrm_migrate")
     except Exception as e:
         import traceback
+
         messages.error(request, f"Ошибка: {str(e)}")
         logger.error("AMOCRM_CONTACTS_DRY_RUN_ERROR: %s", traceback.format_exc())
         return redirect("settings_amocrm_migrate")
@@ -763,14 +874,14 @@ def settings_amocrm_debug_contacts(request: HttpRequest) -> HttpResponse:
 
     limit = int(request.GET.get("limit", 250))
     responsible_user_id = request.GET.get("responsible_user_id")
-    
+
     # Параметры запроса (максимум 250 - лимит AmoCRM API)
     limit = min(limit, 250)
     params = {
         "with": "custom_fields,notes,leads,customers,catalog_elements",
         "limit": limit,
     }
-    
+
     if responsible_user_id:
         params["filter[responsible_user_id]"] = int(responsible_user_id)
 
@@ -802,19 +913,31 @@ def settings_amocrm_debug_contacts(request: HttpRequest) -> HttpResponse:
                 "all_keys": list(contact.keys()),
                 "full_json": json.dumps(contact, ensure_ascii=False, indent=2),
             }
-            
+
             # Стандартные поля
             standard_fields = [
-                "id", "name", "first_name", "last_name",
-                "responsible_user_id", "group_id", "created_by", "updated_by",
-                "created_at", "updated_at", "is_deleted",
-                "phone", "email", "company_id", "closest_task_at", "account_id",
+                "id",
+                "name",
+                "first_name",
+                "last_name",
+                "responsible_user_id",
+                "group_id",
+                "created_by",
+                "updated_by",
+                "created_at",
+                "updated_at",
+                "is_deleted",
+                "phone",
+                "email",
+                "company_id",
+                "closest_task_at",
+                "account_id",
             ]
             for field in standard_fields:
                 value = contact.get(field)
                 if value is not None:
                     contact_info["standard_fields"][field] = value
-            
+
             contacts_data.append(contact_info)
 
         # Статистика
@@ -824,7 +947,7 @@ def settings_amocrm_debug_contacts(request: HttpRequest) -> HttpResponse:
             "field_codes": {},
             "field_names": {},
         }
-        
+
         for contact in contacts_data:
             for cf in contact["custom_fields"]:
                 field_type = cf.get("field_type", "unknown")
@@ -850,6 +973,7 @@ def settings_amocrm_debug_contacts(request: HttpRequest) -> HttpResponse:
         return redirect("settings_amocrm_migrate")
     except Exception as e:
         import traceback
+
         messages.error(request, f"Ошибка: {str(e)}")
         logger.error("AMOCRM_DEBUG_CONTACTS_ERROR: %s", traceback.format_exc())
         return redirect("settings_amocrm_migrate")
@@ -935,10 +1059,7 @@ def settings_mobile_devices(request: HttpRequest) -> HttpResponse:
     now = timezone.now()
     active_threshold = now - timedelta(minutes=15)
 
-    qs = (
-        PhoneDevice.objects.select_related("user")
-        .order_by("-last_seen_at", "-created_at")
-    )
+    qs = PhoneDevice.objects.select_related("user").order_by("-last_seen_at", "-created_at")
 
     # Фильтры по пользователю и статусу (живое/неживое)
     user_id = (request.GET.get("user") or "").strip()
@@ -951,7 +1072,9 @@ def settings_mobile_devices(request: HttpRequest) -> HttpResponse:
     if status == "active":
         qs = qs.filter(last_seen_at__gte=active_threshold)
     elif status == "stale":
-        qs = qs.filter(models.Q(last_seen_at__lt=active_threshold) | models.Q(last_seen_at__isnull=True))
+        qs = qs.filter(
+            models.Q(last_seen_at__lt=active_threshold) | models.Q(last_seen_at__isnull=True)
+        )
 
     total = qs.count()
     active_count = qs.filter(last_seen_at__gte=active_threshold).count()
@@ -1001,41 +1124,42 @@ def settings_mobile_overview(request: HttpRequest) -> HttpResponse:
 
     # Проблемы за сутки
     devices_with_errors = PhoneDevice.objects.filter(
-        Q(last_error_code__isnull=False) & ~Q(last_error_code=""),
-        last_seen_at__gte=day_ago
+        Q(last_error_code__isnull=False) & ~Q(last_error_code=""), last_seen_at__gte=day_ago
     ).count()
 
     # Устройства с частыми 401 (более 3 за последний час)
     hour_ago = now - timedelta(hours=1)
     devices_401_storm = PhoneDevice.objects.filter(
-        last_poll_code=401,
-        last_poll_at__gte=hour_ago
+        last_poll_code=401, last_poll_at__gte=hour_ago
     ).count()
 
     # Устройства без сети долго (не видели более 2 часов)
     two_hours_ago = now - timedelta(hours=2)
     devices_no_network = PhoneDevice.objects.filter(
         Q(last_seen_at__lt=two_hours_ago) | Q(last_seen_at__isnull=True),
-        last_seen_at__lt=active_threshold
+        last_seen_at__lt=active_threshold,
     ).count()
 
     # Устройства с ошибками refresh (last_error_code содержит "refresh" или "401")
     devices_refresh_fail = PhoneDevice.objects.filter(
         Q(last_error_code__icontains="refresh") | Q(last_error_code__icontains="401"),
-        last_seen_at__gte=day_ago
+        last_seen_at__gte=day_ago,
     ).count()
 
     # Последние алерты (устройства с проблемами)
     alerts = []
-    problem_devices = PhoneDevice.objects.filter(
-        Q(last_error_code__isnull=False) & ~Q(last_error_code=""),
-        last_seen_at__gte=day_ago
-    ).select_related("user").order_by("-last_seen_at")[:10]
+    problem_devices = (
+        PhoneDevice.objects.filter(
+            Q(last_error_code__isnull=False) & ~Q(last_error_code=""), last_seen_at__gte=day_ago
+        )
+        .select_related("user")
+        .order_by("-last_seen_at")[:10]
+    )
 
     for device in problem_devices:
         alert_type = "unknown"
         alert_message = device.last_error_message or device.last_error_code or "Ошибка"
-        
+
         if "401" in (device.last_error_code or ""):
             alert_type = "auth"
             alert_message = "Проблемы с авторизацией (401)"
@@ -1048,18 +1172,18 @@ def settings_mobile_overview(request: HttpRequest) -> HttpResponse:
         elif device.last_poll_code == 401:
             alert_type = "auth"
             alert_message = "Требуется повторный вход"
-        
-        alerts.append({
-            "device": device,
-            "type": alert_type,
-            "message": alert_message,
-            "timestamp": device.last_seen_at or device.created_at,
-        })
+
+        alerts.append(
+            {
+                "device": device,
+                "type": alert_type,
+                "message": alert_message,
+                "timestamp": device.last_seen_at or device.created_at,
+            }
+        )
 
     # Статистика по телеметрии за сутки
-    telemetry_stats = PhoneTelemetry.objects.filter(
-        ts__gte=day_ago
-    ).aggregate(
+    telemetry_stats = PhoneTelemetry.objects.filter(ts__gte=day_ago).aggregate(
         total=Count("id"),
         errors=Count("id", filter=Q(http_code__gte=400)),
         avg_latency=Avg("value_ms", filter=Q(type="latency")),
@@ -1101,14 +1225,8 @@ def settings_mobile_device_detail(request: HttpRequest, pk) -> HttpResponse:
     )
 
     # Ограничиваемся последними записями, чтобы не грузить страницу
-    telemetry_qs = (
-        PhoneTelemetry.objects.filter(device=device)
-        .order_by("-ts")[:200]
-    )
-    logs_qs = (
-        PhoneLogBundle.objects.filter(device=device)
-        .order_by("-ts")[:100]
-    )
+    telemetry_qs = PhoneTelemetry.objects.filter(device=device).order_by("-ts")[:200]
+    logs_qs = PhoneLogBundle.objects.filter(device=device).order_by("-ts")[:100]
 
     return render(
         request,
@@ -1133,7 +1251,11 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
     - Менеджер (MANAGER): видит только свои звонки
     """
     # Разрешаем доступ менеджерам, руководителям и админам
-    if request.user.role not in [User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR, User.Role.ADMIN] and not request.user.is_superuser:
+    if (
+        request.user.role
+        not in [User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR, User.Role.ADMIN]
+        and not request.user.is_superuser
+    ):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
@@ -1142,16 +1264,18 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
 
     now = timezone.now()
     local_now = timezone.localtime(now)
-    
+
     # Период: день или месяц
     period = (request.GET.get("period") or "day").strip()
     if period not in ("day", "month"):
         period = "day"
-    
+
     # Фильтры
     filter_manager_id = request.GET.get("manager", "").strip()
-    filter_status = request.GET.get("status", "").strip()  # connected, no_answer, busy, rejected, missed
-    
+    filter_status = request.GET.get(
+        "status", ""
+    ).strip()  # connected, no_answer, busy, rejected, missed
+
     if period == "month":
         start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         end = (start + timedelta(days=32)).replace(day=1)
@@ -1160,11 +1284,15 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
         start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
         end = start + timedelta(days=1)
         period_label = timezone.localdate(now).strftime("%d.%m.%Y")
-    
+
     # Определяем, каких менеджеров показывать
     session = getattr(request, "session", {})
     view_as_branch_id = None
-    if (request.user.is_superuser or request.user.role == User.Role.ADMIN) and session.get("view_as_enabled") and session.get("view_as_branch_id"):
+    if (
+        (request.user.is_superuser or request.user.role == User.Role.ADMIN)
+        and session.get("view_as_enabled")
+        and session.get("view_as_branch_id")
+    ):
         try:
             view_as_branch_id = int(session.get("view_as_branch_id"))
         except (TypeError, ValueError):
@@ -1178,21 +1306,26 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
         # Если админ выбрал конкретный филиал в режиме "просмотр как" – ограничиваем менеджеров этим филиалом.
         if view_as_branch_id:
             base_qs = base_qs.filter(branch_id=view_as_branch_id)
-        managers_qs = base_qs.select_related("branch").order_by("branch__name", "last_name", "first_name")
+        managers_qs = base_qs.select_related("branch").order_by(
+            "branch__name", "last_name", "first_name"
+        )
     elif request.user.role in [User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]:
         # Руководители видят менеджеров своего филиала
-        managers_qs = User.objects.filter(
-            is_active=True,
-            branch_id=request.user.branch_id,
-            role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]
-        ).select_related("branch").order_by("last_name", "first_name")
+        managers_qs = (
+            User.objects.filter(
+                is_active=True,
+                branch_id=request.user.branch_id,
+                role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR],
+            )
+            .select_related("branch")
+            .order_by("last_name", "first_name")
+        )
     else:
         # Менеджер видит только себя
-        managers_qs = User.objects.filter(
-            is_active=True,
-            id=request.user.id
-        ).select_related("branch")
-    
+        managers_qs = User.objects.filter(is_active=True, id=request.user.id).select_related(
+            "branch"
+        )
+
     # Фильтр по менеджеру
     if filter_manager_id:
         try:
@@ -1200,17 +1333,17 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
             managers_qs = managers_qs.filter(id=filter_manager_id_int)
         except (ValueError, TypeError):
             filter_manager_id = ""
-    
+
     manager_ids = list(managers_qs.values_list("id", flat=True))
-    
+
     # Собираем статистику по звонкам
     calls_qs = CallRequest.objects.filter(
         user_id__in=manager_ids,
         call_started_at__gte=start,
         call_started_at__lt=end,
-        call_status__isnull=False  # Только звонки с результатом
+        call_status__isnull=False,  # Только звонки с результатом
     ).select_related("user", "user__branch", "company", "contact")
-    
+
     # Фильтр по исходу звонка
     if filter_status:
         status_map = {
@@ -1222,7 +1355,7 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
         }
         if filter_status in status_map:
             calls_qs = calls_qs.filter(call_status=status_map[filter_status])
-    
+
     # Группируем по менеджеру и статусу
     stats_by_manager = {}
     for call in calls_qs:
@@ -1246,10 +1379,10 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
                 "by_resolve_method": {"observer": 0, "retry": 0, "unknown": 0},
                 "by_action_source": {"crm_ui": 0, "notification": 0, "history": 0, "unknown": 0},
             }
-        
+
         stats = stats_by_manager[manager_id]
         stats["total"] += 1
-        
+
         if call.call_status == CallRequest.CallStatus.CONNECTED:
             stats["connected"] += 1
             # Длительность считаем только для CONNECTED (для правильного avg_duration)
@@ -1265,11 +1398,11 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
             stats["missed"] += 1
         elif call.call_status == CallRequest.CallStatus.UNKNOWN:
             stats["unknown"] += 1
-        
+
         # Старая логика для обратной совместимости (если UI ожидает total_duration)
         if call.call_duration_seconds:
             stats["total_duration"] += call.call_duration_seconds
-        
+
         # Группировки по новым полям (ЭТАП 3)
         if call.direction:
             direction_key = call.direction
@@ -1277,21 +1410,21 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
                 stats["by_direction"][direction_key] += 1
             else:
                 stats["by_direction"]["unknown"] += 1
-        
+
         if call.resolve_method:
             resolve_key = call.resolve_method
             if resolve_key in stats["by_resolve_method"]:
                 stats["by_resolve_method"][resolve_key] += 1
             else:
                 stats["by_resolve_method"]["unknown"] += 1
-        
+
         if call.action_source:
             action_key = call.action_source
             if action_key in stats["by_action_source"]:
                 stats["by_action_source"][action_key] += 1
             else:
                 stats["by_action_source"]["unknown"] += 1
-    
+
     # Вычисляем среднюю длительность и дозвоняемость
     for stats in stats_by_manager.values():
         # Новая логика: avg_duration только по CONNECTED
@@ -1302,36 +1435,39 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
             stats["avg_duration"] = stats["total_duration"] // stats["total"]
         else:
             stats["avg_duration"] = 0
-        
+
         # Дозвоняемость % = connected / total (где total = все с call_status != null)
         if stats["total"] > 0:
             connect_rate = (stats["connected"] / stats["total"]) * 100
             stats["connect_rate_percent"] = round(connect_rate, 1)
         else:
             stats["connect_rate_percent"] = 0.0
-    
+
     # Формируем список для шаблона
     stats_list = []
     for manager in managers_qs:
-        stats = stats_by_manager.get(manager.id, {
-            "user": manager,
-            "total": 0,
-            "connected": 0,
-            "no_answer": 0,
-            "busy": 0,
-            "rejected": 0,
-            "missed": 0,
-            "unknown": 0,
-            "total_duration": 0,
-            "total_duration_connected": 0,
-            "avg_duration": 0,
-            "connect_rate_percent": 0.0,
-            "by_direction": {"outgoing": 0, "incoming": 0, "missed": 0, "unknown": 0},
-            "by_resolve_method": {"observer": 0, "retry": 0, "unknown": 0},
-            "by_action_source": {"crm_ui": 0, "notification": 0, "history": 0, "unknown": 0},
-        })
+        stats = stats_by_manager.get(
+            manager.id,
+            {
+                "user": manager,
+                "total": 0,
+                "connected": 0,
+                "no_answer": 0,
+                "busy": 0,
+                "rejected": 0,
+                "missed": 0,
+                "unknown": 0,
+                "total_duration": 0,
+                "total_duration_connected": 0,
+                "avg_duration": 0,
+                "connect_rate_percent": 0.0,
+                "by_direction": {"outgoing": 0, "incoming": 0, "missed": 0, "unknown": 0},
+                "by_resolve_method": {"observer": 0, "retry": 0, "unknown": 0},
+                "by_action_source": {"crm_ui": 0, "notification": 0, "history": 0, "unknown": 0},
+            },
+        )
         stats_list.append(stats)
-    
+
     # Общая статистика
     total_calls = sum(s["total"] for s in stats_list)
     total_connected = sum(s["connected"] for s in stats_list)
@@ -1343,15 +1479,19 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
     total_duration = sum(s["total_duration"] for s in stats_list)
     total_duration_connected = sum(s.get("total_duration_connected", 0) for s in stats_list)
     # Новая логика: avg_duration только по CONNECTED
-    avg_duration_all = total_duration_connected // total_connected if total_connected > 0 else (total_duration // total_calls if total_calls > 0 else 0)
+    avg_duration_all = (
+        total_duration_connected // total_connected
+        if total_connected > 0
+        else (total_duration // total_calls if total_calls > 0 else 0)
+    )
     # Дозвоняемость %
     connect_rate_all = round((total_connected / total_calls * 100), 1) if total_calls > 0 else 0.0
-    
+
     # ЭТАП 4: Вычисляем общие суммы для распределений (для шаблона)
     total_by_direction = {"outgoing": 0, "incoming": 0, "missed": 0, "unknown": 0}
     total_by_action_source = {"crm_ui": 0, "notification": 0, "history": 0, "unknown": 0}
     total_by_resolve_method = {"observer": 0, "retry": 0, "unknown": 0}
-    
+
     for stat in stats_list:
         if "by_direction" in stat:
             total_by_direction["outgoing"] += stat["by_direction"].get("outgoing", 0)
@@ -1360,14 +1500,16 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
             total_by_direction["unknown"] += stat["by_direction"].get("unknown", 0)
         if "by_action_source" in stat:
             total_by_action_source["crm_ui"] += stat["by_action_source"].get("crm_ui", 0)
-            total_by_action_source["notification"] += stat["by_action_source"].get("notification", 0)
+            total_by_action_source["notification"] += stat["by_action_source"].get(
+                "notification", 0
+            )
             total_by_action_source["history"] += stat["by_action_source"].get("history", 0)
             total_by_action_source["unknown"] += stat["by_action_source"].get("unknown", 0)
         if "by_resolve_method" in stat:
             total_by_resolve_method["observer"] += stat["by_resolve_method"].get("observer", 0)
             total_by_resolve_method["retry"] += stat["by_resolve_method"].get("retry", 0)
             total_by_resolve_method["unknown"] += stat["by_resolve_method"].get("unknown", 0)
-    
+
     return render(
         request,
         "ui/settings/calls_stats.html",
@@ -1403,14 +1545,18 @@ def settings_calls_manager_detail(request: HttpRequest, user_id: int) -> HttpRes
     Детальный список звонков конкретного менеджера за период (drill-down из статистики).
     """
     # Разрешаем доступ менеджерам, руководителям и админам
-    if request.user.role not in [User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR, User.Role.ADMIN] and not request.user.is_superuser:
+    if (
+        request.user.role
+        not in [User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR, User.Role.ADMIN]
+        and not request.user.is_superuser
+    ):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
     from phonebridge.models import CallRequest
 
     manager = get_object_or_404(User.objects.select_related("branch"), id=user_id, is_active=True)
-    
+
     # Проверка доступа:
     # - Админ/суперпользователь: видит всех
     # - Руководители: видят менеджеров своего филиала
@@ -1425,15 +1571,15 @@ def settings_calls_manager_detail(request: HttpRequest, user_id: int) -> HttpRes
         if not request.user.branch_id or request.user.branch_id != manager.branch_id:
             messages.error(request, "Нет доступа к звонкам менеджера из другого филиала.")
             return redirect("settings_calls_stats")
-    
+
     now = timezone.now()
     local_now = timezone.localtime(now)
-    
+
     # Период: день или месяц
     period = (request.GET.get("period") or "day").strip()
     if period not in ("day", "month"):
         period = "day"
-    
+
     if period == "month":
         start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         end = (start + timedelta(days=32)).replace(day=1)
@@ -1442,15 +1588,19 @@ def settings_calls_manager_detail(request: HttpRequest, user_id: int) -> HttpRes
         start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
         end = start + timedelta(days=1)
         period_label = timezone.localdate(now).strftime("%d.%m.%Y")
-    
+
     # Получаем звонки менеджера
-    calls_qs = CallRequest.objects.filter(
-        user=manager,
-        call_started_at__gte=start,
-        call_started_at__lt=end,
-        call_status__isnull=False
-    ).select_related("company", "contact").order_by("-call_started_at")
-    
+    calls_qs = (
+        CallRequest.objects.filter(
+            user=manager,
+            call_started_at__gte=start,
+            call_started_at__lt=end,
+            call_status__isnull=False,
+        )
+        .select_related("company", "contact")
+        .order_by("-call_started_at")
+    )
+
     # Фильтр по исходу звонка
     filter_status = request.GET.get("status", "").strip()
     if filter_status:
@@ -1464,11 +1614,11 @@ def settings_calls_manager_detail(request: HttpRequest, user_id: int) -> HttpRes
         }
         if filter_status in status_map:
             calls_qs = calls_qs.filter(call_status=status_map[filter_status])
-    
+
     per_page = 50
     paginator = Paginator(calls_qs, per_page)
     page = paginator.get_page(request.GET.get("page"))
-    
+
     # Статистика для этого менеджера
     stats = {
         "total": calls_qs.count(),
@@ -1478,7 +1628,7 @@ def settings_calls_manager_detail(request: HttpRequest, user_id: int) -> HttpRes
         "rejected": calls_qs.filter(call_status=CallRequest.CallStatus.REJECTED).count(),
         "missed": calls_qs.filter(call_status=CallRequest.CallStatus.MISSED).count(),
     }
-    
+
     return render(
         request,
         "ui/settings/calls_manager_detail.html",
@@ -1491,5 +1641,3 @@ def settings_calls_manager_detail(request: HttpRequest, user_id: int) -> HttpRes
             "filter_status": filter_status,
         },
     )
-
-

@@ -84,13 +84,13 @@ class Command(BaseCommand):
             "--map",
             type=str,
             default="",
-            help="Путь к JSON-файлу с явной картой: {\"from\": \"to\"|null, ...} (id или name). null/\"\" = удалить сферу.",
+            help='Путь к JSON-файлу с явной картой: {"from": "to"|null, ...} (id или name). null/"" = удалить сферу.',
         )
         parser.add_argument(
             "--delete",
             type=str,
             default="",
-            help="Удалить сферы (список через запятую ИЛИ путь к JSON-файлу-массиву). Пример: \"Новая CRM,Информация не найдена\"",
+            help='Удалить сферы (список через запятую ИЛИ путь к JSON-файлу-массиву). Пример: "Новая CRM,Информация не найдена"',
         )
         parser.add_argument(
             "--threshold",
@@ -105,7 +105,9 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **opts):
-        do_report = bool(opts.get("report")) or (not opts.get("apply_exact") and not opts.get("map"))
+        do_report = bool(opts.get("report")) or (
+            not opts.get("apply_exact") and not opts.get("map")
+        )
         apply_exact = bool(opts.get("apply_exact"))
         dry_run = bool(opts.get("dry_run"))
         map_path = (opts.get("map") or "").strip()
@@ -128,10 +130,14 @@ class Command(BaseCommand):
             if not exact_dups:
                 self.stdout.write("(не найдено)\n")
             else:
-                for key, items in sorted(exact_dups.items(), key=lambda kv: (len(kv[1]) * -1, kv[0])):
+                for key, items in sorted(
+                    exact_dups.items(), key=lambda kv: (len(kv[1]) * -1, kv[0])
+                ):
                     self.stdout.write(f"- norm='{key}':")
                     for it in items:
-                        self.stdout.write(f"  - id={it.id} name='{it.name}' companies={it.companies.count()}")
+                        self.stdout.write(
+                            f"  - id={it.id} name='{it.name}' companies={it.companies.count()}"
+                        )
                     self.stdout.write("")
 
             # Подсказки по похожим названиям (опечатки типа Металлургия/Металургия)
@@ -168,7 +174,7 @@ class Command(BaseCommand):
                 raise CommandError(f"Файл не найден: {map_path}")
             raw = json.loads(p.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
-                raise CommandError("--map ожидает JSON-объект вида {\"from\": \"to\"|null}")
+                raise CommandError('--map ожидает JSON-объект вида {"from": "to"|null}')
             for k, v in raw.items():
                 src = _resolve_sphere(str(k))
                 if v is None or (isinstance(v, str) and not v.strip()):
@@ -184,7 +190,7 @@ class Command(BaseCommand):
             if p.exists():
                 raw = json.loads(p.read_text(encoding="utf-8"))
                 if not isinstance(raw, list):
-                    raise CommandError("--delete файл должен содержать JSON-массив: [\"name\", ...]")
+                    raise CommandError('--delete файл должен содержать JSON-массив: ["name", ...]')
                 for x in raw:
                     deletes.append(_resolve_sphere(str(x)))
             else:
@@ -218,7 +224,9 @@ class Command(BaseCommand):
 
         # Если сфера удаляется — не пытаемся её ещё и мерджить
         del_ids = {s.id for s in deletes}
-        merges = [(src, dst) for (src, dst) in merges if src.id not in del_ids and dst.id not in del_ids]
+        merges = [
+            (src, dst) for (src, dst) in merges if src.id not in del_ids and dst.id not in del_ids
+        ]
 
         if not merges and not deletes:
             if not do_report:
@@ -255,11 +263,18 @@ class Command(BaseCommand):
                 # Чистим filter_meta у кампаний
                 try:
                     from mailer.models import Campaign
-                    for camp in Campaign.objects.filter(filter_meta__sphere__contains=[s.id]).only("id", "filter_meta").iterator():
+
+                    for camp in (
+                        Campaign.objects.filter(filter_meta__sphere__contains=[s.id])
+                        .only("id", "filter_meta")
+                        .iterator()
+                    ):
                         meta = dict(camp.filter_meta or {})
                         sph = meta.get("sphere")
                         if isinstance(sph, list):
-                            meta["sphere"] = [x for x in sph if str(x).strip() and int(x) != int(s.id)]
+                            meta["sphere"] = [
+                                x for x in sph if str(x).strip() and int(x) != int(s.id)
+                            ]
                             camp.filter_meta = meta
                             camp.save(update_fields=["filter_meta", "updated_at"])
                 except Exception:
@@ -272,11 +287,15 @@ class Command(BaseCommand):
                     continue
                 # компании, где есть src
                 company_ids = list(
-                    through.objects.filter(**{sphere_fk_id: src.id}).values_list(company_fk_id, flat=True)
+                    through.objects.filter(**{sphere_fk_id: src.id}).values_list(
+                        company_fk_id, flat=True
+                    )
                 )
                 if company_ids:
                     # добавляем связь на dst (ignore_conflicts, чтобы не падать на уникальности)
-                    to_create = [through(**{company_fk_id: cid, sphere_fk_id: dst.id}) for cid in company_ids]
+                    to_create = [
+                        through(**{company_fk_id: cid, sphere_fk_id: dst.id}) for cid in company_ids
+                    ]
                     through.objects.bulk_create(to_create, ignore_conflicts=True)
                     # удаляем связи на src
                     deleted_links, _ = through.objects.filter(
@@ -287,11 +306,20 @@ class Command(BaseCommand):
                 # обновляем фильтры кампаний mailer (snapshot filter_meta) — чтобы старые id не висели
                 try:
                     from mailer.models import Campaign
-                    for camp in Campaign.objects.filter(filter_meta__sphere__contains=[src.id]).only("id", "filter_meta").iterator():
+
+                    for camp in (
+                        Campaign.objects.filter(filter_meta__sphere__contains=[src.id])
+                        .only("id", "filter_meta")
+                        .iterator()
+                    ):
                         meta = dict(camp.filter_meta or {})
                         sph = meta.get("sphere")
                         if isinstance(sph, list):
-                            meta["sphere"] = [dst.id if int(x) == int(src.id) else x for x in sph if str(x).strip()]
+                            meta["sphere"] = [
+                                dst.id if int(x) == int(src.id) else x
+                                for x in sph
+                                if str(x).strip()
+                            ]
                             camp.filter_meta = meta
                             camp.save(update_fields=["filter_meta", "updated_at"])
                 except Exception:
@@ -307,4 +335,3 @@ class Command(BaseCommand):
                     f"\nГотово: удалено сфер={total_spheres_deleted}, изменено связей (company-sphere)={total_links_moved}."
                 )
             )
-

@@ -153,68 +153,92 @@ class OperatorConsumer(AsyncWebsocketConsumer):
                 )
 
         elif action == "ping":
-            await self.send(text_data=json.dumps({"type": "pong", "ts": timezone.now().isoformat()}))
+            await self.send(
+                text_data=json.dumps({"type": "pong", "ts": timezone.now().isoformat()})
+            )
 
     # ─── Group message handlers ──────────────────────────────────────
 
     async def new_message(self, event):
         """Новое сообщение в диалоге."""
-        await self.send(text_data=json.dumps({
-            "type": "new_message",
-            "conversation_id": event.get("conversation_id"),
-            "message": event.get("message"),
-        }))
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "new_message",
+                    "conversation_id": event.get("conversation_id"),
+                    "message": event.get("message"),
+                }
+            )
+        )
 
     async def conversation_updated(self, event):
         """Обновление диалога (статус, assignee и т.д.)."""
-        await self.send(text_data=json.dumps({
-            "type": "conversation_updated",
-            "conversation_id": event.get("conversation_id"),
-            "changes": event.get("changes"),
-        }))
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "conversation_updated",
+                    "conversation_id": event.get("conversation_id"),
+                    "changes": event.get("changes"),
+                }
+            )
+        )
 
     async def new_conversation(self, event):
         """Новый диалог в inbox."""
-        await self.send(text_data=json.dumps({
-            "type": "new_conversation",
-            "conversation": event.get("conversation"),
-        }))
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "new_conversation",
+                    "conversation": event.get("conversation"),
+                }
+            )
+        )
 
     async def typing_indicator(self, event):
         """Индикатор набора текста."""
         if event.get("user_id") != self.user_id:
-            await self.send(text_data=json.dumps({
-                "type": "typing",
-                "conversation_id": event.get("conversation_id"),
-                "user_id": event.get("user_id"),
-                "is_typing": event.get("is_typing", True),
-            }))
+            await self.send(
+                text_data=json.dumps(
+                    {
+                        "type": "typing",
+                        "conversation_id": event.get("conversation_id"),
+                        "user_id": event.get("user_id"),
+                        "is_typing": event.get("is_typing", True),
+                    }
+                )
+            )
 
     async def operator_notification(self, event):
         """Личное уведомление оператору."""
-        await self.send(text_data=json.dumps({
-            "type": "notification",
-            "title": event.get("title"),
-            "body": event.get("body"),
-            "conversation_id": event.get("conversation_id"),
-        }))
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "notification",
+                    "title": event.get("title"),
+                    "body": event.get("body"),
+                    "conversation_id": event.get("conversation_id"),
+                }
+            )
+        )
 
     # ─── DB helpers ──────────────────────────────────────────────────
 
     @database_sync_to_async
     def _get_accessible_inbox_ids(self):
         from .models import Inbox
+
         qs = Inbox.objects.filter(is_active=True)
-        if hasattr(self.user, 'branch_id') and self.user.branch_id:
+        if hasattr(self.user, "branch_id") and self.user.branch_id:
             qs = qs.filter(branch_id=self.user.branch_id)
         return list(qs.values_list("id", flat=True))
 
     @database_sync_to_async
     def _can_access_conversation(self, conversation_id):
         from .models import Conversation
+
         try:
             conv = Conversation.objects.select_related("inbox").get(pk=conversation_id)
-            if hasattr(self.user, 'branch_id') and self.user.branch_id:
+            if hasattr(self.user, "branch_id") and self.user.branch_id:
                 return conv.inbox.branch_id == self.user.branch_id
             return True
         except Conversation.DoesNotExist:
@@ -223,6 +247,7 @@ class OperatorConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _set_operator_online(self):
         from .models import AgentProfile
+
         AgentProfile.objects.update_or_create(
             user=self.user,
             defaults={"status": AgentProfile.Status.ONLINE},
@@ -231,6 +256,7 @@ class OperatorConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _set_operator_offline(self):
         from .models import AgentProfile
+
         AgentProfile.objects.filter(user=self.user).update(
             status=AgentProfile.Status.OFFLINE,
         )
@@ -295,7 +321,11 @@ class WidgetConsumer(AsyncWebsocketConsumer):
                     f"conversation_{self.conversation_id}",
                     self.channel_name,
                 )
-                await self.send(text_data=json.dumps({"type": "authenticated", "conversation_id": self.conversation_id}))
+                await self.send(
+                    text_data=json.dumps(
+                        {"type": "authenticated", "conversation_id": self.conversation_id}
+                    )
+                )
             else:
                 await self.send(text_data=json.dumps({"type": "error", "code": "auth_failed"}))
                 await self.close(code=4401)
@@ -324,31 +354,44 @@ class WidgetConsumer(AsyncWebsocketConsumer):
         """Новое сообщение — показать посетителю только исходящие (от оператора)."""
         msg = event.get("message", {})
         if msg.get("direction") == "out":
-            await self.send(text_data=json.dumps({
-                "type": "new_message",
-                "message": msg,
-            }))
+            await self.send(
+                text_data=json.dumps(
+                    {
+                        "type": "new_message",
+                        "message": msg,
+                    }
+                )
+            )
 
     async def typing_indicator(self, event):
         """Оператор печатает."""
         if event.get("user_id") is not None:
-            await self.send(text_data=json.dumps({
-                "type": "typing",
-                "is_typing": event.get("is_typing", True),
-            }))
+            await self.send(
+                text_data=json.dumps(
+                    {
+                        "type": "typing",
+                        "is_typing": event.get("is_typing", True),
+                    }
+                )
+            )
 
     async def conversation_updated(self, event):
         """Статус диалога изменился."""
-        await self.send(text_data=json.dumps({
-            "type": "conversation_updated",
-            "changes": event.get("changes"),
-        }))
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "type": "conversation_updated",
+                    "changes": event.get("changes"),
+                }
+            )
+        )
 
     # ─── DB helpers ──────────────────────────────────────────────────
 
     @database_sync_to_async
     def _validate_inbox(self):
         from .models import Inbox
+
         return Inbox.objects.filter(widget_token=self.widget_token, is_active=True).exists()
 
     @database_sync_to_async

@@ -11,7 +11,14 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import CallRequest, PhoneDevice, PhoneTelemetry, PhoneLogBundle, MobileAppQrToken, MobileAppBuild
+from .models import (
+    CallRequest,
+    PhoneDevice,
+    PhoneTelemetry,
+    PhoneLogBundle,
+    MobileAppQrToken,
+    MobileAppBuild,
+)
 from policy.engine import enforce
 
 
@@ -116,7 +123,12 @@ class RegisterDeviceView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        enforce(user=request.user, resource_type="action", resource="phone:devices:register", context={"path": request.path})
+        enforce(
+            user=request.user,
+            resource_type="action",
+            resource="phone:devices:register",
+            context={"path": request.path},
+        )
         s = RegisterDeviceSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         device_id = s.validated_data["device_id"]
@@ -167,7 +179,12 @@ class DeviceHeartbeatView(APIView):
         import logging
 
         logger = logging.getLogger(__name__)
-        enforce(user=request.user, resource_type="action", resource="phone:devices:heartbeat", context={"path": request.path})
+        enforce(
+            user=request.user,
+            resource_type="action",
+            resource="phone:devices:heartbeat",
+            context={"path": request.path},
+        )
 
         s = DeviceHeartbeatSerializer(data=request.data)
         s.is_valid(raise_exception=True)
@@ -188,6 +205,7 @@ class DeviceHeartbeatView(APIView):
 
         # Определяем IP для диагностики (используем единую логику из accounts.security)
         from accounts.security import get_client_ip
+
         ip = get_client_ip(request)
 
         # Формируем сообщение об ошибке для queue_stuck
@@ -199,7 +217,7 @@ class DeviceHeartbeatView(APIView):
             if stuck_by_type:
                 type_list = [f"{k}:{v}" for k, v in stuck_by_type.items()]
                 error_message += f" (by type: {', '.join(type_list)})"
-        
+
         # Сначала получаем/создаём устройство без использования obj в defaults,
         # затем обновляем поля — так избегаем обращения к obj до присваивания.
         obj, created = PhoneDevice.objects.get_or_create(
@@ -252,14 +270,20 @@ class DeviceHeartbeatView(APIView):
                 "last_error_message",
             ]
         )
-        
+
         # Логируем предупреждения
         if not encryption_enabled:
-            logger.warning(f"DeviceHeartbeat: user={request.user.id}, device={device_id} - encryption DISABLED (security risk)")
+            logger.warning(
+                f"DeviceHeartbeat: user={request.user.id}, device={device_id} - encryption DISABLED (security risk)"
+            )
         if queue_stuck:
-            logger.warning(f"DeviceHeartbeat: user={request.user.id}, device={device_id} - QUEUE STUCK: {stuck_count} items failed after max retries")
+            logger.warning(
+                f"DeviceHeartbeat: user={request.user.id}, device={device_id} - QUEUE STUCK: {stuck_count} items failed after max retries"
+            )
 
-        logger.debug(f"DeviceHeartbeat: user={request.user.id}, device={device_id}, created={created}")
+        logger.debug(
+            f"DeviceHeartbeat: user={request.user.id}, device={device_id}, created={created}"
+        )
 
         return Response(
             {
@@ -286,7 +310,12 @@ class PullCallView(APIView):
         import logging
 
         logger = logging.getLogger(__name__)
-        enforce(user=request.user, resource_type="action", resource="phone:calls:pull", context={"path": request.path})
+        enforce(
+            user=request.user,
+            resource_type="action",
+            resource="phone:calls:pull",
+            context={"path": request.path},
+        )
 
         device_id = (request.query_params.get("device_id") or "").strip()
         if not device_id:
@@ -296,15 +325,23 @@ class PullCallView(APIView):
         # Проверяем, что device_id принадлежит текущему пользователю (безопасность)
         device_exists = PhoneDevice.objects.filter(user=request.user, device_id=device_id).exists()
         if not device_exists:
-            logger.warning(f"PullCallView: device_id {device_id} not found for user {request.user.id}")
+            logger.warning(
+                f"PullCallView: device_id {device_id} not found for user {request.user.id}"
+            )
             return Response({"detail": "Device not found or access denied"}, status=403)
 
         # обновим last_seen
-        PhoneDevice.objects.filter(user=request.user, device_id=device_id).update(last_seen_at=timezone.now())
+        PhoneDevice.objects.filter(user=request.user, device_id=device_id).update(
+            last_seen_at=timezone.now()
+        )
 
         # Проверяем наличие pending запросов для этого пользователя (для логов/диагностики)
-        pending_count = CallRequest.objects.filter(user=request.user, status=CallRequest.Status.PENDING).count()
-        logger.debug(f"PullCallView: user {request.user.id}, device {device_id}, pending calls: {pending_count}")
+        pending_count = CallRequest.objects.filter(
+            user=request.user, status=CallRequest.Status.PENDING
+        ).count()
+        logger.debug(
+            f"PullCallView: user {request.user.id}, device {device_id}, pending calls: {pending_count}"
+        )
 
         # ВАЖНО: используем select_for_update(skip_locked=True), чтобы один и тот же звонок
         # не был выдан одновременно двум устройствам при конкурентных запросах.
@@ -324,7 +361,9 @@ class PullCallView(APIView):
             call.consumed_at = now
             call.save(update_fields=["status", "delivered_at", "consumed_at"])
 
-        logger.info(f"PullCallView: delivered call {call.id} to user {request.user.id}, phone {mask_phone(call.phone_raw)}")
+        logger.info(
+            f"PullCallView: delivered call {call.id} to user {request.user.id}, phone {mask_phone(call.phone_raw)}"
+        )
 
         return Response(
             {
@@ -344,12 +383,15 @@ class UpdateCallInfoSerializer(serializers.Serializer):
     Поддерживает legacy формат (4 поля) и extended формат (со всеми optional полями).
     Все новые поля optional для обратной совместимости.
     """
+
     # Legacy поля (обязательное только call_request_id)
     call_request_id = serializers.UUIDField()
-    call_status = serializers.ChoiceField(choices=CallRequest.CallStatus.choices, required=False, allow_null=True)
+    call_status = serializers.ChoiceField(
+        choices=CallRequest.CallStatus.choices, required=False, allow_null=True
+    )
     call_started_at = serializers.DateTimeField(required=False, allow_null=True)
     call_duration_seconds = serializers.IntegerField(required=False, allow_null=True, min_value=0)
-    
+
     # Новые поля (ЭТАП 1: контракт, приём и валидация, но пока не сохраняем в БД - ЭТАП 3)
     call_ended_at = serializers.DateTimeField(required=False, allow_null=True)
     # Используем CharField вместо ChoiceField для graceful handling неизвестных значений
@@ -357,7 +399,7 @@ class UpdateCallInfoSerializer(serializers.Serializer):
     resolve_method = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     attempts_count = serializers.IntegerField(required=False, allow_null=True, min_value=0)
     action_source = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-    
+
     def validate_call_status(self, value):
         """
         Валидация call_status с graceful обработкой неизвестных значений.
@@ -365,58 +407,68 @@ class UpdateCallInfoSerializer(serializers.Serializer):
         """
         if value is None:
             return value
-        
+
         # Проверяем, что значение в choices
         valid_choices = [choice[0] for choice in CallRequest.CallStatus.choices]
         if value not in valid_choices:
             import logging
+
             logger = logging.getLogger(__name__)
-            logger.warning(f"UpdateCallInfoSerializer: неизвестный call_status '{value}', маппим в UNKNOWN")
+            logger.warning(
+                f"UpdateCallInfoSerializer: неизвестный call_status '{value}', маппим в UNKNOWN"
+            )
             # Маппим в UNKNOWN вместо ошибки валидации
             return CallRequest.CallStatus.UNKNOWN
-        
+
         return value
-    
+
     def validate_direction(self, value):
         """Валидация direction с graceful обработкой неизвестных значений."""
         if value is None or value == "":
             return None
-        
+
         valid_choices = [choice[0] for choice in CallRequest.CallDirection.choices]
         if value not in valid_choices:
             import logging
+
             logger = logging.getLogger(__name__)
             logger.warning(f"UpdateCallInfoSerializer: неизвестный direction '{value}', игнорируем")
             return None  # Игнорируем неизвестное значение
-        
+
         return value
-    
+
     def validate_resolve_method(self, value):
         """Валидация resolve_method с graceful обработкой неизвестных значений."""
         if value is None or value == "":
             return None
-        
+
         valid_choices = [choice[0] for choice in CallRequest.ResolveMethod.choices]
         if value not in valid_choices:
             import logging
+
             logger = logging.getLogger(__name__)
-            logger.warning(f"UpdateCallInfoSerializer: неизвестный resolve_method '{value}', игнорируем")
+            logger.warning(
+                f"UpdateCallInfoSerializer: неизвестный resolve_method '{value}', игнорируем"
+            )
             return None
-        
+
         return value
-    
+
     def validate_action_source(self, value):
         """Валидация action_source с graceful обработкой неизвестных значений."""
         if value is None or value == "":
             return None
-        
+
         valid_choices = [choice[0] for choice in CallRequest.ActionSource.choices]
         if value not in valid_choices:
             import logging
+
             logger = logging.getLogger(__name__)
-            logger.warning(f"UpdateCallInfoSerializer: неизвестный action_source '{value}', игнорируем")
+            logger.warning(
+                f"UpdateCallInfoSerializer: неизвестный action_source '{value}', игнорируем"
+            )
             return None
-        
+
         return value
 
 
@@ -431,12 +483,18 @@ class UpdateCallInfoView(APIView):
 
     def post(self, request):
         import logging
+
         logger = logging.getLogger(__name__)
-        enforce(user=request.user, resource_type="action", resource="phone:calls:update", context={"path": request.path})
-        
+        enforce(
+            user=request.user,
+            resource_type="action",
+            resource="phone:calls:update",
+            context={"path": request.path},
+        )
+
         s = UpdateCallInfoSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        
+
         call_request_id = s.validated_data["call_request_id"]
         call_status = s.validated_data.get("call_status")
         call_started_at = s.validated_data.get("call_started_at")
@@ -446,7 +504,9 @@ class UpdateCallInfoView(APIView):
         try:
             call_request = CallRequest.objects.get(id=call_request_id, user=request.user)
         except CallRequest.DoesNotExist:
-            logger.warning(f"UpdateCallInfo: CallRequest {call_request_id} not found for user {request.user.id}")
+            logger.warning(
+                f"UpdateCallInfo: CallRequest {call_request_id} not found for user {request.user.id}"
+            )
             return Response({"detail": "CallRequest not found or access denied"}, status=404)
 
         # Обновляем данные о звонке (legacy поля)
@@ -460,43 +520,49 @@ class UpdateCallInfoView(APIView):
         if call_duration_seconds is not None:
             call_request.call_duration_seconds = call_duration_seconds
             update_fields.append("call_duration_seconds")
-        
+
         # Новые поля (ЭТАП 3: сохраняем в БД)
         # Вычисляем call_ended_at, если не передан, но есть started_at и duration
         call_ended_at = s.validated_data.get("call_ended_at")
-        if call_ended_at is None and call_started_at is not None and call_duration_seconds is not None and call_duration_seconds > 0:
+        if (
+            call_ended_at is None
+            and call_started_at is not None
+            and call_duration_seconds is not None
+            and call_duration_seconds > 0
+        ):
             from datetime import timedelta
+
             try:
                 call_ended_at = call_started_at + timedelta(seconds=call_duration_seconds)
                 logger.debug(f"UpdateCallInfo: вычислен call_ended_at = {call_ended_at}")
             except Exception as e:
                 logger.warning(f"UpdateCallInfo: ошибка вычисления call_ended_at: {e}")
-        
+
         # Сохраняем новые поля в БД
         direction = s.validated_data.get("direction")
         if direction is not None:
             call_request.direction = direction
             update_fields.append("direction")
-        
+
         resolve_method = s.validated_data.get("resolve_method")
         if resolve_method is not None:
             call_request.resolve_method = resolve_method
             update_fields.append("resolve_method")
-        
+
         attempts_count = s.validated_data.get("attempts_count")
         if attempts_count is not None:
             call_request.attempts_count = attempts_count
             update_fields.append("attempts_count")
-        
+
         action_source = s.validated_data.get("action_source")
         if action_source is not None:
             call_request.action_source = action_source
             update_fields.append("action_source")
-        
+
         if call_ended_at is not None:
             call_request.call_ended_at = call_ended_at
             update_fields.append("call_ended_at")
-        
+
         # Логируем новые поля для отладки
         new_fields_received = {}
         if call_ended_at is not None:
@@ -509,13 +575,15 @@ class UpdateCallInfoView(APIView):
             new_fields_received["attempts_count"] = attempts_count
         if action_source is not None:
             new_fields_received["action_source"] = action_source
-        
+
         if new_fields_received:
             logger.info(f"UpdateCallInfo: сохранены новые поля в БД: {new_fields_received}")
 
         if update_fields:
             call_request.save(update_fields=update_fields)
-            logger.info(f"UpdateCallInfo: updated CallRequest {call_request_id} with {update_fields}")
+            logger.info(
+                f"UpdateCallInfo: updated CallRequest {call_request_id} with {update_fields}"
+            )
 
         return Response({"ok": True, "call_request_id": str(call_request.id)})
 
@@ -532,11 +600,13 @@ class TelemetryItemSerializer(serializers.Serializer):
 class TelemetryBatchSerializer(serializers.Serializer):
     device_id = serializers.CharField(max_length=64, required=False, allow_blank=True)
     items = TelemetryItemSerializer(many=True)
-    
+
     def validate_items(self, value):
         """Валидация размера батча: максимум 100 items для защиты от DoS."""
         if len(value) > 100:
-            raise serializers.ValidationError("Максимум 100 items за раз. Получено: %d" % len(value))
+            raise serializers.ValidationError(
+                "Максимум 100 items за раз. Получено: %d" % len(value)
+            )
         return value
 
 
@@ -555,7 +625,12 @@ class PhoneTelemetryView(APIView):
         import logging
 
         logger = logging.getLogger(__name__)
-        enforce(user=request.user, resource_type="action", resource="phone:telemetry", context={"path": request.path})
+        enforce(
+            user=request.user,
+            resource_type="action",
+            resource="phone:telemetry",
+            context={"path": request.path},
+        )
 
         s = TelemetryBatchSerializer(data=request.data)
         s.is_valid(raise_exception=True)
@@ -597,7 +672,9 @@ class PhoneTelemetryView(APIView):
             # Убрали ignore_conflicts - дедупликация телеметрии не требуется,
             # все записи уникальны по времени и контексту
             PhoneTelemetry.objects.bulk_create(to_create)
-            logger.debug(f"PhoneTelemetry: user={request.user.id}, device={device_id}, count={len(to_create)}")
+            logger.debug(
+                f"PhoneTelemetry: user={request.user.id}, device={device_id}, count={len(to_create)}"
+            )
 
         return Response({"ok": True, "saved": len(to_create)})
 
@@ -623,7 +700,12 @@ class PhoneLogUploadView(APIView):
         import logging
 
         logger = logging.getLogger(__name__)
-        enforce(user=request.user, resource_type="action", resource="phone:logs:upload", context={"path": request.path})
+        enforce(
+            user=request.user,
+            resource_type="action",
+            resource="phone:logs:upload",
+            context={"path": request.path},
+        )
 
         many = isinstance(request.data, list)
         if many:
@@ -680,7 +762,12 @@ class QrTokenCreateView(APIView):
         from django.db import DatabaseError
 
         logger = logging.getLogger(__name__)
-        enforce(user=request.user, resource_type="action", resource="phone:qr:create", context={"path": request.path})
+        enforce(
+            user=request.user,
+            resource_type="action",
+            resource="phone:qr:create",
+            context={"path": request.path},
+        )
 
         try:
             # Rate limiting: не чаще 1 раза в 10 секунд
@@ -688,7 +775,7 @@ class QrTokenCreateView(APIView):
             if is_ip_rate_limited(ip, "qr_token_create", 1, 10):
                 return Response(
                     {"detail": "Слишком частые запросы. Подождите немного."},
-                    status=status.HTTP_429_TOO_MANY_REQUESTS
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
                 )
 
             # Генерируем токен
@@ -700,23 +787,27 @@ class QrTokenCreateView(APIView):
                 user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
             )
 
-            logger.info(f"QrTokenCreate: user={request.user.id}, hash={qr_token.token_hash[:12]}...")
+            logger.info(
+                f"QrTokenCreate: user={request.user.id}, hash={qr_token.token_hash[:12]}..."
+            )
 
-            return Response({
-                "token": token,
-                "expires_at": qr_token.expires_at.isoformat(),
-            })
+            return Response(
+                {
+                    "token": token,
+                    "expires_at": qr_token.expires_at.isoformat(),
+                }
+            )
         except DatabaseError as e:
             logger.error(f"QrTokenCreate database error: {e}")
             return Response(
                 {"detail": "Ошибка базы данных. Убедитесь, что миграции применены."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         except Exception as e:
             logger.error(f"QrTokenCreate error: {e}", exc_info=True)
             return Response(
                 {"detail": f"Ошибка создания QR-токена: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
@@ -746,26 +837,31 @@ class QrTokenExchangeView(APIView):
 
         # Находим токен
         try:
-            qr_token = MobileAppQrToken.objects.get(
-                token_hash=MobileAppQrToken.hash_token(token)
-            )
+            qr_token = MobileAppQrToken.objects.get(token_hash=MobileAppQrToken.hash_token(token))
         except MobileAppQrToken.DoesNotExist:
-            logger.warning(f"QrTokenExchange: invalid token hash={MobileAppQrToken.hash_token(token)[:12]}...")
+            logger.warning(
+                f"QrTokenExchange: invalid token hash={MobileAppQrToken.hash_token(token)[:12]}..."
+            )
             return Response(
-                {"detail": "Неверный или истекший токен"},
-                status=status.HTTP_400_BAD_REQUEST
+                {"detail": "Неверный или истекший токен"}, status=status.HTTP_400_BAD_REQUEST
             )
 
         # Проверяем валидность
         if not qr_token.is_valid():
-            logger.warning(f"QrTokenExchange: expired or used token hash={MobileAppQrToken.hash_token(token)[:12]}...")
+            logger.warning(
+                f"QrTokenExchange: expired or used token hash={MobileAppQrToken.hash_token(token)[:12]}..."
+            )
             return Response(
-                {"detail": "Неверный или истекший токен"},
-                status=status.HTTP_400_BAD_REQUEST
+                {"detail": "Неверный или истекший токен"}, status=status.HTTP_400_BAD_REQUEST
             )
 
         # Policy: можно запретить вход в мобильное приложение для некоторых ролей/пользователей
-        enforce(user=qr_token.user, resource_type="action", resource="phone:qr:exchange", context={"path": request.path})
+        enforce(
+            user=qr_token.user,
+            resource_type="action",
+            resource="phone:qr:exchange",
+            context={"path": request.path},
+        )
 
         # Помечаем как использованный (делаем ПОСЛЕ проверки policy, чтобы не «сжигать» токен при запрете)
         qr_token.mark_as_used()
@@ -774,22 +870,26 @@ class QrTokenExchangeView(APIView):
         refresh = RefreshToken.for_user(qr_token.user)
         access = refresh.access_token
 
-        logger.info(f"QrTokenExchange: user={qr_token.user.id}, hash={qr_token.token_hash[:12]}... - success")
+        logger.info(
+            f"QrTokenExchange: user={qr_token.user.id}, hash={qr_token.token_hash[:12]}... - success"
+        )
 
         # Определяем, является ли пользователь администратором
         from accounts.models import User
+
         user = qr_token.user
         is_admin = bool(
-            user.is_superuser or 
-            (hasattr(user, "role") and user.role == User.Role.ADMIN)
+            user.is_superuser or (hasattr(user, "role") and user.role == User.Role.ADMIN)
         )
 
-        return Response({
-            "access": str(access),
-            "refresh": str(refresh),
-            "username": qr_token.user.username,  # Возвращаем username для удобства
-            "is_admin": is_admin,  # Возвращаем роль администратора
-        })
+        return Response(
+            {
+                "access": str(access),
+                "refresh": str(refresh),
+                "username": qr_token.user.username,  # Возвращаем username для удобства
+                "is_admin": is_admin,  # Возвращаем роль администратора
+            }
+        )
 
 
 class LogoutSerializer(serializers.Serializer):
@@ -802,6 +902,7 @@ class LogoutView(APIView):
     Удалённый logout: инвалидирует refresh token или все сессии пользователя.
     Используется для безопасного завершения сессии с другого устройства или из CRM.
     """
+
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
@@ -811,13 +912,18 @@ class LogoutView(APIView):
         from accounts.security import get_client_ip
 
         logger = logging.getLogger(__name__)
-        enforce(user=request.user, resource_type="action", resource="phone:logout", context={"path": request.path})
+        enforce(
+            user=request.user,
+            resource_type="action",
+            resource="phone:logout",
+            context={"path": request.path},
+        )
         s = LogoutSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        
+
         refresh_token = s.validated_data.get("refresh", "").strip()
         device_id = s.validated_data.get("device_id", "").strip()
-        
+
         # Если передан refresh token - инвалидируем его
         if refresh_token:
             try:
@@ -827,7 +933,7 @@ class LogoutView(APIView):
             except Exception as e:
                 # Если blacklist не настроен или токен невалиден - просто логируем
                 logger.warning(f"Logout: failed to blacklist token: {e}")
-        
+
         # Если передан device_id - логируем logout для конкретного устройства
         if device_id:
             try:
@@ -836,11 +942,12 @@ class LogoutView(APIView):
                     logger.info(f"Logout: user={request.user.id}, device={device_id}")
             except Exception:
                 pass
-        
+
         # Логируем logout в audit
         try:
             from audit.service import log_event
             from audit.models import ActivityEvent
+
             log_event(
                 actor=request.user,
                 verb=ActivityEvent.Verb.UPDATE,
@@ -855,7 +962,7 @@ class LogoutView(APIView):
             )
         except Exception:
             pass
-        
+
         return Response({"ok": True, "message": "Сессия завершена"})
 
 
@@ -864,6 +971,7 @@ class LogoutAllView(APIView):
     Завершить все мобильные сессии пользователя.
     Используется для полного logout со всех устройств.
     """
+
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
@@ -872,7 +980,12 @@ class LogoutAllView(APIView):
         from accounts.security import get_client_ip
 
         logger = logging.getLogger(__name__)
-        enforce(user=request.user, resource_type="action", resource="phone:logout_all", context={"path": request.path})
+        enforce(
+            user=request.user,
+            resource_type="action",
+            resource="phone:logout_all",
+            context={"path": request.path},
+        )
 
         # Реально инвалидируем все outstanding refresh-токены пользователя
         # через simplejwt blacklist. Без этого «выход со всех устройств»
@@ -883,6 +996,7 @@ class LogoutAllView(APIView):
                 OutstandingToken,
                 BlacklistedToken,
             )
+
             tokens = OutstandingToken.objects.filter(user=request.user)
             for t in tokens:
                 _, created = BlacklistedToken.objects.get_or_create(token=t)
@@ -895,6 +1009,7 @@ class LogoutAllView(APIView):
         try:
             from audit.service import log_event
             from audit.models import ActivityEvent
+
             device_count = PhoneDevice.objects.filter(user=request.user).count()
             log_event(
                 actor=request.user,
@@ -913,7 +1028,8 @@ class LogoutAllView(APIView):
 
         logger.info(
             "LogoutAll: user=%s, tokens_blacklisted=%s",
-            request.user.id, blacklisted,
+            request.user.id,
+            blacklisted,
         )
 
         return Response({"ok": True, "message": "Все сессии завершены", "blacklisted": blacklisted})
@@ -927,21 +1043,28 @@ class UserInfoView(APIView):
 
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
-    
+
     def get(self, request):
         from accounts.models import User
-        enforce(user=request.user, resource_type="action", resource="phone:user:info", context={"path": request.path})
-        
+
+        enforce(
+            user=request.user,
+            resource_type="action",
+            resource="phone:user:info",
+            context={"path": request.path},
+        )
+
         user = request.user
         is_admin = bool(
-            user.is_superuser or 
-            (hasattr(user, "role") and user.role == User.Role.ADMIN)
+            user.is_superuser or (hasattr(user, "role") and user.role == User.Role.ADMIN)
         )
-        
-        return Response({
-            "username": user.username,
-            "is_admin": is_admin,
-        })
+
+        return Response(
+            {
+                "username": user.username,
+                "is_admin": is_admin,
+            }
+        )
 
 
 class QrTokenStatusView(APIView):
@@ -955,7 +1078,12 @@ class QrTokenStatusView(APIView):
     def get(self, request):
         from rest_framework import status as drf_status
 
-        enforce(user=request.user, resource_type="action", resource="phone:qr:status", context={"path": request.path})
+        enforce(
+            user=request.user,
+            resource_type="action",
+            resource="phone:qr:status",
+            context={"path": request.path},
+        )
 
         token = (request.query_params.get("token") or "").strip()
         if not token:
@@ -994,7 +1122,6 @@ class QrTokenStatusView(APIView):
         )
 
 
-
 # ──────────────────────────────────────────────────────────────────
 # F9 (2026-04-18): MobileAppBuild — latest APK info для CRMProfiDialer.
 # ──────────────────────────────────────────────────────────────────
@@ -1026,8 +1153,7 @@ class MobileAppLatestView(APIView):
 
     def get(self, request):
         build = (
-            MobileAppBuild.objects
-            .filter(is_active=True, env="production")
+            MobileAppBuild.objects.filter(is_active=True, env="production")
             .order_by("-version_code", "-uploaded_at")
             .first()
         )
@@ -1048,12 +1174,14 @@ class MobileAppLatestView(APIView):
                 status=500,
             )
 
-        return Response({
-            "version_name": build.version_name,
-            "version_code": build.version_code,
-            "sha256": build.sha256 or None,
-            "size_bytes": build.get_file_size(),
-            "size_display": build.get_file_size_display(),
-            "download_url": request.build_absolute_uri(download_url),
-            "uploaded_at": build.uploaded_at.isoformat(),
-        })
+        return Response(
+            {
+                "version_name": build.version_name,
+                "version_code": build.version_code,
+                "sha256": build.sha256 or None,
+                "size_bytes": build.get_file_size(),
+                "size_display": build.get_file_size_display(),
+                "download_url": request.build_absolute_uri(download_url),
+                "uploaded_at": build.uploaded_at.isoformat(),
+            }
+        )

@@ -93,12 +93,13 @@ DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 # (определяем production по наличию не-dev значений в ALLOWED_HOSTS или явному DJANGO_DEBUG=0)
 _django_debug_env = os.getenv("DJANGO_DEBUG", "").strip()
 _is_production_like = any(
-    h not in ("localhost", "127.0.0.1") 
-    for h in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") 
+    h not in ("localhost", "127.0.0.1")
+    for h in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",")
     if h.strip()
 )
 if _is_production_like and _django_debug_env != "0" and DEBUG:
     import warnings
+
     warnings.warn(
         "⚠️ SECURITY WARNING: DEBUG=True detected in production-like environment. "
         "Set DJANGO_DEBUG=0 explicitly. Continuing with DEBUG=True (unsafe).",
@@ -106,9 +107,15 @@ if _is_production_like and _django_debug_env != "0" and DEBUG:
         stacklevel=2,
     )
 
-ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]
+ALLOWED_HOSTS = [
+    h.strip()
+    for h in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if h.strip()
+]
 # For Cloudflare Tunnel / proxies: add full origins with scheme, e.g. "https://*.trycloudflare.com"
-CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
+CSRF_TRUSTED_ORIGINS = [
+    o.strip() for o in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()
+]
 
 # Trust proxy headers (X-Forwarded-For, X-Forwarded-Host) only from our own proxy
 # В production: установить IP прокси через DJANGO_PROXY_IPS (через запятую)
@@ -119,7 +126,11 @@ PROXY_IPS = [ip.strip() for ip in os.getenv("DJANGO_PROXY_IPS", "").split(",") i
 
 # Production hardening (when DEBUG=0)
 if not DEBUG:
-    if SECRET_KEY in ("dev-secret-key-change-me", "", None) or str(SECRET_KEY).startswith("django-insecure-") or len(str(SECRET_KEY)) < 50:
+    if (
+        SECRET_KEY in ("dev-secret-key-change-me", "", None)
+        or str(SECRET_KEY).startswith("django-insecure-")
+        or len(str(SECRET_KEY)) < 50
+    ):
         raise ImproperlyConfigured("Set a strong DJANGO_SECRET_KEY (50+ chars) for production.")
 
     # F11 (2026-04-18): запрет на wildcard в ALLOWED_HOSTS в проде —
@@ -136,6 +147,7 @@ if not DEBUG:
     # будет падать с 403 на любых доменах кроме same-origin.
     if not CSRF_TRUSTED_ORIGINS:
         import warnings
+
         warnings.warn(
             "⚠️ DJANGO_CSRF_TRUSTED_ORIGINS не задан. В проде крайне рекомендуется — "
             "укажите https://crm.groupprofi.ru (и staging domain, если нужно). "
@@ -156,15 +168,15 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "3600") or "3600")
     SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", "0") == "1"
     SECURE_HSTS_PRELOAD = os.getenv("DJANGO_SECURE_HSTS_PRELOAD", "0") == "1"
-    
+
     # Дополнительные security headers для защиты от утечки информации
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_BROWSER_XSS_FILTER = True
     X_FRAME_OPTIONS = "DENY"
-    
+
     # Защита от утечки информации через ошибки
     SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
-    
+
     # Content Security Policy (CSP) - защита от XSS
     # Разрешаем только доверенные источники для скриптов и стилей
     CSP_DEFAULT_SRC = os.getenv("CSP_DEFAULT_SRC", "'self'")
@@ -173,7 +185,7 @@ if not DEBUG:
     CSP_IMG_SRC = os.getenv("CSP_IMG_SRC", "'self' data: https: blob:")
     CSP_FONT_SRC = os.getenv("CSP_FONT_SRC", "'self' data:")
     CSP_CONNECT_SRC = os.getenv("CSP_CONNECT_SRC", "'self'")
-    
+
     # Формируем CSP заголовок (только в production)
     CSP_HEADER = (
         f"default-src {CSP_DEFAULT_SRC}; "
@@ -198,36 +210,34 @@ MAGIC_LINK_ONLY = os.getenv("MAGIC_LINK_ONLY", "0") == "1"
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'django.contrib.postgres',  # Для PostgreSQL-специфичных функций (pg_trgm, full-text search)
-
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "django.contrib.postgres",  # Для PostgreSQL-специфичных функций (pg_trgm, full-text search)
     # Third-party
-    'rest_framework',
-    'rest_framework_simplejwt',
+    "rest_framework",
+    "rest_framework_simplejwt",
     # Включаем blacklist для возможности отзыва refresh-токенов
-    'rest_framework_simplejwt.token_blacklist',
-    'django_filters',
-    'corsheaders',
-    'drf_spectacular',  # OpenAPI 3.0 schema generation
-    'channels',  # Django Channels for WebSocket support
-
+    "rest_framework_simplejwt.token_blacklist",
+    "django_filters",
+    "corsheaders",
+    "drf_spectacular",  # OpenAPI 3.0 schema generation
+    "channels",  # Django Channels for WebSocket support
     # Local apps
-    'accounts',
-    'companies',
-    'tasksapp',
-    'ui',
-    'audit',
-    'mailer',
-    'notifications',
-    'phonebridge',
-    'amocrm',  # AmoCRM integration (migration tools and management commands)
-    'policy',
-    'messenger',
+    "accounts",
+    "companies",
+    "tasksapp",
+    "ui",
+    "audit",
+    "mailer",
+    "notifications",
+    "phonebridge",
+    "amocrm",  # AmoCRM integration (migration tools and management commands)
+    "policy",
+    "messenger",
 ]
 
 # Wave 0.0 (2026-04-20): django-extensions подключается только в DEBUG,
@@ -236,44 +246,45 @@ INSTALLED_APPS = [
 if DEBUG:
     try:
         import django_extensions  # noqa: F401
-        INSTALLED_APPS += ['django_extensions']
+
+        INSTALLED_APPS += ["django_extensions"]
     except ImportError:
         # Dev-зависимость не установлена — это норма для prod.
         pass
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
-    'core.request_id.RequestIdMiddleware',  # Добавляет request_id для корреляции логов
-    'django.middleware.security.SecurityMiddleware',
+    "corsheaders.middleware.CorsMiddleware",
+    "core.request_id.RequestIdMiddleware",  # Добавляет request_id для корреляции логов
+    "django.middleware.security.SecurityMiddleware",
     # Serve static files in production (admin CSS/JS) without relying on DEBUG=1.
-    'whitenoise.middleware.WhiteNoiseMiddleware',
-    'accounts.middleware.RateLimitMiddleware',  # Защита от DDoS и rate limiting
-    'crm.middleware.SecurityHeadersMiddleware',  # Дополнительные security headers (CSP, Permissions-Policy)
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.locale.LocaleMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'crm.middleware.ErrorLoggingMiddleware',  # Логирование ошибок в БД
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "accounts.middleware.RateLimitMiddleware",  # Защита от DDoS и rate limiting
+    "crm.middleware.SecurityHeadersMiddleware",  # Дополнительные security headers (CSP, Permissions-Policy)
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.locale.LocaleMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "crm.middleware.ErrorLoggingMiddleware",  # Логирование ошибок в БД
 ]
 
-ROOT_URLCONF = 'crm.urls'
+ROOT_URLCONF = "crm.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
-                'ui.context_processors.ui_globals',
-                'notifications.context_processors.notifications_panel',
-                'crm.context_processors.csp_nonce',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+                "ui.context_processors.ui_globals",
+                "notifications.context_processors.notifications_panel",
+                "crm.context_processors.csp_nonce",
             ],
         },
     },
@@ -283,7 +294,7 @@ LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/login/"
 
-WSGI_APPLICATION = 'crm.wsgi.application'
+WSGI_APPLICATION = "crm.wsgi.application"
 
 
 # Database
@@ -309,14 +320,15 @@ if DB_ENGINE == "postgres":
 else:
     if _is_production_like:
         from django.core.exceptions import ImproperlyConfigured
+
         raise ImproperlyConfigured(
             "DB_ENGINE is not set to 'postgres' in a production-like environment. "
             "Set DB_ENGINE=postgres in your .env file."
         )
     DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
         }
     }
 
@@ -326,16 +338,16 @@ else:
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
@@ -354,7 +366,9 @@ USE_TZ = True
 # Настройки сессий для безопасности
 # Длительность сессии в секундах. По умолчанию 2 недели (1209600), чтобы сотрудникам не нужно
 # было каждую неделю получать новую ссылку входа. Можно задать через DJANGO_SESSION_COOKIE_AGE в .env.
-SESSION_COOKIE_AGE = int(os.getenv("DJANGO_SESSION_COOKIE_AGE", "1209600"))  # 2 недели (14 * 24 * 3600)
+SESSION_COOKIE_AGE = int(
+    os.getenv("DJANGO_SESSION_COOKIE_AGE", "1209600")
+)  # 2 недели (14 * 24 * 3600)
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"  # Защита от CSRF
 # При каждом запросе продлевать сессию (скользящее окно): пока сотрудник пользуется сайтом —
@@ -374,7 +388,7 @@ MAILER_FERNET_KEYS_OLD = [
 if not DEBUG and not MAILER_FERNET_KEY:
     raise ImproperlyConfigured(
         "MAILER_FERNET_KEY is not set. Email account passwords cannot be encrypted. "
-        "Generate: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+        'Generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
     )
 
 # Public base URL for emails/unsubscribe (optional; example: https://crm.example.ru)
@@ -425,14 +439,24 @@ MESSENGER_ESCALATION_TIMEOUT_SECONDS = int(os.getenv("MESSENGER_ESCALATION_TIMEO
 MESSENGER_AUTO_RESOLVE_HOURS = int(os.getenv("MESSENGER_AUTO_RESOLVE_HOURS", "24"))
 
 # Политика хранения: через сколько дней переводить RESOLVED → CLOSED (архивировать). По умолчанию 90 дней.
-MESSENGER_RETENTION_RESOLVED_TO_CLOSED_DAYS = int(os.getenv("MESSENGER_RETENTION_RESOLVED_TO_CLOSED_DAYS", "90"))
+MESSENGER_RETENTION_RESOLVED_TO_CLOSED_DAYS = int(
+    os.getenv("MESSENGER_RETENTION_RESOLVED_TO_CLOSED_DAYS", "90")
+)
 
 # Throttling / abuse‑защита публичного Widget API (переопределяются через env на проде)
-MESSENGER_WIDGET_BOOTSTRAP_RATE_PER_IP = int(os.getenv("MESSENGER_WIDGET_BOOTSTRAP_RATE_PER_IP", "10"))
-MESSENGER_WIDGET_BOOTSTRAP_RATE_PER_TOKEN = int(os.getenv("MESSENGER_WIDGET_BOOTSTRAP_RATE_PER_TOKEN", "20"))
-MESSENGER_WIDGET_SEND_RATE_PER_SESSION = int(os.getenv("MESSENGER_WIDGET_SEND_RATE_PER_SESSION", "30"))
+MESSENGER_WIDGET_BOOTSTRAP_RATE_PER_IP = int(
+    os.getenv("MESSENGER_WIDGET_BOOTSTRAP_RATE_PER_IP", "10")
+)
+MESSENGER_WIDGET_BOOTSTRAP_RATE_PER_TOKEN = int(
+    os.getenv("MESSENGER_WIDGET_BOOTSTRAP_RATE_PER_TOKEN", "20")
+)
+MESSENGER_WIDGET_SEND_RATE_PER_SESSION = int(
+    os.getenv("MESSENGER_WIDGET_SEND_RATE_PER_SESSION", "30")
+)
 MESSENGER_WIDGET_SEND_RATE_PER_IP = int(os.getenv("MESSENGER_WIDGET_SEND_RATE_PER_IP", "60"))
-MESSENGER_WIDGET_POLL_RATE_PER_SESSION = int(os.getenv("MESSENGER_WIDGET_POLL_RATE_PER_SESSION", "60"))
+MESSENGER_WIDGET_POLL_RATE_PER_SESSION = int(
+    os.getenv("MESSENGER_WIDGET_POLL_RATE_PER_SESSION", "60")
+)
 MESSENGER_WIDGET_POLL_MIN_INTERVAL_SECONDS = int(
     os.getenv("MESSENGER_WIDGET_POLL_MIN_INTERVAL_SECONDS", "2")
 )
@@ -440,13 +464,18 @@ MESSENGER_WIDGET_POLL_MIN_INTERVAL_SECONDS = int(
 # Secure-by-default allowlist доменов для виджета.
 # Если True (прод-дефолт), при пустом allowlist запрос блокируется.
 # Если False (dev), пустой allowlist пропускает запрос (обратная совместимость).
-MESSENGER_WIDGET_STRICT_ORIGIN = os.getenv(
-    "MESSENGER_WIDGET_STRICT_ORIGIN",
-    "0" if DEBUG else "1",
-) == "1"
+MESSENGER_WIDGET_STRICT_ORIGIN = (
+    os.getenv(
+        "MESSENGER_WIDGET_STRICT_ORIGIN",
+        "0" if DEBUG else "1",
+    )
+    == "1"
+)
 # Глобальный allowlist доменов (через запятую) — добавляется к inbox.allowed_domains.
 MESSENGER_WIDGET_GLOBAL_ALLOWED_DOMAINS = [
-    d.strip() for d in os.getenv("MESSENGER_WIDGET_GLOBAL_ALLOWED_DOMAINS", "").split(",") if d.strip()
+    d.strip()
+    for d in os.getenv("MESSENGER_WIDGET_GLOBAL_ALLOWED_DOMAINS", "").split(",")
+    if d.strip()
 ]
 
 # Privacy‑настройки для публичного виджета (минимальное уведомление о данных)
@@ -467,9 +496,7 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",  # Для UI запросов из браузера
     ),
-    "DEFAULT_PERMISSION_CLASSES": (
-        "rest_framework.permissions.IsAuthenticated",
-    ),
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_FILTER_BACKENDS": (
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.SearchFilter",
@@ -528,13 +555,20 @@ SIMPLE_JWT = {
 }
 
 # Frontend dev CORS (Vite)
-CORS_ALLOWED_ORIGINS = [o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",") if o.strip()]
+CORS_ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+    if o.strip()
+]
 
 # Проверка: в production CORS_ALLOWED_ORIGINS не должен содержать localhost
 if not DEBUG:
-    localhost_origins = [o for o in CORS_ALLOWED_ORIGINS if "localhost" in o.lower() or "127.0.0.1" in o.lower()]
+    localhost_origins = [
+        o for o in CORS_ALLOWED_ORIGINS if "localhost" in o.lower() or "127.0.0.1" in o.lower()
+    ]
     if localhost_origins:
         from django.core.exceptions import ImproperlyConfigured
+
         raise ImproperlyConfigured(
             f"CORS_ALLOWED_ORIGINS contains localhost origins in production: {localhost_origins}. "
             "Set CORS_ALLOWED_ORIGINS to your production domain(s) only."
@@ -546,7 +580,7 @@ CORS_ALLOW_CREDENTIALS = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = '/static/'
+STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 
@@ -556,8 +590,12 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 # Upload limits (bytes). Default: 20MB total/request and 20MB per-file in memory.
 # Real per-file limit is validated in forms/models where needed.
-DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv("DJANGO_DATA_UPLOAD_MAX_MEMORY_SIZE", str(20 * 1024 * 1024)))
-FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv("DJANGO_FILE_UPLOAD_MAX_MEMORY_SIZE", str(20 * 1024 * 1024)))
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(
+    os.getenv("DJANGO_DATA_UPLOAD_MAX_MEMORY_SIZE", str(20 * 1024 * 1024))
+)
+FILE_UPLOAD_MAX_MEMORY_SIZE = int(
+    os.getenv("DJANGO_FILE_UPLOAD_MAX_MEMORY_SIZE", str(20 * 1024 * 1024))
+)
 
 # Кеш для rate limiting и защиты от брутфорса
 # Используем Redis для production, LocMemCache для development
@@ -619,7 +657,9 @@ CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 минут максимум на зада
 CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 минут мягкий лимит
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # Не брать задачи заранее
 CELERY_TASK_ACKS_LATE = True  # Подтверждать задачи после выполнения
-CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True  # Исправление предупреждения о broker_connection_retry
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = (
+    True  # Исправление предупреждения о broker_connection_retry
+)
 CELERY_WORKER_HIJACK_ROOT_LOGGER = False  # Не перехватывать root logger
 CELERY_WORKER_LOG_COLOR = False  # Отключить цветной вывод в логах
 # Примечание: запуск Celery от root в Docker контейнере безопасен, так как контейнер изолирован
@@ -628,6 +668,7 @@ CELERY_WORKER_LOG_COLOR = False  # Отключить цветной вывод 
 # Поиск компаний: только PostgreSQL FTS+pg_trgm (CompanySearchIndex).
 # SEARCH_ENGINE_BACKEND оставлен для обратной совместимости, но поддерживает только значение "postgres".
 SEARCH_ENGINE_BACKEND = "postgres"
+
 
 # Текстовый поиск: отсечка мусора и пороги (опционально через env, дефолты — без обязательного .env).
 # ABS_MIN_SCORE: минимальный score для попадания в выдачу (абсолютный порог).
@@ -641,10 +682,13 @@ def _float_env(name: str, default: float) -> float:
     except (TypeError, ValueError):
         return default
 
+
 SEARCH_TEXT_ABS_MIN_SCORE = _float_env("SEARCH_TEXT_ABS_MIN_SCORE", 0.5)
 SEARCH_TEXT_RELATIVE_MIN_FACTOR = _float_env("SEARCH_TEXT_RELATIVE_MIN_FACTOR", 0.15)
 SEARCH_TEXT_EXACT_CUTOFF_LIMIT = int(os.getenv("SEARCH_TEXT_EXACT_CUTOFF_LIMIT", "20") or "20")
-SEARCH_TEXT_SIMILARITY_ONLY_IF_FTS_EMPTY = (os.getenv("SEARCH_TEXT_SIMILARITY_ONLY_IF_FTS_EMPTY", "1") or "1").strip().lower() in ("1", "true", "yes")
+SEARCH_TEXT_SIMILARITY_ONLY_IF_FTS_EMPTY = (
+    os.getenv("SEARCH_TEXT_SIMILARITY_ONLY_IF_FTS_EMPTY", "1") or "1"
+).strip().lower() in ("1", "true", "yes")
 SEARCH_TEXT_SIMILARITY_THRESHOLD = _float_env("SEARCH_TEXT_SIMILARITY_THRESHOLD", 0.4)
 
 # Celery Beat Schedule (периодические задачи)
@@ -689,7 +733,9 @@ CELERY_BEAT_SCHEDULE = {
     },
     "reindex-companies-daily": {
         "task": "companies.tasks.reindex_companies_daily",
-        "schedule": crontab(hour=0, minute=0),  # Ежедневно 00:00 (по CELERY_TIMEZONE = Europe/Moscow)
+        "schedule": crontab(
+            hour=0, minute=0
+        ),  # Ежедневно 00:00 (по CELERY_TIMEZONE = Europe/Moscow)
     },
     "generate-recurring-tasks": {
         "task": "tasksapp.tasks.generate_recurring_tasks",
@@ -801,33 +847,57 @@ LOGGING = {
     },
     "loggers": {
         "django": {
-            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
+            "handlers": (
+                (["console", "file"] if _use_file_logging else ["console"])
+                if not DEBUG
+                else ["console"]
+            ),
             "level": "INFO",
             "propagate": False,
         },
         "django.request": {
-            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
+            "handlers": (
+                (["console", "file"] if _use_file_logging else ["console"])
+                if not DEBUG
+                else ["console"]
+            ),
             "level": "ERROR",
             "propagate": False,
         },
         "crm": {
-            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
+            "handlers": (
+                (["console", "file"] if _use_file_logging else ["console"])
+                if not DEBUG
+                else ["console"]
+            ),
             "level": "INFO",
             "propagate": False,
         },
         "mailer": {
-            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
+            "handlers": (
+                (["console", "file"] if _use_file_logging else ["console"])
+                if not DEBUG
+                else ["console"]
+            ),
             "level": "INFO",
             "propagate": False,
         },
         # ENTERPRISE: JSON formatter для mailer в production (structured logging)
         "mailer.tasks": {
-            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
+            "handlers": (
+                (["console", "file"] if _use_file_logging else ["console"])
+                if not DEBUG
+                else ["console"]
+            ),
             "level": "INFO",
             "propagate": False,
         },
         "phonebridge": {
-            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
+            "handlers": (
+                (["console", "file"] if _use_file_logging else ["console"])
+                if not DEBUG
+                else ["console"]
+            ),
             "level": "INFO",
             "propagate": False,
         },
@@ -837,22 +907,38 @@ LOGGING = {
             "propagate": False,
         },
         "messenger": {
-            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
+            "handlers": (
+                (["console", "file"] if _use_file_logging else ["console"])
+                if not DEBUG
+                else ["console"]
+            ),
             "level": "INFO",
             "propagate": False,
         },
         "messenger.security": {
-            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
+            "handlers": (
+                (["console", "file"] if _use_file_logging else ["console"])
+                if not DEBUG
+                else ["console"]
+            ),
             "level": "WARNING",
             "propagate": False,
         },
         "messenger.ws": {
-            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
+            "handlers": (
+                (["console", "file"] if _use_file_logging else ["console"])
+                if not DEBUG
+                else ["console"]
+            ),
             "level": "INFO",
             "propagate": False,
         },
         "messenger.tasks": {
-            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
+            "handlers": (
+                (["console", "file"] if _use_file_logging else ["console"])
+                if not DEBUG
+                else ["console"]
+            ),
             "level": "INFO",
             "propagate": False,
         },
@@ -870,7 +956,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ============================================================================
 
 # Throttling rates (запросов в час на пользователя)
-MAILER_THROTTLE_CAMPAIGN_START_PER_HOUR = int(os.getenv("MAILER_THROTTLE_CAMPAIGN_START_PER_HOUR", "10"))
+MAILER_THROTTLE_CAMPAIGN_START_PER_HOUR = int(
+    os.getenv("MAILER_THROTTLE_CAMPAIGN_START_PER_HOUR", "10")
+)
 MAILER_THROTTLE_TEST_EMAIL_PER_HOUR = int(os.getenv("MAILER_THROTTLE_TEST_EMAIL_PER_HOUR", "5"))
 
 # Circuit breaker threshold (количество последовательных transient ошибок до паузы)

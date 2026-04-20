@@ -57,12 +57,14 @@ class WidgetAPITests(TestCase):
 
         # Очищаем кэш throttling между тестами
         from django.core.cache import cache
+
         cache.clear()
 
     def tearDown(self):
         """Восстановление настроек после тестов."""
         settings.MESSENGER_ENABLED = self.original_messenger_enabled
         from django.core.cache import cache
+
         cache.clear()
 
     # ========================================================================
@@ -457,9 +459,21 @@ class WidgetAPITests(TestCase):
         client = APIClient()
 
         endpoints = [
-            ("POST", "/api/widget/bootstrap/", {"widget_token": "test", "contact_external_id": "visitor"}),
-            ("POST", "/api/widget/send/", {"widget_token": "test", "widget_session_token": "session", "body": "test"}),
-            ("GET", "/api/widget/poll/", {"widget_token": "test", "widget_session_token": "session"}),
+            (
+                "POST",
+                "/api/widget/bootstrap/",
+                {"widget_token": "test", "contact_external_id": "visitor"},
+            ),
+            (
+                "POST",
+                "/api/widget/send/",
+                {"widget_token": "test", "widget_session_token": "session", "body": "test"},
+            ),
+            (
+                "GET",
+                "/api/widget/poll/",
+                {"widget_token": "test", "widget_session_token": "session"},
+            ),
         ]
 
         for method, endpoint, data in endpoints:
@@ -473,21 +487,21 @@ class WidgetAPITests(TestCase):
                 status.HTTP_404_NOT_FOUND,
                 f"Endpoint {endpoint} должен возвращать 404 при отключённом messenger",
             )
-    
+
     # ========================================================================
     # Throttling тесты (PRD-1)
     # ========================================================================
-    
+
     def test_bootstrap_throttling(self):
         """Проверка throttling для bootstrap: превышение лимита возвращает 429."""
         from django.core.cache import cache
         from messenger.throttles import WidgetBootstrapThrottle
-        
+
         # Очистить кэш перед тестом
         cache.clear()
-        
+
         client = APIClient()
-        
+
         # Отправить больше лимита запросов с одного IP
         for i in range(WidgetBootstrapThrottle.RATE_PER_IP + 1):
             response = client.post(
@@ -497,12 +511,15 @@ class WidgetAPITests(TestCase):
                     "contact_external_id": f"test-contact-{i}",
                 },
             )
-            
+
             if i < WidgetBootstrapThrottle.RATE_PER_IP:
                 # Первые запросы должны проходить
                 self.assertIn(
                     response.status_code,
-                    [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND],  # 404 если inbox не найден, но не 429
+                    [
+                        status.HTTP_200_OK,
+                        status.HTTP_404_NOT_FOUND,
+                    ],  # 404 если inbox не найден, но не 429
                     f"Запрос {i} не должен быть throttled",
                 )
             else:
@@ -512,24 +529,24 @@ class WidgetAPITests(TestCase):
                     status.HTTP_429_TOO_MANY_REQUESTS,
                     f"Запрос {i} должен быть throttled (429)",
                 )
-    
+
     def test_send_throttling(self):
         """Проверка throttling для send: превышение лимита возвращает 429."""
         from django.core.cache import cache
         from messenger.throttles import WidgetSendThrottle
         from messenger.utils import create_widget_session
-        
+
         cache.clear()
-        
+
         # Создать сессию
         session = create_widget_session(
             inbox_id=self.inbox.id,
             conversation_id=self.conversation.id,
             contact_id=str(self.contact.id),
         )
-        
+
         client = APIClient()
-        
+
         # Отправить больше лимита запросов
         for i in range(WidgetSendThrottle.RATE_PER_SESSION + 1):
             response = client.post(
@@ -540,12 +557,16 @@ class WidgetAPITests(TestCase):
                     "body": f"Test message {i}",
                 },
             )
-            
+
             if i < WidgetSendThrottle.RATE_PER_SESSION:
                 # Первые запросы должны проходить (или 429 от модели при превышении flood-лимита)
                 self.assertIn(
                     response.status_code,
-                    [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST, status.HTTP_429_TOO_MANY_REQUESTS],
+                    [
+                        status.HTTP_201_CREATED,
+                        status.HTTP_400_BAD_REQUEST,
+                        status.HTTP_429_TOO_MANY_REQUESTS,
+                    ],
                     f"Запрос {i} не должен быть throttled",
                 )
             else:
@@ -555,24 +576,24 @@ class WidgetAPITests(TestCase):
                     status.HTTP_429_TOO_MANY_REQUESTS,
                     f"Запрос {i} должен быть throttled (429)",
                 )
-    
+
     def test_poll_throttling(self):
         """Проверка throttling для poll: минимальный интервал и лимит запросов."""
         from django.core.cache import cache
         from messenger.throttles import WidgetPollThrottle
         from messenger.utils import create_widget_session
-        
+
         cache.clear()
-        
+
         # Создать сессию
         session = create_widget_session(
             inbox_id=self.inbox.id,
             conversation_id=self.conversation.id,
             contact_id=str(self.contact.id),
         )
-        
+
         client = APIClient()
-        
+
         # Первый запрос должен пройти
         response1 = client.get(
             "/api/widget/poll/",
@@ -586,7 +607,7 @@ class WidgetAPITests(TestCase):
             [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST],
             "Первый запрос должен пройти",
         )
-        
+
         # Второй запрос сразу после первого должен быть заблокирован (min interval)
         response2 = client.get(
             "/api/widget/poll/",
@@ -596,27 +617,27 @@ class WidgetAPITests(TestCase):
             },
         )
         self.assertEqual(
-                response2.status_code,
-                status.HTTP_429_TOO_MANY_REQUESTS,
-                "Второй запрос должен быть заблокирован из-за минимального интервала",
-            )
-    
+            response2.status_code,
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Второй запрос должен быть заблокирован из-за минимального интервала",
+        )
+
     # ========================================================================
     # Honeypot и антибот-валидация тесты (PRD-2)
     # ========================================================================
-    
+
     def test_send_honeypot_blocks_bot(self):
         """Проверка honeypot: заполненное поле hp блокирует запрос."""
         from messenger.utils import create_widget_session
-        
+
         session = create_widget_session(
             inbox_id=self.inbox.id,
             conversation_id=self.conversation.id,
             contact_id=str(self.contact.id),
         )
-        
+
         client = APIClient()
-        
+
         # Запрос с заполненным honeypot полем
         response = client.post(
             "/api/widget/send/",
@@ -627,26 +648,26 @@ class WidgetAPITests(TestCase):
                 "hp": "filled",  # Бот заполнил honeypot
             },
         )
-        
+
         self.assertEqual(
             response.status_code,
             status.HTTP_400_BAD_REQUEST,
             "Запрос с заполненным honeypot должен быть заблокирован",
         )
         self.assertIn("hp", response.data or {})
-    
+
     def test_send_too_many_links_blocked(self):
         """Проверка: сообщение с слишком большим количеством ссылок блокируется."""
         from messenger.utils import create_widget_session
-        
+
         session = create_widget_session(
             inbox_id=self.inbox.id,
             conversation_id=self.conversation.id,
             contact_id=str(self.contact.id),
         )
-        
+
         client = APIClient()
-        
+
         # Сообщение с 4+ ссылками
         response = client.post(
             "/api/widget/send/",
@@ -656,30 +677,30 @@ class WidgetAPITests(TestCase):
                 "body": "Check http://link1.com and https://link2.com and www.link3.com and http://link4.com",
             },
         )
-        
+
         self.assertEqual(
             response.status_code,
             status.HTTP_400_BAD_REQUEST,
             "Сообщение с слишком большим количеством ссылок должно быть заблокировано",
         )
-    
+
     def test_send_duplicate_messages_blocked(self):
         """Проверка: одинаковые сообщения подряд блокируются."""
         from django.core.cache import cache
         from messenger.utils import create_widget_session
-        
+
         cache.clear()
-        
+
         session = create_widget_session(
             inbox_id=self.inbox.id,
             conversation_id=self.conversation.id,
             contact_id=str(self.contact.id),
         )
-        
+
         client = APIClient()
-        
+
         message_body = "Spam message"
-        
+
         # Отправляем одинаковое сообщение несколько раз
         for i in range(4):
             response = client.post(
@@ -690,7 +711,7 @@ class WidgetAPITests(TestCase):
                     "body": message_body,
                 },
             )
-            
+
             if i < 3:
                 # Первые 3 сообщения должны проходить
                 self.assertIn(
@@ -706,18 +727,18 @@ class WidgetAPITests(TestCase):
                     "4-е одинаковое сообщение должно быть заблокировано",
                 )
                 self.assertIn("duplicate", response.data.get("detail", "").lower())
-    
+
     # ========================================================================
     # Routing Engine тесты (PRD-4)
     # ========================================================================
-    
+
     def test_bootstrap_applies_routing_rule_by_region(self):
         """Проверка: при создании нового Conversation применяется RoutingRule по region."""
         from companies.models import Region
-        
+
         # Создаём регион
         region = Region.objects.get_or_create(name="Москва")[0]
-        
+
         # Создаём правило маршрутизации
         routing_rule = RoutingRule.objects.create(
             name="Москва → Филиал 1",
@@ -727,9 +748,9 @@ class WidgetAPITests(TestCase):
             is_active=True,
         )
         routing_rule.regions.add(region)
-        
+
         client = APIClient()
-        
+
         # Bootstrap с указанием region_id
         response = client.post(
             "/api/widget/bootstrap/",
@@ -739,20 +760,20 @@ class WidgetAPITests(TestCase):
                 "region_id": region.id,
             },
         )
-        
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
+
         # Проверяем, что Conversation создан с правильным region
         conversation = Conversation.objects.get(id=response.data["conversation_id"])
         self.assertEqual(conversation.region, region)
-    
+
     def test_bootstrap_fallback_routing_rule(self):
         """Проверка: fallback правило применяется, если нет правила по region."""
         from companies.models import Region
-        
+
         # Создаём регион без правила
         region = Region.objects.get_or_create(name="Санкт-Петербург")[0]
-        
+
         # Создаём fallback правило
         fallback_rule = RoutingRule.objects.create(
             name="Fallback",
@@ -762,9 +783,9 @@ class WidgetAPITests(TestCase):
             is_fallback=True,
             is_active=True,
         )
-        
+
         client = APIClient()
-        
+
         # Bootstrap с region, для которого нет правила
         response = client.post(
             "/api/widget/bootstrap/",
@@ -774,20 +795,20 @@ class WidgetAPITests(TestCase):
                 "region_id": region.id,
             },
         )
-        
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
+
         # Проверяем, что Conversation создан с region (fallback не меняет region, но правило найдено)
         conversation = Conversation.objects.get(id=response.data["conversation_id"])
         self.assertEqual(conversation.region, region)  # region проставляется из параметра
-    
+
     def test_select_routing_rule_by_region(self):
         """Проверка функции select_routing_rule: выбор правила по region."""
         from companies.models import Region
-        
+
         region1 = Region.objects.get_or_create(name="Москва")[0]
         region2 = Region.objects.get_or_create(name="СПб")[0]
-        
+
         # Правило для region1
         rule1 = RoutingRule.objects.create(
             name="Москва",
@@ -797,7 +818,7 @@ class WidgetAPITests(TestCase):
             is_active=True,
         )
         rule1.regions.add(region1)
-        
+
         # Fallback правило
         fallback = RoutingRule.objects.create(
             name="Fallback",
@@ -807,17 +828,17 @@ class WidgetAPITests(TestCase):
             is_fallback=True,
             is_active=True,
         )
-        
+
         # Выбор правила для region1
         selected = services.select_routing_rule(self.inbox, region1)
         self.assertIsNotNone(selected)
         self.assertEqual(selected.id, rule1.id)
-        
+
         # Выбор правила для region2 (должен вернуть fallback)
         selected = services.select_routing_rule(self.inbox, region2)
         self.assertIsNotNone(selected)
         self.assertEqual(selected.id, fallback.id)
-        
+
         # Выбор правила без region (должен вернуть fallback)
         selected = services.select_routing_rule(self.inbox, None)
         self.assertIsNotNone(selected)

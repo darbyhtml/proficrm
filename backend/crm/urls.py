@@ -14,6 +14,7 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+
 from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
@@ -44,8 +45,13 @@ from phonebridge.api import (
     MobileAppLatestView,
 )
 from messenger.api import (
-    ConversationViewSet, CannedResponseViewSet, ConversationLabelViewSet,
-    PushSubscriptionViewSet, CampaignViewSet, AutomationRuleViewSet, ReportingViewSet,
+    ConversationViewSet,
+    CannedResponseViewSet,
+    ConversationLabelViewSet,
+    PushSubscriptionViewSet,
+    CampaignViewSet,
+    AutomationRuleViewSet,
+    ReportingViewSet,
     MacroViewSet,
 )
 from messenger.widget_api import (
@@ -70,6 +76,7 @@ admin.site.site_header = "CRM — Админка"
 admin.site.site_title = "CRM Admin"
 admin.site.index_title = "Управление"
 
+
 def _admin_has_permission(request):
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated or not user.is_active:
@@ -78,6 +85,7 @@ def _admin_has_permission(request):
     if user.is_superuser:
         return True
     return bool(user.is_staff and getattr(user, "role", None) == User.Role.ADMIN)
+
 
 admin.site.has_permission = _admin_has_permission
 
@@ -116,7 +124,7 @@ urlpatterns = [
     # Service Worker для push-уведомлений — отдаём напрямую (браузеры запрещают SW через redirect)
     path("sw-push.js", sw_push_js, name="sw_push"),
     path("favicon.ico", RedirectView.as_view(url=static("ui/favicon-v2.svg"), permanent=True)),
-    path('django-admin/', admin.site.urls),
+    path("django-admin/", admin.site.urls),
     path("", include("ui.urls")),
     path("", include("messenger.urls")),
     path("", include("mailer.urls")),
@@ -133,7 +141,9 @@ urlpatterns = [
     path("api/v1/token/refresh/", LoggedTokenRefreshView.as_view()),
     # Phonebridge: canonical at /api/phone/ (backward compat)
     path("api/phone/devices/register/", RegisterDeviceView.as_view(), name="phone_register_device"),
-    path("api/phone/devices/heartbeat/", DeviceHeartbeatView.as_view(), name="phone_device_heartbeat"),
+    path(
+        "api/phone/devices/heartbeat/", DeviceHeartbeatView.as_view(), name="phone_device_heartbeat"
+    ),
     path("api/phone/calls/pull/", PullCallView.as_view(), name="phone_pull_call"),
     path("api/phone/calls/update/", UpdateCallInfoView.as_view(), name="phone_update_call_info"),
     path("api/phone/telemetry/", PhoneTelemetryView.as_view(), name="phone_telemetry"),
@@ -157,7 +167,11 @@ urlpatterns = [
     path("api/widget/mark_read/", widget_mark_read, name="widget-mark-read"),
     path("api/widget/rate/", widget_rate, name="widget-rate"),
     path("api/widget/campaigns/", widget_campaigns, name="widget-campaigns"),
-    path("api/widget/attachment/<int:attachment_id>/", widget_attachment_download, name="widget-attachment"),
+    path(
+        "api/widget/attachment/<int:attachment_id>/",
+        widget_attachment_download,
+        name="widget-attachment",
+    ),
     # Phonebridge: /api/v1/phone/ aliases (no names to avoid conflicts)
     path("api/v1/phone/devices/register/", RegisterDeviceView.as_view()),
     path("api/v1/phone/devices/heartbeat/", DeviceHeartbeatView.as_view()),
@@ -179,11 +193,17 @@ urlpatterns = [
 # Serve user-uploaded media files in development
 if settings.DEBUG:
     from django.conf.urls.static import static as static_files
+
     urlpatterns += static_files(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
     # OpenAPI schema + Swagger UI — только в development (не экспонировать в production)
     from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+
     urlpatterns += [
         path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-        path("api/schema/swagger-ui/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+        path(
+            "api/schema/swagger-ui/",
+            SpectacularSwaggerView.as_view(url_name="schema"),
+            name="swagger-ui",
+        ),
     ]

@@ -95,13 +95,13 @@ def visible_canned_responses_qs(user: User) -> QuerySet[CannedResponse]:
 def get_messenger_unread_count(user: User) -> int:
     """
     Суммарное число непрочитанных входящих сообщений по всем диалогам (по образцу Chatwoot).
-    
+
     Args:
         user: Пользователь для подсчёта непрочитанных сообщений
-    
+
     Returns:
         Количество непрочитанных входящих сообщений
-    
+
     Note:
         Непрочитанное = входящее (IN) сообщение с created_at > assignee_last_read_at
         (или все входящие, если assignee_last_read_at не задан).
@@ -109,18 +109,18 @@ def get_messenger_unread_count(user: User) -> int:
     """
     if not user or not user.is_authenticated or not user.is_active:
         return 0
-    
+
     # Кэширование для оптимизации (по образцу Chatwoot)
     from django.core.cache import cache
     from django.conf import settings
-    
+
     cache_key = f"messenger:unread_count:{user.id}"
     cache_timeout = getattr(settings, "MESSENGER_UNREAD_COUNT_CACHE_TIMEOUT", 30)  # 30 секунд
-    
+
     cached_count = cache.get(cache_key)
     if cached_count is not None:
         return cached_count
-    
+
     count = (
         Message.objects.filter(
             conversation__assignee_id=user.id,
@@ -132,7 +132,7 @@ def get_messenger_unread_count(user: User) -> int:
         )
         .count()
     )
-    
+
     # Кэшируем результат
     cache.set(cache_key, count, timeout=cache_timeout)
 
@@ -170,9 +170,7 @@ def get_visible_conversations(user) -> QuerySet[Conversation]:
 
     if role == User.Role.GROUP_MANAGER:
         if hasattr(User, "group_manager"):
-            sub_ids = list(
-                User.objects.filter(group_manager=user).values_list("id", flat=True)
-            )
+            sub_ids = list(User.objects.filter(group_manager=user).values_list("id", flat=True))
             sub_ids.append(user.id)
             return Conversation.objects.filter(assignee_id__in=sub_ids)
         return Conversation.objects.filter(assignee=user)

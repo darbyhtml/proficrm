@@ -1,4 +1,5 @@
 """Plan 3 Task 1 — поля Conversation.resolution / escalation_level / last_escalated_at."""
+
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
@@ -72,17 +73,24 @@ class ResolutionApiTests(TestCase):
         self.user = User.objects.create_user(
             username="resolapi_m", password="x", role="manager", branch=self.branch
         )
-        self.inbox = Inbox.objects.create(name="S", branch=self.branch, widget_token="tok_resolapi", settings={})
+        self.inbox = Inbox.objects.create(
+            name="S", branch=self.branch, widget_token="tok_resolapi", settings={}
+        )
         self.contact = Contact.objects.create(external_id="resolapi_c", name="C", email="c@e.com")
         self.conv = Conversation.objects.create(
-            inbox=self.inbox, contact=self.contact, branch=self.branch, assignee=self.user,
+            inbox=self.inbox,
+            contact=self.contact,
+            branch=self.branch,
+            assignee=self.user,
         )
         self.api = APIClient()
         self.api.force_authenticate(self.user)
 
     def test_serializer_exposes_resolution_and_escalation_level(self):
         resp = self.api.get(f"/api/conversations/{self.conv.id}/")
-        self.assertEqual(resp.status_code, 200, resp.data if hasattr(resp, 'data') else resp.content)
+        self.assertEqual(
+            resp.status_code, 200, resp.data if hasattr(resp, "data") else resp.content
+        )
         self.assertIn("resolution", resp.data)
         self.assertIn("escalation_level", resp.data)
         self.assertIn("last_escalated_at", resp.data)

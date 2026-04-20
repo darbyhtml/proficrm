@@ -8,7 +8,17 @@ from django.contrib.auth.password_validation import validate_password
 from django.db.models import Q
 
 from accounts.models import Branch, User
-from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone, Region, ContractType
+from companies.models import (
+    Company,
+    CompanyNote,
+    CompanySphere,
+    CompanyStatus,
+    Contact,
+    ContactEmail,
+    ContactPhone,
+    Region,
+    ContractType,
+)
 from tasksapp.models import Task, TaskType
 from ui.models import UiGlobalConfig
 from ui.widgets import TaskTypeSelectWidget, UserSelectWithBranchWidget
@@ -20,6 +30,7 @@ class FlexibleUserChoiceField(forms.ModelChoiceField):
     Кастомное поле для выбора пользователя, которое правильно обрабатывает значения,
     приходящие в различных форматах (например, "['1']" вместо "1").
     """
+
     def to_python(self, value):
         """
         Преобразует значение в объект User.
@@ -27,21 +38,21 @@ class FlexibleUserChoiceField(forms.ModelChoiceField):
         """
         if value in self.empty_values:
             return None
-        
+
         # Если значение уже является объектом User, возвращаем его
         if isinstance(value, User):
             return value
-        
+
         # Очищаем значение, если оно пришло в неправильном формате
         cleaned_value = value
         if isinstance(value, str) or isinstance(value, (list, tuple)):
             cleaned_id = clean_int_id(value)
             if cleaned_id is not None:
                 cleaned_value = cleaned_id
-        
+
         # Вызываем стандартный метод to_python с очищенным значением
         return super().to_python(cleaned_value)
-    
+
     def clean(self, value):
         """
         Переопределяем clean для обработки ошибок валидации.
@@ -49,9 +60,9 @@ class FlexibleUserChoiceField(forms.ModelChoiceField):
         """
         if value in self.empty_values:
             if self.required:
-                raise forms.ValidationError(self.error_messages['required'], code='required')
+                raise forms.ValidationError(self.error_messages["required"], code="required")
             return None
-        
+
         # Сначала пытаемся стандартную валидацию
         try:
             return super().clean(value)
@@ -66,12 +77,12 @@ class FlexibleUserChoiceField(forms.ModelChoiceField):
                     if not self.queryset.filter(id=cleaned_id).exists():
                         # Временно расширяем queryset, чтобы валидация прошла
                         self.queryset = User.objects.filter(
-                            Q(id__in=self.queryset.values_list('id', flat=True)) | Q(id=cleaned_id)
+                            Q(id__in=self.queryset.values_list("id", flat=True)) | Q(id=cleaned_id)
                         )
                     return user
                 except (User.DoesNotExist, ValueError, TypeError):
                     pass
-            
+
             # Если не удалось найти пользователя, пробрасываем оригинальную ошибку
             raise e
 
@@ -117,18 +128,18 @@ class CompanyCreateForm(forms.ModelForm):
     head_company = FlexibleCompanyChoiceField(queryset=Company.objects.none(), required=False)
 
     def __init__(self, *args, **kwargs):
-        user = kwargs.pop('user', None)
+        user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
 
         # Для head_company используем AJAX-поиск (см. base.html), поэтому не грузим огромный <select>.
         # Но при этом должны валидировать любой выбранный ID — через FlexibleCompanyChoiceField.
         self.fields["head_company"].empty_label = "— Не выбрано —"
-        self.fields["head_company"].allowed_qs_getter = (lambda: Company.objects.all())
-        
+        self.fields["head_company"].allowed_qs_getter = lambda: Company.objects.all()
+
         # Оптимизация queryset для status и spheres: используем only() для загрузки только необходимых полей
         self.fields["status"].queryset = CompanyStatus.objects.only("id", "name").order_by("name")
         self.fields["spheres"].queryset = CompanySphere.objects.only("id", "name").order_by("name")
-        
+
         # Регионы выводим отсортированными по названию, без лишних полей.
         if "region" in self.fields:
             self.fields["region"].queryset = Region.objects.only("id", "name").order_by("name")
@@ -143,7 +154,9 @@ class CompanyCreateForm(forms.ModelForm):
         # Часовой пояс: показываем понятный селект по РФ + авто по адресу при пустом значении.
         self.fields["work_timezone"].required = False
         _choices = [("", "Авто (по адресу)")] + RUS_TZ_CHOICES
-        self.fields["work_timezone"].widget = forms.Select(choices=_choices, attrs={"class": "w-full rounded-lg border px-3 py-2"})
+        self.fields["work_timezone"].widget = forms.Select(
+            choices=_choices, attrs={"class": "w-full rounded-lg border px-3 py-2"}
+        )
         # На GET (когда форма не связана) подставляем предположение из адреса
         if not self.is_bound:
             addr = (getattr(self.instance, "address", "") or "").strip()
@@ -176,7 +189,7 @@ class CompanyCreateForm(forms.ModelForm):
         if not inn or not str(inn).strip():
             raise ValidationError("ИНН обязателен для заполнения.")
         return normalize_inn(inn)
-    
+
     class Meta:
         model = Company
         fields = [
@@ -212,22 +225,56 @@ class CompanyCreateForm(forms.ModelForm):
                 }
             ),
             "kpp": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "address": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2"}),
+            "address": forms.Textarea(
+                attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2"}
+            ),
             "website": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "activity_kind": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2", "placeholder": "Напр.: строительство, услуги, производство… (можно с новой строки)"}),
-            "employees_count": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "min": "0", "placeholder": "Напр.: 120"}),
+            "activity_kind": forms.Textarea(
+                attrs={
+                    "rows": 3,
+                    "class": "w-full rounded-lg border px-3 py-2",
+                    "placeholder": "Напр.: строительство, услуги, производство… (можно с новой строки)",
+                }
+            ),
+            "employees_count": forms.NumberInput(
+                attrs={
+                    "class": "w-full rounded-lg border px-3 py-2",
+                    "min": "0",
+                    "placeholder": "Напр.: 120",
+                }
+            ),
             "work_timezone": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "work_schedule": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2 font-mono text-sm", "placeholder": "Пн–Пт: 09:00–18:00\nСб: 10:00–16:00\nВс: выходной"}),
+            "work_schedule": forms.Textarea(
+                attrs={
+                    "rows": 3,
+                    "class": "w-full rounded-lg border px-3 py-2 font-mono text-sm",
+                    "placeholder": "Пн–Пт: 09:00–18:00\nСб: 10:00–16:00\nВс: выходной",
+                }
+            ),
             "contract_type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "contract_until": forms.DateInput(attrs={"type": "date", "class": "w-full rounded-lg border px-3 py-2"}),
+            "contract_until": forms.DateInput(
+                attrs={"type": "date", "class": "w-full rounded-lg border px-3 py-2"}
+            ),
             "head_company": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "phone": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "+7 ..."}),
-            "email": forms.EmailInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "email@example.com"}),
-            "contact_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "ФИО"}),
-            "contact_position": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "Должность"}),
+            "phone": forms.TextInput(
+                attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "+7 ..."}
+            ),
+            "email": forms.EmailInput(
+                attrs={
+                    "class": "w-full rounded-lg border px-3 py-2",
+                    "placeholder": "email@example.com",
+                }
+            ),
+            "contact_name": forms.TextInput(
+                attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "ФИО"}
+            ),
+            "contact_position": forms.TextInput(
+                attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "Должность"}
+            ),
             "status": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "spheres": forms.SelectMultiple(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
+
 
 class CompanyQuickEditForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
@@ -241,7 +288,9 @@ class CompanyQuickEditForm(forms.ModelForm):
         widgets = {
             "status": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "spheres": forms.SelectMultiple(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "region": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2", "data-inline-input": "1"}),
+            "region": forms.Select(
+                attrs={"class": "w-full rounded-lg border px-3 py-2", "data-inline-input": "1"}
+            ),
         }
 
 
@@ -250,6 +299,7 @@ class CompanyEditForm(forms.ModelForm):
     Полное редактирование данных компании (без смены ответственного/подразделения).
     Статус/сферы здесь тоже доступны, чтобы редактирование было "в одном месте".
     """
+
     head_company = FlexibleCompanyChoiceField(queryset=Company.objects.none(), required=False)
 
     def __init__(self, *args, **kwargs):
@@ -268,10 +318,12 @@ class CompanyEditForm(forms.ModelForm):
         # head_company: минимальный queryset для рендера (текущая выбранная + пустая),
         # дальше работает AJAX-поиск, а валидация идёт через allowed_qs_getter.
         self.fields["head_company"].empty_label = "— Не выбрано —"
-        self.fields["head_company"].allowed_qs_getter = (lambda: Company.objects.all())
+        self.fields["head_company"].allowed_qs_getter = lambda: Company.objects.all()
         current_id = getattr(self.instance, "head_company_id", None)
         if current_id:
-            self.fields["head_company"].queryset = Company.objects.filter(id=current_id).only("id", "name", "head_company_id")
+            self.fields["head_company"].queryset = Company.objects.filter(id=current_id).only(
+                "id", "name", "head_company_id"
+            )
         else:
             self.fields["head_company"].queryset = Company.objects.none()
 
@@ -281,7 +333,9 @@ class CompanyEditForm(forms.ModelForm):
         current_tz = (getattr(self.instance, "work_timezone", "") or "").strip()
         if current_tz and all(v != current_tz for v, _ in _choices):
             _choices = _choices + [(current_tz, current_tz)]
-        self.fields["work_timezone"].widget = forms.Select(choices=_choices, attrs={"class": "w-full rounded-lg border px-3 py-2"})
+        self.fields["work_timezone"].widget = forms.Select(
+            choices=_choices, attrs={"class": "w-full rounded-lg border px-3 py-2"}
+        )
         if not self.is_bound:
             addr = (getattr(self.instance, "address", "") or "").strip()
             if addr and not (getattr(self.instance, "work_timezone", "") or "").strip():
@@ -332,14 +386,16 @@ class CompanyEditForm(forms.ModelForm):
                 break
             seen.add(cur_id)
             if cur_id == self.instance.id:
-                raise ValidationError("Нельзя выбрать дочернюю карточку этой организации как головную (получится цикл).")
+                raise ValidationError(
+                    "Нельзя выбрать дочернюю карточку этой организации как головную (получится цикл)."
+                )
             cur = Company.objects.only("id", "head_company_id").filter(id=cur_id).first()
             if not cur or not cur.head_company_id:
                 break
             cur_id = cur.head_company_id
 
         return hc
-    
+
     class Meta:
         model = Company
         fields = [
@@ -375,20 +431,53 @@ class CompanyEditForm(forms.ModelForm):
                 }
             ),
             "kpp": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "address": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2"}),
+            "address": forms.Textarea(
+                attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2"}
+            ),
             "website": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "activity_kind": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2", "placeholder": "Напр.: строительство, услуги, производство… (можно с новой строки)"}),
-            "employees_count": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "min": "0", "placeholder": "Напр.: 120"}),
+            "activity_kind": forms.Textarea(
+                attrs={
+                    "rows": 3,
+                    "class": "w-full rounded-lg border px-3 py-2",
+                    "placeholder": "Напр.: строительство, услуги, производство… (можно с новой строки)",
+                }
+            ),
+            "employees_count": forms.NumberInput(
+                attrs={
+                    "class": "w-full rounded-lg border px-3 py-2",
+                    "min": "0",
+                    "placeholder": "Напр.: 120",
+                }
+            ),
             "work_timezone": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "region": forms.Select(attrs={"class": "select w-full"}),
-            "work_schedule": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2 font-mono text-sm", "placeholder": "Пн–Пт: 09:00–18:00\nСб: 10:00–16:00\nВс: выходной"}),
+            "work_schedule": forms.Textarea(
+                attrs={
+                    "rows": 3,
+                    "class": "w-full rounded-lg border px-3 py-2 font-mono text-sm",
+                    "placeholder": "Пн–Пт: 09:00–18:00\nСб: 10:00–16:00\nВс: выходной",
+                }
+            ),
             "contract_type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "contract_until": forms.DateInput(attrs={"type": "date", "class": "w-full rounded-lg border px-3 py-2"}),
+            "contract_until": forms.DateInput(
+                attrs={"type": "date", "class": "w-full rounded-lg border px-3 py-2"}
+            ),
             "head_company": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "phone": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "+7 ..."}),
-            "email": forms.EmailInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "email@example.com"}),
-            "contact_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "ФИО"}),
-            "contact_position": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "Должность"}),
+            "phone": forms.TextInput(
+                attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "+7 ..."}
+            ),
+            "email": forms.EmailInput(
+                attrs={
+                    "class": "w-full rounded-lg border px-3 py-2",
+                    "placeholder": "email@example.com",
+                }
+            ),
+            "contact_name": forms.TextInput(
+                attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "ФИО"}
+            ),
+            "contact_position": forms.TextInput(
+                attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "Должность"}
+            ),
             "status": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "spheres": forms.SelectMultiple(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
@@ -485,7 +574,9 @@ class CompanyInlineEditForm(forms.ModelForm):
             return None
         if amount is not None and self.instance and self.instance.contract_type:
             if not self.instance.contract_type.is_annual:
-                raise ValidationError("Сумма договора может быть указана только для годовых договоров.")
+                raise ValidationError(
+                    "Сумма договора может быть указана только для годовых договоров."
+                )
         return amount
 
     def clean_employees_count(self):
@@ -532,9 +623,11 @@ class CompanyContractForm(forms.ModelForm):
                 max_digits=12,
                 decimal_places=2,
                 required=False,
-                widget=forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "step": "0.01"}),
+                widget=forms.NumberInput(
+                    attrs={"class": "w-full rounded-lg border px-3 py-2", "step": "0.01"}
+                ),
             )
-        
+
         # Инициализируем видимость полей в зависимости от текущего типа договора
         if self.instance and self.instance.contract_type and self.instance.contract_type.is_annual:
             # Для годовых договоров скрываем "Действует до"
@@ -550,8 +643,12 @@ class CompanyContractForm(forms.ModelForm):
         fields = ["contract_type", "contract_until", "contract_amount"]
         widgets = {
             "contract_type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "contract_until": forms.DateInput(attrs={"type": "date", "class": "w-full rounded-lg border px-3 py-2"}),
-            "contract_amount": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "step": "0.01"}),
+            "contract_until": forms.DateInput(
+                attrs={"type": "date", "class": "w-full rounded-lg border px-3 py-2"}
+            ),
+            "contract_amount": forms.NumberInput(
+                attrs={"class": "w-full rounded-lg border px-3 py-2", "step": "0.01"}
+            ),
         }
 
 
@@ -560,19 +657,33 @@ class CompanyNoteForm(forms.ModelForm):
         model = CompanyNote
         fields = ["text", "attachment"]
         widgets = {
-            "text": forms.Textarea(attrs={"rows": 1, "placeholder": "Ввести текст заметки", "class": "note-input-bar-field note-input-autogrow w-full rounded-lg border border-brand-soft px-3 py-2"}),
+            "text": forms.Textarea(
+                attrs={
+                    "rows": 1,
+                    "placeholder": "Ввести текст заметки",
+                    "class": "note-input-bar-field note-input-autogrow w-full rounded-lg border border-brand-soft px-3 py-2",
+                }
+            ),
         }
 
     MAX_SIZE = 15 * 1024 * 1024  # 15 MB
     ALLOWED_EXT = {
         "pdf",
-        "doc", "docx",
-        "xls", "xlsx",
-        "ppt", "pptx",
-        "png", "jpg", "jpeg", "gif", "webp",
-        "txt", "csv",
+        "doc",
+        "docx",
+        "xls",
+        "xlsx",
+        "ppt",
+        "pptx",
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "webp",
+        "txt",
+        "csv",
     }
-    
+
     # Соответствие расширений и MIME типов для дополнительной проверки
     ALLOWED_MIME_TYPES = {
         "pdf": ["application/pdf"],
@@ -605,39 +716,43 @@ class CompanyNoteForm(forms.ModelForm):
                 raise ValidationError("Пустой файл.")
             if size > self.MAX_SIZE:
                 raise ValidationError("Слишком большой файл. Максимум 15 МБ.")
-            
+
             name = (getattr(f, "name", "") or "").strip().lower()
             ext = name.rsplit(".", 1)[-1] if "." in name else ""
-            
+
             if ext and ext not in self.ALLOWED_EXT:
-                raise ValidationError("Формат файла не поддерживается. Разрешены: PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, изображения, TXT/CSV.")
-            
+                raise ValidationError(
+                    "Формат файла не поддерживается. Разрешены: PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, изображения, TXT/CSV."
+                )
+
             # Дополнительная проверка MIME типа
             if ext:
                 # Читаем первые байты для определения реального типа файла
                 file_content = f.read(1024)  # Читаем первые 1024 байта
                 f.seek(0)  # Возвращаемся в начало файла
-                
+
                 # Определяем MIME тип по содержимому
                 detected_mime = None
-                if file_content.startswith(b'%PDF'):
-                    detected_mime = 'application/pdf'
-                elif file_content.startswith(b'\x89PNG'):
-                    detected_mime = 'image/png'
-                elif file_content.startswith(b'\xff\xd8\xff'):
-                    detected_mime = 'image/jpeg'
-                elif file_content.startswith(b'GIF'):
-                    detected_mime = 'image/gif'
-                elif file_content.startswith(b'RIFF') and b'WEBP' in file_content[:20]:
-                    detected_mime = 'image/webp'
+                if file_content.startswith(b"%PDF"):
+                    detected_mime = "application/pdf"
+                elif file_content.startswith(b"\x89PNG"):
+                    detected_mime = "image/png"
+                elif file_content.startswith(b"\xff\xd8\xff"):
+                    detected_mime = "image/jpeg"
+                elif file_content.startswith(b"GIF"):
+                    detected_mime = "image/gif"
+                elif file_content.startswith(b"RIFF") and b"WEBP" in file_content[:20]:
+                    detected_mime = "image/webp"
                 else:
                     # Используем стандартное определение MIME
                     detected_mime = mimetypes.guess_type(name)[0]
-                
+
                 # Проверяем соответствие MIME типа расширению
                 allowed_mimes = self.ALLOWED_MIME_TYPES.get(ext, [])
                 if detected_mime and allowed_mimes and detected_mime not in allowed_mimes:
-                    raise ValidationError(f"Тип файла не соответствует расширению. Ожидался {ext}, обнаружен {detected_mime}.")
+                    raise ValidationError(
+                        f"Тип файла не соответствует расширению. Ожидался {ext}, обнаружен {detected_mime}."
+                    )
 
         return cleaned
 
@@ -657,7 +772,7 @@ class TaskForm(forms.ModelForm):
                 "data-min-hour": "8",
                 "data-max-hour": "17",
                 "data-minute-step": "10",
-                # Шаг 10 минут реализован в кастомном календаре, 
+                # Шаг 10 минут реализован в кастомном календаре,
                 # нативный step не задаём, чтобы избежать конфликтов с таймзоной браузера.
             }
         ),
@@ -675,23 +790,29 @@ class TaskForm(forms.ModelForm):
         # Заголовок теперь не вводится руками — он берётся из выбранного типа/статуса.
         fields = ["description", "company", "type", "assigned_to", "due_at", "is_urgent"]
         widgets = {
-            "description": forms.Textarea(attrs={"rows": 4, "class": "w-full rounded-lg border px-3 py-2"}),
+            "description": forms.Textarea(
+                attrs={"rows": 4, "class": "w-full rounded-lg border px-3 py-2"}
+            ),
             "company": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             # type фактически используется как «Задача» (тип задачи из справочника)
-            "type": TaskTypeSelectWidget(attrs={"class": "w-full rounded-lg border px-3 py-2 task-type-select"}),
-            "assigned_to": UserSelectWithBranchWidget(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "type": TaskTypeSelectWidget(
+                attrs={"class": "w-full rounded-lg border px-3 py-2 task-type-select"}
+            ),
+            "assigned_to": UserSelectWithBranchWidget(
+                attrs={"class": "w-full rounded-lg border px-3 py-2"}
+            ),
             "is_urgent": forms.CheckboxInput(attrs={"class": "rounded border-gray-300"}),
         }
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Заменяем стандартное поле assigned_to на кастомное, которое правильно обрабатывает значения
         # ВАЖНО: queryset будет установлен в view через _set_assigned_to_queryset,
         # поэтому здесь устанавливаем временный queryset на всех пользователей
-        if 'assigned_to' in self.fields:
+        if "assigned_to" in self.fields:
             # Сохраняем оригинальные параметры поля
-            original_field = self.fields['assigned_to']
-            self.fields['assigned_to'] = FlexibleUserChoiceField(
+            original_field = self.fields["assigned_to"]
+            self.fields["assigned_to"] = FlexibleUserChoiceField(
                 queryset=User.objects.filter(is_active=True).select_related("branch"),
                 widget=original_field.widget,
                 required=False,
@@ -699,13 +820,13 @@ class TaskForm(forms.ModelForm):
                 help_text=original_field.help_text,
             )
             # ВАЖНО: queryset будет переустановлен в view, поэтому не ограничиваем его здесь
-    
+
     def clean_assigned_to(self):
         """
         Переопределяем валидацию assigned_to, чтобы принимать любое значение,
         если оно было передано в форме. Валидация прав будет выполнена в view.
         """
-        assigned_to = self.cleaned_data.get('assigned_to')
+        assigned_to = self.cleaned_data.get("assigned_to")
         if assigned_to:
             # Проверяем, что пользователь существует
             if not User.objects.filter(id=assigned_to.id, is_active=True).exists():
@@ -744,25 +865,29 @@ class TaskEditForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         from django.utils import timezone
         from datetime import timedelta
-        
+
         # Форматируем дату для datetime-local input
         if self.instance and self.instance.due_at:
             local_dt = timezone.localtime(self.instance.due_at)
-            self.initial['due_at'] = local_dt.strftime('%Y-%m-%dT%H:%M')
+            self.initial["due_at"] = local_dt.strftime("%Y-%m-%dT%H:%M")
         elif self.instance and not self.instance.due_at:
             # Если у задачи нет дедлайна, устанавливаем дефолтный (завтра в 18:00)
             local_now = timezone.localtime(timezone.now())
             default_due = local_now + timedelta(days=1)
             default_due = default_due.replace(hour=18, minute=0, second=0, microsecond=0)
-            self.initial['due_at'] = default_due.strftime('%Y-%m-%dT%H:%M')
+            self.initial["due_at"] = default_due.strftime("%Y-%m-%dT%H:%M")
 
     class Meta:
         model = Task
         # Заголовок не редактируется вручную, берётся из выбранного типа/статуса.
         fields = ["description", "type", "due_at", "is_urgent"]
         widgets = {
-            "description": forms.Textarea(attrs={"rows": 4, "class": "w-full rounded-lg border px-3 py-2"}),
-            "type": TaskTypeSelectWidget(attrs={"class": "w-full rounded-lg border px-3 py-2 task-type-select"}),
+            "description": forms.Textarea(
+                attrs={"rows": 4, "class": "w-full rounded-lg border px-3 py-2"}
+            ),
+            "type": TaskTypeSelectWidget(
+                attrs={"class": "w-full rounded-lg border px-3 py-2 task-type-select"}
+            ),
             "is_urgent": forms.CheckboxInput(attrs={"class": "rounded border-gray-300"}),
         }
 
@@ -774,6 +899,7 @@ class TaskEditForm(forms.ModelForm):
         if not task_type:
             raise forms.ValidationError("Пожалуйста, выберите тип задачи в поле «Задача».")
         return task_type
+
 
 class BranchForm(forms.ModelForm):
     class Meta:
@@ -810,8 +936,12 @@ class ContractTypeForm(forms.ModelForm):
         widgets = {
             "name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "is_annual": forms.CheckboxInput(attrs={"class": "rounded border"}),
-            "warning_days": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "min": 1}),
-            "danger_days": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "min": 1}),
+            "warning_days": forms.NumberInput(
+                attrs={"class": "w-full rounded-lg border px-3 py-2", "min": 1}
+            ),
+            "danger_days": forms.NumberInput(
+                attrs={"class": "w-full rounded-lg border px-3 py-2", "min": 1}
+            ),
             "order": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
 
@@ -880,6 +1010,7 @@ class UserCreateForm(forms.ModelForm):
     Форма создания пользователя.
     Пароли не используются - вместо них генерируется ключ доступа.
     """
+
     class Meta:
         model = User
         # data_scope больше не используем: вся база компаний видна всем пользователям.
@@ -904,15 +1035,16 @@ class UserCreateForm(forms.ModelForm):
         user = super().save(commit=False)
         # Админка доступна только ADMIN + is_staff
         user.is_staff = user.role == User.Role.ADMIN
-        
+
         if commit:
             # Для администраторов генерируем пароль
             if user.role == User.Role.ADMIN:
                 import secrets
                 import string
+
                 # Генерируем сложный пароль: минимум 16 символов, включая буквы, цифры и спецсимволы
                 alphabet = string.ascii_letters + string.digits + "!@#$%^&*()_+-=[]{}|;:,.<>?"
-                password = ''.join(secrets.choice(alphabet) for _ in range(16))
+                password = "".join(secrets.choice(alphabet) for _ in range(16))
                 user.set_password(password)
                 # Сохраняем пароль в сессии для отображения (только один раз)
                 if request and created_by:
@@ -923,20 +1055,28 @@ class UserCreateForm(forms.ModelForm):
             else:
                 # Для не-администраторов устанавливаем неиспользуемый пароль и генерируем ключ доступа
                 user.set_unusable_password()
-            
+
             user.save()
-            
+
             # Обновляем user_id в сессии, если пароль был сохранен
-            if user.role == User.Role.ADMIN and request and "admin_password_generated" in request.session:
+            if (
+                user.role == User.Role.ADMIN
+                and request
+                and "admin_password_generated" in request.session
+            ):
                 request.session["admin_password_generated"]["user_id"] = user.id
-            
+
             # Автоматически генерируем ключ доступа только для не-администраторов
             if user.role != User.Role.ADMIN and created_by:
                 from accounts.models import MagicLinkToken
-                magic_link, plain_token = MagicLinkToken.create_for_user(user=user, created_by=created_by)
+
+                magic_link, plain_token = MagicLinkToken.create_for_user(
+                    user=user, created_by=created_by
+                )
                 # Сохраняем plain_token в сессии для отображения
                 if request:
                     from django.conf import settings as django_settings
+
                     public_base_url = getattr(django_settings, "PUBLIC_BASE_URL", None)
                     if public_base_url:
                         base_url = public_base_url.rstrip("/")
@@ -947,7 +1087,7 @@ class UserCreateForm(forms.ModelForm):
                         magic_link_url = f"{base_url}/auth/magic/{plain_token}/"
                     else:
                         magic_link_url = None
-                    
+
                     request.session["magic_link_generated"] = {
                         "token": plain_token,
                         "link": magic_link_url,
@@ -962,10 +1102,13 @@ class UserEditForm(forms.ModelForm):
     Форма редактирования пользователя.
     Для администраторов доступна генерация пароля.
     """
+
     new_password = forms.CharField(
         label="Новый пароль (только для администраторов)",
         required=False,
-        widget=forms.PasswordInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "id": "id_new_password"}),
+        widget=forms.PasswordInput(
+            attrs={"class": "w-full rounded-lg border px-3 py-2", "id": "id_new_password"}
+        ),
         help_text="Оставьте пустым, чтобы не менять пароль. Доступно только для пользователей с ролью 'Администратор'.",
     )
 
@@ -992,7 +1135,7 @@ class UserEditForm(forms.ModelForm):
         user = super().save(commit=False)
         # Админка доступна только ADMIN + is_staff
         user.is_staff = user.role == User.Role.ADMIN
-        
+
         # Устанавливаем пароль только для администраторов
         p = self.cleaned_data.get("new_password") or ""
         if p and user.role == User.Role.ADMIN:
@@ -1001,7 +1144,7 @@ class UserEditForm(forms.ModelForm):
             # Для не-администраторов устанавливаем неиспользуемый пароль
             if not user.has_usable_password():
                 user.set_unusable_password()
-        
+
         if commit:
             user.save()
         return user
@@ -1009,13 +1152,17 @@ class UserEditForm(forms.ModelForm):
 
 class ImportCompaniesForm(forms.Form):
     csv_file = forms.FileField(label="CSV файл")
-    limit_companies = forms.IntegerField(label="Сколько компаний импортировать", min_value=1, max_value=1000, initial=20)
+    limit_companies = forms.IntegerField(
+        label="Сколько компаний импортировать", min_value=1, max_value=1000, initial=20
+    )
     dry_run = forms.BooleanField(label="Только проверить (dry-run)", required=False, initial=True)
 
 
 class ImportTasksIcsForm(forms.Form):
     ics_file = forms.FileField(label="ICS файл (.ics)")
-    limit_events = forms.IntegerField(label="Сколько задач импортировать", min_value=1, max_value=20000, initial=500)
+    limit_events = forms.IntegerField(
+        label="Сколько задач импортировать", min_value=1, max_value=20000, initial=500
+    )
     dry_run = forms.BooleanField(label="Только проверить (dry-run)", required=False, initial=True)
     only_linked = forms.BooleanField(
         label="Импортировать только задачи, привязанные к существующей компании",
@@ -1037,8 +1184,14 @@ class ImportTasksIcsForm(forms.Form):
 class AmoApiConfigForm(forms.Form):
     domain = forms.CharField(label="Домен amoCRM", initial="kmrprofi.amocrm.ru")
     client_id = forms.CharField(label="Client ID")
-    client_secret = forms.CharField(label="Client Secret", required=False, widget=forms.PasswordInput(render_value=True))
-    redirect_uri = forms.CharField(label="Redirect URI", required=False, help_text="Если пусто — возьмём автоматически (callback URL).")
+    client_secret = forms.CharField(
+        label="Client Secret", required=False, widget=forms.PasswordInput(render_value=True)
+    )
+    redirect_uri = forms.CharField(
+        label="Redirect URI",
+        required=False,
+        help_text="Если пусто — возьмём автоматически (callback URL).",
+    )
     long_lived_token = forms.CharField(
         label="Долгосрочный токен (рекомендуем для миграции)",
         required=False,
@@ -1054,12 +1207,14 @@ class AmoApiConfigForm(forms.Form):
 
 class AmoMigrateFilterForm(forms.Form):
     dry_run = forms.BooleanField(label="Только проверить (dry-run)", required=False, initial=True)
-    limit_companies = forms.IntegerField(label="Размер пачки компаний", min_value=1, max_value=5000, initial=50, required=False)
+    limit_companies = forms.IntegerField(
+        label="Размер пачки компаний", min_value=1, max_value=5000, initial=50, required=False
+    )
     offset = forms.IntegerField(label="Offset", required=False, initial=0)
     responsible_user_id = forms.CharField(
         label="Ответственный (amo, менеджер)",
         required=True,
-        help_text="Выберите одного ответственного (менеджера) amoCRM."
+        help_text="Выберите одного ответственного (менеджера) amoCRM.",
     )
     target_responsible = FlexibleUserChoiceField(
         queryset=User.objects.none(),
@@ -1068,13 +1223,21 @@ class AmoMigrateFilterForm(forms.Form):
         widget=forms.Select(attrs={"class": "select w-full"}),
         help_text="Если указать, все перенесённые компании будут назначены этому пользователю (подразделение — по пользователю). Иначе — по совпадению ФИО с amo.",
     )
-    migrate_all_companies = forms.BooleanField(label="Мигрировать все компании ответственного (без фильтра по полю)", required=False, initial=False)
+    migrate_all_companies = forms.BooleanField(
+        label="Мигрировать все компании ответственного (без фильтра по полю)",
+        required=False,
+        initial=False,
+    )
     custom_field_id = forms.IntegerField(label="Кастомное поле (id)", required=False)
-    custom_value_label = forms.CharField(label="Значение (текст)", required=False, initial="Новая CRM")
+    custom_value_label = forms.CharField(
+        label="Значение (текст)", required=False, initial="Новая CRM"
+    )
     custom_value_enum_id = forms.IntegerField(label="Значение (enum id)", required=False)
     import_tasks = forms.BooleanField(label="Импортировать задачи", required=False, initial=True)
     import_notes = forms.BooleanField(label="Импортировать заметки", required=False, initial=True)
-    import_contacts = forms.BooleanField(label="Импортировать контакты (может быть медленно)", required=False, initial=False)
+    import_contacts = forms.BooleanField(
+        label="Импортировать контакты (может быть медленно)", required=False, initial=False
+    )
     import_history = forms.BooleanField(
         label="Только импорт истории передвижений (быстро, данные карточек не изменяются)",
         required=False,
@@ -1084,7 +1247,9 @@ class AmoMigrateFilterForm(forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["target_responsible"].queryset = (
-            User.objects.filter(is_active=True).select_related("branch").order_by("last_name", "first_name")
+            User.objects.filter(is_active=True)
+            .select_related("branch")
+            .order_by("last_name", "first_name")
         )
 
     def clean(self):
@@ -1131,7 +1296,9 @@ class ContactForm(forms.ModelForm):
             "first_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "position": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "status": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "note": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2"}),
+            "note": forms.Textarea(
+                attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2"}
+            ),
         }
 
 
@@ -1193,7 +1360,13 @@ ContactEmailFormSet = inlineformset_factory(
     formset=_BaseEmailFormSet,
     widgets={
         "type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-        "value": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "inputmode": "email", "autocomplete": "email"}),
+        "value": forms.TextInput(
+            attrs={
+                "class": "w-full rounded-lg border px-3 py-2",
+                "inputmode": "email",
+                "autocomplete": "email",
+            }
+        ),
     },
 )
 
@@ -1210,5 +1383,3 @@ ContactPhoneFormSet = inlineformset_factory(
         "value": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
     },
 )
-
-

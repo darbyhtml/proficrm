@@ -64,6 +64,6 @@ class Command(BaseCommand):
             self.stdout.write("Demo admin: admin / admin12345 (доступ к /admin/)")
         if manager_created:
             self.stdout.write("Demo manager: manager1 / manager12345 (только UI, без /admin/)")
-        self.stdout.write(f"Demo company: {demo_company.name} (открой: /companies/{demo_company.id}/)")
-
-
+        self.stdout.write(
+            f"Demo company: {demo_company.name} (открой: /companies/{demo_company.id}/)"
+        )

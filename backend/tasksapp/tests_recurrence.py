@@ -6,6 +6,7 @@
   2. generate_recurring_tasks — создание экземпляров, защита от дублей,
      обновление recurrence_next_generate_after, пропуск без RRULE
 """
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -37,6 +38,7 @@ def _make_template(user, rrule, due_at=None, title="Template"):
 # 1. _parse_rrule_occurrences
 # ---------------------------------------------------------------------------
 
+
 class ParseRRuleTest(TestCase):
     def _bounds(self, days=7):
         start = timezone.now().replace(hour=10, minute=0, second=0, microsecond=0)
@@ -56,7 +58,9 @@ class ParseRRuleTest(TestCase):
 
     def test_count_limits_occurrences(self):
         start, after, until = self._bounds(days=100)
-        result = _parse_rrule_occurrences("FREQ=DAILY;COUNT=3", dtstart=start, after=after, until=until)
+        result = _parse_rrule_occurrences(
+            "FREQ=DAILY;COUNT=3", dtstart=start, after=after, until=until
+        )
         self.assertEqual(len(result), 3)
 
     def test_after_excludes_already_generated(self):
@@ -69,18 +73,26 @@ class ParseRRuleTest(TestCase):
 
     def test_invalid_rrule_returns_empty(self):
         start = timezone.now()
-        result = _parse_rrule_occurrences("NOT_VALID_RRULE", dtstart=start, after=start - timedelta(seconds=1), until=start + timedelta(days=7))
+        result = _parse_rrule_occurrences(
+            "NOT_VALID_RRULE",
+            dtstart=start,
+            after=start - timedelta(seconds=1),
+            until=start + timedelta(days=7),
+        )
         self.assertEqual(result, [])
 
     def test_empty_string_returns_empty(self):
         start = timezone.now()
-        result = _parse_rrule_occurrences("", dtstart=start, after=start - timedelta(seconds=1), until=start + timedelta(days=7))
+        result = _parse_rrule_occurrences(
+            "", dtstart=start, after=start - timedelta(seconds=1), until=start + timedelta(days=7)
+        )
         self.assertEqual(result, [])
 
 
 # ---------------------------------------------------------------------------
 # 2. generate_recurring_tasks
 # ---------------------------------------------------------------------------
+
 
 class GenerateRecurringTasksTest(TestCase):
     def setUp(self):

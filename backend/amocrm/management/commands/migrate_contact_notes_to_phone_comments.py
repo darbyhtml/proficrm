@@ -24,7 +24,7 @@ def _looks_like_phone(value: str) -> bool:
     if not value or not isinstance(value, str):
         return False
     # Извлекаем только цифры
-    digits = ''.join(c for c in value if c.isdigit())
+    digits = "".join(c for c in value if c.isdigit())
     # Телефон должен содержать минимум 7 цифр (короткие номера) или больше
     # Но не слишком много (максимум 15 цифр для международных номеров)
     if len(digits) < 7 or len(digits) > 15:
@@ -36,7 +36,9 @@ def _looks_like_phone(value: str) -> bool:
 
 
 class Command(BaseCommand):
-    help = "Переносит примечания из raw_fields.extracted_note_text в comment первого телефона контакта"
+    help = (
+        "Переносит примечания из raw_fields.extracted_note_text в comment первого телефона контакта"
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -59,12 +61,14 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"{'=' * 80}\n"))
 
         if dry_run:
-            self.stdout.write(self.style.WARNING("⚠️  РЕЖИМ DRY-RUN: изменения не будут сохранены\n"))
+            self.stdout.write(
+                self.style.WARNING("⚠️  РЕЖИМ DRY-RUN: изменения не будут сохранены\n")
+            )
 
         # Находим все контакты с extracted_note_text в raw_fields
-        contacts = Contact.objects.filter(
-            raw_fields__extracted_note_text__isnull=False
-        ).exclude(raw_fields__extracted_note_text="")
+        contacts = Contact.objects.filter(raw_fields__extracted_note_text__isnull=False).exclude(
+            raw_fields__extracted_note_text=""
+        )
 
         if limit:
             contacts = contacts[:limit]
@@ -88,45 +92,45 @@ class Command(BaseCommand):
         all_contacts_with_phones = Contact.objects.filter(phones__isnull=False).distinct()
         if limit:
             all_contacts_with_phones = all_contacts_with_phones[:limit]
-        
+
         for contact in all_contacts_with_phones:
             try:
                 # Проверяем все телефоны контакта
                 phones_list = list(contact.phones.all())
                 if not phones_list:
                     continue
-                
+
                 # Находим "ложные" телефоны (не похожие на телефоны)
                 fake_phones = []
                 real_phones = []
-                
+
                 for phone in phones_list:
                     if _looks_like_phone(phone.value):
                         real_phones.append(phone)
                     else:
                         fake_phones.append(phone)
-                
+
                 if fake_phones:
                     # Если есть реальные телефоны, переносим "ложные" в комментарии
                     if real_phones:
                         first_real_phone = real_phones[0]
                         fake_texts = [p.value for p in fake_phones]
                         combined_fake_text = " | ".join(fake_texts)
-                        
+
                         existing_comment = (first_real_phone.comment or "").strip()
                         if existing_comment:
                             new_comment = f"{existing_comment}; {combined_fake_text[:200]}"
                             new_comment = new_comment[:255]
                         else:
                             new_comment = combined_fake_text[:255]
-                        
+
                         if not dry_run:
                             first_real_phone.comment = new_comment
                             first_real_phone.save(update_fields=["comment"])
                             # Удаляем "ложные" телефоны
                             for fake_phone in fake_phones:
                                 fake_phone.delete()
-                        
+
                         fake_phones_fixed += len(fake_phones)
                         if processed < 10:
                             self.stdout.write(
@@ -140,16 +144,16 @@ class Command(BaseCommand):
                                     f"  Контакт {contact.id}: все телефоны 'ложные', но нет реальных телефонов для переноса"
                                 )
                             )
-                
+
             except Exception as e:
                 errors += 1
                 logger.error(f"Ошибка при обработке контакта {contact.id}: {e}", exc_info=True)
-        
+
         self.stdout.write(f"\nИсправлено 'ложных' телефонов: {fake_phones_fixed}\n")
-        
+
         # Теперь обрабатываем примечания из raw_fields
         self.stdout.write("Шаг 2: Перенос примечаний из raw_fields в комментарии телефонов...\n")
-        
+
         for contact in contacts:
             try:
                 processed += 1
@@ -173,9 +177,7 @@ class Command(BaseCommand):
                     skipped_no_phones += 1
                     if processed <= 10:
                         self.stdout.write(
-                            self.style.WARNING(
-                                f"  Контакт {contact.id}: нет телефонов, пропускаем"
-                            )
+                            self.style.WARNING(f"  Контакт {contact.id}: нет телефонов, пропускаем")
                         )
                     continue
 

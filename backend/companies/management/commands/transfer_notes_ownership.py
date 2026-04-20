@@ -44,7 +44,9 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"{'=' * 80}\n"))
 
         if dry_run:
-            self.stdout.write(self.style.WARNING("⚠️  РЕЖИМ DRY-RUN: изменения не будут сохранены\n"))
+            self.stdout.write(
+                self.style.WARNING("⚠️  РЕЖИМ DRY-RUN: изменения не будут сохранены\n")
+            )
 
         # Находим все заметки с author=None, у которых есть компания с ответственным
         notes_qs = (
@@ -52,7 +54,7 @@ class Command(BaseCommand):
             .select_related("company", "company__responsible")
             .filter(company__isnull=False, company__responsible__isnull=False)
         )
-        
+
         if limit:
             notes_qs = notes_qs[:limit]
 
@@ -71,7 +73,9 @@ class Command(BaseCommand):
         )
         if notes_no_responsible > 0:
             self.stdout.write(
-                self.style.WARNING(f"Пропущено заметок без ответственного: {notes_no_responsible}\n")
+                self.style.WARNING(
+                    f"Пропущено заметок без ответственного: {notes_no_responsible}\n"
+                )
             )
 
         transferred = 0

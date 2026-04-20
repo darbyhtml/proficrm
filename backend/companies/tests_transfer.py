@@ -1,6 +1,7 @@
 """
 Тесты для передачи компаний между пользователями.
 """
+
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 
@@ -23,7 +24,7 @@ class CompanyTransferPermissionsTestCase(TestCase):
         # Филиалы
         self.branch1 = Branch.objects.create(code="ekb", name="Екатеринбург")
         self.branch2 = Branch.objects.create(code="tyumen", name="Тюмень")
-        
+
         # Пользователи
         self.manager1 = User.objects.create_user(
             username="manager1",
@@ -79,7 +80,7 @@ class CompanyTransferPermissionsTestCase(TestCase):
             first_name="Админ",
             last_name="Системы",
         )
-        
+
         # Компании
         self.company1 = Company.objects.create(
             name="Компания 1",
@@ -145,7 +146,7 @@ class CompanyTransferPermissionsTestCase(TestCase):
         """Список получателей не содержит GROUP_MANAGER и ADMIN."""
         targets = get_transfer_targets(self.manager1)
         target_ids = list(targets.values_list("id", flat=True))
-        
+
         self.assertIn(self.manager1.id, target_ids)
         self.assertIn(self.manager2.id, target_ids)
         self.assertIn(self.rop1.id, target_ids)
@@ -156,23 +157,24 @@ class CompanyTransferPermissionsTestCase(TestCase):
     def test_get_transfer_targets_grouped_by_branch(self):
         """Список получателей отсортирован по филиалам."""
         targets = list(get_transfer_targets(self.manager1))
-        
+
         # Проверяем, что сначала идут пользователи из branch1, потом из branch2
         branch1_users = [u for u in targets if u.branch_id == self.branch1.id]
         branch2_users = [u for u in targets if u.branch_id == self.branch2.id]
-        
+
         # Все пользователи branch1 должны идти перед пользователями branch2
         if branch1_users and branch2_users:
-            last_branch1_idx = max(i for i, u in enumerate(targets) if u.branch_id == self.branch1.id)
-            first_branch2_idx = min(i for i, u in enumerate(targets) if u.branch_id == self.branch2.id)
+            last_branch1_idx = max(
+                i for i, u in enumerate(targets) if u.branch_id == self.branch1.id
+            )
+            first_branch2_idx = min(
+                i for i, u in enumerate(targets) if u.branch_id == self.branch2.id
+            )
             self.assertLess(last_branch1_idx, first_branch2_idx)
 
     def test_can_transfer_companies_bulk_all_allowed(self):
         """Массовая передача: все компании разрешены."""
-        result = can_transfer_companies(
-            self.manager1,
-            [self.company1.id]
-        )
+        result = can_transfer_companies(self.manager1, [self.company1.id])
         self.assertEqual(len(result["allowed"]), 1)
         self.assertEqual(len(result["forbidden"]), 0)
         self.assertIn(self.company1.id, result["allowed"])
@@ -180,8 +182,7 @@ class CompanyTransferPermissionsTestCase(TestCase):
     def test_can_transfer_companies_bulk_some_forbidden(self):
         """Массовая передача: некоторые компании запрещены."""
         result = can_transfer_companies(
-            self.manager1,
-            [self.company1.id, self.company2.id, self.company3.id]
+            self.manager1, [self.company1.id, self.company2.id, self.company3.id]
         )
         # manager1 может передать только company1 (свою)
         self.assertEqual(len(result["allowed"]), 1)
@@ -194,18 +195,14 @@ class CompanyTransferPermissionsTestCase(TestCase):
 
     def test_can_transfer_companies_bulk_rop_all_in_branch(self):
         """Массовая передача РОП: все компании своего филиала разрешены."""
-        result = can_transfer_companies(
-            self.rop1,
-            [self.company1.id, self.company2.id]
-        )
+        result = can_transfer_companies(self.rop1, [self.company1.id, self.company2.id])
         self.assertEqual(len(result["allowed"]), 2)
         self.assertEqual(len(result["forbidden"]), 0)
 
     def test_can_transfer_companies_bulk_rop_mixed(self):
         """Массовая передача РОП: смешанный выбор (свой филиал + другой филиал)."""
         result = can_transfer_companies(
-            self.rop1,
-            [self.company1.id, self.company2.id, self.company3.id]
+            self.rop1, [self.company1.id, self.company2.id, self.company3.id]
         )
         # rop1 может передать только компании своего филиала
         self.assertEqual(len(result["allowed"]), 2)
@@ -220,17 +217,14 @@ class CompanyTransferPermissionsTestCase(TestCase):
         """Массовая передача админа: все компании разрешены."""
         result = can_transfer_companies(
             self.admin,
-            [self.company1.id, self.company2.id, self.company3.id, self.company_no_resp.id]
+            [self.company1.id, self.company2.id, self.company3.id, self.company_no_resp.id],
         )
         self.assertEqual(len(result["allowed"]), 4)
         self.assertEqual(len(result["forbidden"]), 0)
 
     def test_can_transfer_companies_forbidden_reason(self):
         """Проверка причин запрета в массовой передаче."""
-        result = can_transfer_companies(
-            self.manager1,
-            [self.company2.id]
-        )
+        result = can_transfer_companies(self.manager1, [self.company2.id])
         self.assertEqual(len(result["forbidden"]), 1)
         forbidden = result["forbidden"][0]
         self.assertIn("не являетесь ответственным", forbidden["reason"])

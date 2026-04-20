@@ -1,6 +1,7 @@
 """
 Тесты для Magic Link Authentication.
 """
+
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -36,7 +37,7 @@ class MagicLinkTokenTestCase(TestCase):
         """Генерация токена создаёт уникальный хэш."""
         token1, hash1 = MagicLinkToken.generate_token()
         token2, hash2 = MagicLinkToken.generate_token()
-        
+
         self.assertNotEqual(token1, token2)
         self.assertNotEqual(hash1, hash2)
         self.assertEqual(len(hash1), 64)  # SHA256 hex = 64 символа
@@ -48,16 +49,16 @@ class MagicLinkTokenTestCase(TestCase):
             created_by=self.admin,
             ttl_minutes=30,
         )
-        
+
         self.assertEqual(magic_link.user, self.user)
         self.assertEqual(magic_link.created_by, self.admin)
         self.assertIsNone(magic_link.used_at)
         self.assertLess(timezone.now(), magic_link.expires_at)
         self.assertLessEqual(
             (magic_link.expires_at - timezone.now()).total_seconds(),
-            30 * 60 + 5  # 30 минут + небольшой запас
+            30 * 60 + 5,  # 30 минут + небольшой запас
         )
-        
+
         # Проверяем, что хэш соответствует токену
         expected_hash = hashlib.sha256(plain_token.encode()).hexdigest()
         self.assertEqual(magic_link.token_hash, expected_hash)
@@ -99,13 +100,13 @@ class MagicLinkTokenTestCase(TestCase):
             created_by=self.admin,
             ttl_minutes=30,
         )
-        
+
         self.assertIsNone(magic_link.used_at)
         self.assertIsNone(magic_link.ip_address)
         self.assertEqual(magic_link.user_agent, "")
-        
+
         magic_link.mark_as_used(ip_address="192.168.1.1", user_agent="Mozilla/5.0")
-        
+
         magic_link.refresh_from_db()
         self.assertIsNotNone(magic_link.used_at)
         self.assertEqual(magic_link.ip_address, "192.168.1.1")
@@ -136,44 +137,56 @@ class MagicLinkLoginTestCase(TestCase):
             ttl_minutes=30,
         )
         token_id = magic_link.id  # Сохраняем ID для последующей проверки
-        
+
         # Используем Client для полного тестирования
         from django.test import Client
+
         client = Client()
-        
+
         # Делаем запрос с follow=True, чтобы следовать редиректу
         # Это гарантирует, что view выполнится полностью
         response = client.get(f"/auth/magic/{plain_token}/", follow=True)
-        
+
         # После успешного входа должен быть доступ к главной странице (200)
         # или редирект, но не ошибка
-        self.assertNotIn(response.status_code, [400, 404, 500], 
-                        f"Запрос не должен возвращать ошибку. Статус: {response.status_code}")
-        
+        self.assertNotIn(
+            response.status_code,
+            [400, 404, 500],
+            f"Запрос не должен возвращать ошибку. Статус: {response.status_code}",
+        )
+
         # Проверяем, что пользователь залогинен - пытаемся получить защищённую страницу
         response_protected = client.get("/companies/", follow=True)
         # Если пользователь не залогинен, будет редирект на /login/
         if response_protected.redirect_chain:
-            final_url = response_protected.redirect_chain[-1][0] if response_protected.redirect_chain else ""
-            self.assertNotIn("/login/", final_url, 
-                            "Пользователь должен быть залогинен после успешного входа")
-        
+            final_url = (
+                response_protected.redirect_chain[-1][0]
+                if response_protected.redirect_chain
+                else ""
+            )
+            self.assertNotIn(
+                "/login/", final_url, "Пользователь должен быть залогинен после успешного входа"
+            )
+
         # Проверяем, что токен помечен как использованный
         # Важно: получаем объект заново из БД
         magic_link_after = MagicLinkToken.objects.get(id=token_id)
-        self.assertIsNotNone(magic_link_after.used_at, 
-                            f"Токен должен быть помечен как использованный после входа. "
-                            f"Текущее значение used_at: {magic_link_after.used_at}, "
-                            f"ip_address: {magic_link_after.ip_address}, "
-                            f"user_agent: {magic_link_after.user_agent}")
+        self.assertIsNotNone(
+            magic_link_after.used_at,
+            f"Токен должен быть помечен как использованный после входа. "
+            f"Текущее значение used_at: {magic_link_after.used_at}, "
+            f"ip_address: {magic_link_after.ip_address}, "
+            f"user_agent: {magic_link_after.user_agent}",
+        )
 
     def test_magic_link_login_invalid_token(self):
         """Невалидный токен не работает."""
         from django.test import Client
+
         client = Client()
         # Используем follow=True, чтобы следовать редиректам и получить финальный ответ
         response = client.get("/auth/magic/invalid-token-12345/", follow=True)
-        
+
         # Должна быть ошибка 404 или 400 (после всех редиректов)
         self.assertIn(response.status_code, [400, 404])
 
@@ -186,12 +199,13 @@ class MagicLinkLoginTestCase(TestCase):
         )
         magic_link.expires_at = timezone.now() - timedelta(minutes=1)
         magic_link.save()
-        
+
         from django.test import Client
+
         client = Client()
         # Используем follow=True, чтобы следовать редиректам и получить финальный ответ
         response = client.get(f"/auth/magic/{plain_token}/", follow=True)
-        
+
         # Должна быть ошибка 400 (после всех редиректов)
         self.assertEqual(response.status_code, 400)
 
@@ -203,11 +217,12 @@ class MagicLinkLoginTestCase(TestCase):
             ttl_minutes=30,
         )
         magic_link.mark_as_used(ip_address="127.0.0.1", user_agent="test")
-        
+
         from django.test import Client
+
         client = Client()
         # Используем follow=True, чтобы следовать редиректам и получить финальный ответ
         response = client.get(f"/auth/magic/{plain_token}/", follow=True)
-        
+
         # Должна быть ошибка 400 (после всех редиректов)
         self.assertEqual(response.status_code, 400)

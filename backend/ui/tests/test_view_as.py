@@ -43,6 +43,7 @@ class ViewAsUpdateTestCase(TestCase):
     def test_view_as_update_saves_branch_id_in_session(self):
         """POST с view_as_branch_id сохраняет филиал в сессии."""
         from accounts.models import Branch
+
         branch = Branch.objects.create(code="br1", name="Филиал 1")
         response = self.client.post(
             reverse("view_as_update"),
@@ -65,6 +66,7 @@ class ViewAsUpdateTestCase(TestCase):
     def test_view_as_update_accepts_view_as_branch_id_param(self):
         """Форма может отправлять view_as_branch_id (имя из base.html)."""
         from accounts.models import Branch
+
         branch = Branch.objects.create(code="br2", name="Филиал 2")
         response = self.client.post(
             reverse("view_as_update"),

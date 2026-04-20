@@ -3,6 +3,7 @@
 
 Цель: единообразная логика для UI и API, устранение расхождений.
 """
+
 from __future__ import annotations
 
 import logging
@@ -17,7 +18,16 @@ from django.utils import timezone
 from accounts.models import User
 from audit.service import log_event
 from audit.models import ActivityEvent
-from companies.models import Company, CompanyPhone, CompanyEmail, CompanyNote, CompanyNoteAttachment, CompanyHistoryEvent, Contact, ContactPhone
+from companies.models import (
+    Company,
+    CompanyPhone,
+    CompanyEmail,
+    CompanyNote,
+    CompanyNoteAttachment,
+    CompanyHistoryEvent,
+    Contact,
+    ContactPhone,
+)
 from companies.normalizers import normalize_phone as _normalize_phone
 from companies.permissions import can_edit_company, can_transfer_company
 from core.request_id import get_request_id
@@ -129,7 +139,11 @@ def get_dashboard_contracts(user, today=None, limit: int = DASHBOARD_CONTRACTS_L
     """
     from datetime import timedelta
 
-    today_date = (today or timezone.now()).date() if hasattr(today or timezone.now(), "date") else (today or timezone.localdate())
+    today_date = (
+        (today or timezone.now()).date()
+        if hasattr(today or timezone.now(), "date")
+        else (today or timezone.localdate())
+    )
     contract_until_30 = today_date + timedelta(days=DEFAULT_CONTRACT_WARNING_DAYS)
 
     result: list[dict] = []
@@ -165,22 +179,28 @@ def get_dashboard_contracts(user, today=None, limit: int = DASHBOARD_CONTRACTS_L
             else:
                 level = None
         if level:
-            result.append({
-                "company": c,
-                "days_left": days_left,
-                "level": level,
-                "is_annual": False,
-                "amount": None,
-            })
+            result.append(
+                {
+                    "company": c,
+                    "days_left": days_left,
+                    "level": level,
+                    "is_annual": False,
+                    "amount": None,
+                }
+            )
 
     # --- Годовые договоры (по сумме) ---
     annual_qs = (
         Company.objects.filter(responsible=user, contract_type__is_annual=True)
         .select_related("contract_type")
         .only(
-            "id", "name", "contract_type", "contract_amount",
+            "id",
+            "name",
+            "contract_type",
+            "contract_amount",
             # подтягиваем пороги типа договора чтобы избежать N+1
-            "contract_type__id", "contract_type__amount_danger_threshold",
+            "contract_type__id",
+            "contract_type__amount_danger_threshold",
             "contract_type__amount_warn_threshold",
         )
         .order_by("contract_amount", "name")[:limit]
@@ -188,13 +208,15 @@ def get_dashboard_contracts(user, today=None, limit: int = DASHBOARD_CONTRACTS_L
     for c in annual_qs:
         level = _get_annual_contract_alert(c.contract_amount, contract_type=c.contract_type)
         if level:
-            result.append({
-                "company": c,
-                "amount": c.contract_amount,
-                "level": level,
-                "is_annual": True,
-                "days_left": None,
-            })
+            result.append(
+                {
+                    "company": c,
+                    "amount": c.contract_amount,
+                    "level": level,
+                    "is_annual": True,
+                    "days_left": None,
+                }
+            )
 
     return result
 
@@ -298,7 +320,7 @@ def resolve_target_companies(
 
 class CompanyService:
     """Сервис для работы с компаниями."""
-    
+
     @staticmethod
     def update_phone(
         *,
@@ -309,41 +331,42 @@ class CompanyService:
     ) -> dict[str, Any]:
         """
         Обновить основной телефон компании.
-        
+
         Args:
             company: Компания для обновления
             user: Пользователь, выполняющий операцию
             phone: Новый номер телефона
             normalize_func: Функция нормализации телефона (опционально)
-        
+
         Returns:
             dict с результатом операции
-        
+
         Raises:
             PermissionDenied: если нет прав на редактирование
             ValidationError: если телефон некорректен или дублируется
         """
         if not can_edit_company(user, company):
             from django.core.exceptions import PermissionDenied
+
             raise PermissionDenied("Нет прав на редактирование этой компании")
-        
+
         # Нормализация телефона
         if normalize_func:
             normalized = normalize_func(phone) if phone else ""
         else:
             normalized = phone.strip() if phone else ""
-        
+
         # Проверка дублей с дополнительными телефонами
         if normalized:
             exists = CompanyPhone.objects.filter(company=company, value=normalized).exists()
             if exists:
                 raise ValidationError("Такой телефон уже есть в дополнительных номерах")
-        
+
         # Обновление
         old_phone = company.phone
         company.phone = normalized
         company.save(update_fields=["phone", "updated_at"])
-        
+
         # Логирование
         log_event(
             actor=user,
@@ -358,13 +381,13 @@ class CompanyService:
                 "request_id": get_request_id(),
             },
         )
-        
+
         return {
             "success": True,
             "phone": normalized,
             "company_id": str(company.id),
         }
-    
+
     @staticmethod
     def update_email(
         *,
@@ -374,41 +397,43 @@ class CompanyService:
     ) -> dict[str, Any]:
         """
         Обновить основной email компании.
-        
+
         Args:
             company: Компания для обновления
             user: Пользователь, выполняющий операцию
             email: Новый email адрес
-        
+
         Returns:
             dict с результатом операции
-        
+
         Raises:
             PermissionDenied: если нет прав на редактирование
             ValidationError: если email некорректен или дублируется
         """
         if not can_edit_company(user, company):
             from django.core.exceptions import PermissionDenied
+
             raise PermissionDenied("Нет прав на редактирование этой компании")
-        
+
         email = email.strip().lower() if email else ""
-        
+
         if email:
             from django.core.validators import validate_email
+
             try:
                 validate_email(email)
             except ValidationError:
                 raise ValidationError("Некорректный email")
-            
+
             # Проверка дублей с дополнительными email
             if CompanyEmail.objects.filter(company=company, value__iexact=email).exists():
                 raise ValidationError("Такой email уже есть в дополнительных адресах")
-        
+
         # Обновление
         old_email = company.email
         company.email = email
         company.save(update_fields=["email", "updated_at"])
-        
+
         # Логирование
         log_event(
             actor=user,
@@ -423,13 +448,13 @@ class CompanyService:
                 "request_id": get_request_id(),
             },
         )
-        
+
         return {
             "success": True,
             "email": email,
             "company_id": str(company.id),
         }
-    
+
     @staticmethod
     @transaction.atomic
     def transfer(
@@ -440,26 +465,33 @@ class CompanyService:
     ) -> dict[str, Any]:
         """
         Передать компанию другому ответственному.
-        
+
         Args:
             company: Компания для передачи
             user: Пользователь, выполняющий операцию
             new_responsible: Новый ответственный
-        
+
         Returns:
             dict с результатом операции
-        
+
         Raises:
             PermissionDenied: если нет прав на передачу
             ValidationError: если новый ответственный некорректен
         """
         if not can_transfer_company(user, company):
             from django.core.exceptions import PermissionDenied
+
             raise PermissionDenied("Нет прав на передачу компании")
-        
-        if new_responsible.role not in (User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD):
-            raise ValidationError("Нового ответственного можно выбрать только из: менеджер / директор филиала / РОП")
-        
+
+        if new_responsible.role not in (
+            User.Role.MANAGER,
+            User.Role.BRANCH_DIRECTOR,
+            User.Role.SALES_HEAD,
+        ):
+            raise ValidationError(
+                "Нового ответственного можно выбрать только из: менеджер / директор филиала / РОП"
+            )
+
         old_responsible = company.responsible
         old_branch = company.branch
 
@@ -489,6 +521,7 @@ class CompanyService:
         if new_responsible.id != user.id:
             from notifications.models import Notification
             from notifications.service import notify
+
             notify(
                 user=new_responsible,
                 kind=Notification.Kind.COMPANY,
@@ -527,7 +560,7 @@ class CompanyService:
             "old_responsible_id": str(old_responsible.id) if old_responsible else None,
             "new_responsible_id": str(new_responsible.id),
         }
-    
+
     @staticmethod
     def add_note(
         *,
@@ -560,17 +593,36 @@ class CompanyService:
         # Метаданные основного вложения
         if attachment:
             try:
-                note.attachment_name = (getattr(attachment, "name", "") or "").split("/")[-1].split("\\")[-1]
-                note.attachment_ext = (note.attachment_name.rsplit(".", 1)[-1].lower() if "." in note.attachment_name else "")[:16]
+                note.attachment_name = (
+                    (getattr(attachment, "name", "") or "").split("/")[-1].split("\\")[-1]
+                )
+                note.attachment_ext = (
+                    note.attachment_name.rsplit(".", 1)[-1].lower()
+                    if "." in note.attachment_name
+                    else ""
+                )[:16]
                 note.attachment_size = int(getattr(attachment, "size", 0) or 0)
-                note.attachment_content_type = (getattr(attachment, "content_type", "") or "").strip()[:120]
-                note.save(update_fields=["attachment_name", "attachment_ext", "attachment_size", "attachment_content_type"])
+                note.attachment_content_type = (
+                    getattr(attachment, "content_type", "") or ""
+                ).strip()[:120]
+                note.save(
+                    update_fields=[
+                        "attachment_name",
+                        "attachment_ext",
+                        "attachment_size",
+                        "attachment_content_type",
+                    ]
+                )
             except Exception as e:
                 logger.warning(
                     "Ошибка при извлечении метаданных вложения заметки: %s",
                     e,
                     exc_info=True,
-                    extra={"company_id": str(company.id), "note_id": note.id, "request_id": get_request_id()},
+                    extra={
+                        "company_id": str(company.id),
+                        "note_id": note.id,
+                        "request_id": get_request_id(),
+                    },
                 )
 
         # Дополнительные вложения
@@ -601,6 +653,7 @@ class CompanyService:
             try:
                 from notifications.models import Notification
                 from notifications.service import notify
+
                 notify(
                     user=company.responsible,
                     kind=Notification.Kind.COMPANY,
@@ -618,6 +671,7 @@ class CompanyService:
 # ColdCallService — единообразная отметка холодного звонка по 4 уровням
 # ---------------------------------------------------------------------------
 
+
 class ColdCallService:
     """
     Централизованная логика отметки/сброса холодного звонка для:
@@ -631,6 +685,7 @@ class ColdCallService:
     def _find_last_call_for_company(user: User, company: Company):
         """Найти последний CallRequest от user по основному телефону компании."""
         from phonebridge.models import CallRequest
+
         phone = (company.phone or "").strip()
         if not phone:
             return None
@@ -651,6 +706,7 @@ class ColdCallService:
     def _find_last_call_for_contact(user: User, contact: Contact):
         """Найти последний CallRequest от user по контакту."""
         from phonebridge.models import CallRequest
+
         return (
             CallRequest.objects.filter(created_by=user, contact=contact)
             .order_by("-created_at")
@@ -661,6 +717,7 @@ class ColdCallService:
     def _find_last_call_for_phone(user: User, phone_value: str, *, company=None, contact=None):
         """Найти последний CallRequest по нормализованному номеру телефона."""
         from phonebridge.models import CallRequest
+
         normalized = _normalize_phone(phone_value)
         qs = CallRequest.objects.filter(created_by=user, phone_raw=normalized)
         if company is not None:
@@ -698,10 +755,15 @@ class ColdCallService:
         company.primary_cold_marked_at = now
         company.primary_cold_marked_by = user
         company.primary_cold_marked_call = last_call
-        company.save(update_fields=[
-            "primary_contact_is_cold_call", "primary_cold_marked_at",
-            "primary_cold_marked_by", "primary_cold_marked_call", "updated_at",
-        ])
+        company.save(
+            update_fields=[
+                "primary_contact_is_cold_call",
+                "primary_cold_marked_at",
+                "primary_cold_marked_by",
+                "primary_cold_marked_call",
+                "updated_at",
+            ]
+        )
         ColdCallService._link_call(last_call)
         return {"changed": True, "already_set": False, "call": last_call}
 
@@ -714,10 +776,15 @@ class ColdCallService:
         company.primary_cold_marked_at = None
         company.primary_cold_marked_by = None
         company.primary_cold_marked_call = None
-        company.save(update_fields=[
-            "primary_contact_is_cold_call", "primary_cold_marked_at",
-            "primary_cold_marked_by", "primary_cold_marked_call", "updated_at",
-        ])
+        company.save(
+            update_fields=[
+                "primary_contact_is_cold_call",
+                "primary_cold_marked_at",
+                "primary_cold_marked_by",
+                "primary_cold_marked_call",
+                "updated_at",
+            ]
+        )
         return {"changed": True}
 
     # ------------------------------------------------------------------
@@ -735,7 +802,15 @@ class ColdCallService:
         contact.cold_marked_at = now
         contact.cold_marked_by = user
         contact.cold_marked_call = last_call
-        contact.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call", "updated_at"])
+        contact.save(
+            update_fields=[
+                "is_cold_call",
+                "cold_marked_at",
+                "cold_marked_by",
+                "cold_marked_call",
+                "updated_at",
+            ]
+        )
         ColdCallService._link_call(last_call)
         return {"changed": True, "already_set": False, "call": last_call}
 
@@ -748,7 +823,9 @@ class ColdCallService:
         contact.cold_marked_at = None
         contact.cold_marked_by = None
         contact.cold_marked_call = None
-        contact.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
+        contact.save(
+            update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"]
+        )
         return {"changed": True}
 
     # ------------------------------------------------------------------
@@ -769,7 +846,9 @@ class ColdCallService:
         contact_phone.cold_marked_at = now
         contact_phone.cold_marked_by = user
         contact_phone.cold_marked_call = last_call
-        contact_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
+        contact_phone.save(
+            update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"]
+        )
         ColdCallService._link_call(last_call)
         return {"changed": True, "already_set": False, "call": last_call}
 
@@ -782,7 +861,9 @@ class ColdCallService:
         contact_phone.cold_marked_at = None
         contact_phone.cold_marked_by = None
         contact_phone.cold_marked_call = None
-        contact_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
+        contact_phone.save(
+            update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"]
+        )
         return {"changed": True}
 
     # ------------------------------------------------------------------
@@ -803,7 +884,9 @@ class ColdCallService:
         company_phone.cold_marked_at = now
         company_phone.cold_marked_by = user
         company_phone.cold_marked_call = last_call
-        company_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
+        company_phone.save(
+            update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"]
+        )
         ColdCallService._link_call(last_call)
         return {"changed": True, "already_set": False, "call": last_call}
 
@@ -816,5 +899,7 @@ class ColdCallService:
         company_phone.cold_marked_at = None
         company_phone.cold_marked_by = None
         company_phone.cold_marked_call = None
-        company_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
+        company_phone.save(
+            update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"]
+        )
         return {"changed": True}

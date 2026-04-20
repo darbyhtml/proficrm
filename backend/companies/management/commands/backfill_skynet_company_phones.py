@@ -5,6 +5,7 @@ Backfill: разбирает поле 309609 «Список телефонов (
 Для компаний, у которых в raw_fields есть custom_fields_values с field_id=309609, но телефоны
 ещё не разнесены в CompanyPhone (например, импорт был до появления логики Скайнет).
 """
+
 from django.core.management.base import BaseCommand
 from django.db.models import Max
 import logging
@@ -57,7 +58,9 @@ class Command(BaseCommand):
     )
 
     def add_arguments(self, parser):
-        parser.add_argument("--dry-run", action="store_true", help="Только показать, без записи в БД")
+        parser.add_argument(
+            "--dry-run", action="store_true", help="Только показать, без записи в БД"
+        )
         parser.add_argument("--limit", type=int, default=0, help="Макс. компаний (0 = все)")
 
     def handle(self, *args, **options):
@@ -95,7 +98,7 @@ class Command(BaseCommand):
                 phs, rej, _ = parse_skynet_phones(t)
                 all_phones.extend(phs)
                 rejected += rej
-            
+
             # дедуп по E164
             seen = set()
             uniq = []
@@ -126,20 +129,23 @@ class Command(BaseCommand):
                 if not raw_value:
                     continue
                 n = _normalize_phone(raw_value) or raw_value
-                
+
                 # Собираем "входящий" комментарий: SKYNET или SKYNET; <parsed_comment>
                 extra_comment = (item.get("comment") or "").strip()
                 if extra_comment:
                     incoming_comment = f"SKYNET; {extra_comment}".strip()
                 else:
                     incoming_comment = "SKYNET"
-                
+
                 if main_norm and main_norm == n:
                     # Если номер совпал с основным телефоном компании и есть комментарий - мержим в phone_comment
                     if incoming_comment and incoming_comment.strip():
                         if not dry_run:
                             from amocrm.migrate import merge_comment_segments
-                            merged_comment = merge_comment_segments(comp.phone_comment, incoming_comment)
+
+                            merged_comment = merge_comment_segments(
+                                comp.phone_comment, incoming_comment
+                            )
                             if merged_comment != (comp.phone_comment or ""):
                                 comp.phone_comment = merged_comment
                                 comp.save(update_fields=["phone_comment"])
@@ -158,6 +164,7 @@ class Command(BaseCommand):
                     # - иначе → дописываем через разделитель " | "
                     if not dry_run:
                         from amocrm.migrate import merge_comment_segments
+
                         qs = CompanyPhone.objects.filter(company=comp, value=n)
                         if qs.count() > 1:
                             logger.warning(
@@ -175,7 +182,9 @@ class Command(BaseCommand):
                     continue
 
                 if not dry_run:
-                    CompanyPhone.objects.create(company=comp, value=n, order=next_order, comment=incoming_comment)
+                    CompanyPhone.objects.create(
+                        company=comp, value=n, order=next_order, comment=incoming_comment
+                    )
                     existing.add(n)
                     next_order += 1
                 added += 1
@@ -184,6 +193,8 @@ class Command(BaseCommand):
                     f"{' | ' + extra_comment if extra_comment else ''}"
                 )
 
-        self.stdout.write(self.style.SUCCESS(
-            f"Итого: added={added}, skipped_duplicate={skipped_dup}, rejected={rejected}, no_value={no_value}"
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Итого: added={added}, skipped_duplicate={skipped_dup}, rejected={rejected}, no_value={no_value}"
+            )
+        )

@@ -31,8 +31,12 @@ class TaskOrgCreationTestCase(TestCase):
 
         # Организация: root + два филиала
         self.root = Company.objects.create(name="Головная", responsible=self.user)
-        self.branch1 = Company.objects.create(name="Филиал 1", head_company=self.root, responsible=self.user)
-        self.branch2 = Company.objects.create(name="Филиал 2", head_company=self.root, responsible=self.user)
+        self.branch1 = Company.objects.create(
+            name="Филиал 1", head_company=self.root, responsible=self.user
+        )
+        self.branch2 = Company.objects.create(
+            name="Филиал 2", head_company=self.root, responsible=self.user
+        )
 
         self.task_type = TaskType.objects.create(name="Тестовая задача")
 
@@ -50,12 +54,13 @@ class TaskOrgCreationTestCase(TestCase):
         # DRF DefaultRouter создает URL с trailing slash: /api/tasks/
         # Используем reverse для получения правильного URL
         from django.urls import reverse
+
         url = reverse("task-list")  # Должно вернуть "/api/tasks/"
         # Убеждаемся, что URL заканчивается на slash (DRF DefaultRouter требует это)
         if not url.endswith("/"):
             url = url + "/"
         resp = self.client.post(url, payload, format="json")
-        
+
         # Проверяем успешный статус (201 Created или 200 OK)
         self.assertIn(
             resp.status_code,
@@ -100,8 +105,12 @@ class ResolveTargetCompaniesUnitTestCase(TestCase):
             role=User.Role.ADMIN,
         )
         self.root = Company.objects.create(name="Root", responsible=self.user)
-        self.branch1 = Company.objects.create(name="B1", head_company=self.root, responsible=self.user)
-        self.branch2 = Company.objects.create(name="B2", head_company=self.root, responsible=self.user)
+        self.branch1 = Company.objects.create(
+            name="B1", head_company=self.root, responsible=self.user
+        )
+        self.branch2 = Company.objects.create(
+            name="B2", head_company=self.root, responsible=self.user
+        )
 
     def test_resolve_without_flag_returns_only_selected(self):
         targets = resolve_target_companies(self.branch1, apply_to_org_branches=False)
@@ -116,9 +125,10 @@ class ResolveTargetCompaniesUnitTestCase(TestCase):
 
 class TaskNotificationTestCase(TestCase):
     """Тесты для уведомлений при назначении задач."""
-    
+
     def setUp(self):
         from accounts.models import Branch
+
         self.branch = Branch.objects.create(code="test", name="Тестовый филиал")
         self.creator = User.objects.create_user(
             username="creator",
@@ -136,11 +146,11 @@ class TaskNotificationTestCase(TestCase):
         )
         self.task_type = TaskType.objects.create(name="Тестовая задача")
         self.company = Company.objects.create(name="Тестовая компания", responsible=self.creator)
-    
+
     def test_task_assigned_notification_created(self):
         """Проверка создания уведомления при назначении задачи."""
         from notifications.models import Notification
-        
+
         task = Task.objects.create(
             created_by=self.creator,
             assigned_to=self.assignee,
@@ -150,24 +160,24 @@ class TaskNotificationTestCase(TestCase):
             description="Описание",
             is_urgent=True,
         )
-        
+
         # Проверяем, что уведомление создано
         notification = Notification.objects.filter(
             user=self.assignee,
             kind=Notification.Kind.TASK,
             title="Вам назначена задача",
         ).first()
-        
+
         self.assertIsNotNone(notification, "Уведомление должно быть создано")
         self.assertIsNotNone(notification.payload, "Payload должен быть заполнен")
         self.assertEqual(notification.payload.get("task_id"), str(task.id))
         self.assertEqual(notification.payload.get("is_urgent"), True)
         self.assertEqual(notification.payload.get("creator_role"), "sales_head")
-    
+
     def test_task_assigned_to_self_no_notification(self):
         """Проверка, что уведомление не создаётся, если задача назначена самому создателю."""
         from notifications.models import Notification
-        
+
         task = Task.objects.create(
             created_by=self.creator,
             assigned_to=self.creator,  # Назначено самому создателю
@@ -175,23 +185,24 @@ class TaskNotificationTestCase(TestCase):
             type=self.task_type,
             title="Тестовая задача",
         )
-        
+
         # Проверяем, что уведомление НЕ создано
         notification = Notification.objects.filter(
             user=self.creator,
             kind=Notification.Kind.TASK,
             title="Вам назначена задача",
         ).first()
-        
+
         self.assertIsNone(notification, "Уведомление не должно быть создано для самого создателя")
 
 
 class CompanyDeletionRequestNotificationTestCase(TestCase):
     """Тесты для уведомлений при запросах на удаление компаний."""
-    
+
     def setUp(self):
         from accounts.models import Branch
         from companies.models import CompanyDeletionRequest
+
         self.branch = Branch.objects.create(code="test", name="Тестовый филиал")
         self.manager = User.objects.create_user(
             username="manager",
@@ -212,12 +223,12 @@ class CompanyDeletionRequestNotificationTestCase(TestCase):
             responsible=self.manager,
             branch=self.branch,
         )
-    
+
     def test_deletion_request_notifies_director(self):
         """Проверка уведомления директора при создании запроса на удаление."""
         from notifications.models import Notification
         from companies.models import CompanyDeletionRequest
-        
+
         req = CompanyDeletionRequest.objects.create(
             company=self.company,
             company_id_snapshot=self.company.id,
@@ -227,10 +238,11 @@ class CompanyDeletionRequestNotificationTestCase(TestCase):
             note="Тестовая причина",
             status=CompanyDeletionRequest.Status.PENDING,
         )
-        
+
         # Симулируем создание уведомления (в реальности это делается в view)
         from notifications.service import notify
         from notifications.models import Notification as NotifModel
+
         notify(
             user=self.director,
             kind=NotifModel.Kind.COMPANY,
@@ -243,26 +255,26 @@ class CompanyDeletionRequestNotificationTestCase(TestCase):
                 "requested_by_id": self.manager.id,
             },
         )
-        
+
         notification = Notification.objects.filter(
             user=self.director,
             kind=Notification.Kind.COMPANY,
             title="Запрос на удаление компании",
         ).first()
-        
+
         self.assertIsNotNone(notification, "Уведомление должно быть создано для директора")
 
 
 class BulkTransferBranchRestrictionTestCase(TestCase):
     """Тесты для ограничений bulk transfer по филиалу."""
-    
+
     def setUp(self):
         from accounts.models import Branch
         from companies.permissions import get_transfer_targets
-        
+
         self.branch1 = Branch.objects.create(code="branch1", name="Филиал 1")
         self.branch2 = Branch.objects.create(code="branch2", name="Филиал 2")
-        
+
         self.director1 = User.objects.create_user(
             username="director1",
             email="director1@example.com",
@@ -270,7 +282,7 @@ class BulkTransferBranchRestrictionTestCase(TestCase):
             role=User.Role.BRANCH_DIRECTOR,
             branch=self.branch1,
         )
-        
+
         self.manager1 = User.objects.create_user(
             username="manager1",
             email="manager1@example.com",
@@ -278,7 +290,7 @@ class BulkTransferBranchRestrictionTestCase(TestCase):
             role=User.Role.MANAGER,
             branch=self.branch1,
         )
-        
+
         self.manager2 = User.objects.create_user(
             username="manager2",
             email="manager2@example.com",
@@ -286,17 +298,21 @@ class BulkTransferBranchRestrictionTestCase(TestCase):
             role=User.Role.MANAGER,
             branch=self.branch2,
         )
-    
+
     def test_get_transfer_targets_limited_by_branch(self):
         """Проверка, что get_transfer_targets для директора ограничивает список получателей филиалом."""
         from companies.permissions import get_transfer_targets
-        
+
         targets = get_transfer_targets(self.director1)
         target_ids = set(targets.values_list("id", flat=True))
-        
+
         # Должны быть только пользователи из branch1
-        self.assertIn(self.manager1.id, target_ids, "Менеджер из того же филиала должен быть в списке")
-        self.assertNotIn(self.manager2.id, target_ids, "Менеджер из другого филиала не должен быть в списке")
+        self.assertIn(
+            self.manager1.id, target_ids, "Менеджер из того же филиала должен быть в списке"
+        )
+        self.assertNotIn(
+            self.manager2.id, target_ids, "Менеджер из другого филиала не должен быть в списке"
+        )
 
 
 class TaskBulkFilterSummaryUnitTestCase(TestCase):
@@ -559,8 +575,16 @@ class TaskEventTestCase(TestCase):
 
     def test_events_ordered_by_created_at(self):
         """События возвращаются в хронологическом порядке."""
-        TaskEvent.objects.create(task=self.task, actor=self.user, kind=TaskEvent.Kind.CREATED, new_value="a")
-        TaskEvent.objects.create(task=self.task, actor=self.user, kind=TaskEvent.Kind.STATUS_CHANGED, old_value="a", new_value="b")
+        TaskEvent.objects.create(
+            task=self.task, actor=self.user, kind=TaskEvent.Kind.CREATED, new_value="a"
+        )
+        TaskEvent.objects.create(
+            task=self.task,
+            actor=self.user,
+            kind=TaskEvent.Kind.STATUS_CHANGED,
+            old_value="a",
+            new_value="b",
+        )
         kinds = list(self.task.events.values_list("kind", flat=True))
         self.assertEqual(kinds[0], TaskEvent.Kind.CREATED)
         self.assertEqual(kinds[1], TaskEvent.Kind.STATUS_CHANGED)

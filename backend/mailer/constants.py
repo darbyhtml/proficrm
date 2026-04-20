@@ -10,13 +10,16 @@ PER_USER_DAILY_LIMIT_DEFAULT = 100
 # Cooldown на повторное использование email после "очистки" кампании (дней)
 COOLDOWN_DAYS_DEFAULT = 3
 
+
 # ENTERPRISE: Максимальное количество получателей в одной кампании
 # Предотвращает блокировку очереди одной большой кампанией
 # Значение берётся из settings.MAILER_MAX_CAMPAIGN_RECIPIENTS (по умолчанию 10000)
 def get_max_campaign_recipients() -> int:
     """Получить максимальное количество получателей из settings."""
     from django.conf import settings
+
     return getattr(settings, "MAILER_MAX_CAMPAIGN_RECIPIENTS", 10000)
+
 
 MAX_CAMPAIGN_RECIPIENTS = get_max_campaign_recipients()  # Для обратной совместимости
 
@@ -77,4 +80,3 @@ MAX_ERROR_MESSAGE_LENGTH = 500
 
 # Размер батча при bulk_update (защита от превышения max_allowed_packet MySQL/Postgres)
 BULK_UPDATE_BATCH_SIZE = 500
-

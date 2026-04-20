@@ -1,6 +1,7 @@
 """
 Тесты для tasksapp/services.py — TaskService.
 """
+
 from __future__ import annotations
 
 from django.test import TestCase
@@ -22,9 +23,7 @@ class TaskServiceSetupMixin:
         self.admin = User.objects.create_user(
             username="svc_admin", password="pass", role=User.Role.ADMIN
         )
-        self.company = Company.objects.create(
-            name="Тест Сервис", responsible=self.manager
-        )
+        self.company = Company.objects.create(name="Тест Сервис", responsible=self.manager)
         self.task_type = TaskType.objects.create(name="Звонок", color="#000", icon="📞")
         self.task = Task.objects.create(
             title="Тестовая задача",
@@ -55,17 +54,13 @@ class TaskServiceSetStatusTest(TaskServiceSetupMixin, TestCase):
         self.assertEqual(event.actor, self.manager)
 
     def test_set_status_done_sets_completed_at(self):
-        TaskService.set_status(
-            task=self.task, user=self.manager, new_status=Task.Status.DONE
-        )
+        TaskService.set_status(task=self.task, user=self.manager, new_status=Task.Status.DONE)
         self.task.refresh_from_db()
         self.assertIsNotNone(self.task.completed_at)
 
     def test_set_status_invalid_raises(self):
         with self.assertRaises(ValueError):
-            TaskService.set_status(
-                task=self.task, user=self.manager, new_status="nonexistent"
-            )
+            TaskService.set_status(task=self.task, user=self.manager, new_status="nonexistent")
 
     def test_set_status_done_with_save_to_notes_creates_note(self):
         result = TaskService.set_status(
@@ -77,6 +72,7 @@ class TaskServiceSetStatusTest(TaskServiceSetupMixin, TestCase):
         self.assertTrue(result["note_created"])
         self.assertIsNotNone(result["note"])
         from companies.models import CompanyNote
+
         self.assertTrue(
             CompanyNote.objects.filter(company=self.company, author=self.manager).exists()
         )
@@ -116,11 +112,10 @@ class TaskServiceDeleteTest(TaskServiceSetupMixin, TestCase):
         self.assertEqual(result["title"], "Тестовая задача")
 
     def test_delete_task_with_save_to_notes_creates_note(self):
-        result = TaskService.delete_task(
-            task=self.task, user=self.manager, save_to_notes=True
-        )
+        result = TaskService.delete_task(task=self.task, user=self.manager, save_to_notes=True)
         self.assertTrue(result["note_created"])
         from companies.models import CompanyNote
+
         self.assertTrue(
             CompanyNote.objects.filter(company=self.company, author=self.manager).exists()
         )
@@ -157,6 +152,7 @@ class TaskServiceCreateNoteTest(TaskServiceSetupMixin, TestCase):
 
     def test_create_note_from_task(self):
         from companies.models import CompanyNote
+
         note = TaskService.create_note_from_task(self.task, self.manager)
         self.assertIsInstance(note, CompanyNote)
         self.assertIn("Звонок", note.text)

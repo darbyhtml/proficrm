@@ -4,6 +4,7 @@
 Используются в UI-views и любых обработчиках, где по company_id
 нужно гарантировать, что пользователь имеет право видеть компанию (can_view_company).
 """
+
 from __future__ import annotations
 
 import functools
@@ -11,7 +12,13 @@ import uuid
 from typing import Any, Callable
 
 from django.core.exceptions import PermissionDenied
-from django.http import Http404, HttpRequest, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
+from django.http import (
+    Http404,
+    HttpRequest,
+    HttpResponse,
+    HttpResponseBadRequest,
+    HttpResponseForbidden,
+)
 from django.shortcuts import get_object_or_404
 
 from accounts.models import User
@@ -35,6 +42,7 @@ def require_can_view_company(
         def company_edit(request, company_id):
             ...
     """
+
     @functools.wraps(view_func)
     def wrapper(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         company_id = kwargs.get("company_id")
@@ -71,6 +79,7 @@ def require_can_view_note_company(
     Декоратор: по note_id из kwargs загружает Note с select_related('company')
     и проверяет can_view_company(user, note.company).
     """
+
     @functools.wraps(view_func)
     def wrapper(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         note_id = kwargs.get("note_id")

@@ -4,6 +4,7 @@
 Цель: изолировать бизнес-логику от HTTP-слоя,
 чтобы она была переиспользуема из UI-views, DRF API, management commands, тестов.
 """
+
 from __future__ import annotations
 
 import logging
@@ -188,7 +189,9 @@ class TaskService:
                         url=task_url,
                     )
         except Exception as e:
-            logger.warning("Ошибка при отправке уведомления об изменении статуса: %s", e, exc_info=True)
+            logger.warning(
+                "Ошибка при отправке уведомления об изменении статуса: %s", e, exc_info=True
+            )
 
     # ------------------------------------------------------------------
     # delete_task

@@ -4,6 +4,7 @@ ENTERPRISE: Throttling для mailer endpoints.
 
 FAIL-CLOSED POLICY: При ошибке Redis возвращаем throttled=True (безопаснее заблокировать, чем разрешить DoS).
 """
+
 from __future__ import annotations
 
 import logging
@@ -36,7 +37,7 @@ def _cache_hit(key: str, window_seconds: int) -> int:
     """
     Выполняет hit через cache (инкремент счетчика).
     add -> incr гарантирует, что ключ существует.
-    
+
     Returns:
         Новое значение счетчика (1, 2, 3, ...)
     """
@@ -54,7 +55,7 @@ def _hit(key: str, window_seconds: int) -> int:
     """
     Выполняет hit (инкремент счетчика) и возвращает новое значение.
     Пробует cache, при ошибке переключается на in-memory fallback.
-    
+
     Returns:
         Новое значение счетчика (1, 2, 3, ...)
     """
@@ -67,26 +68,28 @@ def _hit(key: str, window_seconds: int) -> int:
             extra={
                 "cache_key": key,
                 "error_type": "throttle_backend_fallback",
-            }
+            },
         )
         return _mem_hit(key, window_seconds)
 
 
-def is_user_throttled(user_id: int | str, action: str, max_requests: int, window_seconds: int = 3600) -> tuple[bool, int, str | None]:
+def is_user_throttled(
+    user_id: int | str, action: str, max_requests: int, window_seconds: int = 3600
+) -> tuple[bool, int, str | None]:
     """
     Проверка throttling по пользователю (не по IP).
-    
+
     КРИТИЧНО: Каждый вызов этой функции = hit (инкремент счетчика).
     Сначала увеличиваем счетчик, потом проверяем лимит.
-    
+
     FAIL-CLOSED POLICY: При ошибке Redis возвращаем throttled=True (безопаснее заблокировать, чем разрешить DoS).
-    
+
     Args:
         user_id: ID пользователя
         action: Действие (например "campaign_start", "send_test_email")
         max_requests: Максимум запросов в окне
         window_seconds: Окно времени в секундах (по умолчанию 1 час)
-    
+
     Returns:
         (is_throttled, current_count, reason)
         - is_throttled: True если лимит превышен
@@ -96,17 +99,17 @@ def is_user_throttled(user_id: int | str, action: str, max_requests: int, window
     """
     # ВАЖНО: key должен быть стабильным (action/user_id/window_seconds)
     key = f"throttle:{action}:{user_id}:{window_seconds}"
-    
+
     # ВАЖНО: count берём ТОЛЬКО из hit() - никаких cache.get() для count
     count = _hit(key, window_seconds)
-    
+
     # Проверяем, превышен ли лимит
     is_throttled = count > max_requests
-    
+
     # При throttled "зажимаем" count до max_requests для возврата наружу
     # (но в логах используем реальный count для видимости реальной нагрузки)
     visible_count = min(count, max_requests) if is_throttled else count
-    
+
     if is_throttled:
         logger.warning(
             f"User {user_id} throttled for action {action}: {count}/{max_requests}",
@@ -115,8 +118,8 @@ def is_user_throttled(user_id: int | str, action: str, max_requests: int, window
                 "action": action,
                 "current_count": count,  # Реальный count в логах
                 "max_requests": max_requests,
-            }
+            },
         )
-    
+
     # reason всегда None (по контракту тестов)
     return is_throttled, visible_count, None

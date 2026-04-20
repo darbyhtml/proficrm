@@ -5,6 +5,7 @@
 - CompanyService.transfer()
 - ColdCallService
 """
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -15,13 +16,26 @@ from django.test import TestCase
 from django.utils import timezone
 
 from accounts.models import Branch, User
-from companies.models import Company, CompanyHistoryEvent, ContractType, Contact, ContactPhone, CompanyPhone
-from companies.services import CompanyService, ColdCallService, get_contract_alert, get_worktime_status
+from companies.models import (
+    Company,
+    CompanyHistoryEvent,
+    ContractType,
+    Contact,
+    ContactPhone,
+    CompanyPhone,
+)
+from companies.services import (
+    CompanyService,
+    ColdCallService,
+    get_contract_alert,
+    get_worktime_status,
+)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _branch(code: str) -> Branch:
     return Branch.objects.create(code=code, name=code.upper())
@@ -43,6 +57,7 @@ def _company(responsible=None, branch=None, **kwargs) -> Company:
 # ---------------------------------------------------------------------------
 # get_contract_alert
 # ---------------------------------------------------------------------------
+
 
 class GetContractAlertTest(TestCase):
     def setUp(self):
@@ -103,6 +118,7 @@ class GetContractAlertTest(TestCase):
 # get_worktime_status
 # ---------------------------------------------------------------------------
 
+
 class GetWorktimeStatusTest(TestCase):
     def test_no_schedule(self):
         """Без расписания: has=False, status=None."""
@@ -138,6 +154,7 @@ class GetWorktimeStatusTest(TestCase):
 # ---------------------------------------------------------------------------
 # CompanyService.transfer
 # ---------------------------------------------------------------------------
+
 
 class CompanyServiceTransferTest(TestCase):
     def setUp(self):
@@ -209,6 +226,7 @@ class CompanyServiceTransferTest(TestCase):
 # ColdCallService tests
 # ---------------------------------------------------------------------------
 
+
 class ColdCallServiceCompanyTest(TestCase):
     def setUp(self):
         self.manager = User.objects.create_user(
@@ -261,9 +279,7 @@ class ColdCallServiceContactTest(TestCase):
         self.manager = User.objects.create_user(
             username="cc_mgr2", password="pass", role=User.Role.MANAGER
         )
-        self.company = Company.objects.create(
-            name="Тест ХЗ контакт", responsible=self.manager
-        )
+        self.company = Company.objects.create(name="Тест ХЗ контакт", responsible=self.manager)
         self.contact = Contact.objects.create(
             company=self.company, first_name="Иван", last_name="Петров"
         )
@@ -303,15 +319,9 @@ class ColdCallServiceContactPhoneTest(TestCase):
         self.manager = User.objects.create_user(
             username="cc_mgr3", password="pass", role=User.Role.MANAGER
         )
-        self.company = Company.objects.create(
-            name="Тест ХЗ тел", responsible=self.manager
-        )
-        self.contact = Contact.objects.create(
-            company=self.company, first_name="Анна"
-        )
-        self.phone = ContactPhone.objects.create(
-            contact=self.contact, value="+79009876543"
-        )
+        self.company = Company.objects.create(name="Тест ХЗ тел", responsible=self.manager)
+        self.contact = Contact.objects.create(company=self.company, first_name="Анна")
+        self.phone = ContactPhone.objects.create(contact=self.contact, value="+79009876543")
 
     def test_mark_contact_phone_sets_flag(self):
         result = ColdCallService.mark_contact_phone(contact_phone=self.phone, user=self.manager)
@@ -348,12 +358,8 @@ class ColdCallServiceCompanyPhoneTest(TestCase):
         self.manager = User.objects.create_user(
             username="cc_mgr4", password="pass", role=User.Role.MANAGER
         )
-        self.company = Company.objects.create(
-            name="Тест ХЗ тел компании", responsible=self.manager
-        )
-        self.phone = CompanyPhone.objects.create(
-            company=self.company, value="+79001112233"
-        )
+        self.company = Company.objects.create(name="Тест ХЗ тел компании", responsible=self.manager)
+        self.phone = CompanyPhone.objects.create(company=self.company, value="+79001112233")
 
     def test_mark_company_phone_sets_flag(self):
         result = ColdCallService.mark_company_phone(company_phone=self.phone, user=self.manager)

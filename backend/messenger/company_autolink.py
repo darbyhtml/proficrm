@@ -88,9 +88,7 @@ def _find_candidates_by_domain(domain: str) -> set:
         | Q(emails__value__iendswith=suffix)
         | Q(contacts__emails__value__iendswith=suffix)
     )
-    return set(
-        Company.objects.filter(q).values_list("id", flat=True).distinct()[:5]
-    )
+    return set(Company.objects.filter(q).values_list("id", flat=True).distinct()[:5])
 
 
 def _find_candidates_by_phone(phone_tail: str) -> set:
@@ -105,9 +103,7 @@ def _find_candidates_by_phone(phone_tail: str) -> set:
         | Q(phones__value__endswith=phone_tail)
         | Q(contacts__phones__value__endswith=phone_tail)
     )
-    return set(
-        Company.objects.filter(q).values_list("id", flat=True).distinct()[:5]
-    )
+    return set(Company.objects.filter(q).values_list("id", flat=True).distinct()[:5])
 
 
 def find_company_for_contact(contact):

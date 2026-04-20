@@ -47,6 +47,6 @@ def notify(
                 existing.save(update_fields=["payload"])
             return existing
 
-    return Notification.objects.create(user=user, title=t, body=b, url=u, kind=kind, payload=payload or {})
-
-
+    return Notification.objects.create(
+        user=user, title=t, body=b, url=u, kind=kind, payload=payload or {}
+    )

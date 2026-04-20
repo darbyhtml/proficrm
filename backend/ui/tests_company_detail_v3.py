@@ -7,6 +7,7 @@
 - contact_quick_create требует права на редактирование
 - Edge cases: company.inn=None, contacts=empty, task=empty
 """
+
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model
@@ -28,15 +29,20 @@ class CompanyDetailV3PreviewTests(TestCase):
     def setUp(self):
         self.branch = Branch.objects.create(code="v3t", name="V3 Test Branch")
         self.admin = User.objects.create_superuser(
-            username="v3_admin", email="a@v3.ru",
+            username="v3_admin",
+            email="a@v3.ru",
         )
         self.manager = User.objects.create_user(
-            username="v3_mgr", email="m@v3.ru",
-            role=User.Role.MANAGER, branch=self.branch,
+            username="v3_mgr",
+            email="m@v3.ru",
+            role=User.Role.MANAGER,
+            branch=self.branch,
         )
         self.other_mgr = User.objects.create_user(
-            username="v3_other", email="o@v3.ru",
-            role=User.Role.MANAGER, branch=self.branch,
+            username="v3_other",
+            email="o@v3.ru",
+            role=User.Role.MANAGER,
+            branch=self.branch,
         )
         self.company = Company.objects.create(
             name="Тестовая компания",
@@ -50,7 +56,9 @@ class CompanyDetailV3PreviewTests(TestCase):
         for v in ("a", "b", "c"):
             r = self.client.get(f"/companies/{self.company.id}/v3/{v}/")
             self.assertEqual(r.status_code, 200, f"variant {v}")
-            self.assertIn(b"\xd0\xa2\xd0\xb5\xd1\x81\xd1\x82\xd0\xbe\xd0\xb2\xd0\xb0\xd1\x8f", r.content)  # «Тестовая»
+            self.assertIn(
+                b"\xd0\xa2\xd0\xb5\xd1\x81\xd1\x82\xd0\xbe\xd0\xb2\xd0\xb0\xd1\x8f", r.content
+            )  # «Тестовая»
 
     def test_responsible_manager_can_open(self):
         self.client.force_login(self.manager)
@@ -69,7 +77,9 @@ class CompanyDetailV3PreviewTests(TestCase):
 
     def test_renders_with_empty_inn(self):
         company = Company.objects.create(
-            name="Без ИНН", branch=self.branch, responsible=self.admin,
+            name="Без ИНН",
+            branch=self.branch,
+            responsible=self.admin,
         )
         self.client.force_login(self.admin)
         r = self.client.get(f"/companies/{company.id}/v3/b/")
@@ -88,18 +98,25 @@ class ContactQuickCreateTests(TestCase):
     def setUp(self):
         self.branch = Branch.objects.create(code="cqc", name="CQC Branch")
         self.admin = User.objects.create_superuser(
-            username="cqc_admin", email="a@c.ru",
+            username="cqc_admin",
+            email="a@c.ru",
         )
         self.manager = User.objects.create_user(
-            username="cqc_mgr", email="m@c.ru",
-            role=User.Role.MANAGER, branch=self.branch,
+            username="cqc_mgr",
+            email="m@c.ru",
+            role=User.Role.MANAGER,
+            branch=self.branch,
         )
         self.foreign = User.objects.create_user(
-            username="cqc_other", email="o@c.ru",
-            role=User.Role.MANAGER, branch=self.branch,
+            username="cqc_other",
+            email="o@c.ru",
+            role=User.Role.MANAGER,
+            branch=self.branch,
         )
         self.company = Company.objects.create(
-            name="CQC Test Co", branch=self.branch, responsible=self.manager,
+            name="CQC Test Co",
+            branch=self.branch,
+            responsible=self.manager,
             inn="7712345678",
         )
 
@@ -107,8 +124,12 @@ class ContactQuickCreateTests(TestCase):
         self.client.force_login(self.admin)
         r = self.client.post(
             f"/companies/{self.company.id}/contacts/quick-create/",
-            {"name": "Иванов Иван", "position": "Директор",
-             "phone": "+79999999999", "email": "i@i.ru"},
+            {
+                "name": "Иванов Иван",
+                "position": "Директор",
+                "phone": "+79999999999",
+                "email": "i@i.ru",
+            },
         )
         self.assertEqual(r.status_code, 302)
         self.assertIn("/v3/b/", r.url)
@@ -151,8 +172,10 @@ class ContactQuickCreateTests(TestCase):
         # Менеджер другого branch не может добавить контакт
         other_branch = Branch.objects.create(code="cqc2", name="CQC2")
         other = User.objects.create_user(
-            username="cqc_foreign", email="f@c.ru",
-            role=User.Role.MANAGER, branch=other_branch,
+            username="cqc_foreign",
+            email="f@c.ru",
+            role=User.Role.MANAGER,
+            branch=other_branch,
         )
         self.client.force_login(other)
         r = self.client.post(

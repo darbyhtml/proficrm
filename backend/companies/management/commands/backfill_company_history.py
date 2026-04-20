@@ -10,6 +10,7 @@ Backfill: заполняет CompanyHistoryEvent из существующих A
 
     python manage.py backfill_company_history [--dry-run] [--batch-size 500]
 """
+
 import uuid
 
 from django.core.management.base import BaseCommand
@@ -52,9 +53,7 @@ class Command(BaseCommand):
 
         # Кэшируем ID существующих компаний для быстрой проверки
         self.stdout.write("Загружаем ID всех компаний...")
-        existing_company_ids: set[uuid.UUID] = set(
-            Company.objects.values_list("id", flat=True)
-        )
+        existing_company_ids: set[uuid.UUID] = set(Company.objects.values_list("id", flat=True))
         self.stdout.write(f"  Всего компаний в БД: {len(existing_company_ids)}")
 
         created_total = 0
@@ -64,8 +63,7 @@ class Command(BaseCommand):
         # --- 1. Событие "создание компании" ---
         self.stdout.write("\nОбрабатываем события создания компаний...")
         create_qs = (
-            ActivityEvent.objects
-            .filter(verb="create", entity_type="company")
+            ActivityEvent.objects.filter(verb="create", entity_type="company")
             .select_related("actor")
             .order_by("created_at")
         )
@@ -89,14 +87,16 @@ class Command(BaseCommand):
                 skipped_total += 1
                 continue
 
-            batch.append(CompanyHistoryEvent(
-                company_id=company_uuid,
-                event_type=CompanyHistoryEvent.EventType.CREATED,
-                source=CompanyHistoryEvent.Source.LOCAL,
-                actor=ev.actor,
-                actor_name=str(ev.actor) if ev.actor else "",
-                occurred_at=ev.created_at,
-            ))
+            batch.append(
+                CompanyHistoryEvent(
+                    company_id=company_uuid,
+                    event_type=CompanyHistoryEvent.EventType.CREATED,
+                    source=CompanyHistoryEvent.Source.LOCAL,
+                    actor=ev.actor,
+                    actor_name=str(ev.actor) if ev.actor else "",
+                    occurred_at=ev.created_at,
+                )
+            )
             created_total += 1
 
             if len(batch) >= batch_size:
@@ -119,8 +119,9 @@ class Command(BaseCommand):
         # --- 2. Событие "передача ответственного" ---
         self.stdout.write("\nОбрабатываем события передачи ответственного...")
         transfer_qs = (
-            ActivityEvent.objects
-            .filter(verb="update", entity_type="company", message="Изменён ответственный компании")
+            ActivityEvent.objects.filter(
+                verb="update", entity_type="company", message="Изменён ответственный компании"
+            )
             .select_related("actor")
             .order_by("created_at")
         )
@@ -151,16 +152,18 @@ class Command(BaseCommand):
                 transfer_skipped += 1
                 continue
 
-            batch.append(CompanyHistoryEvent(
-                company_id=company_uuid,
-                event_type=CompanyHistoryEvent.EventType.ASSIGNED,
-                source=CompanyHistoryEvent.Source.LOCAL,
-                actor=ev.actor,
-                actor_name=str(ev.actor) if ev.actor else "",
-                from_user_name=from_name[:255],
-                to_user_name=to_name[:255],
-                occurred_at=ev.created_at,
-            ))
+            batch.append(
+                CompanyHistoryEvent(
+                    company_id=company_uuid,
+                    event_type=CompanyHistoryEvent.EventType.ASSIGNED,
+                    source=CompanyHistoryEvent.Source.LOCAL,
+                    actor=ev.actor,
+                    actor_name=str(ev.actor) if ev.actor else "",
+                    from_user_name=from_name[:255],
+                    to_user_name=to_name[:255],
+                    occurred_at=ev.created_at,
+                )
+            )
             transfer_created += 1
 
             if len(batch) >= batch_size:
@@ -195,8 +198,7 @@ class Command(BaseCommand):
                 already_have_created.add(ev.company_id)
 
         companies_missing_created = (
-            Company.objects
-            .exclude(id__in=already_have_created)
+            Company.objects.exclude(id__in=already_have_created)
             .only("id", "created_at")
             .order_by("created_at")
         )
@@ -206,14 +208,16 @@ class Command(BaseCommand):
         for company in companies_missing_created.iterator(chunk_size=batch_size):
             if company.created_at is None:
                 continue
-            batch.append(CompanyHistoryEvent(
-                company_id=company.id,
-                event_type=CompanyHistoryEvent.EventType.CREATED,
-                source=CompanyHistoryEvent.Source.LOCAL,
-                actor=None,
-                actor_name="",
-                occurred_at=company.created_at,
-            ))
+            batch.append(
+                CompanyHistoryEvent(
+                    company_id=company.id,
+                    event_type=CompanyHistoryEvent.EventType.CREATED,
+                    source=CompanyHistoryEvent.Source.LOCAL,
+                    actor=None,
+                    actor_name="",
+                    occurred_at=company.created_at,
+                )
+            )
             synthetic_count += 1
 
             if len(batch) >= batch_size:

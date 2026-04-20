@@ -6,6 +6,7 @@
   True  (по умолчанию) — fail-open:  разрешить отправку, залогировать CRITICAL.
   False               — fail-closed: запретить отправку до восстановления Redis.
 """
+
 from __future__ import annotations
 
 import logging
@@ -48,6 +49,7 @@ def reserve_rate_limit_token(max_per_hour: int = 100) -> tuple[bool, int, timezo
         - next_reset_at: время сброса, если reserved=False
     """
     from django.conf import settings
+
     fail_open: bool = getattr(settings, "MAILER_RATE_LIMIT_FAIL_OPEN", True)
 
     now = timezone.now()

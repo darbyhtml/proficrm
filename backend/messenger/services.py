@@ -169,7 +169,7 @@ def record_message(
 ) -> Message:
     """
     Создаёт сообщение в диалоге и обновляет last_activity_at (по образцу Chatwoot).
-    
+
     Args:
         conversation: Диалог
         direction: Направление (IN, OUT, INTERNAL)
@@ -186,10 +186,14 @@ def record_message(
     with transaction.atomic():
         # Дедупликация через source_id (по образцу Chatwoot)
         if source_id:
-            existing = Message.objects.select_for_update().filter(
-                conversation=conversation,
-                source_id=source_id,
-            ).first()
+            existing = (
+                Message.objects.select_for_update()
+                .filter(
+                    conversation=conversation,
+                    source_id=source_id,
+                )
+                .first()
+            )
             if existing:
                 return existing  # Дубликат
 
@@ -219,7 +223,11 @@ def record_message(
         _logger.warning(
             "Webhook notify_message failed from record_message",
             exc_info=True,
-            extra={"conversation_id": conversation.id, "message_id": msg.id, "direction": direction},
+            extra={
+                "conversation_id": conversation.id,
+                "message_id": msg.id,
+                "direction": direction,
+            },
         )
 
     # Reporting events для исходящих сообщений (ответ оператора)
@@ -233,43 +241,46 @@ def record_message(
 def assign_conversation(conversation: Conversation, user: User) -> None:
     """
     Назначить диалог оператору с защитой от race condition (по образцу Chatwoot).
-    
+
     Args:
         conversation: Диалог для назначения
         user: Оператор для назначения
-    
+
     Raises:
         ValueError: Если диалог уже назначен другому оператору
-    
+
     Note:
         Обновляет assignee_assigned_at и сбрасывает assignee_opened_at (для эскалации).
         Использует select_for_update для предотвращения одновременного назначения разным операторам.
     """
     from django.db import transaction
-    
+
     with transaction.atomic():
         # Блокируем запись для обновления (по образцу Chatwoot)
         conv = Conversation.objects.select_for_update().get(pk=conversation.pk)
-        
+
         # Проверяем, что диалог не назначен другому оператору
         if conv.assignee_id and conv.assignee_id != user.id:
             raise ValueError("Conversation already assigned to another agent")
-        
+
         now = timezone.now()
         conv.assignee = user
         conv.assignee_assigned_at = now
         conv.assignee_opened_at = None
         conv.waiting_since = conv.waiting_since or now
-        conv.save(update_fields=[
-            "assignee",
-            "assignee_assigned_at",
-            "assignee_opened_at",
-            "waiting_since"
-        ])
+        conv.save(
+            update_fields=[
+                "assignee",
+                "assignee_assigned_at",
+                "assignee_opened_at",
+                "waiting_since",
+            ]
+        )
 
         # Push-уведомление назначенному оператору
         try:
             from .push import send_push_assignment
+
             send_push_assignment(conv, user)
         except Exception:
             pass  # push не критичен
@@ -281,10 +292,10 @@ def auto_assign_conversation(conversation: Conversation) -> Optional[User]:
 
     Args:
         conversation: Диалог для автоназначения
-    
+
     Returns:
         Назначенный User или None, если кандидатов нет
-    
+
     Note:
         Кандидаты: активные пользователи того же branch (ADMIN исключаем),
         только со статусом «онлайн». Используется Round-Robin список в Redis
@@ -352,8 +363,7 @@ def auto_assign_conversation(conversation: Conversation) -> Optional[User]:
 
     # Фильтруем кандидатов по Rate Limiter (по образцу Chatwoot)
     allowed_agent_ids = [
-        user_id for user_id in candidates
-        if default_rate_limiter.check_limit(user_id)
+        user_id for user_id in candidates if default_rate_limiter.check_limit(user_id)
     ]
 
     # Если все операторы превысили лимит, используем всех кандидатов
@@ -371,42 +381,44 @@ def auto_assign_conversation(conversation: Conversation) -> Optional[User]:
 
     # Назначаем диалог с защитой от race condition (по образцу Chatwoot)
     from django.db import transaction
-    
+
     with transaction.atomic():
         # Блокируем запись для обновления
         conv = Conversation.objects.select_for_update().get(pk=conversation.pk)
-        
+
         # Проверяем, что диалог не был назначен другому оператору пока мы выбирали кандидата
         if conv.assignee_id and conv.assignee_id != assignee.id:
             # Диалог уже назначен - возвращаем None (или можно вернуть текущего assignee)
             return None
-        
+
         now = timezone.now()
         conv.assignee_id = assignee.id
         conv.assignee_assigned_at = now
         conv.assignee_opened_at = None
         conv.waiting_since = None  # Очищаем waiting_since при назначении
-        conv.save(update_fields=[
-            "assignee_id", 
-            "assignee_assigned_at", 
-            "assignee_opened_at",
-            "waiting_since"
-        ])
-    
+        conv.save(
+            update_fields=[
+                "assignee_id",
+                "assignee_assigned_at",
+                "assignee_opened_at",
+                "waiting_since",
+            ]
+        )
+
     return assignee
 
 
 def has_online_operators_for_branch(branch_id: int, inbox_id: int) -> bool:
     """
     Проверить наличие онлайн операторов в филиале (по образцу Chatwoot).
-    
+
     Args:
         branch_id: ID филиала
         inbox_id: ID inbox (не используется, но оставлен для совместимости)
-    
+
     Returns:
         True если есть хотя бы один онлайн оператор, иначе False
-    
+
     Note:
         Используется для проверки возможности автоназначения перед вызовом auto_assign_conversation.
     """
@@ -434,38 +446,39 @@ def select_routing_rule(
 ) -> "Optional[object]":
     """
     Выбрать правило маршрутизации для inbox и region.
-    
+
     Логика:
     1. Если region задан - ищем активное правило с этим region и inbox, сортируем по priority
     2. Если не найдено - ищем fallback правило для inbox
     3. Если ничего не найдено - возвращаем None
-    
+
     Args:
         inbox: Inbox для маршрутизации
         region: Регион (может быть None)
-    
+
     Returns:
         RoutingRule или None
     """
     from . import models
-    
+
     # Ищем активные правила для этого inbox
-    rules_qs = models.RoutingRule.objects.filter(
-        inbox=inbox,
-        is_active=True,
-    ).select_related("branch").prefetch_related("regions")
-    
+    rules_qs = (
+        models.RoutingRule.objects.filter(
+            inbox=inbox,
+            is_active=True,
+        )
+        .select_related("branch")
+        .prefetch_related("regions")
+    )
+
     # Если region задан - ищем правило с этим region
     if region:
-        matching_rules = [
-            rule for rule in rules_qs
-            if rule.regions.filter(id=region.id).exists()
-        ]
+        matching_rules = [rule for rule in rules_qs if rule.regions.filter(id=region.id).exists()]
         if matching_rules:
             # Сортируем по priority (меньше = выше приоритет)
             matching_rules.sort(key=lambda r: (r.priority, r.id))
             return matching_rules[0]
-    
+
     # Если не найдено правило по region - ищем fallback
     fallback_rule = rules_qs.filter(is_fallback=True).first()
     if fallback_rule:
@@ -477,10 +490,10 @@ def select_routing_rule(
 def get_default_branch_for_messenger():
     """
     Получить филиал по умолчанию для глобального inbox (по образцу Chatwoot).
-    
+
     Returns:
         Branch или None, если не настроен
-    
+
     Note:
         Берётся из настроек MESSENGER_DEFAULT_BRANCH_ID (ID филиала).
         Используется когда ни одно правило маршрутизации не сработало.
@@ -488,18 +501,18 @@ def get_default_branch_for_messenger():
     """
     from django.conf import settings
     from accounts.models import Branch
-    
+
     # Кэширование для оптимизации (по образцу Chatwoot)
     cache_key = "messenger:default_branch"
     cached_branch = cache.get(cache_key)
     if cached_branch is not None:
         return cached_branch
-    
+
     branch_id = getattr(settings, "MESSENGER_DEFAULT_BRANCH_ID", None)
     if not branch_id:
         cache.set(cache_key, None, timeout=3600)  # Кэшируем None на 1 час
         return None
-    
+
     try:
         branch = Branch.objects.get(pk=branch_id)
         cache.set(cache_key, branch, timeout=3600)  # Кэшируем на 1 час
@@ -513,16 +526,17 @@ def get_default_branch_for_messenger():
 # Эскалация по таймауту (п.3 дорожной карты)
 # ---------------------------------------------------------------------------
 
+
 def get_conversations_eligible_for_escalation(timeout_seconds: int = 240):
     """
     Получить диалоги, которые можно эскалировать (по образцу Chatwoot).
-    
+
     Args:
         timeout_seconds: Таймаут в секундах (по умолчанию 240 = 4 минуты)
-    
+
     Returns:
         QuerySet диалогов для эскалации
-    
+
     Note:
         Критерии эскалации:
         - Назначен оператор (assignee_id не пуст)
@@ -533,6 +547,7 @@ def get_conversations_eligible_for_escalation(timeout_seconds: int = 240):
     """
     from django.utils import timezone
     from datetime import timedelta
+
     threshold = timezone.now() - timedelta(seconds=timeout_seconds)
     qs = Conversation.objects.filter(
         assignee_id__isnull=False,
@@ -541,8 +556,10 @@ def get_conversations_eligible_for_escalation(timeout_seconds: int = 240):
     )
     # assignee_assigned_at может быть пустым у старых записей
     from django.db.models import Q
+
     qs = qs.filter(
-        Q(assignee_assigned_at__lte=threshold) | Q(assignee_assigned_at__isnull=True, created_at__lte=threshold)
+        Q(assignee_assigned_at__lte=threshold)
+        | Q(assignee_assigned_at__isnull=True, created_at__lte=threshold)
     )
     return qs
 
@@ -550,13 +567,13 @@ def get_conversations_eligible_for_escalation(timeout_seconds: int = 240):
 def escalate_conversation(conversation: Conversation) -> Optional[User]:
     """
     Переназначить диалог следующему оператору через Round-Robin (по образцу Chatwoot).
-    
+
     Args:
         conversation: Диалог для эскалации
-    
+
     Returns:
         Новый назначенный User или None, если кандидатов нет
-    
+
     Note:
         Исключает текущего назначенного оператора. Используется та же логика кандидатов,
         что и в auto_assign, но без текущего assignee.
@@ -609,8 +626,7 @@ def escalate_conversation(conversation: Conversation) -> Optional[User]:
 
     # Фильтруем кандидатов по Rate Limiter (по образцу Chatwoot)
     allowed_agent_ids = [
-        user_id for user_id in candidates
-        if default_rate_limiter.check_limit(user_id)
+        user_id for user_id in candidates if default_rate_limiter.check_limit(user_id)
     ]
 
     # Если все операторы превысили лимит, используем всех кандидатов
@@ -628,32 +644,34 @@ def escalate_conversation(conversation: Conversation) -> Optional[User]:
 
     # Переназначаем диалог с защитой от race condition (по образцу Chatwoot)
     from django.db import transaction
-    
+
     with transaction.atomic():
         # Блокируем запись для обновления
         conv = Conversation.objects.select_for_update().get(pk=conversation.pk)
-        
+
         # Проверяем, что диалог не был назначен другому оператору пока мы выбирали кандидата
         if conv.assignee_id and conv.assignee_id != current_assignee_id:
             # Диалог уже переназначен - возвращаем None
             return None
-        
+
         # Проверяем, что текущий оператор всё ещё назначен (для эскалации)
         if conv.assignee_id != current_assignee_id:
             return None
-        
+
         now = timezone.now()
         conv.assignee_id = assignee.id
         conv.assignee_assigned_at = now
         conv.assignee_opened_at = None
         conv.waiting_since = None  # Очищаем waiting_since при назначении
-        conv.save(update_fields=[
-            "assignee_id", 
-            "assignee_assigned_at", 
-            "assignee_opened_at",
-            "waiting_since"
-        ])
-    
+        conv.save(
+            update_fields=[
+                "assignee_id",
+                "assignee_assigned_at",
+                "assignee_opened_at",
+                "waiting_since",
+            ]
+        )
+
     return assignee
 
 
@@ -671,14 +689,14 @@ LAST_SEEN_THROTTLE_SECONDS = getattr(
 def touch_assignee_last_seen(conversation: Conversation, user: User) -> timezone.datetime:
     """
     Обновить assignee_last_read_at/agent_last_seen_at с троттлингом (по образцу Chatwoot).
-    
+
     Args:
         conversation: Диалог для обновления
         user: Оператор, который просматривает диалог
-    
+
     Returns:
         Время обновления (может быть кэшированное, если троттлинг активен)
-    
+
     Note:
         Не пишет в БД чаще, чем раз в MESSENGER_LAST_SEEN_THROTTLE_SECONDS секунд
         для каждой пары (оператор, диалог). Использует Redis для кэширования.
@@ -707,14 +725,14 @@ def touch_assignee_last_seen(conversation: Conversation, user: User) -> timezone
 def touch_contact_last_seen(conversation: Conversation, contact_id) -> timezone.datetime:
     """
     Обновить contact_last_seen_at/last_activity_at контакта с троттлингом (по образцу Chatwoot).
-    
+
     Args:
         conversation: Диалог для обновления
         contact_id: ID контакта (UUID)
-    
+
     Returns:
         Время обновления (может быть кэшированное, если троттлинг активен)
-    
+
     Note:
         Не пишет в БД чаще, чем раз в MESSENGER_LAST_SEEN_THROTTLE_SECONDS секунд
         для каждой пары (контакт, диалог). Использует Redis для кэширования.
@@ -744,14 +762,14 @@ def touch_contact_last_seen(conversation: Conversation, contact_id) -> timezone.
 def transfer_conversation_to_branch(conversation: Conversation, branch: "Branch") -> Optional[User]:
     """
     Перенести диалог в другой филиал с автоназначением (по образцу Chatwoot).
-    
+
     Args:
         conversation: Диалог для переноса
         branch: Целевой филиал
-    
+
     Returns:
         Назначенный оператор или None, если автоназначение не удалось
-    
+
     Note:
         Обновляет branch диалога и пытается автоматически назначить оператора
         из нового филиала через auto_assign_conversation.
@@ -767,6 +785,7 @@ def transfer_conversation_to_branch(conversation: Conversation, branch: "Branch"
         Назначенный User или None, если в филиале нет подходящих операторов.
     """
     from accounts.models import Branch
+
     if conversation.inbox.branch_id is not None:
         return None
     if not isinstance(branch, Branch) or not branch.id:
@@ -775,6 +794,7 @@ def transfer_conversation_to_branch(conversation: Conversation, branch: "Branch"
     conversation.assignee_id = None
     conversation.assignee_assigned_at = None
     conversation.assignee_opened_at = None
-    conversation.save(update_fields=["branch_id", "assignee_id", "assignee_assigned_at", "assignee_opened_at"])
+    conversation.save(
+        update_fields=["branch_id", "assignee_id", "assignee_assigned_at", "assignee_opened_at"]
+    )
     return auto_assign_conversation(conversation)
-

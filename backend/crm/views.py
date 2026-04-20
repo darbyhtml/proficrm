@@ -1,6 +1,7 @@
 """
 Общие views для обработки ошибок с защитой от утечки информации.
 """
+
 import os
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
@@ -37,12 +38,14 @@ def security_txt(request):
     security_email = getattr(settings, "SECURITY_CONTACT_EMAIL", "") or "security@example.com"
 
     # Дата истечения: через год от текущей даты (timezone-aware, не deprecated utcnow)
-    expires_date = (datetime.now(timezone.utc) + timedelta(days=365)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-    
+    expires_date = (datetime.now(timezone.utc) + timedelta(days=365)).strftime(
+        "%Y-%m-%dT%H:%M:%S.000Z"
+    )
+
     # Получаем домен из запроса (всегда используем HTTPS для canonical)
     host = request.get_host()
     canonical_url = f"https://{host}/.well-known/security.txt"
-    
+
     content = f"""Contact: mailto:{security_email}
 Expires: {expires_date}
 Preferred-Languages: ru, en
@@ -64,7 +67,9 @@ def sw_push_js(request):
     import pathlib
     from django.conf import settings as django_settings
 
-    sw_path = pathlib.Path(django_settings.BASE_DIR) / "messenger" / "static" / "messenger" / "sw-push.js"
+    sw_path = (
+        pathlib.Path(django_settings.BASE_DIR) / "messenger" / "static" / "messenger" / "sw-push.js"
+    )
     try:
         content = sw_path.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -109,7 +114,7 @@ def metrics_endpoint(request):
 
     auth = (request.META.get("HTTP_AUTHORIZATION") or "").strip()
     prefix = "Bearer "
-    provided = auth[len(prefix):] if auth.startswith(prefix) else ""
+    provided = auth[len(prefix) :] if auth.startswith(prefix) else ""
     if provided != expected:
         return HttpResponse(
             "# unauthorized\n",
@@ -130,12 +135,14 @@ def metrics_endpoint(request):
     # Бизнес-метрики — best-effort, любая ошибка → не блокирует.
     try:
         from companies.models import Company
+
         gauge("crm_companies_total", Company.objects.count(), "Total companies")
     except Exception:
         pass
 
     try:
         from tasksapp.models import Task
+
         open_tasks = Task.objects.filter(
             status__in=[Task.Status.NEW, Task.Status.IN_PROGRESS]
         ).count()
@@ -145,6 +152,7 @@ def metrics_endpoint(request):
 
     try:
         from messenger.models import Conversation
+
         gauge(
             "crm_conversations_waiting_offline",
             Conversation.objects.filter(status=Conversation.Status.WAITING_OFFLINE).count(),
@@ -161,16 +169,21 @@ def metrics_endpoint(request):
     try:
         from accounts.models import UserAbsence
         from django.utils import timezone
+
         today = timezone.localdate()
-        absent = UserAbsence.objects.filter(
-            start_date__lte=today, end_date__gte=today
-        ).values("user").distinct().count()
+        absent = (
+            UserAbsence.objects.filter(start_date__lte=today, end_date__gte=today)
+            .values("user")
+            .distinct()
+            .count()
+        )
         gauge("crm_users_absent", absent, "Users currently absent (vacation/sick/dayoff)")
     except Exception:
         pass
 
     try:
         from phonebridge.models import MobileAppBuild
+
         gauge(
             "crm_mobile_app_builds_active",
             MobileAppBuild.objects.filter(is_active=True, env="production").count(),
@@ -226,6 +239,7 @@ def health_check(request):
     # --- celery (ping, timeout 2s — warning only) ---
     try:
         from celery import current_app
+
         reply = current_app.control.ping(timeout=1)
         if reply:
             checks["celery"] = {"status": "ok", "workers": len(reply)}
@@ -251,8 +265,11 @@ def health_check(request):
     overall = "degraded" if degraded else "ok"
     status_code = 503 if degraded else 200
 
-    return JsonResponse({
-        "status": overall,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "checks": checks,
-    }, status=status_code)
+    return JsonResponse(
+        {
+            "status": overall,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "checks": checks,
+        },
+        status=status_code,
+    )

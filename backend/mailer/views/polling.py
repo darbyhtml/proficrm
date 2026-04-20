@@ -1,6 +1,7 @@
 """
 Views для polling прогресса рассылки (глобальный и по кампании).
 """
+
 from __future__ import annotations
 
 import logging
@@ -30,9 +31,18 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
     ВАЖНО: reason_code и next_run_at берутся из CampaignQueue (единый источник правды).
     """
     user: User = request.user
-    enforce(user=request.user, resource_type="action", resource="ui:mail:progress:poll", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:progress:poll",
+        context={"path": request.path, "method": request.method},
+    )
 
-    qs = Campaign.objects.filter(created_by=user).order_by("-updated_at").select_related("queue_entry")
+    qs = (
+        Campaign.objects.filter(created_by=user)
+        .order_by("-updated_at")
+        .select_related("queue_entry")
+    )
     active = qs.filter(status=Campaign.Status.SENDING).first()
     if not active:
         active = qs.filter(
@@ -48,9 +58,11 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
     queued_count = 0
     next_campaign_at = None
 
-    processing_queue = CampaignQueue.objects.filter(
-        status=CampaignQueue.Status.PROCESSING
-    ).select_related("campaign", "campaign__created_by").first()
+    processing_queue = (
+        CampaignQueue.objects.filter(status=CampaignQueue.Status.PROCESSING)
+        .select_related("campaign", "campaign__created_by")
+        .first()
+    )
 
     if processing_queue and processing_queue.campaign.created_by == user:
         active_campaign = {
@@ -64,24 +76,30 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
         campaign__recipients__status=CampaignRecipient.Status.PENDING,
     ).count()
 
-    next_pending = CampaignQueue.objects.filter(
-        status=CampaignQueue.Status.PENDING,
-        campaign__created_by=user,
-        campaign__recipients__status=CampaignRecipient.Status.PENDING,
-        deferred_until__isnull=False,
-    ).order_by("deferred_until").first()
+    next_pending = (
+        CampaignQueue.objects.filter(
+            status=CampaignQueue.Status.PENDING,
+            campaign__created_by=user,
+            campaign__recipients__status=CampaignRecipient.Status.PENDING,
+            deferred_until__isnull=False,
+        )
+        .order_by("deferred_until")
+        .first()
+    )
 
     if next_pending:
         next_campaign_at = next_pending.deferred_until
 
     if not active:
-        return JsonResponse({
-            "ok": True,
-            "active": None,
-            "active_campaign": active_campaign,
-            "queued_count": queued_count,
-            "next_campaign_at": next_campaign_at.isoformat() if next_campaign_at else None,
-        })
+        return JsonResponse(
+            {
+                "ok": True,
+                "active": None,
+                "active_campaign": active_campaign,
+                "queued_count": queued_count,
+                "next_campaign_at": next_campaign_at.isoformat() if next_campaign_at else None,
+            }
+        )
 
     agg = active.recipients.aggregate(
         pending=Count("id", filter=Q(status=CampaignRecipient.Status.PENDING)),
@@ -97,7 +115,7 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
     percent = int(round((done / total) * 100)) if total > 0 else 0
 
     q = getattr(active, "queue_entry", None)
-    queue_status = (getattr(q, "status", None) if q else None)
+    queue_status = getattr(q, "status", None) if q else None
     deferred_until = getattr(q, "deferred_until", None) if q else None
     defer_reason = (getattr(q, "defer_reason", None) or "") if q else ""
 
@@ -200,17 +218,19 @@ def campaign_progress_poll(request: HttpRequest, campaign_id) -> JsonResponse:
     }
     reason_text = reason_texts.get(defer_reason, defer_reason) if defer_reason else ""
 
-    return JsonResponse({
-        "ok": True,
-        "campaign_id": str(camp.id),
-        "status": camp.status,
-        "pending": pending,
-        "sent": sent,
-        "failed": failed,
-        "total": total,
-        "percent": percent,
-        "queue_status": getattr(q, "status", None) if q else None,
-        "deferred_until": deferred_until.isoformat() if deferred_until else None,
-        "defer_reason": defer_reason,
-        "reason_text": reason_text,
-    })
+    return JsonResponse(
+        {
+            "ok": True,
+            "campaign_id": str(camp.id),
+            "status": camp.status,
+            "pending": pending,
+            "sent": sent,
+            "failed": failed,
+            "total": total,
+            "percent": percent,
+            "queue_status": getattr(q, "status", None) if q else None,
+            "deferred_until": deferred_until.isoformat() if deferred_until else None,
+            "defer_reason": defer_reason,
+            "reason_text": reason_text,
+        }
+    )

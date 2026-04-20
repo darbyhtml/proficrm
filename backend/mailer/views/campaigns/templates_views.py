@@ -1,6 +1,7 @@
 """
 Views: шаблоны кампаний — сохранение, создание из шаблона, удаление, список.
 """
+
 from __future__ import annotations
 
 import logging
@@ -22,7 +23,12 @@ logger = logging.getLogger(__name__)
 @login_required
 def campaign_save_as_template(request: HttpRequest, campaign_id) -> HttpResponse:
     """Сохранить кампанию как шаблон (копия с is_template=True, без получателей)."""
-    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:create", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:campaigns:create",
+        context={"path": request.path, "method": request.method},
+    )
     if request.method != "POST":
         return redirect("campaign_detail", campaign_id=campaign_id)
     camp = get_object_or_404(Campaign, id=campaign_id)
@@ -49,7 +55,12 @@ def campaign_save_as_template(request: HttpRequest, campaign_id) -> HttpResponse
 @login_required
 def campaign_create_from_template(request: HttpRequest, template_id) -> HttpResponse:
     """Создать новую кампанию на основе шаблона."""
-    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:create", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:campaigns:create",
+        context={"path": request.path, "method": request.method},
+    )
     if request.method != "POST":
         return redirect("campaign_templates")
     tmpl = get_object_or_404(Campaign, id=template_id, is_template=True)
@@ -87,11 +98,24 @@ def campaign_template_delete(request: HttpRequest, template_id) -> HttpResponse:
 @login_required
 def campaign_templates(request: HttpRequest) -> HttpResponse:
     """Список шаблонов писем."""
-    enforce(user=request.user, resource_type="page", resource="ui:mail:campaigns", context={"path": request.path})
+    enforce(
+        user=request.user,
+        resource_type="page",
+        resource="ui:mail:campaigns",
+        context={"path": request.path},
+    )
     user: User = request.user
     is_admin = require_admin(user)
-    templates_qs = Campaign.objects.filter(is_template=True).select_related("created_by").order_by("-created_at")
-    return render(request, "ui/mail/templates.html", {
-        "templates": templates_qs,
-        "is_admin": is_admin,
-    })
+    templates_qs = (
+        Campaign.objects.filter(is_template=True)
+        .select_related("created_by")
+        .order_by("-created_at")
+    )
+    return render(
+        request,
+        "ui/mail/templates.html",
+        {
+            "templates": templates_qs,
+            "is_admin": is_admin,
+        },
+    )

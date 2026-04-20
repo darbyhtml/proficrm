@@ -55,36 +55,43 @@ class ContractType(models.Model):
     """
     Справочник видов договоров с настройками напоминаний.
     """
+
     name = models.CharField("Название", max_length=120, unique=True)
     is_annual = models.BooleanField(
         "Годовой договор",
         default=False,
-        help_text="Если отмечено, договор действует на определенную сумму, а не до даты. Для годовых договоров поле 'Действует до' не отображается."
+        help_text="Если отмечено, договор действует на определенную сумму, а не до даты. Для годовых договоров поле 'Действует до' не отображается.",
     )
     warning_days = models.PositiveIntegerField(
         "Дней до желтого предупреждения",
         default=14,
-        help_text="За сколько дней до окончания договора показывать желтое предупреждение"
+        help_text="За сколько дней до окончания договора показывать желтое предупреждение",
     )
     danger_days = models.PositiveIntegerField(
         "Дней до красного предупреждения",
         default=7,
-        help_text="За сколько дней до окончания договора показывать красное предупреждение"
+        help_text="За сколько дней до окончания договора показывать красное предупреждение",
     )
     # Пороговые суммы для годовых договоров (is_annual=True).
     # Были захардкожены в шаблонах и services.py как 25 000 / 70 000.
     # Теперь настраиваются через админку для каждого типа договора.
     amount_danger_threshold = models.DecimalField(
         "Красный порог суммы (₽)",
-        max_digits=12, decimal_places=2,
-        null=True, blank=True, default=25000,
-        help_text="Если сумма годового договора МЕНЬШЕ этой — показываем красный алерт. Только для годовых."
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        default=25000,
+        help_text="Если сумма годового договора МЕНЬШЕ этой — показываем красный алерт. Только для годовых.",
     )
     amount_warn_threshold = models.DecimalField(
         "Жёлтый порог суммы (₽)",
-        max_digits=12, decimal_places=2,
-        null=True, blank=True, default=70000,
-        help_text="Если сумма МЕНЬШЕ этой (но БОЛЬШЕ красного порога) — показываем жёлтый алерт. Только для годовых."
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        default=70000,
+        help_text="Если сумма МЕНЬШЕ этой (но БОЛЬШЕ красного порога) — показываем жёлтый алерт. Только для годовых.",
     )
     order = models.IntegerField("Порядок сортировки", default=0, db_index=True)
 
@@ -116,17 +123,28 @@ class Company(models.Model):
     kpp = models.CharField("КПП", max_length=20, blank=True, default="")
     address = models.CharField("Адрес", max_length=500, blank=True, default="")
     website = models.CharField("Сайт", max_length=255, blank=True, default="")
-    activity_kind = models.CharField("Вид деятельности", max_length=255, blank=True, default="", db_index=True)
+    activity_kind = models.CharField(
+        "Вид деятельности", max_length=255, blank=True, default="", db_index=True
+    )
     employees_count = models.PositiveIntegerField("Численность сотрудников", null=True, blank=True)
     workday_start = models.TimeField("Рабочее время: с", null=True, blank=True)
     workday_end = models.TimeField("Рабочее время: до", null=True, blank=True)
     work_timezone = models.CharField("Часовой пояс", max_length=64, blank=True, default="")
-    work_schedule = models.TextField("Режим работы", blank=True, default="", help_text="Можно копировать с сайта, вводить вручную. Время автоматически форматируется в формат HH:MM.")
+    work_schedule = models.TextField(
+        "Режим работы",
+        blank=True,
+        default="",
+        help_text="Можно копировать с сайта, вводить вручную. Время автоматически форматируется в формат HH:MM.",
+    )
     # Устаревшее: раньше отметка была на всю компанию. Оставляем поле для обратной совместимости/данных,
     # но в UI/логике используем отметки на контактах.
     is_cold_call = models.BooleanField("Холодный звонок (устар.)", default=False, db_index=True)
-    primary_contact_is_cold_call = models.BooleanField("Холодный звонок (основной контакт)", default=False, db_index=True)
-    primary_cold_marked_at = models.DateTimeField("Холодный (осн. контакт): когда отметили", null=True, blank=True, db_index=True)
+    primary_contact_is_cold_call = models.BooleanField(
+        "Холодный звонок (основной контакт)", default=False, db_index=True
+    )
+    primary_cold_marked_at = models.DateTimeField(
+        "Холодный (осн. контакт): когда отметили", null=True, blank=True, db_index=True
+    )
     primary_cold_marked_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         verbose_name="Холодный (осн. контакт): кто отметил",
@@ -160,7 +178,7 @@ class Company(models.Model):
         decimal_places=2,
         null=True,
         blank=True,
-        help_text="Сумма договора (только для годовых договоров)"
+        help_text="Сумма договора (только для годовых договоров)",
     )
 
     head_company = models.ForeignKey(
@@ -173,14 +191,35 @@ class Company(models.Model):
         help_text="Если эта карточка — подразделение клиента, выберите головную организацию.",
     )
 
-    phone = models.CharField("Телефон (основной)", max_length=50, blank=True, default="", db_index=True)
-    phone_comment = models.CharField("Комментарий к основному телефону", max_length=255, blank=True, default="", help_text="Комментарий к основному номеру телефона")
-    email = models.EmailField("Email (основной)", max_length=254, blank=True, default="", db_index=True)
+    phone = models.CharField(
+        "Телефон (основной)", max_length=50, blank=True, default="", db_index=True
+    )
+    phone_comment = models.CharField(
+        "Комментарий к основному телефону",
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Комментарий к основному номеру телефона",
+    )
+    email = models.EmailField(
+        "Email (основной)", max_length=254, blank=True, default="", db_index=True
+    )
     contact_name = models.CharField("Контакт (ФИО)", max_length=255, blank=True, default="")
-    contact_position = models.CharField("Контакт (должность)", max_length=255, blank=True, default="")
+    contact_position = models.CharField(
+        "Контакт (должность)", max_length=255, blank=True, default=""
+    )
 
-    status = models.ForeignKey(CompanyStatus, verbose_name="Статус", null=True, blank=True, on_delete=models.SET_NULL, related_name="companies")
-    spheres = models.ManyToManyField(CompanySphere, verbose_name="Сферы", blank=True, related_name="companies")
+    status = models.ForeignKey(
+        CompanyStatus,
+        verbose_name="Статус",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="companies",
+    )
+    spheres = models.ManyToManyField(
+        CompanySphere, verbose_name="Сферы", blank=True, related_name="companies"
+    )
 
     region = models.ForeignKey(
         Region,
@@ -192,10 +231,26 @@ class Company(models.Model):
         db_index=True,
     )
 
-    responsible = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="Ответственный", null=True, blank=True, on_delete=models.SET_NULL, related_name="companies")
-    branch = models.ForeignKey("accounts.Branch", verbose_name="Подразделение", null=True, blank=True, on_delete=models.SET_NULL, related_name="companies")
+    responsible = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Ответственный",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="companies",
+    )
+    branch = models.ForeignKey(
+        "accounts.Branch",
+        verbose_name="Подразделение",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="companies",
+    )
 
-    amocrm_company_id = models.BigIntegerField("ID компании (amo)", null=True, blank=True, db_index=True)
+    amocrm_company_id = models.BigIntegerField(
+        "ID компании (amo)", null=True, blank=True, db_index=True
+    )
 
     raw_fields = models.JSONField("Сырые поля (импорт)", default=dict, blank=True)
 
@@ -209,11 +264,15 @@ class Company(models.Model):
             # Composite для dashboard_poll: EXISTS(responsible=user, updated_at>since)
             models.Index(fields=["responsible", "updated_at"], name="cmp_resp_updated_idx"),
             # Composite для блока «договоры»: responsible + диапазон contract_until
-            models.Index(fields=["responsible", "contract_until"], name="cmp_resp_contract_until_idx"),
+            models.Index(
+                fields=["responsible", "contract_until"], name="cmp_resp_contract_until_idx"
+            ),
             # Trigram GIN indexes for fast case-insensitive search (see migration 0033_add_search_indexes).
             # NOTE: keep index names <= 30 chars (Django system check).
             GinIndex(OpClass(Upper("name"), name="gin_trgm_ops"), name="cmp_name_trgm_gin_idx"),
-            GinIndex(OpClass(Upper("legal_name"), name="gin_trgm_ops"), name="cmp_legal_trgm_gin_idx"),
+            GinIndex(
+                OpClass(Upper("legal_name"), name="gin_trgm_ops"), name="cmp_legal_trgm_gin_idx"
+            ),
             GinIndex(OpClass(Upper("address"), name="gin_trgm_ops"), name="cmp_addr_trgm_gin_idx"),
             GinIndex(OpClass(Upper("inn"), name="gin_trgm_ops"), name="cmp_inn_trgm_gin_idx"),
             GinIndex(OpClass(Upper("kpp"), name="gin_trgm_ops"), name="cmp_kpp_trgm_gin_idx"),
@@ -223,30 +282,37 @@ class Company(models.Model):
 
     def clean(self):
         from django.core.exceptions import ValidationError
+
         if self.head_company_id and self.pk:
             visited = set()
             current_id = self.head_company_id
             while current_id is not None:
                 if current_id == self.pk:
-                    raise ValidationError({"head_company": "Нельзя создать циклическую связь головных организаций."})
+                    raise ValidationError(
+                        {"head_company": "Нельзя создать циклическую связь головных организаций."}
+                    )
                 if current_id in visited:
                     break
                 visited.add(current_id)
-                current_id = Company.objects.filter(pk=current_id).values_list("head_company_id", flat=True).first()
+                current_id = (
+                    Company.objects.filter(pk=current_id)
+                    .values_list("head_company_id", flat=True)
+                    .first()
+                )
 
     def save(self, *args, **kwargs):
         """
         Сохранение компании с нормализацией данных.
-        
+
         ВАЖНО: Нормализация в save() работает только при вызове через .save().
         Операции типа Company.objects.filter(...).update(phone="...") или bulk_update()
         ОБХОДЯТ save() и не применяют нормализацию!
-        
+
         Для гарантированной нормализации используйте:
         - UI формы (CompanyCreateForm, CompanyEditForm) - применяют нормализацию
         - DRF API (CompanySerializer) - применяет нормализацию в validate_* методах
         - Или service-слой (companies/services.py) - рекомендуется для массовых операций
-        
+
         save() здесь - это "последняя линия обороны", а не единственный путь нормализации.
         """
         # Подразделение компании = подразделению ответственного, если у ответственного задано подразделение.
@@ -260,6 +326,7 @@ class Company(models.Model):
         if self.inn:
             # Используем единый нормализатор ИНН
             from .normalizers import normalize_inn
+
             self.inn = normalize_inn(self.inn)[:255]
         if self.kpp:
             self.kpp = str(self.kpp).strip()[:20]
@@ -280,12 +347,14 @@ class Company(models.Model):
         if self.phone:
             # Используем единый нормализатор телефонов
             from .normalizers import normalize_phone
+
             self.phone = normalize_phone(self.phone)
         if self.email:
             self.email = str(self.email).strip()[:254]
         if self.work_schedule:
             # Используем единый нормализатор расписания работы
             from .normalizers import normalize_work_schedule
+
             normalized = normalize_work_schedule(self.work_schedule)
             # TextField не имеет ограничения по длине в БД, но обрезаем до разумного лимита (5000 символов)
             self.work_schedule = normalized[:5000] if normalized else ""
@@ -305,14 +374,28 @@ class CompanyNote(models.Model):
         CALL_OUT = "call_out", "Исходящий звонок"
         SMS = "sms", "SMS"
 
-    company = models.ForeignKey(Company, verbose_name="Компания", on_delete=models.CASCADE, related_name="notes")
-    author = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="Автор", null=True, on_delete=models.SET_NULL, related_name="company_notes")
+    company = models.ForeignKey(
+        Company, verbose_name="Компания", on_delete=models.CASCADE, related_name="notes"
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Автор",
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="company_notes",
+    )
     text = models.TextField("Текст")
-    note_type = models.CharField("Тип записи", max_length=16, choices=NoteType.choices, default=NoteType.NOTE, db_index=True)
+    note_type = models.CharField(
+        "Тип записи", max_length=16, choices=NoteType.choices, default=NoteType.NOTE, db_index=True
+    )
     meta = models.JSONField("Метаданные", blank=True, default=dict)
-    attachment = models.FileField("Файл (вложение)", upload_to="company_notes/%Y/%m/%d/", null=True, blank=True)
+    attachment = models.FileField(
+        "Файл (вложение)", upload_to="company_notes/%Y/%m/%d/", null=True, blank=True
+    )
     attachment_name = models.CharField("Имя файла", max_length=255, blank=True, default="")
-    attachment_ext = models.CharField("Расширение", max_length=16, blank=True, default="", db_index=True)
+    attachment_ext = models.CharField(
+        "Расширение", max_length=16, blank=True, default="", db_index=True
+    )
     attachment_size = models.BigIntegerField("Размер (байт)", default=0)
     attachment_content_type = models.CharField("MIME тип", max_length=120, blank=True, default="")
     is_pinned = models.BooleanField("Закреплено", default=False, db_index=True)
@@ -327,8 +410,12 @@ class CompanyNote(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     edited_at = models.DateTimeField("Редактировано", null=True, blank=True, db_index=True)
-    external_source = models.CharField("Внешний источник", max_length=32, blank=True, default="", db_index=True)
-    external_uid = models.CharField("Внешний UID", max_length=120, blank=True, default="", db_index=True)
+    external_source = models.CharField(
+        "Внешний источник", max_length=32, blank=True, default="", db_index=True
+    )
+    external_uid = models.CharField(
+        "Внешний UID", max_length=120, blank=True, default="", db_index=True
+    )
 
     def __str__(self) -> str:
         return f"Note({self.company_id})"
@@ -337,9 +424,13 @@ class CompanyNote(models.Model):
         # Снэпшоты метаданных файла (если не заданы)
         try:
             if self.attachment and not self.attachment_name:
-                self.attachment_name = (getattr(self.attachment, "name", "") or "").split("/")[-1].split("\\")[-1]
+                self.attachment_name = (
+                    (getattr(self.attachment, "name", "") or "").split("/")[-1].split("\\")[-1]
+                )
             if self.attachment and not self.attachment_ext:
-                self.attachment_ext = _safe_ext(self.attachment_name or getattr(self.attachment, "name", ""))
+                self.attachment_ext = _safe_ext(
+                    self.attachment_name or getattr(self.attachment, "name", "")
+                )
             if self.attachment and not self.attachment_size:
                 self.attachment_size = int(getattr(self.attachment, "size", 0) or 0)
         except Exception:
@@ -349,6 +440,7 @@ class CompanyNote(models.Model):
 
 class CompanyNoteAttachment(models.Model):
     """Дополнительные вложения к заметке (несколько файлов)."""
+
     note = models.ForeignKey(
         CompanyNote,
         verbose_name="Заметка",
@@ -387,7 +479,9 @@ class CompanyDeal(models.Model):
     чтобы не «шерстить 1С» ради базовой информации.
     """
 
-    company = models.ForeignKey(Company, verbose_name="Компания", on_delete=models.CASCADE, related_name="deals")
+    company = models.ForeignKey(
+        Company, verbose_name="Компания", on_delete=models.CASCADE, related_name="deals"
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         verbose_name="Автор",
@@ -435,8 +529,16 @@ class Contact(models.Model):
     переход в другую компанию и т.д.). Такие контакты видны в общем реестре контактов,
     но не отображаются в карточке ни одной компании. При необходимости — удалять вручную.
     """
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    company = models.ForeignKey(Company, verbose_name="Компания", null=True, blank=True, on_delete=models.SET_NULL, related_name="contacts")
+    company = models.ForeignKey(
+        Company,
+        verbose_name="Компания",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="contacts",
+    )
 
     first_name = models.CharField("Имя", max_length=120, blank=True, default="")
     last_name = models.CharField("Фамилия", max_length=120, blank=True, default="")
@@ -445,7 +547,9 @@ class Contact(models.Model):
     status = models.CharField("Статус", max_length=120, blank=True, default="")
     note = models.TextField("Примечание", blank=True, default="")
     is_cold_call = models.BooleanField("Холодный звонок", default=False, db_index=True)
-    cold_marked_at = models.DateTimeField("Холодный: когда отметили", null=True, blank=True, db_index=True)
+    cold_marked_at = models.DateTimeField(
+        "Холодный: когда отметили", null=True, blank=True, db_index=True
+    )
     cold_marked_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         verbose_name="Холодный: кто отметил",
@@ -462,7 +566,9 @@ class Contact(models.Model):
         on_delete=models.SET_NULL,
         related_name="+",
     )
-    amocrm_contact_id = models.BigIntegerField("ID контакта (amo)", null=True, blank=True, db_index=True)
+    amocrm_contact_id = models.BigIntegerField(
+        "ID контакта (amo)", null=True, blank=True, db_index=True
+    )
 
     raw_fields = models.JSONField("Сырые поля (импорт)", default=dict, blank=True)
 
@@ -472,7 +578,9 @@ class Contact(models.Model):
     class Meta:
         # Trigram GIN indexes for fast case-insensitive search (see migration 0033_add_search_indexes).
         indexes = [
-            GinIndex(OpClass(Upper("first_name"), name="gin_trgm_ops"), name="ct_first_trgm_gin_idx"),
+            GinIndex(
+                OpClass(Upper("first_name"), name="gin_trgm_ops"), name="ct_first_trgm_gin_idx"
+            ),
             GinIndex(OpClass(Upper("last_name"), name="gin_trgm_ops"), name="ct_last_trgm_gin_idx"),
         ]
 
@@ -482,7 +590,10 @@ class Contact(models.Model):
 
 class CompanyEmail(models.Model):
     """Email адреса компании (дополнительные к основному полю email)"""
-    company = models.ForeignKey(Company, verbose_name="Компания", on_delete=models.CASCADE, related_name="emails")
+
+    company = models.ForeignKey(
+        Company, verbose_name="Компания", on_delete=models.CASCADE, related_name="emails"
+    )
     value = models.EmailField("Email", max_length=254, db_index=True)
     order = models.IntegerField("Порядок", default=0, db_index=True)
 
@@ -490,7 +601,9 @@ class CompanyEmail(models.Model):
         indexes = [
             models.Index(fields=["value"]),
             models.Index(fields=["company", "order"]),
-            GinIndex(OpClass(Upper("value"), name="gin_trgm_ops"), name="cmp_emailval_trgm_gin_idx"),
+            GinIndex(
+                OpClass(Upper("value"), name="gin_trgm_ops"), name="cmp_emailval_trgm_gin_idx"
+            ),
         ]
         ordering = ["order", "value"]
 
@@ -501,14 +614,24 @@ class CompanyEmail(models.Model):
 class CompanyPhone(models.Model):
     """Дополнительные телефоны компании (к основному полю phone)."""
 
-    company = models.ForeignKey(Company, verbose_name="Компания", on_delete=models.CASCADE, related_name="phones")
+    company = models.ForeignKey(
+        Company, verbose_name="Компания", on_delete=models.CASCADE, related_name="phones"
+    )
     value = models.CharField("Телефон", max_length=50, db_index=True)
     order = models.IntegerField("Порядок", default=0, db_index=True)
-    comment = models.CharField("Комментарий", max_length=255, blank=True, default="", help_text="Комментарий к номеру телефона")
-    
+    comment = models.CharField(
+        "Комментарий",
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Комментарий к номеру телефона",
+    )
+
     # Холодный звонок привязан к конкретному номеру телефона
     is_cold_call = models.BooleanField("Холодный звонок", default=False, db_index=True)
-    cold_marked_at = models.DateTimeField("Холодный: когда отметили", null=True, blank=True, db_index=True)
+    cold_marked_at = models.DateTimeField(
+        "Холодный: когда отметили", null=True, blank=True, db_index=True
+    )
     cold_marked_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         verbose_name="Холодный: кто отметил",
@@ -530,7 +653,9 @@ class CompanyPhone(models.Model):
         indexes = [
             models.Index(fields=["value"]),
             models.Index(fields=["company", "order"]),
-            GinIndex(OpClass(Upper("value"), name="gin_trgm_ops"), name="cmp_phoneval_trgm_gin_idx"),
+            GinIndex(
+                OpClass(Upper("value"), name="gin_trgm_ops"), name="cmp_phoneval_trgm_gin_idx"
+            ),
         ]
         ordering = ["order", "value"]
 
@@ -559,7 +684,9 @@ class ContactEmail(models.Model):
         PERSONAL = "personal", "Личный"
         OTHER = "other", "Другой"
 
-    contact = models.ForeignKey(Contact, verbose_name="Контакт", on_delete=models.CASCADE, related_name="emails")
+    contact = models.ForeignKey(
+        Contact, verbose_name="Контакт", on_delete=models.CASCADE, related_name="emails"
+    )
     type = models.CharField(max_length=16, choices=EmailType.choices, default=EmailType.WORK)
     value = models.EmailField("Email", max_length=254, db_index=True)
 
@@ -582,14 +709,24 @@ class ContactPhone(models.Model):
         HOME = "home", "Домашний"
         FAX = "fax", "Факс"
 
-    contact = models.ForeignKey(Contact, verbose_name="Контакт", on_delete=models.CASCADE, related_name="phones")
+    contact = models.ForeignKey(
+        Contact, verbose_name="Контакт", on_delete=models.CASCADE, related_name="phones"
+    )
     type = models.CharField(max_length=24, choices=PhoneType.choices, default=PhoneType.WORK)
     value = models.CharField("Телефон", max_length=50, db_index=True)
-    comment = models.CharField("Комментарий", max_length=255, blank=True, default="", help_text="Комментарий к номеру телефона")
-    
+    comment = models.CharField(
+        "Комментарий",
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Комментарий к номеру телефона",
+    )
+
     # Холодный звонок привязан к конкретному номеру телефона
     is_cold_call = models.BooleanField("Холодный звонок", default=False, db_index=True)
-    cold_marked_at = models.DateTimeField("Холодный: когда отметили", null=True, blank=True, db_index=True)
+    cold_marked_at = models.DateTimeField(
+        "Холодный: когда отметили", null=True, blank=True, db_index=True
+    )
     cold_marked_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         verbose_name="Холодный: кто отметил",
@@ -616,7 +753,7 @@ class ContactPhone(models.Model):
     def save(self, *args, **kwargs):
         """
         Сохранение телефона контакта с нормализацией.
-        
+
         ВАЖНО: Нормализация работает только при вызове через .save().
         Операции типа ContactPhone.objects.filter(...).update(value="...") или bulk_update()
         ОБХОДЯТ save() и не применяют нормализацию!
@@ -624,6 +761,7 @@ class ContactPhone(models.Model):
         if self.value:
             # Используем единый нормализатор телефонов
             from .normalizers import normalize_phone
+
             self.value = normalize_phone(self.value)
         super().save(*args, **kwargs)
 
@@ -646,7 +784,9 @@ class CompanyDeletionRequest(models.Model):
         related_name="deletion_requests",
     )
     company_id_snapshot = models.UUIDField("ID компании (снимок)", db_index=True)
-    company_name_snapshot = models.CharField("Название компании (снимок)", max_length=255, blank=True, default="")
+    company_name_snapshot = models.CharField(
+        "Название компании (снимок)", max_length=255, blank=True, default=""
+    )
 
     requested_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -665,7 +805,9 @@ class CompanyDeletionRequest(models.Model):
     )
 
     note = models.TextField("Примечание (почему удалить)", blank=True, default="")
-    status = models.CharField("Статус", max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True)
+    status = models.CharField(
+        "Статус", max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
 
     decided_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -700,14 +842,20 @@ class CompanySearchIndex(models.Model):
     - tsvector поля заполняются триггером в БД (см. миграции), чтобы вектор всегда был консистентен.
     """
 
-    company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name="search_index", primary_key=True)
+    company = models.OneToOneField(
+        Company, on_delete=models.CASCADE, related_name="search_index", primary_key=True
+    )
 
     # Текстовые “группы” для разных весов ранжирования.
     # Нормализация выполняется на уровне indexer/service (lower, ё→е, пробелы).
-    t_ident = models.TextField(blank=True, default="")     # ИНН/КПП/прочие идентификаторы
-    t_name = models.TextField(blank=True, default="")      # название/юр.название/краткие названия
-    t_contacts = models.TextField(blank=True, default="")  # контакты + их телефоны/emails/примечания
-    t_other = models.TextField(blank=True, default="")     # адрес/сайт/вид деятельности/заметки/задачи/прочее
+    t_ident = models.TextField(blank=True, default="")  # ИНН/КПП/прочие идентификаторы
+    t_name = models.TextField(blank=True, default="")  # название/юр.название/краткие названия
+    t_contacts = models.TextField(
+        blank=True, default=""
+    )  # контакты + их телефоны/emails/примечания
+    t_other = models.TextField(
+        blank=True, default=""
+    )  # адрес/сайт/вид деятельности/заметки/задачи/прочее
 
     # Для триграммного fallback (опечатки/частичные совпадения) и для UI-объяснений.
     plain_text = models.TextField(blank=True, default="")
@@ -751,7 +899,9 @@ class CompanySearchIndex(models.Model):
             GinIndex(fields=["vector_c"], name="cmp_si_vc_gin_idx"),
             GinIndex(fields=["vector_d"], name="cmp_si_vd_gin_idx"),
             # Trigram индексы для быстрого LIKE/ILIKE и % (pg_trgm) по агрегированному тексту/цифрам.
-            GinIndex(OpClass(Upper("plain_text"), name="gin_trgm_ops"), name="cmp_si_plain_trgm_idx"),
+            GinIndex(
+                OpClass(Upper("plain_text"), name="gin_trgm_ops"), name="cmp_si_plain_trgm_idx"
+            ),
             GinIndex(OpClass("digits", name="gin_trgm_ops"), name="cmp_si_digits_trgm_idx"),
             # GIN индексы для быстрого exact-поиска по массивам (contains оператор).
             GinIndex(fields=["normalized_phones"], name="cmp_si_nphones_gin_idx"),
@@ -790,7 +940,8 @@ class CompanyHistoryEvent(models.Model):
     actor_name = models.CharField("Кто выполнил (текст)", max_length=255, blank=True, default="")
     actor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
         related_name="actor_history_events",
         verbose_name="Кто выполнил",
@@ -799,7 +950,8 @@ class CompanyHistoryEvent(models.Model):
     from_user_name = models.CharField("От кого (текст)", max_length=255, blank=True, default="")
     from_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
         related_name="+",
         verbose_name="От кого",
@@ -808,7 +960,8 @@ class CompanyHistoryEvent(models.Model):
     to_user_name = models.CharField("Кому (текст)", max_length=255, blank=True, default="")
     to_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
         related_name="+",
         verbose_name="Кому",
@@ -820,7 +973,9 @@ class CompanyHistoryEvent(models.Model):
     )
     # ID события в amoCRM — для дедупликации при повторном импорте.
     # Для "created"-события синтетический: f"created_{amo_company_id}".
-    external_id = models.CharField("Внешний ID", max_length=64, blank=True, default="", db_index=True)
+    external_id = models.CharField(
+        "Внешний ID", max_length=64, blank=True, default="", db_index=True
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -833,5 +988,6 @@ class CompanyHistoryEvent(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.get_event_type_display()} {self.company_id} @ {self.occurred_at:%d.%m.%Y %H:%M}"
-
+        return (
+            f"{self.get_event_type_display()} {self.company_id} @ {self.occurred_at:%d.%m.%Y %H:%M}"
+        )

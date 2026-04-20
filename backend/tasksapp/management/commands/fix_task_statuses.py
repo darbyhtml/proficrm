@@ -41,12 +41,14 @@ class Command(BaseCommand):
 
         # 1. Задачи, где создатель = исполнитель, но статус не IN_PROGRESS
         # Это безопасно менять, так как если человек создал задачу себе, она должна быть "В работе"
-        self_tasks = base_qs.filter(
-            created_by__isnull=False,
-            assigned_to__isnull=False,
-        ).filter(
-            created_by_id=F("assigned_to_id")
-        ).exclude(status=Task.Status.IN_PROGRESS)
+        self_tasks = (
+            base_qs.filter(
+                created_by__isnull=False,
+                assigned_to__isnull=False,
+            )
+            .filter(created_by_id=F("assigned_to_id"))
+            .exclude(status=Task.Status.IN_PROGRESS)
+        )
 
         # 2. Задачи, где created_by или assigned_to = None (обрабатываем отдельно)
         # Устанавливаем им статус NEW для консистентности
@@ -61,7 +63,9 @@ class Command(BaseCommand):
 
         if total == 0:
             self.stdout.write(
-                self.style.SUCCESS("Все задачи уже имеют правильные статусы. Ничего не требуется обновить.")
+                self.style.SUCCESS(
+                    "Все задачи уже имеют правильные статусы. Ничего не требуется обновить."
+                )
             )
             return
 
@@ -82,7 +86,7 @@ class Command(BaseCommand):
 
         if dry_run:
             self.stdout.write("\n" + self.style.WARNING("=== DRY RUN - примеры задач ==="))
-            
+
             # Показываем примеры
             if self_tasks_count > 0:
                 self.stdout.write("\nЗадачи, где создатель = исполнитель (должны быть 'В работе'):")
@@ -93,9 +97,11 @@ class Command(BaseCommand):
                         f"Создатель: {task.created_by} | Исполнитель: {task.assigned_to} | "
                         f"Название: {task.title[:50]}"
                     )
-            
+
             if null_tasks_count > 0:
-                self.stdout.write("\nЗадачи с NULL создателем/исполнителем (будут установлены в 'Новая'):")
+                self.stdout.write(
+                    "\nЗадачи с NULL создателем/исполнителем (будут установлены в 'Новая'):"
+                )
                 examples = null_tasks[:5]
                 for task in examples:
                     self.stdout.write(
@@ -123,10 +129,10 @@ class Command(BaseCommand):
             qs = self_tasks
             if limit:
                 qs = qs[:limit]
-            
+
             ids = list(qs.values_list("id", flat=True))
             batch_size = 500
-            
+
             for i in range(0, len(ids), batch_size):
                 batch_ids = ids[i : i + batch_size]
                 with transaction.atomic():
@@ -134,7 +140,9 @@ class Command(BaseCommand):
                         status=Task.Status.IN_PROGRESS
                     )
                     updated_self += count
-                    self.stdout.write(f"  Обновлено задач (создатель = исполнитель): {updated_self}/{self_tasks_count}")
+                    self.stdout.write(
+                        f"  Обновлено задач (создатель = исполнитель): {updated_self}/{self_tasks_count}"
+                    )
 
         # Обновляем задачи с NULL
         if null_tasks_count > 0:
@@ -143,18 +151,18 @@ class Command(BaseCommand):
                 remaining_limit = (limit - updated_self) if limit else None
                 if remaining_limit and remaining_limit > 0:
                     qs = qs[:remaining_limit]
-            
+
             ids = list(qs.values_list("id", flat=True))
             batch_size = 500
-            
+
             for i in range(0, len(ids), batch_size):
                 batch_ids = ids[i : i + batch_size]
                 with transaction.atomic():
-                    count = Task.objects.filter(id__in=batch_ids).update(
-                        status=Task.Status.NEW
-                    )
+                    count = Task.objects.filter(id__in=batch_ids).update(status=Task.Status.NEW)
                     updated_null += count
-                    self.stdout.write(f"  Обновлено задач (NULL создатель/исполнитель): {updated_null}/{null_tasks_count}")
+                    self.stdout.write(
+                        f"  Обновлено задач (NULL создатель/исполнитель): {updated_null}/{null_tasks_count}"
+                    )
 
         total_updated = updated_self + updated_null
 

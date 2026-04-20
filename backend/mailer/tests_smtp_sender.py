@@ -3,6 +3,7 @@
 _sanitize_header, _inline_data_images, build_message, format_smtp_error.
 send_via_smtp и open_smtp_connection не тестируются напрямую (требуют реальный SMTP).
 """
+
 from __future__ import annotations
 
 import base64
@@ -24,6 +25,7 @@ from mailer.smtp_sender import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_account(**kwargs):
     """Минимальный mock-аккаунт для build_message."""
     acc = MagicMock()
@@ -41,14 +43,13 @@ def _make_account(**kwargs):
 
 def _tiny_png_b64() -> str:
     """Минимальный PNG в base64 (1x1 пиксель)."""
-    return (
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-    )
+    return "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
 
 # ---------------------------------------------------------------------------
 # _sanitize_header
 # ---------------------------------------------------------------------------
+
 
 class SanitizeHeaderTest(TestCase):
 
@@ -71,6 +72,7 @@ class SanitizeHeaderTest(TestCase):
 # ---------------------------------------------------------------------------
 # _inline_data_images
 # ---------------------------------------------------------------------------
+
 
 class InlineDataImagesTest(TestCase):
 
@@ -125,6 +127,7 @@ class InlineDataImagesTest(TestCase):
 # ---------------------------------------------------------------------------
 # build_message
 # ---------------------------------------------------------------------------
+
 
 class BuildMessageTest(TestCase):
 
@@ -205,6 +208,7 @@ class BuildMessageTest(TestCase):
 # ---------------------------------------------------------------------------
 # format_smtp_error
 # ---------------------------------------------------------------------------
+
 
 class FormatSmtpErrorTest(TestCase):
 

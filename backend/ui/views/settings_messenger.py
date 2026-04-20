@@ -12,9 +12,20 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from accounts.permissions import require_admin
-from messenger.models import Conversation, Message, Inbox, RoutingRule, Channel, CannedResponse, Campaign, AutomationRule, Macro
+from messenger.models import (
+    Conversation,
+    Message,
+    Inbox,
+    RoutingRule,
+    Channel,
+    CannedResponse,
+    Campaign,
+    AutomationRule,
+    Macro,
+)
 from messenger.logging_utils import ui_logger
 from messenger.utils import ensure_messenger_enabled_view
+
 
 @login_required
 def settings_messenger_overview(request: HttpRequest) -> HttpResponse:
@@ -24,24 +35,36 @@ def settings_messenger_overview(request: HttpRequest) -> HttpResponse:
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
-    
+
     ensure_messenger_enabled_view()
 
     # Получаем все Inbox'ы (для админа можно показывать всё)
     inboxes = list(
-        Inbox.objects.select_related("branch").annotate(
+        Inbox.objects.select_related("branch")
+        .annotate(
             open_conversations_count=Count(
                 "conversations",
-                filter=Q(conversations__status__in=[Conversation.Status.OPEN, Conversation.Status.PENDING]),
+                filter=Q(
+                    conversations__status__in=[
+                        Conversation.Status.OPEN,
+                        Conversation.Status.PENDING,
+                    ]
+                ),
             )
-        ).order_by("name")
+        )
+        .order_by("name")
     )
     inbox_ids = [i.id for i in inboxes]
     # Тип канала по первому связанному Channel или из settings
     from messenger.models import Channel
-    channel_types = dict(Channel.objects.filter(inbox_id__in=inbox_ids).values_list("inbox_id", "type"))
+
+    channel_types = dict(
+        Channel.objects.filter(inbox_id__in=inbox_ids).values_list("inbox_id", "type")
+    )
     has_conversations = set(
-        Conversation.objects.filter(inbox_id__in=inbox_ids).values_list("inbox_id", flat=True).distinct()
+        Conversation.objects.filter(inbox_id__in=inbox_ids)
+        .values_list("inbox_id", flat=True)
+        .distinct()
     )
     for inbox in inboxes:
         inbox.channel_type = channel_types.get(inbox.id)
@@ -64,6 +87,7 @@ def settings_messenger_overview(request: HttpRequest) -> HttpResponse:
 
     # Получаем базовый URL для виджета
     from django.conf import settings
+
     base_url = getattr(settings, "PUBLIC_BASE_URL", request.build_absolute_uri("/").rstrip("/"))
 
     return render(
@@ -110,7 +134,10 @@ def settings_messenger_inbox_ready(request: HttpRequest, inbox_id: int) -> HttpR
         messages.error(request, "Источник не найден.")
         return redirect("settings_messenger_overview")
     from django.conf import settings as django_settings
-    base_url = getattr(django_settings, "PUBLIC_BASE_URL", request.build_absolute_uri("/").rstrip("/"))
+
+    base_url = getattr(
+        django_settings, "PUBLIC_BASE_URL", request.build_absolute_uri("/").rstrip("/")
+    )
     return render(
         request,
         "ui/settings/messenger_inbox_ready.html",
@@ -205,10 +232,16 @@ def settings_messenger_analytics(request: HttpRequest) -> HttpResponse:
 
     totals = {
         "total": qs.count(),
-        "open_pending": qs.filter(status__in=[Conversation.Status.OPEN, Conversation.Status.PENDING]).count(),
+        "open_pending": qs.filter(
+            status__in=[Conversation.Status.OPEN, Conversation.Status.PENDING]
+        ).count(),
     }
 
-    avg_delta = qs_annotated.filter(first_out_at__isnull=False).aggregate(avg=Avg("first_response_delta")).get("avg")
+    avg_delta = (
+        qs_annotated.filter(first_out_at__isnull=False)
+        .aggregate(avg=Avg("first_response_delta"))
+        .get("avg")
+    )
     avg_first_response = None
     if avg_delta is not None:
         total_seconds = int(avg_delta.total_seconds())
@@ -281,7 +314,9 @@ def settings_messenger_analytics(request: HttpRequest) -> HttpResponse:
 
     by_operator = []
     for op in sorted(operator_stats.values(), key=lambda x: x["count"], reverse=True)[:20]:
-        name = (f"{op['first_name']} {op['last_name']}".strip() or op["username"] or "Без имени").strip()
+        name = (
+            f"{op['first_name']} {op['last_name']}".strip() or op["username"] or "Без имени"
+        ).strip()
         avg_td = op["sum_delta"] / op["count"] if op["count"] else None
         by_operator.append(
             {
@@ -324,7 +359,7 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
-    
+
     ensure_messenger_enabled_view()
 
     inbox = None
@@ -337,7 +372,7 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
 
     if request.method == "POST":
         action = request.POST.get("action", "").strip()
-        
+
         if action == "regenerate_token" and inbox:
             # Регенерация widget_token
             try:
@@ -351,7 +386,7 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
                 messages.warning(
                     request,
                     "Токен виджета обновлён. Старый токен больше не работает. "
-                    "Обновите код вставки на всех сайтах."
+                    "Обновите код вставки на всех сайтах.",
                 )
                 return redirect("settings_messenger_inbox_edit", inbox_id=inbox.id)
             except Exception as e:
@@ -362,7 +397,7 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
                 )
                 messages.error(request, "Ошибка при обновлении токена. Попробуйте ещё раз.")
                 return redirect("settings_messenger_inbox_edit", inbox_id=inbox.id)
-        
+
         if action == "delete_inbox" and inbox:
             # Безопасное удаление Inbox: не даём удалить, если есть связанные диалоги.
             from django.db.models import Exists, OuterRef
@@ -394,29 +429,33 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
                 )
                 messages.error(request, "Ошибка при удалении Inbox. Попробуйте ещё раз.")
                 return redirect("settings_messenger_inbox_edit", inbox_id=inbox.id)
-        
+
         # Обработка формы редактирования
         try:
             name = request.POST.get("name", "").strip()
             if not name:
                 messages.error(request, "Название Inbox обязательно.")
-                return redirect("settings_messenger_inbox_edit", inbox_id=inbox.id if inbox else None)
-            
+                return redirect(
+                    "settings_messenger_inbox_edit", inbox_id=inbox.id if inbox else None
+                )
+
             is_active = request.POST.get("is_active") == "on"
             # Тип канала и домен сайта (для website‑канала)
-            channel_type = (request.POST.get("channel_type") or Channel.Type.WEBSITE).strip() or Channel.Type.WEBSITE
+            channel_type = (
+                request.POST.get("channel_type") or Channel.Type.WEBSITE
+            ).strip() or Channel.Type.WEBSITE
             valid_channel_values = {choice[0] for choice in Channel.Type.choices}
             if channel_type not in valid_channel_values:
                 channel_type = Channel.Type.WEBSITE
             website_domain = (request.POST.get("website_domain") or "").strip().lower()
-            
+
             # Настройки виджета из JSON (при редактировании сохраняем существующие ключи)
             widget_title = request.POST.get("widget_title", "").strip()
             widget_greeting = request.POST.get("widget_greeting", "").strip()
             widget_color = request.POST.get("widget_color", "").strip()
             widget_show_email = request.POST.get("widget_show_email") == "on"
             widget_show_phone = request.POST.get("widget_show_phone") == "on"
-            
+
             if inbox and isinstance(inbox.settings, dict):
                 settings_dict = dict(inbox.settings)
             else:
@@ -457,7 +496,8 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
             offline_message = (request.POST.get("offline_message") or "").strip()
             settings_dict["offline"] = {
                 "enabled": offline_enabled,
-                "message": offline_message or "Сейчас никого нет. Оставьте заявку — мы ответим в рабочее время.",
+                "message": offline_message
+                or "Сейчас никого нет. Оставьте заявку — мы ответим в рабочее время.",
             }
 
             # Оценка диалога
@@ -514,11 +554,19 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
             settings_dict["security"] = {"allowed_domains": domains}
 
             # Конфигурация канала и сайта
-            channel_cfg = settings_dict.get("channel") if isinstance(settings_dict.get("channel"), dict) else {}
+            channel_cfg = (
+                settings_dict.get("channel")
+                if isinstance(settings_dict.get("channel"), dict)
+                else {}
+            )
             channel_cfg["type"] = channel_type
             settings_dict["channel"] = channel_cfg
 
-            website_cfg = settings_dict.get("website") if isinstance(settings_dict.get("website"), dict) else {}
+            website_cfg = (
+                settings_dict.get("website")
+                if isinstance(settings_dict.get("website"), dict)
+                else {}
+            )
             if website_domain:
                 website_cfg["primary_domain"] = website_domain
             # Дублируем список доменов для удобства просмотра в настройках сайта
@@ -526,7 +574,11 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
             settings_dict["website"] = website_cfg
 
             # Интеграции: webhook
-            integrations_cfg = settings_dict.get("integrations") if isinstance(settings_dict.get("integrations"), dict) else {}
+            integrations_cfg = (
+                settings_dict.get("integrations")
+                if isinstance(settings_dict.get("integrations"), dict)
+                else {}
+            )
             webhook_url = (request.POST.get("webhook_url") or "").strip()
             webhook_enabled = request.POST.get("webhook_enabled") == "on"
             webhook_secret = (request.POST.get("webhook_secret") or "").strip()
@@ -548,7 +600,11 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
             settings_dict["integrations"] = integrations_cfg
 
             # Автоматизация: автоответ на первый входящий месседж
-            automation_cfg = settings_dict.get("automation") if isinstance(settings_dict.get("automation"), dict) else {}
+            automation_cfg = (
+                settings_dict.get("automation")
+                if isinstance(settings_dict.get("automation"), dict)
+                else {}
+            )
             auto_reply_enabled = request.POST.get("auto_reply_enabled") == "on"
             auto_reply_body = (request.POST.get("auto_reply_body") or "").strip()
             automation_cfg["auto_reply"] = {
@@ -558,7 +614,11 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
             settings_dict["automation"] = automation_cfg
 
             # Feature flags (по inbox)
-            features_cfg = settings_dict.get("features") if isinstance(settings_dict.get("features"), dict) else {}
+            features_cfg = (
+                settings_dict.get("features")
+                if isinstance(settings_dict.get("features"), dict)
+                else {}
+            )
             features_cfg["sse"] = request.POST.get("features_sse_enabled") == "on"
             settings_dict["features"] = features_cfg
 
@@ -589,6 +649,7 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
                 if branch_id:
                     try:
                         from accounts.models import Branch
+
                         branch = Branch.objects.get(id=int(branch_id))
                     except (Branch.DoesNotExist, ValueError, TypeError) as e:
                         ui_logger.warning(
@@ -599,7 +660,7 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
                         messages.error(request, "Неверный филиал.")
                         return redirect("settings_messenger_overview")
                 # branch=None — глобальный inbox (маршрутизация по GeoIP и правилам)
-                
+
                 inbox = Inbox.objects.create(
                     name=name,
                     branch=branch,
@@ -616,13 +677,17 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
                 )
                 ui_logger.info(
                     "Inbox created",
-                    extra={"inbox_id": inbox.id, "inbox_name": name, "branch_id": branch.id if branch else None},
+                    extra={
+                        "inbox_id": inbox.id,
+                        "inbox_name": name,
+                        "branch_id": branch.id if branch else None,
+                    },
                 )
                 messages.success(request, "Источник создан.")
                 return redirect("settings_messenger_inbox_ready", inbox_id=inbox.id)
-            
+
             return redirect("settings_messenger_overview")
-        
+
         except Exception as e:
             ui_logger.error(
                 "Failed to save inbox",
@@ -634,9 +699,11 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
 
     # GET запрос - показать форму
     from accounts.models import Branch
+
     branches = Branch.objects.order_by("name")
-    
+
     from django.conf import settings
+
     base_url = getattr(settings, "PUBLIC_BASE_URL", request.build_absolute_uri("/").rstrip("/"))
 
     # Рабочие часы / офлайн / оценка / вложения для формы
@@ -647,13 +714,15 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
     for i in range(1, 8):
         slot = schedule.get(str(i), [])
         is_off = not (isinstance(slot, (list, tuple)) and len(slot) >= 2)
-        working_hours_days.append({
-            "num": i,
-            "label": day_labels[i - 1],
-            "start": (slot[0] if len(slot) > 0 else ""),
-            "end": (slot[1] if len(slot) > 1 else ""),
-            "off": is_off,
-        })
+        working_hours_days.append(
+            {
+                "num": i,
+                "label": day_labels[i - 1],
+                "start": (slot[0] if len(slot) > 0 else ""),
+                "end": (slot[1] if len(slot) > 1 else ""),
+                "off": is_off,
+            }
+        )
     working_hours = {
         "enabled": wh.get("enabled", False),
         "tz": wh.get("tz", "Europe/Moscow"),
@@ -662,7 +731,9 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
     offline_cfg = (getattr(inbox, "settings", None) or {}).get("offline") or {}
     offline_settings = {
         "enabled": offline_cfg.get("enabled", False),
-        "message": offline_cfg.get("message", "Сейчас никого нет. Оставьте заявку — мы ответим в рабочее время."),
+        "message": offline_cfg.get(
+            "message", "Сейчас никого нет. Оставьте заявку — мы ответим в рабочее время."
+        ),
     }
 
     rating_cfg = (getattr(inbox, "settings", None) or {}).get("rating") or {}
@@ -714,6 +785,7 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
     wh_cfg = settings_obj_for_widget.get("working_hours") or {}
     schedule = wh_cfg.get("schedule") or {}
     from messenger.utils import compact_working_hours_display
+
     working_hours_display = compact_working_hours_display(wh_cfg.get("enabled"), schedule)
     widget_display = {
         "title": settings_obj_for_widget.get("title", "Чат с поддержкой"),
@@ -722,7 +794,10 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
         "show_email": settings_obj_for_widget.get("show_email", False),
         "show_phone": settings_obj_for_widget.get("show_phone", False),
         "privacy_url": privacy_cfg.get("url", ""),
-        "privacy_text": privacy_cfg.get("text", "Даю согласие на обработку моих персональных данных для обработки заявки и получения обратной связи. Подробная информация — в Политике конфиденциальности."),
+        "privacy_text": privacy_cfg.get(
+            "text",
+            "Даю согласие на обработку моих персональных данных для обработки заявки и получения обратной связи. Подробная информация — в Политике конфиденциальности.",
+        ),
         "working_hours_display": working_hours_display,
     }
 
@@ -758,10 +833,14 @@ def settings_messenger_routing_list(request: HttpRequest) -> HttpResponse:
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
-    
+
     ensure_messenger_enabled_view()
 
-    rules = RoutingRule.objects.select_related("branch", "inbox").prefetch_related("regions").order_by("priority", "id")
+    rules = (
+        RoutingRule.objects.select_related("branch", "inbox")
+        .prefetch_related("regions")
+        .order_by("priority", "id")
+    )
 
     return render(
         request,
@@ -780,7 +859,7 @@ def settings_messenger_routing_edit(request: HttpRequest, rule_id: int = None) -
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
-    
+
     ensure_messenger_enabled_view()
 
     rule = None
@@ -802,11 +881,11 @@ def settings_messenger_routing_edit(request: HttpRequest, rule_id: int = None) -
             try:
                 from accounts.models import Branch
                 from companies.models import Region
-                
+
                 inbox = Inbox.objects.get(id=int(inbox_id))
                 branch = Branch.objects.get(id=int(branch_id))
                 priority_int = int(priority)
-                
+
                 if rule:
                     # Редактирование
                     rule.name = name
@@ -827,12 +906,12 @@ def settings_messenger_routing_edit(request: HttpRequest, rule_id: int = None) -
                         is_fallback=is_fallback,
                         is_active=is_active,
                     )
-                
+
                 # Добавить регионы
                 if region_ids:
                     regions = Region.objects.filter(id__in=[int(rid) for rid in region_ids])
                     rule.regions.set(regions)
-                
+
                 messages.success(request, "Правило маршрутизации сохранено.")
                 return redirect("settings_messenger_routing_list")
             except (Inbox.DoesNotExist, Branch.DoesNotExist, ValueError, TypeError) as e:
@@ -841,11 +920,11 @@ def settings_messenger_routing_edit(request: HttpRequest, rule_id: int = None) -
     # GET запрос - показать форму
     from accounts.models import Branch
     from companies.models import Region
-    
+
     inboxes = Inbox.objects.filter(is_active=True).select_related("branch").order_by("name")
     branches = Branch.objects.order_by("name")
     regions = Region.objects.order_by("name")
-    
+
     selected_region_ids = []
     if rule:
         selected_region_ids = list(rule.regions.values_list("id", flat=True))
@@ -871,11 +950,11 @@ def settings_messenger_routing_delete(request: HttpRequest, rule_id: int) -> Htt
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
-    
+
     ensure_messenger_enabled_view()
 
     rule = get_object_or_404(RoutingRule, id=rule_id)
-    
+
     if request.method == "POST":
         rule.delete()
         messages.success(request, "Правило маршрутизации удалено.")
@@ -895,10 +974,8 @@ def settings_messenger_canned_list(request: HttpRequest) -> HttpResponse:
 
     ensure_messenger_enabled_view()
 
-    responses = (
-        CannedResponse.objects
-        .select_related("branch", "created_by")
-        .order_by("-created_at")
+    responses = CannedResponse.objects.select_related("branch", "created_by").order_by(
+        "-created_at"
     )
 
     return render(
@@ -995,6 +1072,7 @@ def settings_messenger_canned_delete(request: HttpRequest, response_id: int) -> 
 
 # ─── Campaigns ───────────────────────────────────────────────────────────
 
+
 @login_required
 def settings_messenger_campaigns(request: HttpRequest) -> HttpResponse:
     """CRUD для кампаний (список + создание/редактирование inline)."""
@@ -1028,13 +1106,18 @@ def settings_messenger_campaigns(request: HttpRequest) -> HttpResponse:
 
     campaigns = Campaign.objects.select_related("inbox").order_by("-created_at")
     inboxes = Inbox.objects.filter(is_active=True).order_by("name")
-    return render(request, "ui/settings/messenger_campaigns.html", {
-        "campaigns": campaigns,
-        "inboxes": inboxes,
-    })
+    return render(
+        request,
+        "ui/settings/messenger_campaigns.html",
+        {
+            "campaigns": campaigns,
+            "inboxes": inboxes,
+        },
+    )
 
 
 # ─── Automation Rules ────────────────────────────────────────────────────
+
 
 @login_required
 def settings_messenger_automation(request: HttpRequest) -> HttpResponse:
@@ -1062,8 +1145,12 @@ def settings_messenger_automation(request: HttpRequest) -> HttpResponse:
     rules = AutomationRule.objects.select_related("inbox").order_by("-created_at")
     macros = Macro.objects.select_related("user").order_by("name")
     inboxes = Inbox.objects.filter(is_active=True).order_by("name")
-    return render(request, "ui/settings/messenger_automation.html", {
-        "rules": rules,
-        "macros": macros,
-        "inboxes": inboxes,
-    })
+    return render(
+        request,
+        "ui/settings/messenger_automation.html",
+        {
+            "rules": rules,
+            "macros": macros,
+            "inboxes": inboxes,
+        },
+    )

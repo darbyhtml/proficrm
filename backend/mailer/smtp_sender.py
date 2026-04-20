@@ -105,7 +105,9 @@ def build_message(
 ) -> EmailMessage:
     msg = EmailMessage()
     msg["Subject"] = _sanitize_header(subject or "")
-    _from_email = _sanitize_header((from_email or account.from_email or account.smtp_username or "").strip())
+    _from_email = _sanitize_header(
+        (from_email or account.from_email or account.smtp_username or "").strip()
+    )
     _from_name = _sanitize_header((from_name or account.from_name or "").strip())
     msg["From"] = formataddr((_from_name, _from_email)) if _from_name else _from_email
     msg["To"] = _sanitize_header(to_email or "")
@@ -143,6 +145,7 @@ def build_message(
     # Добавляем вложение, если оно есть (поддерживаем кеширование bytes на уровне батча)
     if attachment_content is not None:
         import mimetypes
+
         fname = (attachment_filename or "attachment").strip()
         mime_type, _ = mimetypes.guess_type(fname)
         if mime_type:
@@ -157,6 +160,7 @@ def build_message(
         )
     elif attachment:
         import mimetypes
+
         attachment.open()
         try:
             content = attachment.read()
@@ -181,21 +185,21 @@ def build_message(
 def format_smtp_error(error: Exception, account: _SmtpAccountLike) -> str:
     """
     Форматирует SMTP ошибку в понятное сообщение для пользователя.
-    
+
     Args:
         error: Исключение, возникшее при отправке
         account: SMTP аккаунт
-        
+
     Returns:
         Понятное сообщение об ошибке
     """
     error_str = str(error)
     error_type = type(error).__name__
-    
+
     # Ошибки аутентификации
     if "authentication failed" in error_str.lower() or "535" in error_str or "535-" in error_str:
         return "Ошибка аутентификации: неверный логин или пароль SMTP. Проверьте настройки в Почта → Настройки."
-    
+
     # Ошибки STARTTLS
     if "STARTTLS" in error_str or "starttls" in error_str.lower():
         return f"Ошибка установки защищенного соединения (STARTTLS) с {account.smtp_host}:{account.smtp_port}. Попробуйте отключить STARTTLS или проверьте настройки."
@@ -220,14 +224,14 @@ def format_smtp_error(error: Exception, account: _SmtpAccountLike) -> str:
         if "Name or service not known" in error_str or "getaddrinfo failed" in error_str:
             return f"Не удалось найти SMTP сервер {account.smtp_host}. Проверьте правильность адреса сервера."
         return f"Ошибка подключения к SMTP серверу: {error_str[:200]}"
-    
+
     if isinstance(error, smtplib.SMTPException):
         # Парсим код ошибки SMTP (например, "550 5.1.1 User unknown")
-        code_match = re.search(r'(\d{3})\s+([\d\.]+)?\s*(.+)', error_str)
+        code_match = re.search(r"(\d{3})\s+([\d\.]+)?\s*(.+)", error_str)
         if code_match:
             code = code_match.group(1)
             message = code_match.group(3) if code_match.group(3) else error_str
-            
+
             # Известные коды ошибок
             error_codes = {
                 "550": "Почтовый ящик не существует или недоступен",
@@ -240,18 +244,18 @@ def format_smtp_error(error: Exception, account: _SmtpAccountLike) -> str:
                 "451": "Ошибка обработки, попробуйте позже",
                 "452": "Недостаточно места на сервере",
             }
-            
+
             if code in error_codes:
                 return f"{error_codes[code]} (код {code}): {message[:150]}"
             else:
                 return f"Ошибка SMTP (код {code}): {message[:150]}"
-        
+
         return f"Ошибка SMTP: {error_str[:200]}"
-    
+
     # Общие ошибки
     if "RuntimeError" in error_type:
         return error_str  # RuntimeError уже содержит понятное сообщение
-    
+
     # Если не удалось определить тип ошибки, возвращаем исходное сообщение
     return f"Ошибка отправки: {error_str[:200]}"
 
@@ -287,10 +291,12 @@ def open_smtp_connection(account: _SmtpAccountLike) -> smtplib.SMTP:
         raise formatted_error_obj from e
 
 
-def send_via_smtp(account: _SmtpAccountLike, msg: EmailMessage, *, smtp: Optional[smtplib.SMTP] = None) -> None:
+def send_via_smtp(
+    account: _SmtpAccountLike, msg: EmailMessage, *, smtp: Optional[smtplib.SMTP] = None
+) -> None:
     """
     Отправляет письмо через SMTP с улучшенной обработкой ошибок.
-    
+
     Raises:
         RuntimeError: С понятным сообщением об ошибке
     """
@@ -304,7 +310,9 @@ def send_via_smtp(account: _SmtpAccountLike, msg: EmailMessage, *, smtp: Optiona
                 detail = refused.get(first_email)
                 if isinstance(detail, tuple) and len(detail) >= 2:
                     code, resp = detail[0], detail[1]
-                    raise RuntimeError(f"Получатель отклонён сервером: {first_email} ({code}) {str(resp)[:200]}")
+                    raise RuntimeError(
+                        f"Получатель отклонён сервером: {first_email} ({code}) {str(resp)[:200]}"
+                    )
                 raise RuntimeError(f"Получатель отклонён сервером: {first_email}")
             return
 
@@ -317,7 +325,9 @@ def send_via_smtp(account: _SmtpAccountLike, msg: EmailMessage, *, smtp: Optiona
                 detail = refused.get(first_email)
                 if isinstance(detail, tuple) and len(detail) >= 2:
                     code, resp = detail[0], detail[1]
-                    raise RuntimeError(f"Получатель отклонён сервером: {first_email} ({code}) {str(resp)[:200]}")
+                    raise RuntimeError(
+                        f"Получатель отклонён сервером: {first_email} ({code}) {str(resp)[:200]}"
+                    )
                 raise RuntimeError(f"Получатель отклонён сервером: {first_email}")
         finally:
             try:
@@ -331,5 +341,3 @@ def send_via_smtp(account: _SmtpAccountLike, msg: EmailMessage, *, smtp: Optiona
         formatted_error_obj = RuntimeError(formatted_error)
         formatted_error_obj.original_error = e
         raise formatted_error_obj from e
-
-

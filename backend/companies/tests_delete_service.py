@@ -6,6 +6,7 @@
 Покрывают: happy path, детач дочерних компаний, удаление связанных задач,
 сохранность audit event, обработка IntegrityError.
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch

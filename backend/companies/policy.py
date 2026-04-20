@@ -76,4 +76,3 @@ def visible_company_notes_qs(user: User) -> QuerySet[CompanyNote]:
     if not user or not user.is_authenticated or not user.is_active:
         return qs.none()
     return qs.filter(company__in=visible_companies_qs(user))
-

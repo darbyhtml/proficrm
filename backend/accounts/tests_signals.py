@@ -7,6 +7,7 @@
 - is_superuser=True → is_staff=True (переопределяет role)
 - Смена роли существующего пользователя автоматически пересинхронизирует is_staff
 """
+
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 

@@ -11,6 +11,7 @@
   7. settings_dicts        — GET, словари
   8. settings_announcements— GET/POST, объявления
 """
+
 from __future__ import annotations
 
 from django.test import TestCase, override_settings
@@ -30,6 +31,7 @@ def _make_manager(username="mgr"):
 # ---------------------------------------------------------------------------
 # 1. settings_dashboard — требует admin
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class SettingsDashboardViewTest(TestCase):
@@ -53,6 +55,7 @@ class SettingsDashboardViewTest(TestCase):
 # ---------------------------------------------------------------------------
 # 2. settings_users
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class SettingsUsersViewTest(TestCase):
@@ -79,6 +82,7 @@ class SettingsUsersViewTest(TestCase):
 # 3. settings_user_create
 # ---------------------------------------------------------------------------
 
+
 @override_settings(SECURE_SSL_REDIRECT=False)
 class SettingsUserCreateViewTest(TestCase):
     def setUp(self):
@@ -91,13 +95,16 @@ class SettingsUserCreateViewTest(TestCase):
 
     def test_post_creates_user(self):
         self.client.force_login(self.admin)
-        self.client.post(reverse("settings_user_create"), {
-            "username": "newuser",
-            "first_name": "New",
-            "last_name": "User",
-            "role": User.Role.MANAGER,
-            "email": "new@example.com",
-        })
+        self.client.post(
+            reverse("settings_user_create"),
+            {
+                "username": "newuser",
+                "first_name": "New",
+                "last_name": "User",
+                "role": User.Role.MANAGER,
+                "email": "new@example.com",
+            },
+        )
         self.assertTrue(User.objects.filter(username="newuser").exists())
 
     def test_manager_cannot_create_users(self):
@@ -110,6 +117,7 @@ class SettingsUserCreateViewTest(TestCase):
 # ---------------------------------------------------------------------------
 # 4. settings_user_edit
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class SettingsUserEditViewTest(TestCase):
@@ -124,13 +132,16 @@ class SettingsUserEditViewTest(TestCase):
 
     def test_post_updates_name(self):
         self.client.force_login(self.admin)
-        self.client.post(reverse("settings_user_edit", kwargs={"user_id": self.target.pk}), {
-            "username": self.target.username,
-            "first_name": "Updated",
-            "last_name": "Name",
-            "role": User.Role.MANAGER,
-            "email": "target@example.com",
-        })
+        self.client.post(
+            reverse("settings_user_edit", kwargs={"user_id": self.target.pk}),
+            {
+                "username": self.target.username,
+                "first_name": "Updated",
+                "last_name": "Name",
+                "role": User.Role.MANAGER,
+                "email": "target@example.com",
+            },
+        )
         self.target.refresh_from_db()
         self.assertEqual(self.target.first_name, "Updated")
 
@@ -143,6 +154,7 @@ class SettingsUserEditViewTest(TestCase):
 # ---------------------------------------------------------------------------
 # 5. settings_user_delete
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class SettingsUserDeleteViewTest(TestCase):
@@ -170,6 +182,7 @@ class SettingsUserDeleteViewTest(TestCase):
 # 6. settings_branches
 # ---------------------------------------------------------------------------
 
+
 @override_settings(SECURE_SSL_REDIRECT=False)
 class SettingsBranchesViewTest(TestCase):
     def test_admin_sees_branches(self):
@@ -188,6 +201,7 @@ class SettingsBranchesViewTest(TestCase):
 # ---------------------------------------------------------------------------
 # 7. settings_dicts
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class SettingsDictsViewTest(TestCase):

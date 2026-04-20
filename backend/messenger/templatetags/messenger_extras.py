@@ -42,4 +42,3 @@ def messenger_format(value: str | None) -> str:
     text = text.replace("\r\n", "\n").replace("\n", "<br>")
 
     return mark_safe(text)
-

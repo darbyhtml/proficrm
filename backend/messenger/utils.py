@@ -117,7 +117,9 @@ def _widget_session_cache_key(token: str) -> str:
     return f"messenger:widget_session:{token}"
 
 
-def create_widget_session(*, inbox_id: int, conversation_id: int, contact_id: str, client_ip: str = "") -> WidgetSession:
+def create_widget_session(
+    *, inbox_id: int, conversation_id: int, contact_id: str, client_ip: str = ""
+) -> WidgetSession:
     """
     Создаёт widget_session_token и сохраняет минимальный контекст в cache/Redis.
     Привязывает сессию к IP клиента для защиты от перехвата токена.
@@ -148,9 +150,12 @@ def get_widget_session(token: str, client_ip: str = "") -> Optional[WidgetSessio
     bound_ip = data.get("bound_ip", "")
     if bound_ip and client_ip and bound_ip != client_ip:
         import logging as _logging
+
         _logging.getLogger("messenger.security").warning(
             "Widget session IP mismatch: bound=%s, request=%s, token=%s...",
-            bound_ip, client_ip, token[:8],
+            bound_ip,
+            client_ip,
+            token[:8],
         )
         return None
     return WidgetSession(token=token, **data)
@@ -165,6 +170,7 @@ def delete_widget_session(token: str) -> None:
 # ---------------------------------------------------------------------------
 # Рабочие часы (для автоназначения и сообщения в виджете)
 # ---------------------------------------------------------------------------
+
 
 def is_within_working_hours(inbox: "Inbox") -> bool:
     """
@@ -314,13 +320,34 @@ def is_content_type_allowed(content_type: str, allowed_list: list) -> bool:
 
 
 # Расширения, которые ВСЕГДА блокируются (независимо от Content-Type)
-BLOCKED_EXTENSIONS = frozenset({
-    ".html", ".htm", ".xhtml", ".svg", ".xml",
-    ".exe", ".dll", ".bat", ".cmd", ".com", ".msi",
-    ".js", ".vbs", ".ps1", ".sh", ".bash",
-    ".php", ".phtml", ".jsp", ".asp", ".aspx",
-    ".py", ".rb", ".pl",
-})
+BLOCKED_EXTENSIONS = frozenset(
+    {
+        ".html",
+        ".htm",
+        ".xhtml",
+        ".svg",
+        ".xml",
+        ".exe",
+        ".dll",
+        ".bat",
+        ".cmd",
+        ".com",
+        ".msi",
+        ".js",
+        ".vbs",
+        ".ps1",
+        ".sh",
+        ".bash",
+        ".php",
+        ".phtml",
+        ".jsp",
+        ".asp",
+        ".aspx",
+        ".py",
+        ".rb",
+        ".pl",
+    }
+)
 
 # Magic bytes для определения реального типа файла
 _MAGIC_SIGNATURES = [
@@ -330,18 +357,25 @@ _MAGIC_SIGNATURES = [
     (b"<!doctype", "text/html"),
     (b"<html", "text/html"),
     (b"<HTML", "text/html"),
-    (b"MZ", "application/x-dosexec"),          # PE/EXE
-    (b"\x7fELF", "application/x-executable"),   # ELF
+    (b"MZ", "application/x-dosexec"),  # PE/EXE
+    (b"\x7fELF", "application/x-executable"),  # ELF
     (b"PK\x03\x04", "application/zip"),
 ]
 
 # MIME-типы, которые ВСЕГДА блокируются
-BLOCKED_MIME_TYPES = frozenset({
-    "text/html", "text/xml", "application/xhtml+xml",
-    "image/svg+xml", "application/javascript", "text/javascript",
-    "application/x-dosexec", "application/x-executable",
-    "application/x-httpd-php",
-})
+BLOCKED_MIME_TYPES = frozenset(
+    {
+        "text/html",
+        "text/xml",
+        "application/xhtml+xml",
+        "image/svg+xml",
+        "application/javascript",
+        "text/javascript",
+        "application/x-dosexec",
+        "application/x-executable",
+        "application/x-httpd-php",
+    }
+)
 
 
 def validate_upload_safety(uploaded_file) -> str | None:
@@ -380,7 +414,9 @@ def validate_upload_safety(uploaded_file) -> str | None:
     return None
 
 
-def build_message_attachments_payload(message, request, widget_token: str, widget_session_token: str) -> list:
+def build_message_attachments_payload(
+    message, request, widget_token: str, widget_session_token: str
+) -> list:
     """
     Список вложений сообщения для ответа виджета (poll/bootstrap).
     Каждый элемент: id, url, original_name, content_type, size.
@@ -392,13 +428,15 @@ def build_message_attachments_payload(message, request, widget_token: str, widge
         path = f"/api/widget/attachment/{att.id}/"
         qs = urlencode({"widget_token": widget_token, "widget_session_token": widget_session_token})
         url = request.build_absolute_uri(path) + "?" + qs if request else (path + "?" + qs)
-        result.append({
-            "id": att.id,
-            "url": url,
-            "original_name": att.original_name or "",
-            "content_type": (att.content_type or "")[:120],
-            "size": att.size or 0,
-        })
+        result.append(
+            {
+                "id": att.id,
+                "url": url,
+                "original_name": att.original_name or "",
+                "content_type": (att.content_type or "")[:120],
+                "size": att.size or 0,
+            }
+        )
     return result
 
 
@@ -552,6 +590,7 @@ def get_client_ip(request) -> str:
       X-Forwarded-For) от любого внешнего клиента.
     """
     from accounts.security import get_client_ip as _secure_get_client_ip
+
     ip = _secure_get_client_ip(request)
     if ip == "unknown":
         return (request.META.get("REMOTE_ADDR") or "127.0.0.1").strip()
@@ -639,4 +678,3 @@ def is_captcha_passed(session_token: str) -> bool:
         return safe_cache_get(_captcha_passed_key(session_token)) == "1"
     except Exception:
         return False
-

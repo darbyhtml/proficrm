@@ -2,6 +2,7 @@
 Пакет views для mailer.
 Экспортирует все view-функции из подмодулей для совместимости с urls.py.
 """
+
 from mailer.views.campaigns import (
     campaigns,
     campaign_create,

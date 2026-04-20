@@ -14,10 +14,11 @@ from . import models
 class ConversationSerializer(serializers.ModelSerializer):
     """
     Сериализатор для диалогов (по образцу Chatwoot).
-    
+
     Использует prefetch_related для оптимизации запросов.
     Все связанные поля (contact_name, branch_name и т.д.) читаются из предзагруженных объектов.
     """
+
     contact_name = serializers.CharField(source="contact.name", read_only=True)
     contact_email = serializers.CharField(source="contact.email", read_only=True)
     contact_phone = serializers.CharField(source="contact.phone", read_only=True)
@@ -31,7 +32,8 @@ class ConversationSerializer(serializers.ModelSerializer):
     # Минуты ожидания клиента в состоянии WAITING (0 в прочих статусах).
     waiting_minutes = serializers.IntegerField(read_only=True)
     label_ids = serializers.PrimaryKeyRelatedField(
-        source="labels", many=True,
+        source="labels",
+        many=True,
         queryset=models.ConversationLabel.objects.all(),
         required=False,
     )
@@ -43,55 +45,89 @@ class ConversationSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Conversation
         fields = (
-            "id", "inbox", "contact", "status", "priority",
-            "assignee", "assignee_assigned_at", "assignee_last_read_at",
-            "branch", "region", "created_at",
-            "last_activity_at", "waiting_since", "first_reply_created_at",
-            "snoozed_until", "contact_last_seen_at", "agent_last_seen_at",
-            "needs_help", "needs_help_at",
-            "resolution", "escalation_level", "last_escalated_at",
+            "id",
+            "inbox",
+            "contact",
+            "status",
+            "priority",
+            "assignee",
+            "assignee_assigned_at",
+            "assignee_last_read_at",
+            "branch",
+            "region",
+            "created_at",
+            "last_activity_at",
+            "waiting_since",
+            "first_reply_created_at",
+            "snoozed_until",
+            "contact_last_seen_at",
+            "agent_last_seen_at",
+            "needs_help",
+            "needs_help_at",
+            "resolution",
+            "escalation_level",
+            "last_escalated_at",
             # F5: off-hours request (заявка вне рабочих часов).
-            "off_hours_channel", "off_hours_contact", "off_hours_note",
+            "off_hours_channel",
+            "off_hours_contact",
+            "off_hours_note",
             "off_hours_requested_at",
-            "contacted_back_at", "contacted_back_by",
+            "contacted_back_at",
+            "contacted_back_by",
             # annotated / computed
-            "contact_name", "contact_email", "contact_phone",
-            "branch_name", "region_name", "assignee_name",
-            "last_message_body", "unread_count",
-            "ui_status", "waiting_minutes",
-            "label_ids", "label_names",
+            "contact_name",
+            "contact_email",
+            "contact_phone",
+            "branch_name",
+            "region_name",
+            "assignee_name",
+            "last_message_body",
+            "unread_count",
+            "ui_status",
+            "waiting_minutes",
+            "label_ids",
+            "label_names",
         )
         read_only_fields = (
-            "created_at", "last_activity_at", "waiting_since",
-            "first_reply_created_at", "contact_last_seen_at", "agent_last_seen_at",
-            "needs_help", "needs_help_at",
-            "escalation_level", "last_escalated_at",
+            "created_at",
+            "last_activity_at",
+            "waiting_since",
+            "first_reply_created_at",
+            "contact_last_seen_at",
+            "agent_last_seen_at",
+            "needs_help",
+            "needs_help_at",
+            "escalation_level",
+            "last_escalated_at",
             # off-hours поля управляются только через widget_offhours_request
             # и action contacted-back, через обычный PATCH не редактируются.
-            "off_hours_channel", "off_hours_contact", "off_hours_note",
+            "off_hours_channel",
+            "off_hours_contact",
+            "off_hours_note",
             "off_hours_requested_at",
-            "contacted_back_at", "contacted_back_by",
+            "contacted_back_at",
+            "contacted_back_by",
         )
 
     def update(self, instance: models.Conversation, validated_data: dict) -> models.Conversation:
         """
         Обновление диалога с жёстким ограничением полей (по образцу Chatwoot).
-        
+
         Args:
             instance: Экземпляр диалога для обновления
             validated_data: Валидированные данные из запроса
-        
+
         Returns:
             Обновлённый экземпляр диалога
-        
+
         Raises:
             ValidationError: Если попытка изменить запрещённые поля
-        
+
         Разрешённые поля:
         - status: Статус диалога
         - assignee: Назначенный оператор
         - priority: Приоритет диалога
-        
+
         Запрещённые поля:
         - inbox, branch, contact, region и любые другие системные поля
         """
@@ -107,6 +143,7 @@ class ConversationSerializer(serializers.ModelSerializer):
             assignee = validated_data["assignee"]
             if assignee is not None:
                 from accounts.models import User
+
                 if assignee.role != User.Role.MANAGER:
                     raise serializers.ValidationError(
                         {"assignee": "Ответственным можно назначить только менеджера."}
@@ -130,12 +167,14 @@ class ConversationSerializer(serializers.ModelSerializer):
         # Reporting: conversation resolved
         if instance.status == models.Conversation.Status.RESOLVED and old_status != instance.status:
             from .reporting import record_conversation_resolved
+
             record_conversation_resolved(instance)
 
         # Automation Rules: conversation_updated
         if old_status != instance.status:
             try:
                 from .automation import dispatch_event
+
                 dispatch_event("conversation_updated", conversation=instance)
             except Exception:
                 pass
@@ -146,12 +185,13 @@ class ConversationSerializer(serializers.ModelSerializer):
 class MessageSerializer(serializers.ModelSerializer):
     """
     Сериализатор для сообщений (по образцу Chatwoot).
-    
+
     Использует prefetch_related для attachments и select_related для sender_user/sender_contact.
     """
-    
+
     class MessageAttachmentSerializer(serializers.ModelSerializer):
         """Сериализатор для вложений сообщений."""
+
         class Meta:
             model = models.MessageAttachment
             fields = ("id", "file", "original_name", "content_type", "size", "created_at")
@@ -164,12 +204,21 @@ class MessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Message
         fields = (
-            "id", "conversation", "direction", "body",
-            "content_attributes", "source_id",
-            "sender_user", "sender_contact",
-            "created_at", "delivered_at", "read_at",
+            "id",
+            "conversation",
+            "direction",
+            "body",
+            "content_attributes",
+            "source_id",
+            "sender_user",
+            "sender_contact",
+            "created_at",
+            "delivered_at",
+            "read_at",
             # computed
-            "attachments", "sender_user_name", "sender_user_username",
+            "attachments",
+            "sender_user_name",
+            "sender_user_username",
             "sender_contact_name",
         )
         read_only_fields = ("created_at", "delivered_at")
@@ -177,13 +226,13 @@ class MessageSerializer(serializers.ModelSerializer):
     def create(self, validated_data: dict) -> models.Message:
         """
         Создание сообщения с валидацией инвариантов (по образцу Chatwoot).
-        
+
         Args:
             validated_data: Валидированные данные сообщения
-        
+
         Returns:
             Созданный экземпляр сообщения
-        
+
         Raises:
             ValidationError: Если нарушены инварианты (direction/sender)
         """
@@ -196,14 +245,14 @@ class MessageSerializer(serializers.ModelSerializer):
     def update(self, instance: models.Message, validated_data: dict) -> models.Message:
         """
         Обновление сообщения (ограниченное, по образцу Chatwoot).
-        
+
         Args:
             instance: Экземпляр сообщения для обновления
             validated_data: Валидированные данные
-        
+
         Returns:
             Обновлённый экземпляр сообщения
-        
+
         Note:
             Сообщения считаются практически неизменяемыми. Разрешено только
             обновление delivered_at/body, но при сохранении валидируются инварианты.
@@ -257,8 +306,12 @@ class WidgetBootstrapSerializer(serializers.Serializer):
     name = serializers.CharField(required=False, allow_blank=True, max_length=255)
     email = serializers.EmailField(required=False, allow_blank=True)
     phone = serializers.CharField(required=False, allow_blank=True, max_length=50)
-    meta = serializers.JSONField(required=False, default=dict, help_text="Дополнительные метаданные посетителя")
-    region_id = serializers.IntegerField(required=False, allow_null=True, help_text="ID региона для маршрутизации")
+    meta = serializers.JSONField(
+        required=False, default=dict, help_text="Дополнительные метаданные посетителя"
+    )
+    region_id = serializers.IntegerField(
+        required=False, allow_null=True, help_text="ID региона для маршрутизации"
+    )
 
 
 class WidgetBootstrapResponseSerializer(serializers.Serializer):
@@ -266,7 +319,9 @@ class WidgetBootstrapResponseSerializer(serializers.Serializer):
     Output для POST /api/widget/bootstrap/
     """
 
-    widget_session_token = serializers.CharField(help_text="Токен сессии виджета для последующих запросов")
+    widget_session_token = serializers.CharField(
+        help_text="Токен сессии виджета для последующих запросов"
+    )
     conversation_id = serializers.IntegerField(help_text="ID диалога")
     initial_messages = serializers.ListField(
         child=serializers.DictField(),
@@ -316,7 +371,7 @@ class WidgetBootstrapResponseSerializer(serializers.Serializer):
 class WidgetSendSerializer(serializers.Serializer):
     """
     Input для POST /api/widget/send/
-    
+
     Валидация:
     - body обязателен, не пустой после strip(), max_length=2000
     - hp (honeypot) должен быть пустым (если заполнен - это бот)
@@ -329,8 +384,10 @@ class WidgetSendSerializer(serializers.Serializer):
         max_length=2000,
         help_text="Текст сообщения (макс. 2000 символов)",
     )
-    hp = serializers.CharField(required=False, allow_blank=True, help_text="Honeypot поле (должно быть пустым)")
-    
+    hp = serializers.CharField(
+        required=False, allow_blank=True, help_text="Honeypot поле (должно быть пустым)"
+    )
+
     def validate_hp(self, value):
         """
         Honeypot валидация: если поле заполнено - это бот.
@@ -338,28 +395,29 @@ class WidgetSendSerializer(serializers.Serializer):
         if value and value.strip():
             raise serializers.ValidationError("Invalid request.")
         return value
-    
+
     def validate(self, attrs):
         """
         Дополнительная валидация: проверка на спам через cache.
         """
         attrs = super().validate(attrs)
-        
+
         # Проверка honeypot
         hp = attrs.get("hp", "")
         if hp and hp.strip():
             raise serializers.ValidationError({"hp": "Invalid request."})
-        
+
         # Проверка на слишком много ссылок в сообщении
         body = attrs.get("body", "")
         if body:
             # Подсчёт ссылок (http://, https://, www.)
             import re
-            url_pattern = r'(https?://|www\.)[^\s]+'
+
+            url_pattern = r"(https?://|www\.)[^\s]+"
             urls = re.findall(url_pattern, body, re.IGNORECASE)
             if len(urls) > 3:  # Максимум 3 ссылки
                 raise serializers.ValidationError({"body": "Message contains too many links."})
-        
+
         return attrs
 
 
@@ -376,4 +434,3 @@ class WidgetSendResponseSerializer(serializers.Serializer):
         allow_empty=True,
         help_text="Сериализованные вложения сообщения (как в widget poll/bootstrap).",
     )
-

@@ -1,6 +1,7 @@
 """
 Views: список кампаний и детали кампании.
 """
+
 from __future__ import annotations
 
 import logging
@@ -20,7 +21,14 @@ from companies.models import Company, Region, CompanySphere, CompanyStatus, Cont
 from companies.permissions import get_users_for_lists
 from mailer.constants import COOLDOWN_DAYS_DEFAULT, PER_USER_DAILY_LIMIT_DEFAULT
 from mailer.forms import CampaignGenerateRecipientsForm, CampaignRecipientAddForm
-from mailer.models import Campaign, CampaignQueue, CampaignRecipient, GlobalMailAccount, SendLog, SmtpBzQuota
+from mailer.models import (
+    Campaign,
+    CampaignQueue,
+    CampaignRecipient,
+    GlobalMailAccount,
+    SendLog,
+    SmtpBzQuota,
+)
 from mailer.utils import html_to_text, msk_day_bounds
 from mailer.mail_content import apply_signature
 from policy.engine import enforce
@@ -31,12 +39,17 @@ logger = logging.getLogger(__name__)
 
 @login_required
 def campaigns(request: HttpRequest) -> HttpResponse:
-    enforce(user=request.user, resource_type="page", resource="ui:mail:campaigns", context={"path": request.path})
+    enforce(
+        user=request.user,
+        resource_type="page",
+        resource="ui:mail:campaigns",
+        context={"path": request.path},
+    )
     user: User = request.user
-    is_admin = (user.role == User.Role.ADMIN)
-    is_group_manager = (user.role == User.Role.GROUP_MANAGER)
-    is_branch_director = (user.role == User.Role.BRANCH_DIRECTOR)
-    is_sales_head = (user.role == User.Role.SALES_HEAD)
+    is_admin = user.role == User.Role.ADMIN
+    is_group_manager = user.role == User.Role.GROUP_MANAGER
+    is_branch_director = user.role == User.Role.BRANCH_DIRECTOR
+    is_sales_head = user.role == User.Role.SALES_HEAD
 
     qs = (
         Campaign.objects.filter(is_template=False)
@@ -52,12 +65,13 @@ def campaigns(request: HttpRequest) -> HttpResponse:
         else:
             qs = qs.filter(created_by=user)
 
-    show_creator_column = (is_admin or is_group_manager or is_branch_director or is_sales_head)
+    show_creator_column = is_admin or is_group_manager or is_branch_director or is_sales_head
     filter_branch_id = request.GET.get("branch", "").strip()[:36]
     filter_manager_id = request.GET.get("manager", "").strip()[:10]
     if show_creator_column and filter_branch_id:
         try:
             import uuid as _uuid
+
             _uuid.UUID(filter_branch_id)
             qs = qs.filter(created_by__branch_id=filter_branch_id)
         except (ValueError, TypeError):
@@ -78,6 +92,7 @@ def campaigns(request: HttpRequest) -> HttpResponse:
     analytics = None
     if is_admin:
         from django.utils import timezone as _tz
+
         now = _tz.now()
         start_day_utc, end_day_utc, msk_now = msk_day_bounds(now)
         today = msk_now.date()
@@ -98,22 +113,21 @@ def campaigns(request: HttpRequest) -> HttpResponse:
             campaigns_stats = cached_summary.get("campaigns_stats", {})
             sent_last_hour = cached_summary.get("sent_last_hour", 0)
         else:
-            totals = (
-                SendLog.objects.filter(
-                    provider="smtp_global",
-                    created_at__gte=start_day_utc,
-                    created_at__lt=end_day_utc,
-                )
-                .aggregate(
-                    total_sent_today=Count("id", filter=Q(status="sent")),
-                    total_failed_today=Count("id", filter=Q(status="failed")),
-                )
+            totals = SendLog.objects.filter(
+                provider="smtp_global",
+                created_at__gte=start_day_utc,
+                created_at__lt=end_day_utc,
+            ).aggregate(
+                total_sent_today=Count("id", filter=Q(status="sent")),
+                total_failed_today=Count("id", filter=Q(status="failed")),
             )
             total_sent_today = int(totals.get("total_sent_today") or 0)
             total_failed_today = int(totals.get("total_failed_today") or 0)
             campaigns_stats = Campaign.objects.aggregate(
                 total=Count("id"),
-                active=Count("id", filter=Q(status__in=[Campaign.Status.READY, Campaign.Status.SENDING])),
+                active=Count(
+                    "id", filter=Q(status__in=[Campaign.Status.READY, Campaign.Status.SENDING])
+                ),
                 paused=Count("id", filter=Q(status=Campaign.Status.PAUSED)),
                 sent=Count("id", filter=Q(status=Campaign.Status.SENT)),
             )
@@ -133,9 +147,20 @@ def campaigns(request: HttpRequest) -> HttpResponse:
                 timeout=60,
             )
 
-        global_limit = quota.emails_limit if (quota.last_synced_at and not quota.sync_error and quota.emails_limit) else smtp_cfg.rate_per_day or 0
+        global_limit = (
+            quota.emails_limit
+            if (quota.last_synced_at and not quota.sync_error and quota.emails_limit)
+            else smtp_cfg.rate_per_day or 0
+        )
         all_users = list(
-            User.objects.filter(role__in=[User.Role.MANAGER, User.Role.ADMIN, User.Role.BRANCH_DIRECTOR, User.Role.GROUP_MANAGER]).select_related("branch")
+            User.objects.filter(
+                role__in=[
+                    User.Role.MANAGER,
+                    User.Role.ADMIN,
+                    User.Role.BRANCH_DIRECTOR,
+                    User.Role.GROUP_MANAGER,
+                ]
+            ).select_related("branch")
         )
         user_ids = [u.id for u in all_users]
         send_agg = (
@@ -157,7 +182,9 @@ def campaigns(request: HttpRequest) -> HttpResponse:
             .values("created_by_id")
             .annotate(
                 campaigns_count=Count("id"),
-                active_campaigns=Count("id", filter=Q(status__in=[Campaign.Status.READY, Campaign.Status.SENDING])),
+                active_campaigns=Count(
+                    "id", filter=Q(status__in=[Campaign.Status.READY, Campaign.Status.SENDING])
+                ),
             )
         )
         camp_map = {row["created_by_id"]: row for row in camp_agg}
@@ -169,30 +196,42 @@ def campaigns(request: HttpRequest) -> HttpResponse:
             failed_today_v = int(s.get("failed_today") or 0)
             campaigns_count = int(c.get("campaigns_count") or 0)
             active_campaigns = int(c.get("active_campaigns") or 0)
-            remaining = max(0, per_user_daily_limit - sent_today_v) if per_user_daily_limit else None
-            user_stats.append({
-                "user": u,
-                "sent_today": sent_today_v,
-                "failed_today": failed_today_v,
-                "remaining": remaining,
-                "limit": per_user_daily_limit,
-                "campaigns_count": campaigns_count,
-                "active_campaigns": active_campaigns,
-                "is_limit_reached": per_user_daily_limit and sent_today_v >= per_user_daily_limit,
-            })
+            remaining = (
+                max(0, per_user_daily_limit - sent_today_v) if per_user_daily_limit else None
+            )
+            user_stats.append(
+                {
+                    "user": u,
+                    "sent_today": sent_today_v,
+                    "failed_today": failed_today_v,
+                    "remaining": remaining,
+                    "limit": per_user_daily_limit,
+                    "campaigns_count": campaigns_count,
+                    "active_campaigns": active_campaigns,
+                    "is_limit_reached": per_user_daily_limit
+                    and sent_today_v >= per_user_daily_limit,
+                }
+            )
         user_stats.sort(key=lambda x: x["sent_today"], reverse=True)
 
         from mailer.tasks import _is_working_hours
+
         is_working = _is_working_hours(now)
         next_working_time = None
         if not is_working:
             if msk_now.hour >= 18:
-                next_working_time = msk_now.replace(hour=9, minute=0, second=0, microsecond=0) + _tz.timedelta(days=1)
+                next_working_time = msk_now.replace(
+                    hour=9, minute=0, second=0, microsecond=0
+                ) + _tz.timedelta(days=1)
             else:
                 next_working_time = msk_now.replace(hour=9, minute=0, second=0, microsecond=0)
-        queue_entries_all = list(CampaignQueue.objects.filter(
-            status__in=[CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING]
-        ).select_related("campaign", "campaign__created_by").order_by("-priority", "queued_at"))
+        queue_entries_all = list(
+            CampaignQueue.objects.filter(
+                status__in=[CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING]
+            )
+            .select_related("campaign", "campaign__created_by")
+            .order_by("-priority", "queued_at")
+        )
         queue_list = [
             {
                 "position": idx,
@@ -206,7 +245,9 @@ def campaigns(request: HttpRequest) -> HttpResponse:
         ]
         smtp_bz_stats = {}
         if smtp_cfg.smtp_bz_api_key:
-            smtp_bz_stats = _smtp_bz_today_stats_cached(api_key=smtp_cfg.smtp_bz_api_key, today_str=today_str)
+            smtp_bz_stats = _smtp_bz_today_stats_cached(
+                api_key=smtp_cfg.smtp_bz_api_key, today_str=today_str
+            )
         analytics = {
             "user_stats": user_stats,
             "total_sent_today": total_sent_today,
@@ -225,6 +266,7 @@ def campaigns(request: HttpRequest) -> HttpResponse:
     # Информация о квоте и лимите пользователя
     quota = SmtpBzQuota.load()
     from django.utils import timezone as _tz
+
     now = _tz.now()
     start_day_utc, end_day_utc, now_msk = msk_day_bounds(now)
     sent_today_user = SendLog.objects.filter(
@@ -240,20 +282,22 @@ def campaigns(request: HttpRequest) -> HttpResponse:
 
     user_campaigns_count = Campaign.objects.filter(created_by=user).count()
     user_active_campaigns = Campaign.objects.filter(
-        created_by=user,
-        status__in=[Campaign.Status.READY, Campaign.Status.SENDING]
+        created_by=user, status__in=[Campaign.Status.READY, Campaign.Status.SENDING]
     ).count()
 
     user_limit_info = {
         "sent_today": sent_today_user,
         "limit": per_user_daily_limit,
-        "remaining": max(0, per_user_daily_limit - sent_today_user) if per_user_daily_limit else None,
+        "remaining": (
+            max(0, per_user_daily_limit - sent_today_user) if per_user_daily_limit else None
+        ),
         "is_limit_reached": per_user_daily_limit and sent_today_user >= per_user_daily_limit,
         "campaigns_count": user_campaigns_count,
         "active_campaigns": user_active_campaigns,
     }
 
     from mailer.tasks import _is_working_hours
+
     is_working_time = _is_working_hours(now)
     msk_now = now_msk
     current_time_msk = msk_now.strftime("%H:%M")
@@ -267,11 +311,23 @@ def campaigns(request: HttpRequest) -> HttpResponse:
         max_per_hour = 100
         emails_available = global_limit
 
-    sent_today = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__gte=start_day_utc, created_at__lt=end_day_utc).count()
-    sent_last_hour = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__gte=now - _tz.timedelta(hours=1)).count()
+    sent_today = SendLog.objects.filter(
+        provider="smtp_global",
+        status="sent",
+        created_at__gte=start_day_utc,
+        created_at__lt=end_day_utc,
+    ).count()
+    sent_last_hour = SendLog.objects.filter(
+        provider="smtp_global", status="sent", created_at__gte=now - _tz.timedelta(hours=1)
+    ).count()
 
     campaign_ids = [c.id for c in campaigns_list]
-    queue_entries = {str(q.campaign_id): q for q in CampaignQueue.objects.filter(campaign_id__in=campaign_ids).select_related("campaign")}
+    queue_entries = {
+        str(q.campaign_id): q
+        for q in CampaignQueue.objects.filter(campaign_id__in=campaign_ids).select_related(
+            "campaign"
+        )
+    }
 
     rec_agg = (
         CampaignRecipient.objects.filter(campaign_id__in=campaign_ids)
@@ -316,16 +372,28 @@ def campaigns(request: HttpRequest) -> HttpResponse:
         camp_pause_reasons = []
         if camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
             if not is_working_time:
-                camp_pause_reasons.append(f"Вне рабочего времени (текущее время МСК: {current_time_msk}, рабочие часы: 9:00-18:00 МСК)")
-            camp_sent_today = creator_sent_map.get(camp.created_by_id, 0) if camp.created_by_id else 0
+                camp_pause_reasons.append(
+                    f"Вне рабочего времени (текущее время МСК: {current_time_msk}, рабочие часы: 9:00-18:00 МСК)"
+                )
+            camp_sent_today = (
+                creator_sent_map.get(camp.created_by_id, 0) if camp.created_by_id else 0
+            )
             if per_user_daily_limit and camp_sent_today >= per_user_daily_limit:
-                camp_pause_reasons.append(f"Достигнут лимит отправки для аккаунта: {camp_sent_today}/{per_user_daily_limit} писем в день")
+                camp_pause_reasons.append(
+                    f"Достигнут лимит отправки для аккаунта: {camp_sent_today}/{per_user_daily_limit} писем в день"
+                )
             if emails_available <= 0:
-                camp_pause_reasons.append(f"Квота исчерпана: доступно {emails_available} из {global_limit} писем")
+                camp_pause_reasons.append(
+                    f"Квота исчерпана: доступно {emails_available} из {global_limit} писем"
+                )
             elif sent_today >= global_limit:
-                camp_pause_reasons.append(f"Достигнут глобальный дневной лимит: {sent_today}/{global_limit} писем")
+                camp_pause_reasons.append(
+                    f"Достигнут глобальный дневной лимит: {sent_today}/{global_limit} писем"
+                )
             if sent_last_hour >= max_per_hour:
-                camp_pause_reasons.append(f"Достигнут лимит в час: {sent_last_hour}/{max_per_hour} писем")
+                camp_pause_reasons.append(
+                    f"Достигнут лимит в час: {sent_last_hour}/{max_per_hour} писем"
+                )
             if not smtp_cfg.is_enabled:
                 camp_pause_reasons.append("SMTP не включен администратором")
 
@@ -337,6 +405,7 @@ def campaigns(request: HttpRequest) -> HttpResponse:
     campaigns_grouped = []
     if show_creator_column and campaigns_list:
         from collections import OrderedDict
+
         by_branch = OrderedDict()
         for camp in campaigns_list:
             branch = getattr(camp.created_by, "branch", None) if camp.created_by else None
@@ -350,7 +419,9 @@ def campaigns(request: HttpRequest) -> HttpResponse:
             by_branch[branch_key][creator_id][1].append(camp)
         for (branch_id, branch_name), creators in by_branch.items():
             managers = [{"user": u, "campaigns": camps} for u, camps in creators.values()]
-            campaigns_grouped.append({"branch_id": branch_id, "branch_name": branch_name, "managers": managers})
+            campaigns_grouped.append(
+                {"branch_id": branch_id, "branch_name": branch_name, "managers": managers}
+            )
 
     branches_for_filter = []
     managers_for_filter = []
@@ -363,7 +434,9 @@ def campaigns(request: HttpRequest) -> HttpResponse:
         manager_ids = [x for x in manager_ids if x]
         if manager_ids:
             managers_for_filter = list(
-                User.objects.filter(id__in=manager_ids).order_by("first_name", "last_name", "username")
+                User.objects.filter(id__in=manager_ids).order_by(
+                    "first_name", "last_name", "username"
+                )
             )
 
     return render(
@@ -388,13 +461,18 @@ def campaigns(request: HttpRequest) -> HttpResponse:
             "filter_manager_id": filter_manager_id,
             "branches_for_filter": branches_for_filter,
             "managers_for_filter": managers_for_filter,
-        }
+        },
     )
 
 
 @login_required
 def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
-    enforce(user=request.user, resource_type="page", resource="ui:mail:campaigns:detail", context={"path": request.path})
+    enforce(
+        user=request.user,
+        resource_type="page",
+        resource="ui:mail:campaigns:detail",
+        context={"path": request.path},
+    )
     user: User = request.user
     camp = get_object_or_404(
         Campaign.objects.select_related("created_by"),
@@ -413,8 +491,10 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
         total=Count("id"),
     )
     counts["sent_log"] = (
-        SendLog.objects.filter(campaign=camp, provider="smtp_global", status="sent", recipient__isnull=False)
-        .aggregate(n=Count("recipient_id", distinct=True))["n"] or 0
+        SendLog.objects.filter(
+            campaign=camp, provider="smtp_global", status="sent", recipient__isnull=False
+        ).aggregate(n=Count("recipient_id", distinct=True))["n"]
+        or 0
     )
 
     per_page_param = request.GET.get("per_page", "").strip()
@@ -452,7 +532,9 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             status="sent",
             recipient_id=OuterRef("id"),
         )
-        all_recipients_qs = all_recipients_qs.annotate(_sent_log=Exists(sent_exists)).filter(_sent_log=True)
+        all_recipients_qs = all_recipients_qs.annotate(_sent_log=Exists(sent_exists)).filter(
+            _sent_log=True
+        )
 
     paginator = Paginator(all_recipients_qs, per_page)
     page = paginator.get_page(request.GET.get("page"))
@@ -461,12 +543,22 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
     company_ids = [r.company_id for r in page_recipients if r.company_id]
     companies_map = {}
     if company_ids:
-        companies_map = {str(c.id): c for c in Company.objects.filter(id__in=company_ids).only("id", "name", "contact_name", "contact_position")}
+        companies_map = {
+            str(c.id): c
+            for c in Company.objects.filter(id__in=company_ids).only(
+                "id", "name", "contact_name", "contact_position"
+            )
+        }
 
     contact_ids = [r.contact_id for r in page_recipients if r.contact_id]
     contacts_map = {}
     if contact_ids:
-        contacts_map = {str(c.id): c for c in Contact.objects.filter(id__in=contact_ids).only("id", "first_name", "last_name", "position")}
+        contacts_map = {
+            str(c.id): c
+            for c in Contact.objects.filter(id__in=contact_ids).only(
+                "id", "first_name", "last_name", "position"
+            )
+        }
 
     recipients_by_company = {}
     for r in page_recipients:
@@ -474,7 +566,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
         if company_id not in recipients_by_company:
             recipients_by_company[company_id] = {
                 "company": companies_map.get(company_id) if company_id != "no_company" else None,
-                "recipients": []
+                "recipients": [],
             }
         if r.contact_id and str(r.contact_id) in contacts_map:
             r.contact = contacts_map[str(r.contact_id)]
@@ -493,9 +585,15 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
     from mailer.tasks import _is_working_hours
     from zoneinfo import ZoneInfo
 
-    is_admin = (user.role == User.Role.ADMIN)
+    is_admin = user.role == User.Role.ADMIN
     quota = SmtpBzQuota.load() if is_admin else None
-    if is_admin and quota and quota.last_synced_at and not quota.sync_error and quota.emails_limit > 0:
+    if (
+        is_admin
+        and quota
+        and quota.last_synced_at
+        and not quota.sync_error
+        and quota.emails_limit > 0
+    ):
         global_limit = quota.emails_limit
         max_per_hour = quota.max_per_hour or 100
         emails_available = quota.emails_available or 0
@@ -518,7 +616,8 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
     sent_today = int(_sl_stats["sent_today"] or 0)
     sent_today_user = int(_sl_stats["sent_today_user"] or 0)
     sent_last_hour = SendLog.objects.filter(
-        provider="smtp_global", status="sent",
+        provider="smtp_global",
+        status="sent",
         created_at__gte=now - _tz.timedelta(hours=1),
     ).count()
 
@@ -527,8 +626,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
 
     user_campaigns_count = Campaign.objects.filter(created_by=user).count()
     user_active_campaigns = Campaign.objects.filter(
-        created_by=user,
-        status__in=[Campaign.Status.READY, Campaign.Status.SENDING]
+        created_by=user, status__in=[Campaign.Status.READY, Campaign.Status.SENDING]
     ).count()
 
     msk_now = now_msk
@@ -536,13 +634,21 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
 
     pause_reasons = []
     if not is_working_time:
-        pause_reasons.append(f"Вне рабочего времени (текущее время МСК: {current_time_msk}, рабочие часы: 9:00-18:00 МСК)")
+        pause_reasons.append(
+            f"Вне рабочего времени (текущее время МСК: {current_time_msk}, рабочие часы: 9:00-18:00 МСК)"
+        )
     if per_user_daily_limit and sent_today_user >= per_user_daily_limit:
-        pause_reasons.append(f"Достигнут лимит отправки для вашего аккаунта: {sent_today_user}/{per_user_daily_limit} писем в день")
+        pause_reasons.append(
+            f"Достигнут лимит отправки для вашего аккаунта: {sent_today_user}/{per_user_daily_limit} писем в день"
+        )
     if emails_available <= 0:
-        pause_reasons.append(f"Квота исчерпана: доступно {emails_available} из {global_limit} писем")
+        pause_reasons.append(
+            f"Квота исчерпана: доступно {emails_available} из {global_limit} писем"
+        )
     elif sent_today >= global_limit:
-        pause_reasons.append(f"Достигнут глобальный дневной лимит: {sent_today}/{global_limit} писем")
+        pause_reasons.append(
+            f"Достигнут глобальный дневной лимит: {sent_today}/{global_limit} писем"
+        )
     if sent_last_hour >= max_per_hour:
         pause_reasons.append(f"Достигнут лимит в час: {sent_last_hour}/{max_per_hour} писем")
     if not smtp_cfg.is_enabled:
@@ -564,14 +670,16 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
         "failed_today_campaign": int(_sl_agg["failed_today_campaign"] or 0),
     }
 
-    recent_errors = SendLog.objects.filter(
-        campaign=camp,
-        provider="smtp_global",
-        status="failed"
-    ).select_related("recipient").order_by("-created_at")[:10]
+    recent_errors = (
+        SendLog.objects.filter(campaign=camp, provider="smtp_global", status="failed")
+        .select_related("recipient")
+        .order_by("-created_at")[:10]
+    )
 
     error_types = {}
-    for error_log in SendLog.objects.filter(campaign=camp, provider="smtp_global", status="failed").order_by("-created_at")[:100]:
+    for error_log in SendLog.objects.filter(
+        campaign=camp, provider="smtp_global", status="failed"
+    ).order_by("-created_at")[:100]:
         error_msg = (error_log.error or "").strip()
         if not error_msg:
             error_msg = "Неизвестная ошибка"
@@ -596,11 +704,13 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             error_types[error_key] = {"count": 0, "examples": []}
         error_types[error_key]["count"] += 1
         if len(error_types[error_key]["examples"]) < 3:
-            error_types[error_key]["examples"].append({
-                "email": error_log.recipient.email if error_log.recipient else "—",
-                "error": error_msg[:200],
-                "time": error_log.created_at,
-            })
+            error_types[error_key]["examples"].append(
+                {
+                    "email": error_log.recipient.email if error_log.recipient else "—",
+                    "error": error_msg[:200],
+                    "time": error_log.created_at,
+                }
+            )
 
     attachment_size = None
     if camp.attachment and camp.attachment.name and default_storage.exists(camp.attachment.name):
@@ -613,9 +723,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
     if preview_html:
         auto_plain = html_to_text(preview_html)
         preview_html, _ = apply_signature(
-            user=user,
-            body_html=preview_html,
-            body_text=auto_plain or camp.body_text or ""
+            user=user, body_html=preview_html, body_text=auto_plain or camp.body_text or ""
         )
 
     selected_regions: list[str] = []
@@ -658,7 +766,15 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "smtp_from_name_default": (smtp_cfg.from_name or "CRM ПРОФИ").strip(),
             "recipient_add_form": CampaignRecipientAddForm(),
             "generate_form": CampaignGenerateRecipientsForm(),
-            "branches": Branch.objects.order_by("name") if (user.role == User.Role.ADMIN or user.role == User.Role.GROUP_MANAGER) else (Branch.objects.filter(id=user.branch_id) if user.branch_id else Branch.objects.none()),
+            "branches": (
+                Branch.objects.order_by("name")
+                if (user.role == User.Role.ADMIN or user.role == User.Role.GROUP_MANAGER)
+                else (
+                    Branch.objects.filter(id=user.branch_id)
+                    if user.branch_id
+                    else Branch.objects.none()
+                )
+            ),
             "responsibles": get_users_for_lists(request.user),
             "statuses": CompanyStatus.objects.order_by("name"),
             "spheres": CompanySphere.objects.order_by("name"),
@@ -677,13 +793,30 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "queue_entry": qe,
             "deferred_until": (getattr(qe, "deferred_until", None) if qe else None),
             "defer_reason": (getattr(qe, "defer_reason", None) or "") if qe else "",
-            "is_deferred_daily_limit": bool(qe and (getattr(qe, "defer_reason", None) or "") == "daily_limit" and getattr(qe, "deferred_until", None) and qe.deferred_until > timezone.now()),
+            "is_deferred_daily_limit": bool(
+                qe
+                and (getattr(qe, "defer_reason", None) or "") == "daily_limit"
+                and getattr(qe, "deferred_until", None)
+                and qe.deferred_until > timezone.now()
+            ),
             "attachment_ext": (
-                ((camp.attachment_original_name or camp.attachment.name).split(".")[-1].upper() if (camp.attachment_original_name or camp.attachment) and "." in (camp.attachment_original_name or camp.attachment.name) else "")
+                (
+                    (camp.attachment_original_name or camp.attachment.name).split(".")[-1].upper()
+                    if (camp.attachment_original_name or camp.attachment)
+                    and "." in (camp.attachment_original_name or camp.attachment.name)
+                    else ""
+                )
                 if camp.attachment
                 else ""
             ),
-            "attachment_filename": (camp.attachment_original_name or (camp.attachment.name.split("/")[-1] if camp.attachment and camp.attachment.name else "")),
+            "attachment_filename": (
+                camp.attachment_original_name
+                or (
+                    camp.attachment.name.split("/")[-1]
+                    if camp.attachment and camp.attachment.name
+                    else ""
+                )
+            ),
             "attachment_size": attachment_size,
         },
     )

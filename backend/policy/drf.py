@@ -31,6 +31,10 @@ class PolicyPermission(BasePermission):
         action = _normalize_action(getattr(view, "action", None))
         resource = f"{prefix}:{action}"
         # enforce() в observe_only не блокирует, но логирует
-        enforce(user=request.user, resource_type="action", resource=resource, context={"path": request.path})
+        enforce(
+            user=request.user,
+            resource_type="action",
+            resource=resource,
+            context={"path": request.path},
+        )
         return True
-

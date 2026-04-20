@@ -1,6 +1,7 @@
 """
 Тесты для accounts.templatetags.accounts_extras (has_role, role_label).
 """
+
 from django.contrib.auth.models import AnonymousUser
 from django.test import TestCase
 from django.template import Context, Template
@@ -23,7 +24,7 @@ class HasRoleFilterTests(TestCase):
 
     def _render(self, user, roles: str) -> str:
         tpl = Template(
-            '{% load accounts_extras %}'
+            "{% load accounts_extras %}"
             '{% if user|has_role:"' + roles + '" %}YES{% else %}NO{% endif %}'
         )
         return tpl.render(Context({"user": user}))
@@ -47,15 +48,13 @@ class HasRoleFilterTests(TestCase):
         self.assertEqual(self._render(None, "admin"), "NO")
 
     def test_superuser_matches_admin_check(self):
-        su = User.objects.create_superuser(
-            username="su1", password="pwd12345", email="s@e.com"
-        )
+        su = User.objects.create_superuser(username="su1", password="pwd12345", email="s@e.com")
         self.assertEqual(self._render(su, "admin"), "YES")
 
 
 class RoleLabelFilterTests(TestCase):
     def _render(self, value) -> str:
-        tpl = Template('{% load accounts_extras %}{{ v|role_label }}')
+        tpl = Template("{% load accounts_extras %}{{ v|role_label }}")
         return tpl.render(Context({"v": value}))
 
     def test_admin_label(self):
@@ -73,7 +72,7 @@ class RoleLabelFilterTests(TestCase):
 
 class FullNameFilterTests(TestCase):
     def _render(self, user) -> str:
-        tpl = Template('{% load accounts_extras %}{{ u|full_name }}')
+        tpl = Template("{% load accounts_extras %}{{ u|full_name }}")
         return tpl.render(Context({"u": user}))
 
     def test_last_and_first(self):

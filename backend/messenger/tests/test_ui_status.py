@@ -16,16 +16,12 @@ class MessageTimestampsTests(TestCase):
     def setUp(self):
         # Сигнал авто-назначения мешает юнит-тестам простых полей — отключаем.
         post_save.disconnect(auto_assign_new_conversation, sender=Conversation)
-        self.addCleanup(
-            post_save.connect, auto_assign_new_conversation, sender=Conversation
-        )
+        self.addCleanup(post_save.connect, auto_assign_new_conversation, sender=Conversation)
 
         self.branch = Branch.objects.create(name="Br", code="br")
         self.inbox = Inbox.objects.create(name="Widget", branch=self.branch)
         self.contact = Contact.objects.create(name="C", email="c@example.com")
-        self.conv = Conversation.objects.create(
-            inbox=self.inbox, contact=self.contact
-        )
+        self.conv = Conversation.objects.create(inbox=self.inbox, contact=self.contact)
 
     def test_incoming_sets_customer_ts(self):
         Message.objects.create(
@@ -62,22 +58,22 @@ class MessageTimestampsTests(TestCase):
 class UiStatusPropertyTests(TestCase):
     def setUp(self):
         post_save.disconnect(auto_assign_new_conversation, sender=Conversation)
-        self.addCleanup(
-            post_save.connect, auto_assign_new_conversation, sender=Conversation
-        )
+        self.addCleanup(post_save.connect, auto_assign_new_conversation, sender=Conversation)
         self.branch = Branch.objects.create(name="Br", code="br")
         self.inbox = Inbox.objects.create(name="Widget", branch=self.branch)
         self.contact = Contact.objects.create(name="C", email="c@example.com")
         from django.contrib.auth import get_user_model
+
         self.User = get_user_model()
         self.op = self.User.objects.create_user(
-            "op", password="pw", branch=self.branch, role=self.User.Role.MANAGER,
+            "op",
+            password="pw",
+            branch=self.branch,
+            role=self.User.Role.MANAGER,
         )
 
     def _conv(self, **kw):
-        return Conversation.objects.create(
-            inbox=self.inbox, contact=self.contact, **kw
-        )
+        return Conversation.objects.create(inbox=self.inbox, contact=self.contact, **kw)
 
     def test_status_new_when_open_and_unassigned(self):
         c = self._conv()
@@ -85,6 +81,7 @@ class UiStatusPropertyTests(TestCase):
 
     def test_status_waiting_when_customer_last(self):
         from django.utils import timezone
+
         c = self._conv(assignee=self.op)
         Conversation.objects.filter(pk=c.pk).update(
             last_customer_msg_at=timezone.now(),
@@ -95,6 +92,7 @@ class UiStatusPropertyTests(TestCase):
 
     def test_status_in_progress_when_agent_replied(self):
         from django.utils import timezone
+
         now = timezone.now()
         c = self._conv(assignee=self.op)
         Conversation.objects.filter(pk=c.pk).update(
@@ -124,9 +122,13 @@ class WaitingMinutesTests(TestCase):
         self.inbox = Inbox.objects.create(name="Widget", branch=self.branch)
         self.contact = Contact.objects.create(name="C", email="c@example.com")
         from django.contrib.auth import get_user_model
+
         self.User = get_user_model()
         self.op = self.User.objects.create_user(
-            "op", password="pw", branch=self.branch, role=self.User.Role.MANAGER,
+            "op",
+            password="pw",
+            branch=self.branch,
+            role=self.User.Role.MANAGER,
         )
 
     def test_zero_when_not_waiting(self):
@@ -140,6 +142,7 @@ class WaitingMinutesTests(TestCase):
     def test_positive_when_customer_last(self):
         from django.utils import timezone
         from datetime import timedelta
+
         c = Conversation.objects.create(inbox=self.inbox, contact=self.contact, assignee=self.op)
         ten_ago = timezone.now() - timedelta(minutes=10)
         Conversation.objects.filter(pk=c.pk).update(last_customer_msg_at=ten_ago)

@@ -93,7 +93,9 @@ class Command(BaseCommand):
                 if len(to_update) >= batch_size:
                     if not dry_run:
                         with transaction.atomic():
-                            Company.objects.bulk_update(to_update, ["updated_at"], batch_size=batch_size)
+                            Company.objects.bulk_update(
+                                to_update, ["updated_at"], batch_size=batch_size
+                            )
                     to_update.clear()
 
         # Хвост батча
@@ -107,5 +109,8 @@ class Command(BaseCommand):
             )
         )
         if dry_run:
-            self.stdout.write(self.style.WARNING("Это был DRY-RUN. Для применения изменений запустите без --dry-run.\n"))
-
+            self.stdout.write(
+                self.style.WARNING(
+                    "Это был DRY-RUN. Для применения изменений запустите без --dry-run.\n"
+                )
+            )

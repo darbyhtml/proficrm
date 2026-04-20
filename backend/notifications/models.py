@@ -13,7 +13,12 @@ class Notification(models.Model):
         COMPANY = "company", "Компания"
         SYSTEM = "system", "Система"
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications", verbose_name="Пользователь")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+        verbose_name="Пользователь",
+    )
     kind = models.CharField("Тип", max_length=16, choices=Kind.choices, default=Kind.INFO)
     title = models.CharField("Заголовок", max_length=200)
     body = models.TextField("Текст", blank=True, default="")
@@ -41,8 +46,18 @@ class CompanyContractReminder(models.Model):
     чтобы не слать одно и то же уведомление каждый запрос/день.
     """
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="contract_reminders", verbose_name="Пользователь")
-    company = models.ForeignKey("companies.Company", on_delete=models.CASCADE, related_name="contract_reminders", verbose_name="Компания")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="contract_reminders",
+        verbose_name="Пользователь",
+    )
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.CASCADE,
+        related_name="contract_reminders",
+        verbose_name="Компания",
+    )
     contract_until = models.DateField("Действует до")
     days_before = models.PositiveSmallIntegerField("За сколько дней")
     created_at = models.DateTimeField("Создано", auto_now_add=True)
@@ -51,15 +66,21 @@ class CompanyContractReminder(models.Model):
         verbose_name = "Напоминание по договору"
         verbose_name_plural = "Напоминания по договорам"
         constraints = [
-            models.UniqueConstraint(fields=["user", "company", "contract_until", "days_before"], name="uniq_contract_reminder"),
+            models.UniqueConstraint(
+                fields=["user", "company", "contract_until", "days_before"],
+                name="uniq_contract_reminder",
+            ),
         ]
         indexes = [
             models.Index(fields=["user", "created_at"], name="contractrem_u_created_idx"),
-            models.Index(fields=["user", "company", "contract_until"], name="contractrem_u_c_until_idx"),
+            models.Index(
+                fields=["user", "company", "contract_until"], name="contractrem_u_c_until_idx"
+            ),
         ]
 
     def __str__(self) -> str:
         return f"{self.user} {self.company_id} {self.contract_until} -{self.days_before}d"
+
 
 class CrmAnnouncement(models.Model):
     class Type(models.TextChoices):
@@ -69,11 +90,21 @@ class CrmAnnouncement(models.Model):
 
     title = models.CharField("Заголовок", max_length=200)
     body = models.TextField("Текст сообщения")
-    announcement_type = models.CharField("Тип", max_length=16, choices=Type.choices, default=Type.INFO)
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="created_announcements", verbose_name="Автор")
+    announcement_type = models.CharField(
+        "Тип", max_length=16, choices=Type.choices, default=Type.INFO
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="created_announcements",
+        verbose_name="Автор",
+    )
     created_at = models.DateTimeField("Создано", auto_now_add=True)
     is_active = models.BooleanField("Активно", default=True)
-    scheduled_at = models.DateTimeField("Показать с", null=True, blank=True, help_text="Если пусто — показывается сразу")
+    scheduled_at = models.DateTimeField(
+        "Показать с", null=True, blank=True, help_text="Если пусто — показывается сразу"
+    )
 
     class Meta:
         verbose_name = "Объявление CRM"
@@ -86,6 +117,7 @@ class CrmAnnouncement(models.Model):
     @property
     def is_published(self):
         from django.utils import timezone
+
         if not self.is_active:
             return False
         if self.scheduled_at and self.scheduled_at > timezone.now():
@@ -97,13 +129,21 @@ class CrmAnnouncement(models.Model):
 
     def total_users(self):
         from django.contrib.auth import get_user_model
+
         User = get_user_model()
         return User.objects.filter(is_active=True).count()
 
 
 class CrmAnnouncementRead(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="announcement_reads", verbose_name="Пользователь")
-    announcement = models.ForeignKey(CrmAnnouncement, on_delete=models.CASCADE, related_name="reads", verbose_name="Объявление")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="announcement_reads",
+        verbose_name="Пользователь",
+    )
+    announcement = models.ForeignKey(
+        CrmAnnouncement, on_delete=models.CASCADE, related_name="reads", verbose_name="Объявление"
+    )
     read_at = models.DateTimeField("Прочитано", auto_now_add=True)
 
     class Meta:

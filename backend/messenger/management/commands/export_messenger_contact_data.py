@@ -49,7 +49,9 @@ class Command(BaseCommand):
                 "name": contact.name,
                 "email": contact.email,
                 "phone": contact.phone,
-                "region_detected": contact.region_detected.name if contact.region_detected else None,
+                "region_detected": (
+                    contact.region_detected.name if contact.region_detected else None
+                ),
                 "created_at": contact.created_at.isoformat() if contact.created_at else None,
             },
             "conversations": [],
@@ -67,9 +69,13 @@ class Command(BaseCommand):
                 "status": conv.status,
                 "priority": conv.priority,
                 "assignee_id": conv.assignee_id,
-                "assignee_username": getattr(conv.assignee, "username", None) if conv.assignee_id else None,
+                "assignee_username": (
+                    getattr(conv.assignee, "username", None) if conv.assignee_id else None
+                ),
                 "created_at": conv.created_at.isoformat() if conv.created_at else None,
-                "last_activity_at": conv.last_activity_at.isoformat() if conv.last_activity_at else None,
+                "last_activity_at": (
+                    conv.last_activity_at.isoformat() if conv.last_activity_at else None
+                ),
                 "rating_score": conv.rating_score,
                 "rating_comment": conv.rating_comment,
                 "rated_at": conv.rated_at.isoformat() if conv.rated_at else None,
@@ -90,7 +96,9 @@ class Command(BaseCommand):
                         "body": msg.body,
                         "created_at": msg.created_at.isoformat() if msg.created_at else None,
                         "sender_user_id": msg.sender_user_id,
-                        "sender_contact_id": str(msg.sender_contact_id) if msg.sender_contact_id else None,
+                        "sender_contact_id": (
+                            str(msg.sender_contact_id) if msg.sender_contact_id else None
+                        ),
                         "read_at": msg.read_at.isoformat() if msg.read_at else None,
                         "attachments": [
                             {
@@ -109,4 +117,3 @@ class Command(BaseCommand):
 
         pretty = bool(options.get("pretty"))
         self.stdout.write(json.dumps(data, ensure_ascii=False, indent=2 if pretty else None))
-

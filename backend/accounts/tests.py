@@ -9,6 +9,7 @@ Smoke tests для auth flow и unit tests для accounts/security.py.
 - SecureLoginView: вход по access key, вход по паролю (только admin), lockout
 - SecureTokenObtainPairView: JWT login success/fail, rate limit, lockout
 """
+
 from unittest.mock import patch
 
 from django.test import TestCase, Client, RequestFactory, override_settings
@@ -32,6 +33,7 @@ User = get_user_model()
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_request(factory, remote_addr="1.2.3.4", xff=None, proxy_ips=None):
     """Создаёт GET-запрос с нужными заголовками."""
     req = factory.get("/")
@@ -46,6 +48,7 @@ def _make_request(factory, remote_addr="1.2.3.4", xff=None, proxy_ips=None):
 # ---------------------------------------------------------------------------
 # Unit tests: security.py
 # ---------------------------------------------------------------------------
+
 
 class GetClientIpTest(TestCase):
     def setUp(self):
@@ -102,7 +105,9 @@ class IsIpRateLimitedTest(TestCase):
 
     def test_allows_requests_within_limit(self):
         for _ in range(3):
-            self.assertFalse(is_ip_rate_limited("1.2.3.4", "test", max_requests=5, window_seconds=60))
+            self.assertFalse(
+                is_ip_rate_limited("1.2.3.4", "test", max_requests=5, window_seconds=60)
+            )
 
     def test_blocks_when_limit_reached(self):
         ip = "9.9.9.9"
@@ -119,7 +124,9 @@ class IsIpRateLimitedTest(TestCase):
     def test_different_key_prefixes_are_independent(self):
         for _ in range(5):
             is_ip_rate_limited("3.3.3.3", "prefix_a", max_requests=5, window_seconds=60)
-        self.assertFalse(is_ip_rate_limited("3.3.3.3", "prefix_b", max_requests=5, window_seconds=60))
+        self.assertFalse(
+            is_ip_rate_limited("3.3.3.3", "prefix_b", max_requests=5, window_seconds=60)
+        )
 
 
 class RecordFailedLoginAndLockoutTest(TestCase):
@@ -165,6 +172,7 @@ class RecordFailedLoginAndLockoutTest(TestCase):
 # ---------------------------------------------------------------------------
 # Smoke tests: SecureLoginView — access key flow
 # ---------------------------------------------------------------------------
+
 
 class AccessKeyLoginSmokeTest(TestCase):
     def setUp(self):
@@ -225,6 +233,7 @@ class AccessKeyLoginSmokeTest(TestCase):
 # Smoke tests: SecureLoginView — password flow (admin only)
 # ---------------------------------------------------------------------------
 
+
 class PasswordLoginSmokeTest(TestCase):
     def setUp(self):
         cache.clear()
@@ -266,6 +275,7 @@ class PasswordLoginSmokeTest(TestCase):
 # ---------------------------------------------------------------------------
 # Smoke tests: JWT — SecureTokenObtainPairView
 # ---------------------------------------------------------------------------
+
 
 class JwtLoginSmokeTest(TestCase):
     def setUp(self):

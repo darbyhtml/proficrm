@@ -1,6 +1,7 @@
 """
 Celery-задачи для очистки устаревших записей audit-приложения.
 """
+
 from __future__ import annotations
 
 import logging
@@ -53,5 +54,8 @@ def purge_old_error_logs() -> None:
 
     logger.info(
         "purge_old_error_logs: удалено resolved=%d (>%dd) + hard=%d (>%dd)",
-        soft_deleted, days, hard_deleted, hard_days,
+        soft_deleted,
+        days,
+        hard_deleted,
+        hard_days,
     )

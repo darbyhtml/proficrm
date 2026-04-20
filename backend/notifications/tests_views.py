@@ -8,6 +8,7 @@
   4. all_notifications — GET, рендерит страницу, показывает уведомления
   5. all_reminders   — GET, рендерит страницу
 """
+
 from __future__ import annotations
 
 from django.test import TestCase, override_settings
@@ -35,6 +36,7 @@ def _make_notification(user, title="Test", is_read=False):
 # ---------------------------------------------------------------------------
 # 1. mark_all_read
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class MarkAllReadViewTest(TestCase):
@@ -70,6 +72,7 @@ class MarkAllReadViewTest(TestCase):
 # ---------------------------------------------------------------------------
 # 2. mark_read
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class MarkReadViewTest(TestCase):
@@ -108,6 +111,7 @@ class MarkReadViewTest(TestCase):
 # ---------------------------------------------------------------------------
 # 3. poll (AJAX JSON)
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class PollViewTest(TestCase):
@@ -153,6 +157,7 @@ class PollViewTest(TestCase):
 # 4. all_notifications
 # ---------------------------------------------------------------------------
 
+
 @override_settings(SECURE_SSL_REDIRECT=False)
 class AllNotificationsViewTest(TestCase):
     def setUp(self):
@@ -186,6 +191,7 @@ class AllNotificationsViewTest(TestCase):
 # ---------------------------------------------------------------------------
 # 5. all_reminders
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class AllRemindersViewTest(TestCase):

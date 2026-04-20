@@ -26,15 +26,18 @@ def parse_inns(value: str | None) -> List[str]:
         if inn not in seen:
             inns.append(inn)
             seen.add(inn)
-    
+
     # Если не нашли через regex, убираем все нецифровые символы и ищем последовательности
     if not inns:
-        digits_only = ''.join(c for c in s if c.isdigit())
+        digits_only = "".join(c for c in s if c.isdigit())
         # Ищем последовательности из 10 или 12 цифр
-        for length in [12, 10]:  # Сначала 12, потом 10 (чтобы не находить часть 12-значного как 10-значный)
+        for length in [
+            12,
+            10,
+        ]:  # Сначала 12, потом 10 (чтобы не находить часть 12-значного как 10-значный)
             i = 0
             while i <= len(digits_only) - length:
-                candidate = digits_only[i:i + length]
+                candidate = digits_only[i : i + length]
                 if candidate not in seen:
                     inns.append(candidate)
                     seen.add(candidate)
@@ -45,7 +48,7 @@ def parse_inns(value: str | None) -> List[str]:
         # и длина типична для ИНН/кодов (8–12 цифр), сохраняем как одно значение, чтобы не терять ввод
         if not inns and digits_only and 8 <= len(digits_only) <= 12:
             inns.append(digits_only)
-    
+
     return inns
 
 
@@ -76,4 +79,3 @@ def merge_inn_strings(existing: str | None, incoming: str | None) -> str:
     a = parse_inns(existing)
     b = parse_inns(incoming)
     return format_inns([*a, *b])
-

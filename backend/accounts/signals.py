@@ -5,6 +5,7 @@
 - sync_is_staff_with_role: автоматическая синхронизация флага is_staff с User.role.
 - invalidate_sessions_on_deactivate: инвалидация всех сессий уволенного юзера.
 """
+
 import logging
 
 from django.contrib.sessions.models import Session

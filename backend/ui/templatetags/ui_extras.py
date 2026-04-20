@@ -77,13 +77,14 @@ def task_type_badge(task_type):
         icon_html = (
             f'<span class="inline-flex items-center justify-center w-3.5 h-3.5">'
             f'<svg viewBox="0 0 24 24" width="14" height="14" {svg_attrs}>{paths}</svg>'
-            f'</span>'
+            f"</span>"
         )
 
     return mark_safe(
         f'<span class="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full {color_cls}">'
-        f'{icon_html}<span>{name}</span></span>'
+        f"{icon_html}<span>{name}</span></span>"
     )
+
 
 _HAS_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
 
@@ -119,10 +120,10 @@ def format_phone(value: str) -> str:
     s = str(value).strip()
     if not s:
         return ""
-    
+
     # Убираем все символы, кроме цифр и + в начале
     digits = re.sub(r"[^\d+]", "", s)
-    
+
     # Если начинается с +7, обрабатываем как российский номер
     if digits.startswith("+7"):
         digits = digits[2:]  # Убираем +7
@@ -133,16 +134,16 @@ def format_phone(value: str) -> str:
         digits = digits[1:]  # Убираем 8
     elif digits.startswith("7") and len(digits) >= 11:
         digits = digits[1:]  # Убираем 7
-    
+
     # Если осталось 10 цифр, форматируем как +7 (XXX) XXX-XXXX
     if len(digits) == 10:
         return f"+7 ({digits[0:3]}) {digits[3:6]}-{digits[6:10]}"
-    
+
     # Если осталось 11 цифр (возможно с лишней 7 или 8), берем последние 10
     if len(digits) == 11:
         digits = digits[-10:]
         return f"+7 ({digits[0:3]}) {digits[3:6]}-{digits[6:10]}"
-    
+
     # Если не подходит под формат, возвращаем как есть
     return s
 
@@ -156,6 +157,7 @@ def split_inns(value: str) -> list[str]:
     if value is None:
         return []
     from companies.inn_utils import parse_inns
+
     return parse_inns(value)
 
 
@@ -167,14 +169,14 @@ def format_call_direction(value):
     """
     if not value:
         return "—"
-    
+
     direction_map = {
         "outgoing": "Исходящий",
         "incoming": "Входящий",
         "missed": "Пропущенный",
         "unknown": "—",
     }
-    
+
     return direction_map.get(value, "—")
 
 
@@ -186,14 +188,14 @@ def format_action_source(value):
     """
     if not value:
         return "—"
-    
+
     source_map = {
         "crm_ui": "CRM",
         "notification": "Уведомление",
         "history": "История",
         "unknown": "—",
     }
-    
+
     return source_map.get(value, "—")
 
 
@@ -205,11 +207,11 @@ def format_resolve_method(value):
     """
     if not value:
         return "—"
-    
+
     # Для менеджеров показываем общий текст, технические детали скрыты
     if value in ("observer", "retry"):
         return "Определено автоматически"
-    
+
     return "—"
 
 
@@ -410,14 +412,28 @@ def phone_local_info(raw_phone: str) -> str:
 
 # Русские названия месяцев в родительном падеже
 _RU_MONTHS_GENITIVE = {
-    1: "января", 2: "февраля", 3: "марта", 4: "апреля",
-    5: "мая", 6: "июня", 7: "июля", 8: "августа",
-    9: "сентября", 10: "октября", 11: "ноября", 12: "декабря",
+    1: "января",
+    2: "февраля",
+    3: "марта",
+    4: "апреля",
+    5: "мая",
+    6: "июня",
+    7: "июля",
+    8: "августа",
+    9: "сентября",
+    10: "октября",
+    11: "ноября",
+    12: "декабря",
 }
 
 _RU_WEEKDAYS = {
-    0: "понедельник", 1: "вторник", 2: "среда", 3: "четверг",
-    4: "пятница", 5: "суббота", 6: "воскресенье",
+    0: "понедельник",
+    1: "вторник",
+    2: "среда",
+    3: "четверг",
+    4: "пятница",
+    5: "суббота",
+    6: "воскресенье",
 }
 
 
@@ -438,4 +454,3 @@ def ru_date(value):
         return f"{weekday}, {day} {month} {year}"
     except (AttributeError, TypeError):
         return str(value)
-

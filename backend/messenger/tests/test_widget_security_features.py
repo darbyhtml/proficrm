@@ -18,6 +18,7 @@ class WidgetSecurityFeatureTests(TestCase):
         settings.MESSENGER_ENABLED = True
 
         from django.core.cache import cache
+
         cache.clear()
 
         self.branch = Branch.objects.create(code="b1", name="B1")
@@ -39,6 +40,7 @@ class WidgetSecurityFeatureTests(TestCase):
     def tearDown(self):
         settings.MESSENGER_ENABLED = self.original_messenger_enabled
         from django.core.cache import cache
+
         cache.clear()
 
     def test_domain_allowlist_blocks_foreign_origin(self):
@@ -206,6 +208,7 @@ class WidgetDeliveryAndAttachmentsTests(TestCase):
         settings.MESSENGER_ENABLED = True
 
         from django.core.cache import cache
+
         cache.clear()
 
         self.branch = Branch.objects.create(code="b2", name="B2")
@@ -294,4 +297,3 @@ class WidgetDeliveryAndAttachmentsTests(TestCase):
 
         msg.refresh_from_db()
         self.assertIsNotNone(msg.delivered_at)
-

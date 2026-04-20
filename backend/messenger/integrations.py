@@ -81,7 +81,9 @@ def _get_webhook_config(inbox: Inbox) -> Optional[Dict[str, Any]]:
             "events": list(events),
         }
     except Exception:
-        logger.exception("Failed to read webhook config from inbox.settings", extra={"inbox_id": inbox.id})
+        logger.exception(
+            "Failed to read webhook config from inbox.settings", extra={"inbox_id": inbox.id}
+        )
         return None
 
 
@@ -235,4 +237,3 @@ def notify_message(message: Message) -> None:
         payload["message"]["sender_user_id"] = message.sender_user_id
 
     _send_webhook_async(inbox, event_type, payload)
-

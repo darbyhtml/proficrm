@@ -82,10 +82,16 @@ class GlobalMailAccountForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Если пароль уже сохранен, делаем поле необязательным и добавляем подсказку
         if self.instance and self.instance.pk and self.instance.smtp_password_enc:
-            self.fields["smtp_password"].help_text = "Оставьте пустым, чтобы не менять сохраненный пароль. " + (self.fields["smtp_password"].help_text or "")
+            self.fields["smtp_password"].help_text = (
+                "Оставьте пустым, чтобы не менять сохраненный пароль. "
+                + (self.fields["smtp_password"].help_text or "")
+            )
         # Если API ключ уже сохранен, показываем подсказку
         if self.instance and self.instance.pk and self.instance.smtp_bz_api_key_enc:
-            self.fields["smtp_bz_api_key"].help_text = "Оставьте пустым, чтобы не менять сохраненный ключ. " + (self.fields["smtp_bz_api_key"].help_text or "")
+            self.fields["smtp_bz_api_key"].help_text = (
+                "Оставьте пустым, чтобы не менять сохраненный ключ. "
+                + (self.fields["smtp_bz_api_key"].help_text or "")
+            )
 
     class Meta:
         model = GlobalMailAccount
@@ -106,7 +112,7 @@ class GlobalMailAccountForm(forms.ModelForm):
             "from_email": forms.EmailInput(attrs={"class": "input"}),
             "from_name": forms.TextInput(attrs={"class": "input"}),
         }
-    
+
     def clean(self):
         cleaned_data = super().clean()
         # Проверяем, что либо пароль указан, либо он уже сохранен
@@ -115,11 +121,13 @@ class GlobalMailAccountForm(forms.ModelForm):
             # Пароль не указан, но это редактирование - проверяем, есть ли сохраненный пароль
             if not self.instance.smtp_password_enc:
                 # Пароль не был сохранен ранее - требуем его указать
-                raise forms.ValidationError({
-                    "smtp_password": "Пароль SMTP обязателен для настройки отправки писем. API ключ используется только для получения информации о квоте."
-                })
+                raise forms.ValidationError(
+                    {
+                        "smtp_password": "Пароль SMTP обязателен для настройки отправки писем. API ключ используется только для получения информации о квоте."
+                    }
+                )
         return cleaned_data
-    
+
     def save(self, commit=True):
         obj: GlobalMailAccount = super().save(commit=False)
         p = (self.cleaned_data.get("smtp_password") or "").strip()
@@ -144,7 +152,9 @@ class CampaignForm(forms.ModelForm):
     send_at = forms.DateTimeField(
         label="Запланировано на",
         required=False,
-        widget=forms.DateTimeInput(attrs={"class": "input", "type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
+        widget=forms.DateTimeInput(
+            attrs={"class": "input", "type": "datetime-local"}, format="%Y-%m-%dT%H:%M"
+        ),
         input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S"],
         help_text="Оставьте пустым для немедленного старта. Рассылка не начнётся раньше указанного времени. Время — МСК (UTC+3).",
     )
@@ -155,18 +165,32 @@ class CampaignForm(forms.ModelForm):
         widgets = {
             "name": forms.TextInput(attrs={"class": "input"}),
             "subject": forms.TextInput(attrs={"class": "input"}),
-            "sender_name": forms.TextInput(attrs={"class": "input", "placeholder": "Например: CRM ПРОФИ / Отдел продаж"}),
-            "body_html": forms.Textarea(attrs={"class": "textarea", "rows": 10, "placeholder": "<p>...</p>", "id": "id_body_html"}),
-            "attachment": forms.FileInput(attrs={"class": "input", "accept": ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv,.zip,.rar"}),
+            "sender_name": forms.TextInput(
+                attrs={"class": "input", "placeholder": "Например: CRM ПРОФИ / Отдел продаж"}
+            ),
+            "body_html": forms.Textarea(
+                attrs={
+                    "class": "textarea",
+                    "rows": 10,
+                    "placeholder": "<p>...</p>",
+                    "id": "id_body_html",
+                }
+            ),
+            "attachment": forms.FileInput(
+                attrs={
+                    "class": "input",
+                    "accept": ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv,.zip,.rar",
+                }
+            ),
         }
-    
+
     # Таблица магических байтов: расширение → (сигнатура(ы), смещение)
     _MAGIC_BYTES: dict[str, list[tuple[bytes, int]]] = {
-        ".pdf":  [(b"%PDF", 0)],
-        ".png":  [(b"\x89PNG\r\n\x1a\n", 0)],
-        ".jpg":  [(b"\xff\xd8\xff", 0)],
+        ".pdf": [(b"%PDF", 0)],
+        ".png": [(b"\x89PNG\r\n\x1a\n", 0)],
+        ".jpg": [(b"\xff\xd8\xff", 0)],
         ".jpeg": [(b"\xff\xd8\xff", 0)],
-        ".gif":  [(b"GIF87a", 0), (b"GIF89a", 0)],
+        ".gif": [(b"GIF87a", 0), (b"GIF89a", 0)],
         # WEBP: байты 0-3 = "RIFF", байты 8-11 = "WEBP" — оба условия обязательны.
         # Хранится как два отдельных entry; проверяются через all() в clean_attachment.
         ".webp": [(b"RIFF", 0), (b"WEBP", 8)],
@@ -174,15 +198,15 @@ class CampaignForm(forms.ModelForm):
         ".docx": [(b"PK\x03\x04", 0)],
         ".xlsx": [(b"PK\x03\x04", 0)],
         ".pptx": [(b"PK\x03\x04", 0)],
-        ".zip":  [(b"PK\x03\x04", 0), (b"PK\x05\x06", 0)],
-        ".rar":  [(b"Rar!\x1a\x07", 0)],
+        ".zip": [(b"PK\x03\x04", 0), (b"PK\x05\x06", 0)],
+        ".rar": [(b"Rar!\x1a\x07", 0)],
         # Устаревший OLE2 (бинарный .doc/.xls/.ppt)
-        ".doc":  [(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", 0)],
-        ".xls":  [(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", 0)],
-        ".ppt":  [(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", 0)],
+        ".doc": [(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", 0)],
+        ".xls": [(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", 0)],
+        ".ppt": [(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", 0)],
         # Текстовые форматы — магических байтов нет; проверяем только расширение
-        ".txt":  [],
-        ".csv":  [],
+        ".txt": [],
+        ".csv": [],
     }
 
     def clean_attachment(self):
@@ -191,7 +215,9 @@ class CampaignForm(forms.ModelForm):
             # Проверка размера файла (максимум 15 МБ)
             max_size = 15 * 1024 * 1024  # 15 МБ
             if attachment.size > max_size:
-                raise forms.ValidationError(f"Размер файла не должен превышать 15 МБ. Текущий размер: {attachment.size / 1024 / 1024:.2f} МБ")
+                raise forms.ValidationError(
+                    f"Размер файла не должен превышать 15 МБ. Текущий размер: {attachment.size / 1024 / 1024:.2f} МБ"
+                )
             # Allowlist расширений (дублируем accept атрибут, но на сервере)
             allowed_ext = set(self._MAGIC_BYTES.keys())
             name = getattr(attachment, "name", "") or ""
@@ -211,9 +237,13 @@ class CampaignForm(forms.ModelForm):
                 except Exception:
                     header = b""
                 if ext == ".webp":
-                    matched = all(header[offset:offset + len(sig)] == sig for sig, offset in signatures)
+                    matched = all(
+                        header[offset : offset + len(sig)] == sig for sig, offset in signatures
+                    )
                 else:
-                    matched = any(header[offset:offset + len(sig)] == sig for sig, offset in signatures)
+                    matched = any(
+                        header[offset : offset + len(sig)] == sig for sig, offset in signatures
+                    )
                 if not matched:
                     raise forms.ValidationError(
                         "Содержимое файла не соответствует его расширению. "
@@ -226,6 +256,7 @@ class CampaignForm(forms.ModelForm):
         sanitized = sanitize_email_html(html)
         # Проверяем что после санитизации осталось видимое содержимое
         import re as _re
+
         text_only = _re.sub(r"<[^>]+>", "", sanitized).strip()
         if not text_only:
             raise forms.ValidationError("Текст письма не может быть пустым.")
@@ -240,6 +271,7 @@ class CampaignForm(forms.ModelForm):
             # os.path.basename защищает от path-traversal (старые браузеры слали полный путь).
             try:
                 import os as _os
+
                 raw_name = (getattr(att, "name", "") or "").strip()
                 obj.attachment_original_name = _os.path.basename(raw_name)[:255]
             except Exception:
@@ -267,30 +299,33 @@ class CampaignGenerateRecipientsForm(forms.Form):
         label="Включить основной email компании",
         required=False,
         initial=True,
-        help_text="Email из поля 'Email (основной)' в карточке компании"
+        help_text="Email из поля 'Email (основной)' в карточке компании",
     )
     include_contact_emails = forms.BooleanField(
         label="Включить email'ы контактов",
         required=False,
         initial=True,
-        help_text="Email'ы из контактов компании"
+        help_text="Email'ы из контактов компании",
     )
     contact_email_types = forms.MultipleChoiceField(
         label="Типы email'ов контактов",
         choices=[],
         required=False,
         widget=forms.CheckboxSelectMultiple(),
-        help_text="Выберите типы email'ов для включения (если включены email'ы контактов)"
+        help_text="Выберите типы email'ов для включения (если включены email'ы контактов)",
     )
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Импортируем здесь, чтобы избежать циклических зависимостей
         from companies.models import ContactEmail
+
         self.fields["contact_email_types"].choices = ContactEmail.EmailType.choices
         # По умолчанию выбираем все типы, если форма не была отправлена
         if not self.is_bound:
-            self.fields["contact_email_types"].initial = [choice[0] for choice in ContactEmail.EmailType.choices]
+            self.fields["contact_email_types"].initial = [
+                choice[0] for choice in ContactEmail.EmailType.choices
+            ]
 
 
 class CampaignRecipientAddForm(forms.Form):
@@ -298,4 +333,3 @@ class CampaignRecipientAddForm(forms.Form):
         label="Email",
         widget=forms.EmailInput(attrs={"class": "input", "placeholder": "email@example.com"}),
     )
-

@@ -39,7 +39,11 @@ def ui_globals(request):
 
     is_admin = bool(is_auth and (getattr(user, "is_superuser", False) or role == User.Role.ADMIN))
     is_group_manager = bool(
-        is_auth and (getattr(user, "is_superuser", False) or role in (User.Role.ADMIN, User.Role.GROUP_MANAGER))
+        is_auth
+        and (
+            getattr(user, "is_superuser", False)
+            or role in (User.Role.ADMIN, User.Role.GROUP_MANAGER)
+        )
     )
     is_branch_lead = bool(is_auth and role in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR))
     can_view_activity = bool(is_auth and (is_admin or is_group_manager or is_branch_lead))
@@ -90,7 +94,11 @@ def ui_globals(request):
             # Список филиалов для выпадающего списка админа
             view_as_branches = list(Branch.objects.all().order_by("name"))
             # Список пользователей для выпадающего списка админа
-            view_as_users = list(User.objects.filter(is_active=True).select_related("branch").order_by("last_name", "first_name", "username"))
+            view_as_users = list(
+                User.objects.filter(is_active=True)
+                .select_related("branch")
+                .order_by("last_name", "first_name", "username")
+            )
         else:
             # Если режим отключён, сбрасываем настройки просмотра
             view_as_branches = []
@@ -108,9 +116,12 @@ def ui_globals(request):
         # Используем реальные права выбранного пользователя
         view_is_admin = bool(view_as_user.is_superuser or view_as_user.role == User.Role.ADMIN)
         view_is_group_manager = bool(
-            view_as_user.is_superuser or view_as_user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER)
+            view_as_user.is_superuser
+            or view_as_user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER)
         )
-        view_is_branch_lead = bool(view_as_user.role in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR))
+        view_is_branch_lead = bool(
+            view_as_user.role in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR)
+        )
         view_can_view_activity = bool(view_is_admin or view_is_group_manager or view_is_branch_lead)
         view_can_view_cold_call_reports = bool(
             view_can_view_activity or view_as_user.role == User.Role.MANAGER
@@ -160,5 +171,3 @@ def ui_globals(request):
         "view_as_roles": User.Role.choices,
         "view_as_role_label": view_as_role_label,
     }
-
-

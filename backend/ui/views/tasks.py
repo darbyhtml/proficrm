@@ -50,7 +50,9 @@ from ui.views._base import (
     visible_tasks_qs,
 )
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 @login_required
 @policy_required(resource_type="page", resource="ui:tasks:list")
@@ -86,8 +88,8 @@ def task_list(request: HttpRequest) -> HttpResponse:
     show_done = (request.GET.get("show_done") or "").strip()
     if status:
         # Поддерживаем множественные статусы через запятую (например, "new,in_progress")
-        if ',' in status:
-            statuses = [s.strip() for s in status.split(',')]
+        if "," in status:
+            statuses = [s.strip() for s in status.split(",")]
             qs = qs.filter(status__in=statuses)
         else:
             qs = qs.filter(status=status)
@@ -170,14 +172,18 @@ def task_list(request: HttpRequest) -> HttpResponse:
     if date_from:
         try:
             date_from_dt = datetime.strptime(date_from, "%Y-%m-%d")
-            date_from_start = timezone.make_aware(date_from_dt.replace(hour=0, minute=0, second=0, microsecond=0))
+            date_from_start = timezone.make_aware(
+                date_from_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+            )
             qs = qs.filter(**{f"{date_field}__gte": date_from_start})
         except (ValueError, TypeError):
             pass
     if date_to:
         try:
             date_to_dt = datetime.strptime(date_to, "%Y-%m-%d")
-            date_to_end = timezone.make_aware(date_to_dt.replace(hour=23, minute=59, second=59, microsecond=999999))
+            date_to_end = timezone.make_aware(
+                date_to_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+            )
             qs = qs.filter(**{f"{date_field}__lte": date_to_end})
         except (ValueError, TypeError):
             pass
@@ -188,14 +194,12 @@ def task_list(request: HttpRequest) -> HttpResponse:
     # Текстовый поиск по названию/описанию задачи
     search_q = (request.GET.get("q") or "").strip()
     if search_q:
-        qs = qs.filter(
-            Q(title__icontains=search_q) | Q(description__icontains=search_q)
-        )
+        qs = qs.filter(Q(title__icontains=search_q) | Q(description__icontains=search_q))
 
     # Сортировка: читаем из GET или из cookies
     sort_field = (request.GET.get("sort") or "").strip()
     sort_dir = (request.GET.get("dir") or "").strip().lower()
-    
+
     # Если параметры не указаны, читаем из cookies
     if not sort_field:
         cookie_sort = request.COOKIES.get("task_list_sort", "")
@@ -207,11 +211,11 @@ def task_list(request: HttpRequest) -> HttpResponse:
                     sort_field, sort_dir = parts[0], parts[1]
             except Exception:
                 pass
-    
+
     # Валидация направления сортировки
     if sort_dir not in ("asc", "desc"):
         sort_dir = "desc"  # По умолчанию desc
-    
+
     # Применяем сортировку
     if sort_field == "due_at":
         if sort_dir == "asc":
@@ -256,6 +260,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
 
     # Пагинация с выбором per_page — сохраняется в UiUserPreference.tasks_per_page
     from ui.models import UiUserPreference
+
     _ui_prefs = UiUserPreference.load_for_user(user)
     per_page = int(_ui_prefs.tasks_per_page or 25)
     per_page_param = request.GET.get("per_page", "").strip()
@@ -275,19 +280,38 @@ def task_list(request: HttpRequest) -> HttpResponse:
     # v2-tz-badge). Ранее грузились все поля компании — N+1-риск на
     # address/work_timezone.
     qs = qs.only(
-        "id", "title", "description", "status", "due_at", "created_at",
-        "updated_at", "completed_at", "is_urgent", "type_id",
-        "assigned_to__id", "assigned_to__first_name", "assigned_to__last_name",
+        "id",
+        "title",
+        "description",
+        "status",
+        "due_at",
+        "created_at",
+        "updated_at",
+        "completed_at",
+        "is_urgent",
+        "type_id",
+        "assigned_to__id",
+        "assigned_to__first_name",
+        "assigned_to__last_name",
         "assigned_to__branch_id",
-        "company__id", "company__name", "company__address", "company__work_timezone",
-        "created_by__id", "created_by__first_name", "created_by__last_name",
-        "type__id", "type__name", "type__color", "type__icon",
+        "company__id",
+        "company__name",
+        "company__address",
+        "company__work_timezone",
+        "created_by__id",
+        "created_by__first_name",
+        "created_by__last_name",
+        "type__id",
+        "type__name",
+        "type__color",
+        "type__icon",
     )
 
     paginator = Paginator(qs, per_page)
     page = paginator.get_page(request.GET.get("page"))
     # Формируем query string без параметров page, sort, dir (sort и dir добавляются в ссылках заголовков)
     from urllib.parse import urlencode, parse_qs
+
     params = dict(request.GET)
     params.pop("page", None)
     params.pop("sort", None)
@@ -324,9 +348,11 @@ def task_list(request: HttpRequest) -> HttpResponse:
     if view_task_id:
         try:
             # Показываем модалку для задачи в любом статусе.
-            view_task = Task.objects.select_related("company", "assigned_to", "created_by", "type").filter(
-                id=view_task_id
-            ).first()
+            view_task = (
+                Task.objects.select_related("company", "assigned_to", "created_by", "type")
+                .filter(id=view_task_id)
+                .first()
+            )
             if view_task:
                 # Проверяем права на просмотр через тот же visible_tasks_qs,
                 # чтобы UI и API были консистентны.
@@ -334,7 +360,11 @@ def task_list(request: HttpRequest) -> HttpResponse:
                     view_task = None
                 else:
                     # Вычисляем просрочку в днях (только если известны дедлайн и время завершения)
-                    if view_task.due_at and view_task.completed_at and view_task.completed_at > view_task.due_at:
+                    if (
+                        view_task.due_at
+                        and view_task.completed_at
+                        and view_task.completed_at > view_task.due_at
+                    ):
                         delta = view_task.completed_at - view_task.due_at
                         view_task_overdue_days = delta.days
                     # Добавляем флаги прав
@@ -357,8 +387,9 @@ def task_list(request: HttpRequest) -> HttpResponse:
     # Сопоставляем задачи без типа с TaskType по точному совпадению названия
     # Загружаем все TaskType для сопоставления
     from tasksapp.models import TaskType
+
     task_types_by_name = {tt.name: tt for tt in TaskType.objects.all()}
-    
+
     # Применяем сопоставление к задачам на текущей странице
     # (read-only: GET не пишет в БД — backfill вынесен в data-миграцию).
     for task in page.object_list:
@@ -366,7 +397,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
             task_type = task_types_by_name[task.title]
             task.type = task_type  # type: ignore[assignment]
             task.type_id = task_type.id  # type: ignore[attr-defined]
-    
+
     # Сохраняем сортировку в cookie, если она была изменена через GET параметры
     response = render(
         request,
@@ -399,14 +430,13 @@ def task_list(request: HttpRequest) -> HttpResponse:
             "search_q": search_q,
         },
     )
-    
+
     # Устанавливаем cookie для сохранения сортировки (срок действия 1 год)
     if sort_field:
         cookie_value = f"{sort_field}:{sort_dir}"
         response.set_cookie("task_list_sort", cookie_value, max_age=31536000)  # 1 год
-    
-    return response
 
+    return response
 
 
 @login_required
@@ -418,27 +448,32 @@ def task_create(request: HttpRequest) -> HttpResponse:
 
     if request.method == "POST":
         is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
-        
+
         # Получаем выбранного пользователя из POST данных ДО создания формы
         # assigned_to может прийти в различных форматах, используем функцию очистки
         assigned_to_raw = request.POST.get("assigned_to", "")
         assigned_to_id = clean_int_id(assigned_to_raw)
-        
+
         # Логирование для отладки
         import logging
+
         logger = logging.getLogger(__name__)
-        logger.info(f"Task creation POST: assigned_to_raw={assigned_to_raw!r}, assigned_to_id={assigned_to_id!r}, user={user.id}, role={user.role}")
-        
+        logger.info(
+            f"Task creation POST: assigned_to_raw={assigned_to_raw!r}, assigned_to_id={assigned_to_id!r}, user={user.id}, role={user.role}"
+        )
+
         # Создаем форму
         form = TaskForm(request.POST)
-        
+
         # ВАЖНО: Устанавливаем queryset ДО валидации формы
         # Сначала устанавливаем queryset на всех активных пользователей, чтобы валидация прошла
         # Потом ограничим его для отображения
         # ВАЖНО: Устанавливаем queryset на всех пользователей перед валидацией,
         # чтобы Django мог принять любое значение из POST, даже если оно не в queryset
-        form.fields["assigned_to"].queryset = User.objects.filter(is_active=True).select_related("branch")
-        
+        form.fields["assigned_to"].queryset = User.objects.filter(is_active=True).select_related(
+            "branch"
+        )
+
         # Если есть выбранное значение, убеждаемся, что оно в queryset
         if assigned_to_id is not None:
             # Добавляем выбранного пользователя в queryset, если его там нет
@@ -447,9 +482,9 @@ def task_create(request: HttpRequest) -> HttpResponse:
                 form.fields["assigned_to"].queryset = User.objects.filter(
                     Q(is_active=True) | Q(id=assigned_to_id)
                 ).select_related("branch")
-        
+
         # Теперь валидируем форму
-        
+
         if form.is_valid():
             # После валидации устанавливаем правильный queryset для отображения (если форма будет перерендерена)
             # Но сначала сохраняем выбранное значение
@@ -462,10 +497,20 @@ def task_create(request: HttpRequest) -> HttpResponse:
             apply_to_org = bool(form.cleaned_data.get("apply_to_org_branches"))
             comp: Company | None = None
             if task.company_id:
-                comp = Company.objects.select_related("responsible", "branch", "head_company").filter(id=task.company_id).first()
+                comp = (
+                    Company.objects.select_related("responsible", "branch", "head_company")
+                    .filter(id=task.company_id)
+                    .first()
+                )
                 if comp and not _can_edit_company(user, comp):
                     if is_ajax:
-                        return JsonResponse({"ok": False, "error": "Нет прав на постановку задач по этой компании."}, status=403)
+                        return JsonResponse(
+                            {
+                                "ok": False,
+                                "error": "Нет прав на постановку задач по этой компании.",
+                            },
+                            status=403,
+                        )
                     messages.error(request, "Нет прав на постановку задач по этой компании.")
                     if comp:
                         return redirect("company_detail", company_id=comp.id)
@@ -477,24 +522,52 @@ def task_create(request: HttpRequest) -> HttpResponse:
             else:
                 if not task.assigned_to:
                     task.assigned_to = user
-                if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
-                    if task.assigned_to and task.assigned_to.branch_id and task.assigned_to.branch_id != user.branch_id:
+                if (
+                    user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD)
+                    and user.branch_id
+                ):
+                    if (
+                        task.assigned_to
+                        and task.assigned_to.branch_id
+                        and task.assigned_to.branch_id != user.branch_id
+                    ):
                         if is_ajax:
-                            return JsonResponse({"ok": False, "error": "Можно назначать задачи только сотрудникам своего филиала."}, status=400)
-                        messages.error(request, "Можно назначать задачи только сотрудникам своего филиала.")
+                            return JsonResponse(
+                                {
+                                    "ok": False,
+                                    "error": "Можно назначать задачи только сотрудникам своего филиала.",
+                                },
+                                status=400,
+                            )
+                        messages.error(
+                            request, "Можно назначать задачи только сотрудникам своего филиала."
+                        )
                         return redirect("task_create")
 
             # Доп. ограничение: в списках исполнителей не должно быть ADMIN/GROUP_MANAGER,
             # и назначать на них тоже нельзя.
-            if task.assigned_to and task.assigned_to.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+            if task.assigned_to and task.assigned_to.role in (
+                User.Role.ADMIN,
+                User.Role.GROUP_MANAGER,
+            ):
                 if is_ajax:
-                    return JsonResponse({"ok": False, "error": "Нельзя назначать задачи администратору или управляющему компанией."}, status=400)
-                messages.error(request, "Нельзя назначать задачи администратору или управляющему компанией.")
+                    return JsonResponse(
+                        {
+                            "ok": False,
+                            "error": "Нельзя назначать задачи администратору или управляющему компанией.",
+                        },
+                        status=400,
+                    )
+                messages.error(
+                    request, "Нельзя назначать задачи администратору или управляющему компанией."
+                )
                 return redirect("task_create")
 
             # Если включено "на все филиалы организации" — единый путь создания по целевому списку компаний
             if apply_to_org and comp:
-                target_companies = resolve_target_companies(selected_company=comp, apply_to_org_branches=True)
+                target_companies = resolve_target_companies(
+                    selected_company=comp, apply_to_org_branches=True
+                )
 
                 # Доп. защита от дублей: seen_ids на уровне цикла
                 seen_ids: set = set()
@@ -511,7 +584,11 @@ def task_create(request: HttpRequest) -> HttpResponse:
                         continue
 
                     # Определяем статус: если создатель назначает задачу себе, то "В работе", иначе "Новая"
-                    initial_status = Task.Status.IN_PROGRESS if task.assigned_to_id == user.id else Task.Status.NEW
+                    initial_status = (
+                        Task.Status.IN_PROGRESS
+                        if task.assigned_to_id == user.id
+                        else Task.Status.NEW
+                    )
 
                     # Защита от случайного дублирования задач при повторной отправке формы:
                     # если за последние несколько секунд уже есть такая же задача по этой компании,
@@ -576,7 +653,7 @@ def task_create(request: HttpRequest) -> HttpResponse:
             # Заголовок задачи берём из выбранного типа/статуса
             if task.type:
                 task.title = task.type.name
-            
+
             # Определяем статус задачи:
             # - Если создатель назначает задачу себе, то статус "В работе" (IN_PROGRESS)
             # - Если РОП/директор/управляющий/админ создаёт задачу кому-то другому, то статус "Новая" (NEW)
@@ -603,12 +680,14 @@ def task_create(request: HttpRequest) -> HttpResponse:
             existing_task = duplicate_qs.first()
             if existing_task:
                 if is_ajax:
-                    return JsonResponse({
-                        "ok": True,
-                        "task_id": str(existing_task.id),
-                        "message": "Похожая задача уже была создана недавно.",
-                        "duplicate": True,
-                    })
+                    return JsonResponse(
+                        {
+                            "ok": True,
+                            "task_id": str(existing_task.id),
+                            "message": "Похожая задача уже была создана недавно.",
+                            "duplicate": True,
+                        }
+                    )
                 messages.info(request, "Похожая задача уже была создана недавно.")
                 return redirect("task_list")
 
@@ -642,16 +721,19 @@ def task_create(request: HttpRequest) -> HttpResponse:
                 )
             # Если AJAX запрос - возвращаем JSON
             if is_ajax:
-                return JsonResponse({
-                    "ok": True,
-                    "task_id": str(task.id),
-                    "message": "Задача создана успешно.",
-                })
+                return JsonResponse(
+                    {
+                        "ok": True,
+                        "task_id": str(task.id),
+                        "message": "Задача создана успешно.",
+                    }
+                )
             return redirect("task_list")
         else:
             # Форма не валидна
             # Логирование для отладки
             import logging
+
             logger = logging.getLogger(__name__)
             # PII-safe: логируем только список полей с ошибками, без содержимого POST и form.errors (могут содержать имена/email).
             logger.warning(
@@ -659,11 +741,11 @@ def task_create(request: HttpRequest) -> HttpResponse:
                 list(form.errors.keys()),
                 assigned_to_id,
             )
-            
+
             # Устанавливаем queryset для assigned_to с учетом выбранного значения
             # Это нужно для того, чтобы форма могла быть отрендерена с ошибками
             _set_assigned_to_queryset(form, user, assigned_to_id=assigned_to_id)
-            
+
             if is_ajax:
                 # Собираем ошибки валидации (в JSON отдаём ЧИСТЫЕ строки без "['...']").
                 # Django ValidationError при str() даёт "['msg']", поэтому разворачиваем messages.
@@ -695,21 +777,27 @@ def task_create(request: HttpRequest) -> HttpResponse:
                             s = s[2:-2]
                         cleaned.append(s)
                     errors[field] = cleaned
-                return JsonResponse({
-                    "ok": False,
-                    "error": "Ошибки валидации формы.",
-                    "errors": errors
-                }, status=400)
+                return JsonResponse(
+                    {"ok": False, "error": "Ошибки валидации формы.", "errors": errors}, status=400
+                )
             # Для не-AJAX запросов продолжаем рендеринг формы с ошибками
     else:
         initial = {"assigned_to": user}
         if company_id:
-            comp = Company.objects.select_related("responsible", "branch", "head_company").filter(id=company_id).first()
+            comp = (
+                Company.objects.select_related("responsible", "branch", "head_company")
+                .filter(id=company_id)
+                .first()
+            )
             if comp and _can_edit_company(user, comp):
                 initial["company"] = company_id
                 # если есть организация (головная или филиалы), включим флажок по умолчанию
-                head = (comp.head_company or comp)
-                has_org = Company.objects.filter(Q(id=head.id) | Q(head_company_id=head.id)).exclude(id=comp.id).exists()
+                head = comp.head_company or comp
+                has_org = (
+                    Company.objects.filter(Q(id=head.id) | Q(head_company_id=head.id))
+                    .exclude(id=comp.id)
+                    .exists()
+                )
                 if has_org:
                     initial["apply_to_org_branches"] = True
             else:
@@ -719,7 +807,10 @@ def task_create(request: HttpRequest) -> HttpResponse:
     # Выбор компании: только те, которые пользователь может редактировать
     # Для модального окна ограничиваем количество (для быстрой загрузки)
     # Полный список можно будет искать через автокомплит (TODO)
-    is_modal = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.GET.get("modal") == "1"
+    is_modal = (
+        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or request.GET.get("modal") == "1"
+    )
     company_qs = _editable_company_qs(user).order_by("name")
     if is_modal:
         # В модальном окне показываем только первые 200 компаний для быстрой загрузки
@@ -732,10 +823,9 @@ def task_create(request: HttpRequest) -> HttpResponse:
                 limited_qs = company_qs.exclude(id=company_id)[:199]
                 # Объединяем с выбранной компанией и сортируем
                 from django.db.models import Case, When, IntegerField
+
                 company_qs = (
-                    Company.objects.filter(
-                        Q(id__in=[c.id for c in limited_qs]) | Q(id=company_id)
-                    )
+                    Company.objects.filter(Q(id__in=[c.id for c in limited_qs]) | Q(id=company_id))
                     .annotate(
                         custom_order=Case(
                             When(id=company_id, then=0),
@@ -759,17 +849,22 @@ def task_create(request: HttpRequest) -> HttpResponse:
     form.fields["type"].queryset = TaskType.objects.only("id", "name").order_by("name")
 
     # Если запрос на модалку (через AJAX или параметр modal=1)
-    if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.GET.get("modal") == "1":
+    if (
+        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or request.GET.get("modal") == "1"
+    ):
         return render(request, "ui/task_create_modal.html", {"form": form})
-    
+
     return render(request, "ui/task_create.html", {"form": form})
 
 
-def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: int | None = None) -> None:
+def _set_assigned_to_queryset(
+    form: "TaskForm", user: User, assigned_to_id: int | None = None
+) -> None:
     """
     Устанавливает queryset для поля assigned_to в зависимости от роли пользователя.
     Также убеждается, что выбранное значение (если есть) включено в queryset.
-    
+
     Args:
         form: Форма TaskForm
         user: Текущий пользователь
@@ -777,25 +872,25 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: int 
     """
     # Получаем текущее выбранное значение (если есть)
     current_user_id: int | None = None
-    
+
     # Если передан assigned_to_id (для POST запросов), используем его
     if assigned_to_id is not None:
         current_user_id = assigned_to_id
-    
+
     # Если не передан, проверяем initial (для GET запросов)
-    if not current_user_id and hasattr(form, 'initial') and 'assigned_to' in form.initial:
-        assigned_to_value = form.initial['assigned_to']
+    if not current_user_id and hasattr(form, "initial") and "assigned_to" in form.initial:
+        assigned_to_value = form.initial["assigned_to"]
         if isinstance(assigned_to_value, User):
             current_user_id = str(assigned_to_value.id)
         elif assigned_to_value:
             current_user_id = clean_int_id(assigned_to_value)
-    
+
     # Если все еще нет, проверяем data (для POST запросов как fallback)
-    if not current_user_id and hasattr(form, 'data') and form.data:
-        assigned_to_value = form.data.get('assigned_to', '')
+    if not current_user_id and hasattr(form, "data") and form.data:
+        assigned_to_value = form.data.get("assigned_to", "")
         if assigned_to_value:
             current_user_id = clean_int_id(assigned_to_value)
-    
+
     # Общие исключения для списков исполнителей:
     # - не показываем "Без филиала" (branch is null)
     # - не показываем пользователей с ролью ADMIN и GROUP_MANAGER
@@ -825,19 +920,19 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: int 
     else:
         # Для остальных ролей используем get_transfer_targets (только менеджеры, директора, РОП)
         from companies.permissions import get_transfer_targets
+
         base_queryset = (
-            get_transfer_targets(user)
-            .exclude(role__in=exclude_roles)
-            .exclude(branch__isnull=True)
+            get_transfer_targets(user).exclude(role__in=exclude_roles).exclude(branch__isnull=True)
         )
-    
+
     # Если есть выбранное значение и его нет в queryset, добавляем его
     if current_user_id is not None and not base_queryset.filter(id=current_user_id).exists():
         # Добавляем выбранного пользователя в queryset
         from django.db.models import Case, When, IntegerField
+
         queryset = (
             User.objects.filter(
-                Q(id__in=base_queryset.values_list('id', flat=True)) | Q(id=current_user_id)
+                Q(id__in=base_queryset.values_list("id", flat=True)) | Q(id=current_user_id)
             )
             .annotate(
                 custom_order=Case(
@@ -853,7 +948,7 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: int 
         queryset = base_queryset
     else:
         queryset = base_queryset
-    
+
     # Устанавливаем queryset
     form.fields["assigned_to"].queryset = queryset
 
@@ -866,10 +961,10 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: int 
 def _create_note_from_task(task: Task, user: User) -> CompanyNote:
     """Создает заметку из задачи с информацией о статусе и описании."""
     from companies.models import CompanyNote
-    
+
     # Формируем текст заметки
     note_parts = []
-    
+
     # Задача (тип задачи)
     if task.type:
         status_text = f"Задача: {task.type.name}"
@@ -878,24 +973,24 @@ def _create_note_from_task(task: Task, user: User) -> CompanyNote:
     else:
         status_text = "Задача: Без типа"
     note_parts.append(status_text)
-    
+
     # Описание задачи
     if task.description:
         note_parts.append(f"\n{task.description}")
-    
+
     # Дедлайн, если был
     if task.due_at:
         note_parts.append(f"\nДедлайн: {task.due_at.strftime('%d.%m.%Y %H:%M')}")
-    
+
     note_text = "\n".join(note_parts)
-    
+
     # Создаем заметку
     note = CompanyNote.objects.create(
         company=task.company,
         author=user,
         text=note_text,
     )
-    
+
     return note
 
 
@@ -904,12 +999,14 @@ def _create_note_from_task(task: Task, user: User) -> CompanyNote:
 def task_delete(request: HttpRequest, task_id) -> HttpResponse:
     user: User = request.user
     try:
-        task = Task.objects.select_related("company", "assigned_to", "created_by", "type").get(id=task_id)
+        task = Task.objects.select_related("company", "assigned_to", "created_by", "type").get(
+            id=task_id
+        )
     except Task.DoesNotExist:
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return JsonResponse({"error": "Задача не найдена."}, status=404)
         raise Http404("Задача не найдена")
-    
+
     if not _can_delete_task_ui(user, task):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return JsonResponse({"error": "Нет прав на удаление этой задачи."}, status=403)
@@ -920,6 +1017,7 @@ def task_delete(request: HttpRequest, task_id) -> HttpResponse:
         save_to_notes = request.POST.get("save_to_notes") == "1"
 
         from tasksapp.services import TaskService
+
         try:
             result = TaskService.delete_task(task=task, user=user, save_to_notes=save_to_notes)
         except Exception as e:
@@ -935,11 +1033,14 @@ def task_delete(request: HttpRequest, task_id) -> HttpResponse:
             messages.success(request, f"Задача «{title}» удалена.")
 
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            return JsonResponse({
-                "success": True,
-                "note_created": result["note_created"],
-                "message": f"Задача «{title}» удалена." + (" Заметка создана." if result["note_created"] else ""),
-            })
+            return JsonResponse(
+                {
+                    "success": True,
+                    "note_created": result["note_created"],
+                    "message": f"Задача «{title}» удалена."
+                    + (" Заметка создана." if result["note_created"] else ""),
+                }
+            )
 
         return redirect(request.META.get("HTTP_REFERER") or "task_list")
 
@@ -969,8 +1070,15 @@ def task_bulk_reassign(request: HttpRequest) -> HttpResponse:
         return redirect("task_list")
 
     new_assigned = get_object_or_404(User, id=new_assigned_id, is_active=True)
-    if new_assigned.role not in (User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR):
-        messages.error(request, "Нового ответственного можно выбрать только из: менеджер / РОП / директор филиала.")
+    if new_assigned.role not in (
+        User.Role.MANAGER,
+        User.Role.SALES_HEAD,
+        User.Role.BRANCH_DIRECTOR,
+    ):
+        messages.error(
+            request,
+            "Нового ответственного можно выбрать только из: менеджер / РОП / директор филиала.",
+        )
         return redirect("task_list")
 
     # apply_mode=filtered поддерживается на уровне backend (служебно),
@@ -1043,9 +1151,7 @@ def task_bulk_reassign(request: HttpRequest) -> HttpResponse:
             messages.error(request, "Выберите хотя бы одну задачу (чекбоксы слева).")
             return redirect("task_list")
         # Только задачи, видимые пользователю (на случай подмены task_ids в POST).
-        ids = list(
-            visible_tasks_qs(user).filter(id__in=raw_ids).values_list("id", flat=True)
-        )
+        ids = list(visible_tasks_qs(user).filter(id__in=raw_ids).values_list("id", flat=True))
         if not ids:
             messages.error(request, "Нет доступа к выбранным задачам.")
             return redirect("task_list")
@@ -1059,7 +1165,9 @@ def task_bulk_reassign(request: HttpRequest) -> HttpResponse:
         qs_to_update = Task.objects.filter(id__in=ids)
         updated = qs_to_update.update(assigned_to=new_assigned, updated_at=now_ts)
 
-    messages.success(request, f"Переназначено задач: {updated}. Новый ответственный: {new_assigned}.")
+    messages.success(
+        request, f"Переназначено задач: {updated}. Новый ответственный: {new_assigned}."
+    )
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.UPDATE,
@@ -1347,7 +1455,10 @@ def task_bulk_reschedule(request: HttpRequest) -> HttpResponse:
         else:
             h, m = 17, 50
         new_due_at = timezone.make_aware(datetime.combine(local_dt.date(), datetime_time(h, m, 0)))
-        messages.info(request, f"Время скорректировано в рабочий интервал 8:00–17:50. Применено: {new_due_at.strftime('%d.%m.%Y %H:%M')}.")
+        messages.info(
+            request,
+            f"Время скорректировано в рабочий интервал 8:00–17:50. Применено: {new_due_at.strftime('%d.%m.%Y %H:%M')}.",
+        )
 
     apply_mode = (request.POST.get("apply_mode") or "selected").strip().lower()
 
@@ -1420,9 +1531,7 @@ def task_bulk_reschedule(request: HttpRequest) -> HttpResponse:
             return redirect("task_list")
         requested_count = len(raw_ids)
         # Только задачи, видимые пользователю
-        ids = list(
-            visible_tasks_qs(user).filter(id__in=raw_ids).values_list("id", flat=True)
-        )
+        ids = list(visible_tasks_qs(user).filter(id__in=raw_ids).values_list("id", flat=True))
         if not ids:
             try:
                 logger.warning(
@@ -1444,13 +1553,12 @@ def task_bulk_reschedule(request: HttpRequest) -> HttpResponse:
         cap = None
 
     # Сохраняем старые due_at для возможности отмены переноса из журнала действий
-    task_due_before = list(
-        Task.objects.filter(id__in=ids).values_list("id", "due_at")
-    )
+    task_due_before = list(Task.objects.filter(id__in=ids).values_list("id", "due_at"))
     task_due_before = [
-        {"id": str(t[0]), "due_at": t[1].isoformat() if t[1] else None}
-        for t in task_due_before
-    ][:5000]  # ограничение размера meta
+        {"id": str(t[0]), "due_at": t[1].isoformat() if t[1] else None} for t in task_due_before
+    ][
+        :5000
+    ]  # ограничение размера meta
 
     target_count = len(ids)
     now_ts = timezone.now()
@@ -1565,8 +1673,8 @@ def task_bulk_reschedule_preview(request: HttpRequest) -> JsonResponse:
         except Exception:
             pass
 
-    sample_qs = Task.objects.filter(id__in=ids).select_related("company").order_by(
-        "due_at", "-created_at"
+    sample_qs = (
+        Task.objects.filter(id__in=ids).select_related("company").order_by("due_at", "-created_at")
     )
     sample = []
     for t in sample_qs[:6]:
@@ -1682,7 +1790,10 @@ def task_bulk_reschedule_undo(request: HttpRequest, event_id: UUID) -> HttpRespo
     if restored:
         messages.success(request, f"Перенос отменён: восстановлены даты у {restored} задач.")
     else:
-        messages.warning(request, "Перенос отменён, но ни у одной задачи дата не изменилась (возможно, задачи удалены).")
+        messages.warning(
+            request,
+            "Перенос отменён, но ни у одной задачи дата не изменилась (возможно, задачи удалены).",
+        )
     return redirect("settings_activity")
 
 
@@ -1694,7 +1805,9 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
 
     user: User = request.user
     try:
-        task = Task.objects.select_related("company", "company__responsible", "company__branch", "assigned_to", "type").get(id=task_id)
+        task = Task.objects.select_related(
+            "company", "company__responsible", "company__branch", "assigned_to", "type"
+        ).get(id=task_id)
     except Task.DoesNotExist:
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return JsonResponse({"error": "Задача не найдена."}, status=404)
@@ -1719,13 +1832,24 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
     if user.role == User.Role.MANAGER:
         if task.created_by_id != user.id and task.assigned_to_id != user.id:
             if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-                return JsonResponse({"error": "Менеджер может менять статус только своих задач (созданных им или назначенных ему)."}, status=403)
-            messages.error(request, "Менеджер может менять статус только своих задач (созданных им или назначенных ему).")
+                return JsonResponse(
+                    {
+                        "error": "Менеджер может менять статус только своих задач (созданных им или назначенных ему)."
+                    },
+                    status=403,
+                )
+            messages.error(
+                request,
+                "Менеджер может менять статус только своих задач (созданных им или назначенных ему).",
+            )
             return redirect("task_list")
 
-    save_to_notes = request.POST.get("save_to_notes") == "1" if new_status == Task.Status.DONE else False
+    save_to_notes = (
+        request.POST.get("save_to_notes") == "1" if new_status == Task.Status.DONE else False
+    )
 
     from tasksapp.services import TaskService
+
     try:
         result = TaskService.set_status(
             task=task, user=user, new_status=new_status, save_to_notes=save_to_notes
@@ -1742,12 +1866,15 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
         messages.success(request, "Задача выполнена. Заметка создана.")
 
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-        return JsonResponse({
-            "success": True,
-            "note_created": result["note_created"],
-            "message": "Задача выполнена." + (" Заметка создана." if result["note_created"] else ""),
-            "redirect": request.META.get("HTTP_REFERER") or "/tasks/",
-        })
+        return JsonResponse(
+            {
+                "success": True,
+                "note_created": result["note_created"],
+                "message": "Задача выполнена."
+                + (" Заметка создана." if result["note_created"] else ""),
+                "redirect": request.META.get("HTTP_REFERER") or "/tasks/",
+            }
+        )
 
     return redirect(request.META.get("HTTP_REFERER") or "/tasks/")
 
@@ -1772,20 +1899,23 @@ def task_add_comment(request: HttpRequest, task_id) -> HttpResponse:
 
     text = request.POST.get("text") or ""
     from tasksapp.services import TaskService
+
     try:
         comment = TaskService.add_comment(task=task, user=user, text=text)
     except ValueError as e:
         return JsonResponse({"error": str(e)}, status=400)
 
-    return JsonResponse({
-        "ok": True,
-        "comment": {
-            "id": comment.id,
-            "author": str(user),
-            "text": comment.text,
-            "created_at": comment.created_at.strftime("%d.%m.%Y %H:%M"),
-        },
-    })
+    return JsonResponse(
+        {
+            "ok": True,
+            "comment": {
+                "id": comment.id,
+                "author": str(user),
+                "text": comment.text,
+                "created_at": comment.created_at.strftime("%d.%m.%Y %H:%M"),
+            },
+        }
+    )
 
 
 @login_required
@@ -1802,17 +1932,36 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
     # Сначала загружаем задачу, чтобы проверить права на конкретную задачу
     task = get_object_or_404(
         Task.objects.select_related("company", "assigned_to", "created_by", "type").only(
-            "id", "title", "description", "status", "due_at", "created_at", "completed_at",
-            "is_urgent", "recurrence_rrule",
-            "company_id", "assigned_to_id", "created_by_id", "type_id",
-            "company__id", "company__name", "company__responsible_id",
-            "assigned_to__id", "assigned_to__first_name", "assigned_to__last_name",
-            "created_by__id", "created_by__first_name", "created_by__last_name",
-            "type__id", "type__name", "type__color", "type__icon"
+            "id",
+            "title",
+            "description",
+            "status",
+            "due_at",
+            "created_at",
+            "completed_at",
+            "is_urgent",
+            "recurrence_rrule",
+            "company_id",
+            "assigned_to_id",
+            "created_by_id",
+            "type_id",
+            "company__id",
+            "company__name",
+            "company__responsible_id",
+            "assigned_to__id",
+            "assigned_to__first_name",
+            "assigned_to__last_name",
+            "created_by__id",
+            "created_by__first_name",
+            "created_by__last_name",
+            "type__id",
+            "type__name",
+            "type__color",
+            "type__icon",
         ),
-        id=task_id
+        id=task_id,
     )
-    
+
     # Загружаем responsible_id компании напрямую, если company не загружен
     company_responsible_id = None
     if task.company_id:
@@ -1822,10 +1971,14 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
                 company_responsible_id = getattr(company, "responsible_id", None)
             # Если company не загружен через select_related, загружаем напрямую
             if company_responsible_id is None:
-                company_responsible_id = Company.objects.filter(id=task.company_id).values_list("responsible_id", flat=True).first()
+                company_responsible_id = (
+                    Company.objects.filter(id=task.company_id)
+                    .values_list("responsible_id", flat=True)
+                    .first()
+                )
         except Exception:
             pass
-    
+
     # Проверяем права на просмотр конкретной задачи ПЕРЕД проверкой policy
     # Это позволяет пользователям видеть задачи, к которым у них есть доступ по бизнес-логике
     can_view = False
@@ -1834,8 +1987,8 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
     elif user.role == User.Role.MANAGER:
         # Менеджер может просматривать задачи, которые он создал или которые назначены ему
         can_view = bool(
-            (task.assigned_to_id and task.assigned_to_id == user.id) or
-            (task.created_by_id and task.created_by_id == user.id)
+            (task.assigned_to_id and task.assigned_to_id == user.id)
+            or (task.created_by_id and task.created_by_id == user.id)
         )
         # Также менеджер может просматривать задачи по компаниям, за которые он ответственный
         if not can_view and company_responsible_id == user.id:
@@ -1850,7 +2003,7 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
             can_view = True
         elif task.assigned_to_id and getattr(task.assigned_to, "branch_id", None) == user.branch_id:
             can_view = True
-    
+
     # Ответственный за компанию может просматривать задачи по своей компании (для всех ролей)
     if not can_view and company_responsible_id == user.id:
         can_view = True
@@ -1869,6 +2022,7 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
 
     if not can_view:
         from django.core.exceptions import PermissionDenied
+
         raise PermissionDenied()
 
     # Вычисляем просрочку в днях (только если известны дедлайн и время завершения)
@@ -1876,32 +2030,37 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
     if task.due_at and task.completed_at and task.completed_at > task.due_at:
         delta = task.completed_at - task.due_at
         view_task_overdue_days = delta.days
-    
+
     # Добавляем флаги прав
     task.can_edit_task = _can_edit_task_ui(user, task)  # type: ignore[attr-defined]
     task.can_manage_status = _can_manage_task_status_ui(user, task)  # type: ignore[attr-defined]
-    
+
     # Сопоставляем задачу с TaskType если нужно
     if not task.type and task.title:
         from tasksapp.models import TaskType
+
         task_type = TaskType.objects.filter(name=task.title).first()
         if task_type:
             task.type = task_type  # type: ignore[assignment]
             task.type_id = task_type.id  # type: ignore[attr-defined]
-    
+
     now = timezone.now()
     local_now = timezone.localtime(now)
-    
+
     comments = list(task.comments.select_related("author").all())
     events = list(task.events.select_related("actor").all())
 
-    return render(request, "ui/task_view_modal.html", {
-        "view_task": task,
-        "view_task_overdue_days": view_task_overdue_days,
-        "local_now": local_now,
-        "task_comments": comments,
-        "task_events": events,
-    })
+    return render(
+        request,
+        "ui/task_view_modal.html",
+        {
+            "view_task": task,
+            "view_task_overdue_days": view_task_overdue_days,
+            "local_now": local_now,
+            "task_comments": comments,
+            "task_events": events,
+        },
+    )
 
 
 @login_required
@@ -1911,19 +2070,39 @@ def task_edit(request: HttpRequest, task_id) -> HttpResponse:
     user: User = request.user
     task = get_object_or_404(
         Task.objects.select_related("company", "assigned_to", "created_by", "type").only(
-            "id", "title", "description", "status", "due_at", "created_at", "completed_at", "recurrence_rrule",
-            "company_id", "assigned_to_id", "created_by_id", "type_id",
-            "company__id", "company__name",
-            "assigned_to__id", "assigned_to__first_name", "assigned_to__last_name",
-            "created_by__id", "created_by__first_name", "created_by__last_name",
-            "type__id", "type__name", "type__color", "type__icon"
+            "id",
+            "title",
+            "description",
+            "status",
+            "due_at",
+            "created_at",
+            "completed_at",
+            "recurrence_rrule",
+            "company_id",
+            "assigned_to_id",
+            "created_by_id",
+            "type_id",
+            "company__id",
+            "company__name",
+            "assigned_to__id",
+            "assigned_to__first_name",
+            "assigned_to__last_name",
+            "created_by__id",
+            "created_by__first_name",
+            "created_by__last_name",
+            "type__id",
+            "type__name",
+            "type__color",
+            "type__icon",
         ),
-        id=task_id
+        id=task_id,
     )
 
     if not _can_edit_task_ui(user, task):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            return JsonResponse({"ok": False, "error": "Нет прав на редактирование этой задачи."}, status=403)
+            return JsonResponse(
+                {"ok": False, "error": "Нет прав на редактирование этой задачи."}, status=403
+            )
         messages.error(request, "Нет прав на редактирование этой задачи.")
         return redirect("task_list")
     can_delete_task = _can_delete_task_ui(user, task)
@@ -1940,7 +2119,9 @@ def task_edit(request: HttpRequest, task_id) -> HttpResponse:
             # История: дедлайн изменился?
             if old_due_at != updated_task.due_at:
                 old_str = old_due_at.strftime("%d.%m.%Y %H:%M") if old_due_at else "—"
-                new_str = updated_task.due_at.strftime("%d.%m.%Y %H:%M") if updated_task.due_at else "—"
+                new_str = (
+                    updated_task.due_at.strftime("%d.%m.%Y %H:%M") if updated_task.due_at else "—"
+                )
                 TaskEvent.objects.create(
                     task=updated_task,
                     actor=user,
@@ -1958,38 +2139,53 @@ def task_edit(request: HttpRequest, task_id) -> HttpResponse:
             )
             # Если AJAX запрос - возвращаем JSON
             if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-                return JsonResponse({
-                    "ok": True,
-                    "task_id": str(updated_task.id),
-                    "title": updated_task.title or (updated_task.type.name if updated_task.type else ""),
-                    "description": updated_task.description or "",
-                    "type_id": updated_task.type_id,
-                    "type_name": updated_task.type.name if updated_task.type else "",
-                    "type_icon": updated_task.type.icon if updated_task.type else "",
-                    "type_color": updated_task.type.color if updated_task.type else "",
-                    "due_at": updated_task.due_at.isoformat() if updated_task.due_at else None,
-                })
+                return JsonResponse(
+                    {
+                        "ok": True,
+                        "task_id": str(updated_task.id),
+                        "title": updated_task.title
+                        or (updated_task.type.name if updated_task.type else ""),
+                        "description": updated_task.description or "",
+                        "type_id": updated_task.type_id,
+                        "type_name": updated_task.type.name if updated_task.type else "",
+                        "type_icon": updated_task.type.icon if updated_task.type else "",
+                        "type_color": updated_task.type.color if updated_task.type else "",
+                        "due_at": updated_task.due_at.isoformat() if updated_task.due_at else None,
+                    }
+                )
             messages.success(request, "Задача обновлена.")
             # Редирект на предыдущую страницу или список задач
             referer = request.META.get("HTTP_REFERER", "/tasks/")
             if "/companies/" in referer:
                 # Если редактировали из карточки компании, возвращаемся туда
                 import re
+
                 match = re.search(r"/companies/([a-f0-9-]+)/", referer)
                 if match:
                     return redirect("company_detail", company_id=match.group(1))
             return redirect("task_list")
     else:
         form = TaskEditForm(instance=task)
-    
+
     # Оптимизация queryset для типа задачи (используем only() для загрузки только необходимых полей)
     form.fields["type"].queryset = TaskType.objects.only("id", "name").order_by("name")
-    
-    # Если запрос на модалку (через AJAX или параметр modal=1)
-    if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.GET.get("modal") == "1":
-        return render(request, "ui/task_edit_modal.html", {"form": form, "task": task, "can_delete_task": can_delete_task})
 
-    return render(request, "ui/task_edit.html", {"form": form, "task": task, "can_delete_task": can_delete_task})
+    # Если запрос на модалку (через AJAX или параметр modal=1)
+    if (
+        request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or request.GET.get("modal") == "1"
+    ):
+        return render(
+            request,
+            "ui/task_edit_modal.html",
+            {"form": form, "task": task, "can_delete_task": can_delete_task},
+        )
+
+    return render(
+        request,
+        "ui/task_edit.html",
+        {"form": form, "task": task, "can_delete_task": can_delete_task},
+    )
 
 
 # _require_admin moved to crm.utils.require_admin
@@ -2000,6 +2196,7 @@ def task_edit(request: HttpRequest, task_id) -> HttpResponse:
 #  Возвращают либо чистый HTML-фрагмент (GET ?partial=1), либо JSON на POST.
 #  Отделены от v1 endpoints, чтобы не ломать текущие /tasks/create/ и /tasks/<id>/view/.
 # ============================================================================
+
 
 def _v2_task_create_get(request: HttpRequest) -> HttpResponse:
     """GET v2 partial: отдаёт форму создания задачи без заголовка/RRULE.
@@ -2013,11 +2210,15 @@ def _v2_task_create_get(request: HttpRequest) -> HttpResponse:
     _set_assigned_to_queryset(form, user)
     task_types = list(TaskType.objects.only("id", "name", "icon", "color").all())
     preselect_company_id = (request.GET.get("company") or "").strip()
-    return render(request, "ui/_v2/task_create_partial.html", {
-        "form": form,
-        "task_types": task_types,
-        "preselect_company_id": preselect_company_id,
-    })
+    return render(
+        request,
+        "ui/_v2/task_create_partial.html",
+        {
+            "form": form,
+            "task_types": task_types,
+            "preselect_company_id": preselect_company_id,
+        },
+    )
 
 
 @login_required
@@ -2035,7 +2236,9 @@ def task_create_v2_partial(request: HttpRequest) -> HttpResponse:
 
     # POST
     form = TaskForm(request.POST)
-    form.fields["assigned_to"].queryset = User.objects.filter(is_active=True).select_related("branch")
+    form.fields["assigned_to"].queryset = User.objects.filter(is_active=True).select_related(
+        "branch"
+    )
 
     assigned_to_id = clean_int_id(request.POST.get("assigned_to", ""))
     if assigned_to_id is not None:
@@ -2047,11 +2250,15 @@ def task_create_v2_partial(request: HttpRequest) -> HttpResponse:
     if not form.is_valid():
         # Возвращаем HTML-фрагмент формы с ошибками (status 422) — v2-modal.js перерисует тело
         task_types = list(TaskType.objects.only("id", "name", "icon", "color").all())
-        html = render(request, "ui/_v2/task_create_partial.html", {
-            "form": form,
-            "task_types": task_types,
-            "preselect_company_id": (request.POST.get("company") or "").strip(),
-        }).content.decode("utf-8")
+        html = render(
+            request,
+            "ui/_v2/task_create_partial.html",
+            {
+                "form": form,
+                "task_types": task_types,
+                "preselect_company_id": (request.POST.get("company") or "").strip(),
+            },
+        ).content.decode("utf-8")
         return HttpResponse(html, status=422)
 
     task: Task = form.save(commit=False)
@@ -2063,9 +2270,15 @@ def task_create_v2_partial(request: HttpRequest) -> HttpResponse:
 
     comp = None
     if task.company_id:
-        comp = Company.objects.select_related("responsible", "branch").filter(id=task.company_id).first()
+        comp = (
+            Company.objects.select_related("responsible", "branch")
+            .filter(id=task.company_id)
+            .first()
+        )
         if comp and not _can_edit_company(user, comp):
-            return JsonResponse({"ok": False, "error": "Нет прав на постановку задач по этой компании."}, status=403)
+            return JsonResponse(
+                {"ok": False, "error": "Нет прав на постановку задач по этой компании."}, status=403
+            )
 
     # RBAC
     if user.role == User.Role.MANAGER:
@@ -2074,11 +2287,24 @@ def task_create_v2_partial(request: HttpRequest) -> HttpResponse:
         if not task.assigned_to:
             task.assigned_to = user
         if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
-            if task.assigned_to and task.assigned_to.branch_id and task.assigned_to.branch_id != user.branch_id:
-                return JsonResponse({"ok": False, "error": "Можно назначать задачи только сотрудникам своего подразделения."}, status=400)
+            if (
+                task.assigned_to
+                and task.assigned_to.branch_id
+                and task.assigned_to.branch_id != user.branch_id
+            ):
+                return JsonResponse(
+                    {
+                        "ok": False,
+                        "error": "Можно назначать задачи только сотрудникам своего подразделения.",
+                    },
+                    status=400,
+                )
 
     if task.assigned_to and task.assigned_to.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
-        return JsonResponse({"ok": False, "error": "Нельзя назначать задачи администратору или управляющему."}, status=400)
+        return JsonResponse(
+            {"ok": False, "error": "Нельзя назначать задачи администратору или управляющему."},
+            status=400,
+        )
 
     # Статус: сам себе → «В работе», иначе «Новая»
     task.status = Task.Status.IN_PROGRESS if task.assigned_to_id == user.id else Task.Status.NEW
@@ -2086,18 +2312,25 @@ def task_create_v2_partial(request: HttpRequest) -> HttpResponse:
 
     try:
         log_event(
-            actor=user, verb="task.create", resource_type="task", resource_id=str(task.id),
-            target_user=task.assigned_to, company=task.company, payload={"title": task.title},
+            actor=user,
+            verb="task.create",
+            resource_type="task",
+            resource_id=str(task.id),
+            target_user=task.assigned_to,
+            company=task.company,
+            payload={"title": task.title},
         )
     except Exception:
         logger.exception("task_create_v2_partial: log_event failed")
 
-    return JsonResponse({
-        "ok": True,
-        "toast": "Задача создана",
-        "id": str(task.id),
-        "close": True,
-    })
+    return JsonResponse(
+        {
+            "ok": True,
+            "toast": "Задача создана",
+            "id": str(task.id),
+            "close": True,
+        }
+    )
 
 
 def _v2_load_task_for_user(user: User, task_id) -> Task:
@@ -2120,9 +2353,16 @@ def _v2_load_task_for_user(user: User, task_id) -> Task:
             task.created_by_id == user.id
             or task.assigned_to_id == user.id
             or (task.company_id and getattr(task.company, "branch_id", None) == user.branch_id)
-            or (task.assigned_to_id and getattr(task.assigned_to, "branch_id", None) == user.branch_id)
+            or (
+                task.assigned_to_id
+                and getattr(task.assigned_to, "branch_id", None) == user.branch_id
+            )
         )
-    if not can_view and task.company_id and getattr(task.company, "responsible_id", None) == user.id:
+    if (
+        not can_view
+        and task.company_id
+        and getattr(task.company, "responsible_id", None) == user.id
+    ):
         can_view = True
     if not can_view:
         raise PermissionDenied()
@@ -2148,13 +2388,17 @@ def task_view_v2_partial(request: HttpRequest, task_id) -> HttpResponse:
     comments = list(task.comments.select_related("author").all())
     events = list(task.events.select_related("actor").all())
 
-    return render(request, "ui/_v2/task_view_partial.html", {
-        "view_task": task,
-        "view_task_overdue_days": view_task_overdue_days,
-        "local_now": local_now,
-        "task_comments": comments,
-        "task_events": events,
-    })
+    return render(
+        request,
+        "ui/_v2/task_view_partial.html",
+        {
+            "view_task": task,
+            "view_task_overdue_days": view_task_overdue_days,
+            "local_now": local_now,
+            "task_comments": comments,
+            "task_events": events,
+        },
+    )
 
 
 @login_required
@@ -2174,21 +2418,29 @@ def task_edit_v2_partial(request: HttpRequest, task_id) -> HttpResponse:
     if request.method == "GET":
         form = TaskEditForm(instance=task)
         task_types = list(TaskType.objects.only("id", "name", "icon", "color").all())
-        return render(request, "ui/_v2/task_edit_partial.html", {
-            "form": form,
-            "task": task,
-            "task_types": task_types,
-        })
+        return render(
+            request,
+            "ui/_v2/task_edit_partial.html",
+            {
+                "form": form,
+                "task": task,
+                "task_types": task_types,
+            },
+        )
 
     # POST
     form = TaskEditForm(request.POST, instance=task)
     if not form.is_valid():
         task_types = list(TaskType.objects.only("id", "name", "icon", "color").all())
-        html = render(request, "ui/_v2/task_edit_partial.html", {
-            "form": form,
-            "task": task,
-            "task_types": task_types,
-        }).content.decode("utf-8")
+        html = render(
+            request,
+            "ui/_v2/task_edit_partial.html",
+            {
+                "form": form,
+                "task": task,
+                "task_types": task_types,
+            },
+        ).content.decode("utf-8")
         return HttpResponse(html, status=422)
 
     updated: Task = form.save(commit=False)
@@ -2199,17 +2451,22 @@ def task_edit_v2_partial(request: HttpRequest, task_id) -> HttpResponse:
 
     try:
         log_event(
-            actor=user, verb="task.update", resource_type="task", resource_id=str(updated.id),
-            target_user=updated.assigned_to, company=updated.company, payload={"title": updated.title},
+            actor=user,
+            verb="task.update",
+            resource_type="task",
+            resource_id=str(updated.id),
+            target_user=updated.assigned_to,
+            company=updated.company,
+            payload={"title": updated.title},
         )
     except Exception:
         logger.exception("task_edit_v2_partial: log_event failed")
 
-    return JsonResponse({
-        "ok": True,
-        "toast": "Задача обновлена",
-        "id": str(updated.id),
-        "close": True,
-    })
-
-
+    return JsonResponse(
+        {
+            "ok": True,
+            "toast": "Задача обновлена",
+            "id": str(updated.id),
+            "close": True,
+        }
+    )

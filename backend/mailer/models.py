@@ -8,7 +8,13 @@ class MailAccount(models.Model):
     SMTP аккаунт пользователя (например, Яндекс 587 STARTTLS).
     Храним app-password шифрованным (Fernet).
     """
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="mail_account", verbose_name="Пользователь")
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="mail_account",
+        verbose_name="Пользователь",
+    )
 
     smtp_host = models.CharField("SMTP host", max_length=255, default="smtp.yandex.ru")
     smtp_port = models.PositiveIntegerField("SMTP port", default=587)
@@ -28,10 +34,12 @@ class MailAccount(models.Model):
 
     def set_password(self, password: str):
         from core.crypto import encrypt_str
+
         self.smtp_password_enc = encrypt_str(password or "")
 
     def get_password(self) -> str:
         from core.crypto import decrypt_str
+
         return decrypt_str(self.smtp_password_enc or "")
 
     def __str__(self) -> str:
@@ -43,6 +51,7 @@ class GlobalMailAccount(models.Model):
     Глобальные SMTP-настройки (одни на всю CRM). Редактируются администратором.
     Пароль хранится шифрованным (Fernet), как и в MailAccount.
     """
+
     # smtp.bz defaults (recommended: 587 STARTTLS; alt: 2525)
     smtp_host = models.CharField("SMTP host", max_length=255, default="connect.smtp.bz")
     smtp_port = models.PositiveIntegerField("SMTP port", default=587)
@@ -52,9 +61,13 @@ class GlobalMailAccount(models.Model):
     smtp_password_enc = models.TextField("Пароль (зашифрован)", blank=True, default="")
 
     # Единый адрес отправителя (From) для всей CRM
-    from_email = models.EmailField("Email отправителя (From)", blank=True, default="no-reply@groupprofi.ru")
+    from_email = models.EmailField(
+        "Email отправителя (From)", blank=True, default="no-reply@groupprofi.ru"
+    )
     # Опционально: дефолтное имя отправителя (если у пользователя не задано ФИО)
-    from_name = models.CharField("Имя отправителя (по умолчанию)", max_length=120, blank=True, default="CRM ПРОФИ")
+    from_name = models.CharField(
+        "Имя отправителя (по умолчанию)", max_length=120, blank=True, default="CRM ПРОФИ"
+    )
     is_enabled = models.BooleanField("Включено", default=False)
 
     # Глобальные лимиты (если нужно быстро ограничить отправку всей системой)
@@ -63,19 +76,28 @@ class GlobalMailAccount(models.Model):
     # В тарифе указан общий лимит писем (обычно месячный). Оставляем большим, но можно снизить.
     rate_per_day = models.PositiveIntegerField("Лимит писем в день", default=15000)
     # Дополнительный лимит: сколько писем в день может отправить ОДИН менеджер
-    per_user_daily_limit = models.PositiveIntegerField("Лимит писем в день на менеджера", default=100)
-    
+    per_user_daily_limit = models.PositiveIntegerField(
+        "Лимит писем в день на менеджера", default=100
+    )
+
     # API smtp.bz для получения информации о тарифе и квоте.
     # Хранится зашифрованным (Fernet), как и SMTP-пароль.
-    smtp_bz_api_key_enc = models.TextField("API ключ smtp.bz (зашифрован)", blank=True, default="", help_text="API ключ для получения информации о тарифе и квоте (Fernet)")
+    smtp_bz_api_key_enc = models.TextField(
+        "API ключ smtp.bz (зашифрован)",
+        blank=True,
+        default="",
+        help_text="API ключ для получения информации о тарифе и квоте (Fernet)",
+    )
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
 
     def set_api_key(self, key: str) -> None:
         from core.crypto import encrypt_str
+
         self.smtp_bz_api_key_enc = encrypt_str(key or "")
 
     def get_api_key(self) -> str:
         from core.crypto import decrypt_str
+
         return decrypt_str(self.smtp_bz_api_key_enc or "")
 
     @property
@@ -90,10 +112,12 @@ class GlobalMailAccount(models.Model):
 
     def set_password(self, password: str):
         from core.crypto import encrypt_str
+
         self.smtp_password_enc = encrypt_str(password or "")
 
     def get_password(self) -> str:
         from core.crypto import decrypt_str
+
         return decrypt_str(self.smtp_password_enc or "")
 
     def __str__(self) -> str:
@@ -116,7 +140,9 @@ class Unsubscribe(models.Model):
         default="",
         help_text="bounce/user/unsubscribe (если известно)",
     )
-    last_seen_at = models.DateTimeField("Последнее обновление (из внешних источников)", null=True, blank=True)
+    last_seen_at = models.DateTimeField(
+        "Последнее обновление (из внешних источников)", null=True, blank=True
+    )
     created_at = models.DateTimeField("Когда", auto_now_add=True)
 
     def __str__(self) -> str:
@@ -127,6 +153,7 @@ class UnsubscribeToken(models.Model):
     """
     Токенизированная отписка: безопаснее, чем /unsubscribe/<email>/.
     """
+
     token = models.CharField("Токен", max_length=64, unique=True, db_index=True)
     email = models.EmailField("Email", db_index=True)
     created_at = models.DateTimeField("Когда", auto_now_add=True)
@@ -145,14 +172,26 @@ class Campaign(models.Model):
         STOPPED = "stopped", "Остановлено"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="mail_campaigns", verbose_name="Создатель")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="mail_campaigns",
+        verbose_name="Создатель",
+    )
 
     name = models.CharField("Название", max_length=200)
     subject = models.CharField("Тема письма", max_length=200)
     body_text = models.TextField("Текст письма (plain)", blank=True, default="")
     body_html = models.TextField("Текст письма (HTML)", blank=True, default="")
     sender_name = models.CharField("Имя отправителя", max_length=120, blank=True, default="")
-    attachment = models.FileField("Вложение", upload_to="campaign_attachments/%Y/%m/", blank=True, null=True, help_text="Файл, который будет прикреплен ко всем письмам кампании")
+    attachment = models.FileField(
+        "Вложение",
+        upload_to="campaign_attachments/%Y/%m/",
+        blank=True,
+        null=True,
+        help_text="Файл, который будет прикреплен ко всем письмам кампании",
+    )
     attachment_original_name = models.CharField(
         "Оригинальное имя вложения",
         max_length=255,
@@ -175,7 +214,12 @@ class Campaign(models.Model):
     )
 
     # Шаблон письма: не отправляется, используется для создания новых кампаний
-    is_template = models.BooleanField("Шаблон", default=False, db_index=True, help_text="Шаблоны не отправляются и не показываются в списке кампаний — только как основа для новых.")
+    is_template = models.BooleanField(
+        "Шаблон",
+        default=False,
+        db_index=True,
+        help_text="Шаблоны не отправляются и не показываются в списке кампаний — только как основа для новых.",
+    )
 
     created_at = models.DateTimeField("Создано", auto_now_add=True)
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
@@ -192,12 +236,15 @@ class CampaignRecipient(models.Model):
         UNSUBSCRIBED = "unsubscribed", "Отписался"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name="recipients", verbose_name="Кампания")
+    campaign = models.ForeignKey(
+        Campaign, on_delete=models.CASCADE, related_name="recipients", verbose_name="Кампания"
+    )
 
     email = models.EmailField("Email")
     contact = models.ForeignKey(
         "companies.Contact",
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
         related_name="+",
         verbose_name="Контакт",
@@ -205,14 +252,17 @@ class CampaignRecipient(models.Model):
     )
     company = models.ForeignKey(
         "companies.Company",
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
         related_name="+",
         verbose_name="Компания",
         db_index=True,
     )
 
-    status = models.CharField("Статус", max_length=16, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(
+        "Статус", max_length=16, choices=Status.choices, default=Status.PENDING
+    )
     last_error = models.CharField("Ошибка", max_length=2000, blank=True, default="")
 
     created_at = models.DateTimeField("Создано", auto_now_add=True)
@@ -235,9 +285,25 @@ class SendLog(models.Model):
         FAILED = "failed", "Ошибка"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name="send_logs", verbose_name="Кампания")
-    recipient = models.ForeignKey(CampaignRecipient, null=True, blank=True, on_delete=models.SET_NULL, related_name="send_logs", verbose_name="Получатель")
-    account = models.ForeignKey(MailAccount, null=True, blank=True, on_delete=models.SET_NULL, related_name="send_logs", verbose_name="Аккаунт")
+    campaign = models.ForeignKey(
+        Campaign, on_delete=models.CASCADE, related_name="send_logs", verbose_name="Кампания"
+    )
+    recipient = models.ForeignKey(
+        CampaignRecipient,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="send_logs",
+        verbose_name="Получатель",
+    )
+    account = models.ForeignKey(
+        MailAccount,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="send_logs",
+        verbose_name="Аккаунт",
+    )
 
     provider = models.CharField("Провайдер", max_length=50, default="smtp")
     message_id = models.CharField("Message-ID", max_length=255, blank=True, default="")
@@ -267,10 +333,16 @@ class SendLog(models.Model):
     def __str__(self) -> str:
         return f"{self.campaign} {self.status}"
 
+
 # cooldown на повторное использование email после "очистки" кампании
 class EmailCooldown(models.Model):
     email = models.EmailField("Email", db_index=True)
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="email_cooldowns")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="email_cooldowns",
+    )
     until_at = models.DateTimeField("Нельзя использовать до", db_index=True)
     created_at = models.DateTimeField("Создано", auto_now_add=True)
 
@@ -289,37 +361,38 @@ class SmtpBzQuota(models.Model):
     Информация о тарифе и квоте smtp.bz, полученная через API.
     Обновляется периодически через Celery задачу.
     """
+
     # Singleton: только одна запись
     id = models.IntegerField(primary_key=True, default=1, editable=False)
-    
+
     # Информация о тарифе
     tariff_name = models.CharField("Название тарифа", max_length=50, blank=True, default="")
     tariff_renewal_date = models.DateField("Дата продления тарифа", null=True, blank=True)
-    
+
     # Квота
     emails_available = models.PositiveIntegerField("Доступно писем", default=0)
     emails_limit = models.PositiveIntegerField("Лимит писем", default=0)
-    
+
     # Лимиты по времени
     sent_per_hour = models.PositiveIntegerField("Отправлено за час", default=0)
     max_per_hour = models.PositiveIntegerField("Максимум в час", default=100)
-    
+
     # Метаданные
     last_synced_at = models.DateTimeField("Последняя синхронизация", null=True, blank=True)
     sync_error = models.TextField("Ошибка синхронизации", blank=True, default="")
-    
+
     created_at = models.DateTimeField("Создано", auto_now_add=True)
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
-    
+
     class Meta:
         verbose_name = "Квота smtp.bz"
         verbose_name_plural = "Квота smtp.bz"
-    
+
     @classmethod
     def load(cls) -> "SmtpBzQuota":
         obj, _ = cls.objects.get_or_create(id=1)
         return obj
-    
+
     def __str__(self) -> str:
         return f"smtp.bz: {self.emails_available}/{self.emails_limit} писем"
 
@@ -328,18 +401,25 @@ class CampaignQueue(models.Model):
     """
     Очередь рассылок. Кампании выполняются последовательно, чтобы не превышать лимиты.
     """
+
     class Status(models.TextChoices):
         PENDING = "pending", "В очереди"
         PROCESSING = "processing", "Обрабатывается"
         COMPLETED = "completed", "Завершена"
         CANCELLED = "cancelled", "Отменена"
-    
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    campaign = models.OneToOneField(Campaign, on_delete=models.CASCADE, related_name="queue_entry", verbose_name="Кампания")
-    
-    status = models.CharField("Статус", max_length=16, choices=Status.choices, default=Status.PENDING)
-    priority = models.IntegerField("Приоритет", default=0, help_text="Чем выше число, тем выше приоритет")
-    
+    campaign = models.OneToOneField(
+        Campaign, on_delete=models.CASCADE, related_name="queue_entry", verbose_name="Кампания"
+    )
+
+    status = models.CharField(
+        "Статус", max_length=16, choices=Status.choices, default=Status.PENDING
+    )
+    priority = models.IntegerField(
+        "Приоритет", default=0, help_text="Чем выше число, тем выше приоритет"
+    )
+
     # Время постановки в очередь и начала обработки
     queued_at = models.DateTimeField("Поставлено в очередь", auto_now_add=True)
     started_at = models.DateTimeField("Начало обработки", null=True, blank=True)
@@ -358,7 +438,7 @@ class CampaignQueue(models.Model):
     consecutive_transient_errors = models.IntegerField(
         "Последовательные transient ошибки",
         default=0,
-        help_text="Используется для автоматической паузы при множественных ошибках SMTP"
+        help_text="Используется для автоматической паузы при множественных ошибках SMTP",
     )
 
     class Meta:
@@ -368,7 +448,7 @@ class CampaignQueue(models.Model):
             # Ускоряет основной запрос выборки очереди с фильтром по deferred_until
             models.Index(fields=["status", "deferred_until", "priority", "queued_at"]),
         ]
-    
+
     def __str__(self) -> str:
         return f"{self.campaign.name} ({self.get_status_display()})"
 
@@ -377,18 +457,34 @@ class UserDailyLimitStatus(models.Model):
     """
     Отслеживание статуса дневного лимита пользователя для уведомлений.
     """
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="daily_limit_status", verbose_name="Пользователь")
-    last_limit_reached_date = models.DateField("Дата последнего достижения лимита", null=True, blank=True, help_text="Дата, когда пользователь в последний раз достиг дневного лимита")
-    last_notified_date = models.DateField("Дата последнего уведомления", null=True, blank=True, help_text="Дата, когда было отправлено последнее уведомление об обновлении лимита")
-    
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="daily_limit_status",
+        verbose_name="Пользователь",
+    )
+    last_limit_reached_date = models.DateField(
+        "Дата последнего достижения лимита",
+        null=True,
+        blank=True,
+        help_text="Дата, когда пользователь в последний раз достиг дневного лимита",
+    )
+    last_notified_date = models.DateField(
+        "Дата последнего уведомления",
+        null=True,
+        blank=True,
+        help_text="Дата, когда было отправлено последнее уведомление об обновлении лимита",
+    )
+
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
-    
+
     class Meta:
         verbose_name = "Статус дневного лимита пользователя"
         verbose_name_plural = "Статусы дневных лимитов пользователей"
         indexes = [
             models.Index(fields=["user", "last_limit_reached_date"]),
         ]
-    
+
     def __str__(self) -> str:
         return f"{self.user} (лимит достигнут: {self.last_limit_reached_date or 'никогда'})"

@@ -5,6 +5,7 @@ MANAGER → manager.html, прочие роли → stub-заглушка до R
 
 Дизайн: `knowledge-base/audits/analytics-audit-2026-04-17.md`.
 """
+
 from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required

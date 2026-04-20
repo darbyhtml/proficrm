@@ -2,6 +2,7 @@
 Пакет views/campaigns — CRUD, детали, файлы и шаблоны кампаний.
 Импортируйте из этого пакета напрямую; подмодули можно редактировать независимо.
 """
+
 from mailer.views.campaigns.list_detail import campaigns, campaign_detail
 from mailer.views.campaigns.crud import (
     campaign_create,

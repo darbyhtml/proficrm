@@ -14,7 +14,9 @@ from ui.views._base import (
     render,
 )
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 @login_required
 @policy_required(resource_type="page", resource="ui:mobile_app")
@@ -24,13 +26,19 @@ def mobile_app_page(request: HttpRequest) -> HttpResponse:
     Доступна всем авторизованным пользователям.
     """
     from accounts.security import get_client_ip
-    
+
     # Получаем последнюю production версию
-    latest_build = MobileAppBuild.objects.filter(env="production", is_active=True).order_by("-uploaded_at").first()
-    
+    latest_build = (
+        MobileAppBuild.objects.filter(env="production", is_active=True)
+        .order_by("-uploaded_at")
+        .first()
+    )
+
     # Получаем список всех версий (последние 10)
-    builds = MobileAppBuild.objects.filter(env="production", is_active=True).order_by("-uploaded_at")[:10]
-    
+    builds = MobileAppBuild.objects.filter(env="production", is_active=True).order_by(
+        "-uploaded_at"
+    )[:10]
+
     return render(
         request,
         "ui/mobile_app.html",
@@ -48,12 +56,12 @@ def mobile_app_download(request: HttpRequest, build_id) -> HttpResponse:
     Скачивание APK файла. Только для авторизованных пользователей.
     """
     from accounts.security import get_client_ip
-    
+
     build = get_object_or_404(MobileAppBuild, id=build_id, env="production", is_active=True)
-    
+
     if not build.file:
         raise Http404("Файл не найден")
-    
+
     # Логируем скачивание
     try:
         log_event(
@@ -75,10 +83,14 @@ def mobile_app_download(request: HttpRequest, build_id) -> HttpResponse:
             extra={"user_id": request.user.id if request.user.is_authenticated else None},
         )
         # Не критично, если логирование не удалось, но фиксируем для отладки
-    
+
     # Отдаем файл с правильным Content-Disposition
-    response = FileResponse(build.file.open("rb"), content_type="application/vnd.android.package-archive")
-    response["Content-Disposition"] = f'attachment; filename="crmprofi-{build.version_name}-{build.version_code}.apk"'
+    response = FileResponse(
+        build.file.open("rb"), content_type="application/vnd.android.package-archive"
+    )
+    response["Content-Disposition"] = (
+        f'attachment; filename="crmprofi-{build.version_name}-{build.version_code}.apk"'
+    )
     return response
 
 
@@ -92,11 +104,11 @@ def mobile_app_qr_image(request: HttpRequest) -> HttpResponse:
     """
     import qrcode
     import io
-    
+
     token = request.GET.get("token", "").strip()
     if not token:
         raise Http404("Токен не указан")
-    
+
     # Проверяем, что токен существует и принадлежит текущему пользователю
     try:
         qr_token = MobileAppQrToken.objects.get(
@@ -104,23 +116,23 @@ def mobile_app_qr_image(request: HttpRequest) -> HttpResponse:
         )
     except MobileAppQrToken.DoesNotExist:
         raise Http404("Токен не найден")
-    
+
     # Android приложение ожидает просто токен (строку), а не URL
     # QR-код содержит только токен, который приложение отправит на /api/phone/qr/exchange/
     qr_data = token
-    
+
     # Генерируем QR-код
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
     qr.add_data(qr_data)
     qr.make(fit=True)
-    
+
     img = qr.make_image(fill_color="black", back_color="white")
-    
+
     # Сохраняем в BytesIO
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
     buffer.seek(0)
-    
+
     response = HttpResponse(buffer.read(), content_type="image/png")
     response["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return response

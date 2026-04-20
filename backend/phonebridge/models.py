@@ -25,7 +25,9 @@ class PhoneDevice(models.Model):
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="phone_devices")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="phone_devices"
+    )
 
     device_id = models.CharField(max_length=64, db_index=True)
     device_name = models.CharField(max_length=120, blank=True, default="")
@@ -42,7 +44,11 @@ class PhoneDevice(models.Model):
     last_ip = models.GenericIPAddressField(null=True, blank=True)
     last_error_code = models.CharField(max_length=64, blank=True, default="")
     last_error_message = models.CharField(max_length=255, blank=True, default="")
-    encryption_enabled = models.BooleanField("Шифрование включено", default=True, help_text="Использует ли устройство EncryptedSharedPreferences")
+    encryption_enabled = models.BooleanField(
+        "Шифрование включено",
+        default=True,
+        help_text="Использует ли устройство EncryptedSharedPreferences",
+    )
 
     class Meta:
         unique_together = (("user", "device_id"),)
@@ -79,14 +85,20 @@ class CallRequest(models.Model):
         verbose_name="Кто инициировал",
     )
 
-    company = models.ForeignKey("companies.Company", null=True, blank=True, on_delete=models.SET_NULL)
-    contact = models.ForeignKey("companies.Contact", null=True, blank=True, on_delete=models.SET_NULL)
+    company = models.ForeignKey(
+        "companies.Company", null=True, blank=True, on_delete=models.SET_NULL
+    )
+    contact = models.ForeignKey(
+        "companies.Contact", null=True, blank=True, on_delete=models.SET_NULL
+    )
 
     phone_raw = models.CharField(max_length=64)
     note = models.CharField(max_length=255, blank=True, default="")
     is_cold_call = models.BooleanField(default=False, db_index=True)
 
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True)
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
@@ -99,7 +111,10 @@ class CallRequest(models.Model):
         BUSY = "busy", "Занято"
         REJECTED = "rejected", "Отклонен"
         MISSED = "missed", "Пропущен"
-        UNKNOWN = "unknown", "Не удалось определить"  # Новое: для случаев, когда результат не определён
+        UNKNOWN = (
+            "unknown",
+            "Не удалось определить",
+        )  # Новое: для случаев, когда результат не определён
 
     call_status = models.CharField(
         max_length=16,
@@ -109,32 +124,34 @@ class CallRequest(models.Model):
         db_index=True,
         verbose_name="Статус звонка",
     )
-    call_started_at = models.DateTimeField(null=True, blank=True, verbose_name="Время начала звонка")
-    call_duration_seconds = models.IntegerField(null=True, blank=True, verbose_name="Длительность звонка (секунды)")
-    
+    call_started_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="Время начала звонка"
+    )
+    call_duration_seconds = models.IntegerField(
+        null=True, blank=True, verbose_name="Длительность звонка (секунды)"
+    )
+
     # Enum классы для валидации
     class CallDirection(models.TextChoices):
         OUTGOING = "outgoing", "Исходящий"
         INCOMING = "incoming", "Входящий"
         MISSED = "missed", "Пропущенный"
         UNKNOWN = "unknown", "Неизвестно"
-    
+
     class ResolveMethod(models.TextChoices):
         OBSERVER = "observer", "Определено через ContentObserver"
         RETRY = "retry", "Определено через повторные проверки"
         UNKNOWN = "unknown", "Неизвестно"
-    
+
     class ActionSource(models.TextChoices):
         CRM_UI = "crm_ui", "Команда из CRM"
         NOTIFICATION = "notification", "Нажатие на уведомление"
         HISTORY = "history", "Нажатие из истории звонков"
         UNKNOWN = "unknown", "Неизвестно"
-    
+
     # Новые поля для расширенной аналитики (ЭТАП 3: добавлены в БД)
     call_ended_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name="Время окончания звонка"
+        null=True, blank=True, verbose_name="Время окончания звонка"
     )
     direction = models.CharField(
         max_length=16,
@@ -142,7 +159,7 @@ class CallRequest(models.Model):
         null=True,
         blank=True,
         db_index=True,
-        verbose_name="Направление звонка"
+        verbose_name="Направление звонка",
     )
     resolve_method = models.CharField(
         max_length=16,
@@ -150,12 +167,10 @@ class CallRequest(models.Model):
         null=True,
         blank=True,
         db_index=True,
-        verbose_name="Метод определения результата"
+        verbose_name="Метод определения результата",
     )
     attempts_count = models.IntegerField(
-        null=True,
-        blank=True,
-        verbose_name="Количество попыток определения"
+        null=True, blank=True, verbose_name="Количество попыток определения"
     )
     action_source = models.CharField(
         max_length=16,
@@ -163,7 +178,7 @@ class CallRequest(models.Model):
         null=True,
         blank=True,
         db_index=True,
-        verbose_name="Источник действия пользователя"
+        verbose_name="Источник действия пользователя",
     )
 
     class Meta:
@@ -183,8 +198,12 @@ class PhoneTelemetry(models.Model):
         QUEUE = "queue", "Queue"
         OTHER = "other", "Other"
 
-    device = models.ForeignKey(PhoneDevice, null=True, blank=True, on_delete=models.SET_NULL, related_name="telemetry")
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="phone_telemetry")
+    device = models.ForeignKey(
+        PhoneDevice, null=True, blank=True, on_delete=models.SET_NULL, related_name="telemetry"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="phone_telemetry"
+    )
     ts = models.DateTimeField("Время события")
     type = models.CharField("Тип", max_length=32, choices=Type.choices, default=Type.OTHER)
     endpoint = models.CharField("Endpoint", max_length=128, blank=True, default="")
@@ -204,8 +223,12 @@ class PhoneTelemetry(models.Model):
 
 
 class PhoneLogBundle(models.Model):
-    device = models.ForeignKey(PhoneDevice, null=True, blank=True, on_delete=models.SET_NULL, related_name="log_bundles")
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="phone_log_bundles")
+    device = models.ForeignKey(
+        PhoneDevice, null=True, blank=True, on_delete=models.SET_NULL, related_name="log_bundles"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="phone_log_bundles"
+    )
     ts = models.DateTimeField("Время")
     level_summary = models.CharField("Уровень", max_length=64, blank=True, default="")
     source = models.CharField("Источник", max_length=64, blank=True, default="")
@@ -229,7 +252,9 @@ class MobileAppBuild(models.Model):
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    env = models.CharField(max_length=16, default="production", db_index=True, help_text="Только production")
+    env = models.CharField(
+        max_length=16, default="production", db_index=True, help_text="Только production"
+    )
     version_name = models.CharField(max_length=32, verbose_name="Версия (name)")
     version_code = models.IntegerField(verbose_name="Версия (code)")
     file = models.FileField(
@@ -247,7 +272,9 @@ class MobileAppBuild(models.Model):
         related_name="uploaded_app_builds",
         verbose_name="Загрузил",
     )
-    is_active = models.BooleanField(default=True, db_index=True, verbose_name="Активна", help_text="Показывать в списке")
+    is_active = models.BooleanField(
+        default=True, db_index=True, verbose_name="Активна", help_text="Показывать в списке"
+    )
 
     class Meta:
         ordering = ["-uploaded_at"]
@@ -291,7 +318,9 @@ class MobileAppBuild(models.Model):
         return f"{size:.1f} ТБ"
 
     def __str__(self) -> str:
-        return f"{self.version_name} ({self.version_code}) - {self.uploaded_at.strftime('%Y-%m-%d')}"
+        return (
+            f"{self.version_name} ({self.version_code}) - {self.uploaded_at.strftime('%Y-%m-%d')}"
+        )
 
 
 class MobileAppQrToken(models.Model):
@@ -301,10 +330,15 @@ class MobileAppQrToken(models.Model):
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="qr_tokens")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="qr_tokens"
+    )
     token = models.CharField(max_length=128, unique=True, db_index=True, verbose_name="Токен")
     token_hash = models.CharField(
-        max_length=64, unique=True, db_index=True, blank=True,
+        max_length=64,
+        unique=True,
+        db_index=True,
+        blank=True,
         verbose_name="Хеш токена",
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
@@ -357,4 +391,3 @@ class MobileAppQrToken(models.Model):
     def __str__(self) -> str:
         hash_prefix = self.token_hash[:12] if self.token_hash else "no-hash"
         return f"QRToken({self.user.username}, hash={hash_prefix}..., expires={self.expires_at})"
-

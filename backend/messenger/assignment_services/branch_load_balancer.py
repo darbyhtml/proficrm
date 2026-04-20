@@ -18,8 +18,7 @@ class BranchLoadBalancer:
 
     def pick(self, branch: Branch) -> Optional[User]:
         candidates = (
-            User.objects
-            .filter(
+            User.objects.filter(
                 branch=branch,
                 role=User.Role.MANAGER,
                 is_active=True,
@@ -28,9 +27,7 @@ class BranchLoadBalancer:
             .annotate(
                 active_count=Count(
                     "assigned_conversations",
-                    filter=Q(
-                        assigned_conversations__status=Conversation.Status.OPEN
-                    ),
+                    filter=Q(assigned_conversations__status=Conversation.Status.OPEN),
                     distinct=True,
                 )
             )

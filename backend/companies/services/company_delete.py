@@ -19,6 +19,7 @@ Company deletion workflow — единая точка для удаления к
 Одна ошибка в этой цепочке — риск потерять данные, поэтому логика
 централизована и покрывается тестами.
 """
+
 from __future__ import annotations
 
 import logging

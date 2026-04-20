@@ -3,6 +3,7 @@
 
 Все внешние HTTP-запросы мокируются через unittest.mock.
 """
+
 from __future__ import annotations
 
 import json
@@ -19,6 +20,7 @@ from amocrm.client import AmoApiError, AmoClient, AmoResponse, RateLimitError, _
 # ---------------------------------------------------------------------------
 # Вспомогательная фабрика — создаёт AmoApiConfig-заглушку без БД
 # ---------------------------------------------------------------------------
+
 
 def _make_cfg(
     domain="test.amocrm.ru",
@@ -51,6 +53,7 @@ def _make_cfg(
 # _json_loads
 # ---------------------------------------------------------------------------
 
+
 class TestJsonLoads(unittest.TestCase):
     def test_valid_json(self):
         result = _json_loads(b'{"key": "value"}')
@@ -73,6 +76,7 @@ class TestJsonLoads(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # AmoClient.base — нормализация домена
 # ---------------------------------------------------------------------------
+
 
 class TestAmoClientBase(unittest.TestCase):
     def test_plain_domain(self):
@@ -101,6 +105,7 @@ class TestAmoClientBase(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # AmoClient._token_valid
 # ---------------------------------------------------------------------------
+
 
 class TestTokenValid(unittest.TestCase):
     def test_long_lived_token_always_valid(self):
@@ -141,6 +146,7 @@ class TestTokenValid(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # AmoClient.ensure_token
 # ---------------------------------------------------------------------------
+
 
 class TestEnsureToken(unittest.TestCase):
     def test_long_lived_token_no_refresh(self):
@@ -183,6 +189,7 @@ class TestEnsureToken(unittest.TestCase):
 # AmoClient.authorize_url
 # ---------------------------------------------------------------------------
 
+
 class TestAuthorizeUrl(unittest.TestCase):
     def test_returns_amocrm_oauth_url(self):
         cfg = _make_cfg(client_id="my_client_id")
@@ -196,6 +203,7 @@ class TestAuthorizeUrl(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # AmoClient._request — базовые HTTP сценарии
 # ---------------------------------------------------------------------------
+
 
 class TestAmoClientRequest(TestCase):
     """
@@ -228,12 +236,16 @@ class TestAmoClientRequest(TestCase):
 
     @patch("amocrm.client.urllib.request.build_opener")
     def test_request_without_auth(self, mock_build_opener):
-        mock_build_opener.return_value = self._mock_opener(200, b'{}')
+        mock_build_opener.return_value = self._mock_opener(200, b"{}")
         cfg = _make_cfg(long_lived_token="", access_token="")
         client = AmoClient(cfg)
         # auth=False не должен вызывать ensure_token
-        resp = client._request("POST", "https://test.amocrm.ru/oauth2/access_token",
-                               json_body={"grant_type": "authorization_code"}, auth=False)
+        resp = client._request(
+            "POST",
+            "https://test.amocrm.ru/oauth2/access_token",
+            json_body={"grant_type": "authorization_code"},
+            auth=False,
+        )
         self.assertEqual(resp.status, 200)
 
     @patch("amocrm.client.urllib.request.build_opener")
@@ -251,6 +263,7 @@ class TestAmoClientRequest(TestCase):
 # ---------------------------------------------------------------------------
 # AmoClient.get — retry logic на 429
 # ---------------------------------------------------------------------------
+
 
 class TestAmoClientGet(TestCase):
     @patch("amocrm.client.time.sleep")
@@ -288,8 +301,10 @@ class TestAmoClientGet(TestCase):
     def test_get_returns_data_on_200(self):
         cfg = _make_cfg(long_lived_token="lltoken")
         client = AmoClient(cfg)
-        client._request = Mock(return_value=AmoResponse(
-            status=200, data={"_embedded": {"contacts": [{"id": 1}]}}, headers={}
-        ))
+        client._request = Mock(
+            return_value=AmoResponse(
+                status=200, data={"_embedded": {"contacts": [{"id": 1}]}}, headers={}
+            )
+        )
         result = client.get("/api/v4/contacts")
         self.assertIsNotNone(result)

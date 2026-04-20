@@ -19,7 +19,9 @@ from policy.engine import enforce
 
 
 def _safe_redirect_url(request, url, fallback="/"):
-    if url and url_has_allowed_host_and_scheme(url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+    if url and url_has_allowed_host_and_scheme(
+        url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
         return url
     return fallback
 
@@ -28,7 +30,12 @@ def _safe_redirect_url(request, url, fallback="/"):
 def mark_all_read(request: HttpRequest) -> HttpResponse:
     if request.method != "POST":
         return redirect(_safe_redirect_url(request, request.META.get("HTTP_REFERER")))
-    enforce(user=request.user, resource_type="action", resource="ui:notifications:mark_all_read", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:notifications:mark_all_read",
+        context={"path": request.path, "method": request.method},
+    )
     Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
     cache.delete_many([f"bell_data:{request.user.pk}", f"notif_poll:{request.user.pk}"])
     messages.success(request, "Уведомления отмечены как прочитанные.")
@@ -39,7 +46,12 @@ def mark_all_read(request: HttpRequest) -> HttpResponse:
 def mark_read(request: HttpRequest, notification_id: int) -> HttpResponse:
     if request.method != "POST":
         return redirect(_safe_redirect_url(request, request.META.get("HTTP_REFERER")))
-    enforce(user=request.user, resource_type="action", resource="ui:notifications:mark_read", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:notifications:mark_read",
+        context={"path": request.path, "method": request.method},
+    )
     n = get_object_or_404(Notification, id=notification_id, user=request.user)
     n.is_read = True
     n.save(update_fields=["is_read"])
@@ -60,7 +72,12 @@ def poll(request: HttpRequest) -> HttpResponse:
     Инвалидация при `mark_as_read` (строка 46) работает корректно — пользователь видит
     обновление сразу, а не ждёт expire.
     """
-    enforce(user=request.user, resource_type="action", resource="ui:notifications:poll", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:notifications:poll",
+        context={"path": request.path, "method": request.method},
+    )
 
     cache_key = f"notif_poll:{request.user.pk}"
     cached = cache.get(cache_key)
@@ -86,14 +103,17 @@ def poll(request: HttpRequest) -> HttpResponse:
         )
     # Объявления CRM
     from django.db.models import Q
+
     announcement_payload = None
-    active_ann = CrmAnnouncement.objects.filter(
-        is_active=True,
-    ).filter(
-        Q(scheduled_at__isnull=True) | Q(scheduled_at__lte=timezone.now())
-    ).exclude(
-        reads__user=user
-    ).order_by("-created_at").first()
+    active_ann = (
+        CrmAnnouncement.objects.filter(
+            is_active=True,
+        )
+        .filter(Q(scheduled_at__isnull=True) | Q(scheduled_at__lte=timezone.now()))
+        .exclude(reads__user=user)
+        .order_by("-created_at")
+        .first()
+    )
     if active_ann:
         announcement_payload = {
             "id": active_ann.id,
@@ -120,16 +140,21 @@ def poll(request: HttpRequest) -> HttpResponse:
 @login_required
 def all_notifications(request: HttpRequest) -> HttpResponse:
     """Страница со всеми уведомлениями (непрочитанными и прочитанными)."""
-    enforce(user=request.user, resource_type="page", resource="ui:notifications:all", context={"path": request.path})
+    enforce(
+        user=request.user,
+        resource_type="page",
+        resource="ui:notifications:all",
+        context={"path": request.path},
+    )
     user = request.user
-    
+
     # Получаем все уведомления пользователя, отсортированные по дате создания (новые сверху)
     all_notifications_list = Notification.objects.filter(user=user).order_by("-created_at")
-    
+
     # Разделяем на непрочитанные и прочитанные
     unread_notifications = all_notifications_list.filter(is_read=False)
     read_notifications = all_notifications_list.filter(is_read=True)
-    
+
     return render(
         request,
         "notifications/all_notifications.html",
@@ -146,11 +171,16 @@ def all_notifications(request: HttpRequest) -> HttpResponse:
 @login_required
 def all_reminders(request: HttpRequest) -> HttpResponse:
     """Страница со всеми напоминаниями (задачи и договоры)."""
-    enforce(user=request.user, resource_type="page", resource="ui:notifications:reminders", context={"path": request.path})
+    enforce(
+        user=request.user,
+        resource_type="page",
+        resource="ui:notifications:reminders",
+        context={"path": request.path},
+    )
     user = request.user
     now = timezone.now()
     today_date = timezone.localdate(now)
-    
+
     # Все задачи пользователя (не выполненные и не отмененные)
     reminders = (
         Task.objects.filter(assigned_to=user)
@@ -158,19 +188,19 @@ def all_reminders(request: HttpRequest) -> HttpResponse:
         .select_related("company")
         .order_by("due_at")
     )
-    
+
     # Просроченные задачи
     overdue_tasks = reminders.filter(due_at__lt=now)
-    
+
     # Задачи на сегодня
     today_tasks = reminders.filter(due_at__date=today_date)
-    
+
     # Задачи на ближайшие дни (до 7 дней)
     week_tasks = reminders.filter(due_at__gt=now, due_at__lte=now + timedelta(days=7))
-    
+
     # Задачи на будущее (более 7 дней)
     future_tasks = reminders.filter(due_at__gt=now + timedelta(days=7))
-    
+
     # Напоминания по договорам
     contract_reminders = []
     contract_qs = (
@@ -179,21 +209,22 @@ def all_reminders(request: HttpRequest) -> HttpResponse:
         .only("id", "name", "contract_until", "contract_type")
         .order_by("contract_until")
     )
-    
+
     # Все договоры в пределах максимального warning_days
     max_warning_days = 30
     try:
         from companies.models import ContractType
         from django.db.models import Max
+
         max_warning = ContractType.objects.aggregate(max_warning=Max("warning_days"))
         if max_warning["max_warning"]:
             max_warning_days = max(max_warning["max_warning"], 30)
     except Exception:
         pass
-    
+
     soon_until = today_date + timedelta(days=max_warning_days)
     contracts = contract_qs.filter(contract_until__lte=soon_until)
-    
+
     for c in contracts:
         days_left = (c.contract_until - today_date).days if c.contract_until else None
         if days_left is not None and c.contract_type:
@@ -211,7 +242,7 @@ def all_reminders(request: HttpRequest) -> HttpResponse:
                 "company_id": c.id,
             }
         )
-    
+
     return render(
         request,
         "notifications/all_reminders.html",

@@ -2,6 +2,7 @@
 Тесты retention policy: purge_old_activity_events, purge_old_error_logs,
 purge_old_notifications, management command prune_logs.
 """
+
 from __future__ import annotations
 
 from io import StringIO
@@ -59,6 +60,7 @@ class PurgeActivityEventsTest(TestCase):
         old = _make_activity(days_ago=31)
         recent = _make_activity(days_ago=10)
         from audit.tasks import purge_old_activity_events
+
         purge_old_activity_events()
         self.assertFalse(ActivityEvent.objects.filter(pk=old.pk).exists())
         self.assertTrue(ActivityEvent.objects.filter(pk=recent.pk).exists())
@@ -67,6 +69,7 @@ class PurgeActivityEventsTest(TestCase):
     def test_keeps_recent_records(self):
         recent = _make_activity(days_ago=5)
         from audit.tasks import purge_old_activity_events
+
         purge_old_activity_events()
         self.assertTrue(ActivityEvent.objects.filter(pk=recent.pk).exists())
 
@@ -74,6 +77,7 @@ class PurgeActivityEventsTest(TestCase):
     def test_empty_table_no_error(self):
         ActivityEvent.objects.all().delete()
         from audit.tasks import purge_old_activity_events
+
         purge_old_activity_events()  # должно выполниться без ошибок
 
 
@@ -83,6 +87,7 @@ class PurgeErrorLogsTest(TestCase):
     def test_deletes_old_resolved(self):
         old_resolved = _make_errorlog(days_ago=31, resolved=True)
         from audit.tasks import purge_old_error_logs
+
         purge_old_error_logs()
         self.assertFalse(ErrorLog.objects.filter(pk=old_resolved.pk).exists())
 
@@ -90,6 +95,7 @@ class PurgeErrorLogsTest(TestCase):
     def test_keeps_old_unresolved(self):
         old_unresolved = _make_errorlog(days_ago=31, resolved=False)
         from audit.tasks import purge_old_error_logs
+
         purge_old_error_logs()
         self.assertTrue(ErrorLog.objects.filter(pk=old_unresolved.pk).exists())
 
@@ -97,6 +103,7 @@ class PurgeErrorLogsTest(TestCase):
     def test_keeps_recent_resolved(self):
         recent = _make_errorlog(days_ago=10, resolved=True)
         from audit.tasks import purge_old_error_logs
+
         purge_old_error_logs()
         self.assertTrue(ErrorLog.objects.filter(pk=recent.pk).exists())
 
@@ -110,6 +117,7 @@ class PurgeNotificationsTest(TestCase):
     def test_deletes_old_read(self):
         old_read = _make_notification(self.user, days_ago=31, is_read=True)
         from notifications.tasks import purge_old_notifications
+
         purge_old_notifications()
         self.assertFalse(Notification.objects.filter(pk=old_read.pk).exists())
 
@@ -117,6 +125,7 @@ class PurgeNotificationsTest(TestCase):
     def test_keeps_old_unread(self):
         old_unread = _make_notification(self.user, days_ago=31, is_read=False)
         from notifications.tasks import purge_old_notifications
+
         purge_old_notifications()
         self.assertTrue(Notification.objects.filter(pk=old_unread.pk).exists())
 
@@ -124,6 +133,7 @@ class PurgeNotificationsTest(TestCase):
     def test_keeps_recent_read(self):
         recent = _make_notification(self.user, days_ago=5, is_read=True)
         from notifications.tasks import purge_old_notifications
+
         purge_old_notifications()
         self.assertTrue(Notification.objects.filter(pk=recent.pk).exists())
 
@@ -135,6 +145,7 @@ class PruneLogsCommandTest(TestCase):
 
     def _run_command(self, **kwargs):
         from django.core.management import call_command
+
         out = StringIO()
         call_command("prune_logs", stdout=out, **kwargs)
         return out.getvalue()
@@ -161,9 +172,12 @@ class PruneLogsCommandTest(TestCase):
         _make_errorlog(days_ago=60, resolved=True)
         _make_notification(self.user, days_ago=60, is_read=True)
         self._run_command()
-        self.assertEqual(ActivityEvent.objects.filter(
-            created_at__lt=timezone.now() - timezone.timedelta(days=30)
-        ).count(), 0)
+        self.assertEqual(
+            ActivityEvent.objects.filter(
+                created_at__lt=timezone.now() - timezone.timedelta(days=30)
+            ).count(),
+            0,
+        )
 
     @override_settings(
         ACTIVITY_EVENT_RETENTION_DAYS=30,

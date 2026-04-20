@@ -11,7 +11,15 @@ from django.db.models.functions import Coalesce
 from django.contrib.postgres.search import SearchQuery, SearchRank, TrigramWordSimilarity
 from django.utils.html import escape
 
-from companies.models import Company, CompanyEmail, CompanyNote, CompanyPhone, Contact, ContactEmail, ContactPhone
+from companies.models import (
+    Company,
+    CompanyEmail,
+    CompanyNote,
+    CompanyPhone,
+    Contact,
+    ContactEmail,
+    ContactPhone,
+)
 from tasksapp.models import Task
 
 from django.conf import settings as django_settings
@@ -163,7 +171,9 @@ def highlight_html(
         ranges = ranges[:max_matches]
 
     # режем сниппет вокруг первого совпадения, чтобы UI был читабельным
-    snip_s, snip_e, left_cut, right_cut = _ellipsize(s, start=ranges[0][0], end=ranges[0][1], max_len=max_len)
+    snip_s, snip_e, left_cut, right_cut = _ellipsize(
+        s, start=ranges[0][0], end=ranges[0][1], max_len=max_len
+    )
     if snip_s or snip_e != len(s):
         # сдвигаем ranges в координаты сниппета и отбрасываем не попавшие
         new_ranges: list[tuple[int, int]] = []
@@ -291,7 +301,11 @@ class CompanySearchService:
             return qs.none()
 
         # Тип запроса для поле-зависимого буста и для расширенной фильтрации стоп-токенов (адрес)
-        query_type = classify_text_query(pq.raw, pq.text_tokens) if pq.text_tokens else TEXT_QUERY_COMPANY_OR_GENERAL
+        query_type = (
+            classify_text_query(pq.raw, pq.text_tokens)
+            if pq.text_tokens
+            else TEXT_QUERY_COMPANY_OR_GENERAL
+        )
         if query_type == TEXT_QUERY_ADDRESS:
             significant_tokens = filter_stop_tokens(pq.text_tokens, for_address=True)
             if len(significant_tokens) == 0:
@@ -402,7 +416,9 @@ class CompanySearchService:
         # Включается только если FTS дал мало результатов (SEARCH_TEXT_SIMILARITY_ONLY_IF_FTS_EMPTY).
         similarity_match = Q()
         similarity_threshold = getattr(django_settings, "SEARCH_TEXT_SIMILARITY_THRESHOLD", 0.4)
-        similarity_only_if_empty = getattr(django_settings, "SEARCH_TEXT_SIMILARITY_ONLY_IF_FTS_EMPTY", True)
+        similarity_only_if_empty = getattr(
+            django_settings, "SEARCH_TEXT_SIMILARITY_ONLY_IF_FTS_EMPTY", True
+        )
         use_similarity = False
         if tokens_for_search and not strong_digits:
             long_tokens = [t for t in tokens_for_search if len(t) >= SIMILARITY_MIN_TOKEN_LEN]
@@ -410,7 +426,9 @@ class CompanySearchService:
                 if similarity_only_if_empty:
                     # Проверяем, дал ли FTS достаточно результатов (без similarity)
                     ids_fts = list(
-                        base_qs.filter((indexed & indexed_match) | fallback_match | email_direct_match)
+                        base_qs.filter(
+                            (indexed & indexed_match) | fallback_match | email_direct_match
+                        )
                         .distinct()
                         .values_list("id", flat=True)[:10]
                     )
@@ -425,7 +443,8 @@ class CompanySearchService:
                         .values_list("id", flat=True)[: self.max_results_cap]
                     )
                     sim_tname_ids = (
-                        base_qs.filter(search_index__isnull=False).distinct()
+                        base_qs.filter(search_index__isnull=False)
+                        .distinct()
                         .annotate(sim=TrigramWordSimilarity(token, "search_index__t_name"))
                         .filter(sim__gt=similarity_threshold)
                         .values_list("id", flat=True)[: self.max_results_cap]
@@ -487,9 +506,17 @@ class CompanySearchService:
         digit_boost = Value(0.0, output_field=FloatField())
         for dt in strong_digits:
             w = 2.0 if len(dt) >= 9 else 0.6
-            digit_boost = digit_boost + Case(When(search_index__digits__contains=dt, then=Value(w)), default=Value(0.0), output_field=FloatField())
+            digit_boost = digit_boost + Case(
+                When(search_index__digits__contains=dt, then=Value(w)),
+                default=Value(0.0),
+                output_field=FloatField(),
+            )
         for dt in weak_digits:
-            digit_boost = digit_boost + Case(When(search_index__digits__contains=dt, then=Value(0.15)), default=Value(0.0), output_field=FloatField())
+            digit_boost = digit_boost + Case(
+                When(search_index__digits__contains=dt, then=Value(0.15)),
+                default=Value(0.0),
+                output_field=FloatField(),
+            )
 
         qs = qs.annotate(
             search_score=Case(
@@ -557,7 +584,9 @@ class CompanySearchService:
             email_q = raw.strip().lower()
             if email_q:
                 # Поиск в normalized_emails через contains (GIN индекс)
-                exact_qs = base_qs.filter(search_index__normalized_emails__contains=[email_q]).distinct()
+                exact_qs = base_qs.filter(
+                    search_index__normalized_emails__contains=[email_q]
+                ).distinct()
                 if exact_qs.exists():
                     return exact_qs
 
@@ -575,7 +604,9 @@ class CompanySearchService:
                 phone_digits = only_digits(phone_norm)
                 if phone_norm.startswith("+") and len(phone_digits) == 11:
                     # Поиск в normalized_phones через contains (GIN индекс)
-                    exact_qs = base_qs.filter(search_index__normalized_phones__contains=[phone_norm]).distinct()
+                    exact_qs = base_qs.filter(
+                        search_index__normalized_phones__contains=[phone_norm]
+                    ).distinct()
                     if exact_qs.exists():
                         return exact_qs
 
@@ -583,13 +614,17 @@ class CompanySearchService:
         if 8 <= len(digits_only) <= 12:
             inn_token = digits_only
             # Поиск в normalized_inns через contains (GIN индекс)
-            exact_qs = base_qs.filter(search_index__normalized_inns__contains=[inn_token]).distinct()
+            exact_qs = base_qs.filter(
+                search_index__normalized_inns__contains=[inn_token]
+            ).distinct()
             if exact_qs.exists():
                 return exact_qs
 
         return None
 
-    def explain(self, *, companies: list[Company], query: str, max_reasons_per_company: int = 50) -> dict[UUID, SearchExplain]:
+    def explain(
+        self, *, companies: list[Company], query: str, max_reasons_per_company: int = 50
+    ) -> dict[UUID, SearchExplain]:
         """
         Формирует match_reasons + готовые HTML-сниппеты для UI (без JS-regex по innerHTML).
         Делает O(1) запросов по связанным таблицам на страницу результатов.
@@ -601,13 +636,29 @@ class CompanySearchService:
         company_ids = [c.id for c in companies]
 
         # bulk загрузка связанных значений (без N+1)
-        phones = list(CompanyPhone.objects.filter(company_id__in=company_ids).only("company_id", "value", "comment"))
-        emails = list(CompanyEmail.objects.filter(company_id__in=company_ids).only("company_id", "value"))
+        phones = list(
+            CompanyPhone.objects.filter(company_id__in=company_ids).only(
+                "company_id", "value", "comment"
+            )
+        )
+        emails = list(
+            CompanyEmail.objects.filter(company_id__in=company_ids).only("company_id", "value")
+        )
 
-        contacts = list(Contact.objects.filter(company_id__in=company_ids).only("id", "company_id", "first_name", "last_name", "position", "note"))
+        contacts = list(
+            Contact.objects.filter(company_id__in=company_ids).only(
+                "id", "company_id", "first_name", "last_name", "position", "note"
+            )
+        )
         contact_ids = [c.id for c in contacts]
-        cphones = list(ContactPhone.objects.filter(contact_id__in=contact_ids).only("contact_id", "value", "comment"))
-        cemails = list(ContactEmail.objects.filter(contact_id__in=contact_ids).only("contact_id", "value"))
+        cphones = list(
+            ContactPhone.objects.filter(contact_id__in=contact_ids).only(
+                "contact_id", "value", "comment"
+            )
+        )
+        cemails = list(
+            ContactEmail.objects.filter(contact_id__in=contact_ids).only("contact_id", "value")
+        )
 
         # Заметки/задачи могут быть большими по объёму → забираем только потенциально релевантные записи (OR по токенам).
         note_match_q = Q()
@@ -622,8 +673,12 @@ class CompanySearchService:
             note_match_q |= Q(text__contains=dt)
             task_match_q |= Q(title__contains=dt) | Q(description__contains=dt)
 
-        notes_qs = CompanyNote.objects.filter(company_id__in=company_ids).only("company_id", "text", "attachment_name")
-        tasks_qs = Task.objects.filter(company_id__in=company_ids).only("company_id", "title", "description")
+        notes_qs = CompanyNote.objects.filter(company_id__in=company_ids).only(
+            "company_id", "text", "attachment_name"
+        )
+        tasks_qs = Task.objects.filter(company_id__in=company_ids).only(
+            "company_id", "title", "description"
+        )
         if note_match_q:
             notes_qs = notes_qs.filter(note_match_q)
         if task_match_q:
@@ -666,7 +721,13 @@ class CompanySearchService:
 
         # Индекс (plain_text) для fallback explainability
         from companies.models import CompanySearchIndex
-        idx_map = {i.company_id: i for i in CompanySearchIndex.objects.filter(company_id__in=company_ids).only("company_id", "plain_text")}
+
+        idx_map = {
+            i.company_id: i
+            for i in CompanySearchIndex.objects.filter(company_id__in=company_ids).only(
+                "company_id", "plain_text"
+            )
+        }
 
         ORG_FORMS = {"ооо", "ип", "зао", "оао", "пао", "ао", "нко", "тк", "ооо."}
 
@@ -721,7 +782,15 @@ class CompanySearchService:
                 max_matches=2,
                 max_len=70,
             )
-            return Candidate(field=field, label=label, value=value, value_html=html, hit_text=frozenset(ht), hit_digits=frozenset(hd), priority=priority)
+            return Candidate(
+                field=field,
+                label=label,
+                value=value,
+                value_html=html,
+                hit_text=frozenset(ht),
+                hit_digits=frozenset(hd),
+                priority=priority,
+            )
 
         out: dict[UUID, SearchExplain] = {}
 
@@ -767,7 +836,12 @@ class CompanySearchService:
             add("company.activity_kind", "Вид деятельности", c.activity_kind or "", 7)
             add("company.work_schedule", "График работы", c.work_schedule or "", 7)
             add("company.contact_name", "Контакт (ФИО) [в карточке]", c.contact_name or "", 5)
-            add("company.contact_position", "Контакт (должность) [в карточке]", c.contact_position or "", 6)
+            add(
+                "company.contact_position",
+                "Контакт (должность) [в карточке]",
+                c.contact_position or "",
+                6,
+            )
 
             for n in notes_by_company.get(c.id, [])[:50]:
                 add("company.notes.text", "Заметка", (n.text or "").strip(), 8)
@@ -776,13 +850,17 @@ class CompanySearchService:
 
             for t in tasks_by_company.get(c.id, [])[:50]:
                 add("company.tasks.title", "Задача", (t.title or "").strip(), 8)
-                add("company.tasks.description", "Описание задачи", (t.description or "").strip(), 9)
+                add(
+                    "company.tasks.description", "Описание задачи", (t.description or "").strip(), 9
+                )
 
             # Fallback: если причин мало — добавляем причину из plain_text (как last resort explainability)
             if len(cands) < 2:
                 idx = idx_map.get(c.id)
                 if idx and (idx.plain_text or "").strip():
-                    cand = _mk_candidate("search_index.plain_text", "Совпадение (прочее)", idx.plain_text, 20)
+                    cand = _mk_candidate(
+                        "search_index.plain_text", "Совпадение (прочее)", idx.plain_text, 20
+                    )
                     if cand:
                         cands.append(cand)
 
@@ -806,7 +884,9 @@ class CompanySearchService:
                 for cand in cands_sorted:
                     if cand in selected:
                         continue
-                    gain = len((needed_text - covered_t) & set(cand.hit_text)) + len((needed_digits - covered_d) & set(cand.hit_digits))
+                    gain = len((needed_text - covered_t) & set(cand.hit_text)) + len(
+                        (needed_digits - covered_d) & set(cand.hit_digits)
+                    )
                     if gain > best_gain:
                         best_gain = gain
                         best = cand
@@ -827,26 +907,49 @@ class CompanySearchService:
 
             reasons_total = len(cands_sorted)
             # Убираем "шум": заметки, задачи — если уже есть ясная причина (ИНН, название, контакт, телефон)
-            PRIMARY_FIELDS = frozenset({
-                "company.inn", "company.kpp", "company.name", "company.legal_name",
-                "company.phone", "company.email", "company.phones.value", "company.emails.value",
-                "contact.name", "contact.phones.value", "contact.emails.value",
-                "company.address", "company.website", "company.contact_name", "company.contact_position",
-                "contact.position",
-            })
-            NOISE_FIELDS = frozenset({
-                "company.notes.text", "company.notes.attachment_name",
-                "company.tasks.title", "company.tasks.description",
-                "company.phones.comment", "contact.phones.comment", "contact.note",
-                "search_index.plain_text",
-            })
+            PRIMARY_FIELDS = frozenset(
+                {
+                    "company.inn",
+                    "company.kpp",
+                    "company.name",
+                    "company.legal_name",
+                    "company.phone",
+                    "company.email",
+                    "company.phones.value",
+                    "company.emails.value",
+                    "contact.name",
+                    "contact.phones.value",
+                    "contact.emails.value",
+                    "company.address",
+                    "company.website",
+                    "company.contact_name",
+                    "company.contact_position",
+                    "contact.position",
+                }
+            )
+            NOISE_FIELDS = frozenset(
+                {
+                    "company.notes.text",
+                    "company.notes.attachment_name",
+                    "company.tasks.title",
+                    "company.tasks.description",
+                    "company.phones.comment",
+                    "contact.phones.comment",
+                    "contact.note",
+                    "search_index.plain_text",
+                }
+            )
             has_primary = any(c.field in PRIMARY_FIELDS for c in selected)
             if has_primary:
                 selected = [c for c in selected if c.field not in NOISE_FIELDS]
             # При поиске по email показываем в первую очередь причину «Email», а не контакт/заметку
-            EMAIL_REASON_FIELDS = frozenset({
-                "company.email", "company.emails.value", "contact.emails.value",
-            })
+            EMAIL_REASON_FIELDS = frozenset(
+                {
+                    "company.email",
+                    "company.emails.value",
+                    "contact.emails.value",
+                }
+            )
             if "@" in pq.raw and selected:
                 email_cands = [x for x in selected if x.field in EMAIL_REASON_FIELDS]
                 other_cands = [x for x in selected if x.field not in EMAIL_REASON_FIELDS]
@@ -856,23 +959,46 @@ class CompanySearchService:
 
             # Подсвечиваем в таблице только то поле, по которому реально нашли (иначе — обычный текст)
             if selected_fields & {"company.name", "company.legal_name"}:
-                name_html = highlight_html(c.name or "", text_tokens=pq.text_tokens, digit_tokens=pq.strong_digit_tokens + pq.weak_digit_tokens, max_matches=2, max_len=120)
+                name_html = highlight_html(
+                    c.name or "",
+                    text_tokens=pq.text_tokens,
+                    digit_tokens=pq.strong_digit_tokens + pq.weak_digit_tokens,
+                    max_matches=2,
+                    max_len=120,
+                )
             else:
                 name_html = escape(c.name or "")
 
             if "company.inn" in selected_fields:
-                inn_html = highlight_html(c.inn or "", text_tokens=pq.text_tokens, digit_tokens=pq.strong_digit_tokens + pq.weak_digit_tokens, max_matches=2, max_len=120)
+                inn_html = highlight_html(
+                    c.inn or "",
+                    text_tokens=pq.text_tokens,
+                    digit_tokens=pq.strong_digit_tokens + pq.weak_digit_tokens,
+                    max_matches=2,
+                    max_len=120,
+                )
             else:
                 inn_html = escape(c.inn or "")
 
             if "company.address" in selected_fields:
-                address_html = highlight_html(c.address or "", text_tokens=pq.text_tokens, digit_tokens=pq.strong_digit_tokens + pq.weak_digit_tokens, max_matches=2, max_len=120)
+                address_html = highlight_html(
+                    c.address or "",
+                    text_tokens=pq.text_tokens,
+                    digit_tokens=pq.strong_digit_tokens + pq.weak_digit_tokens,
+                    max_matches=2,
+                    max_len=120,
+                )
             else:
                 address_html = escape(c.address or "")
 
             out[c.id] = SearchExplain(
                 company_id=c.id,
-                reasons=tuple(SearchReason(field=x.field, label=x.label, value=x.value, value_html=x.value_html) for x in selected_for_ui),
+                reasons=tuple(
+                    SearchReason(
+                        field=x.field, label=x.label, value=x.value, value_html=x.value_html
+                    )
+                    for x in selected_for_ui
+                ),
                 reasons_total=reasons_total,
                 name_html=name_html,
                 inn_html=inn_html,
@@ -890,4 +1016,3 @@ def get_company_search_backend(*, max_results_cap: int = 5000):
     (PostgreSQL FTS + pg_trgm). Функция оставлена как фасад для обратной совместимости.
     """
     return CompanySearchService(max_results_cap=max_results_cap)
-

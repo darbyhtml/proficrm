@@ -58,6 +58,7 @@ class CompanyDetailViewTestCase(TestCase):
     def test_company_detail_404_for_nonexistent(self):
         """GET несуществующей компании возвращает 404."""
         import uuid
+
         url = reverse("company_detail", kwargs={"company_id": uuid.uuid4()})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 404)
@@ -69,10 +70,13 @@ class CompanyDetailViewTestCase(TestCase):
     def test_company_edit_post_saves_changes(self):
         """POST /companies/<id>/edit/ сохраняет изменения и редиректит на карточку."""
         url = reverse("company_edit", kwargs={"company_id": self.company.id})
-        response = self.client.post(url, {
-            "name": "Новое название",
-            "inn": "1234567890",
-        })
+        response = self.client.post(
+            url,
+            {
+                "name": "Новое название",
+                "inn": "1234567890",
+            },
+        )
         # Успешное сохранение → redirect на company_detail
         self.assertIn(response.status_code, [302, 200])
         if response.status_code == 302:
@@ -111,26 +115,27 @@ class CompanyDetailViewTestCase(TestCase):
     def test_contact_create_post_creates_contact(self):
         """POST /companies/<id>/contacts/new/ создаёт контакт."""
         url = reverse("contact_create", kwargs={"company_id": self.company.id})
-        response = self.client.post(url, {
-            "last_name": "Иванов",
-            "first_name": "Иван",
-            "position": "Директор",
-            "status": "",
-            "note": "",
-            # Пустые инлайн-формсеты
-            "emails-TOTAL_FORMS": "0",
-            "emails-INITIAL_FORMS": "0",
-            "emails-MIN_NUM_FORMS": "0",
-            "emails-MAX_NUM_FORMS": "1000",
-            "phones-TOTAL_FORMS": "0",
-            "phones-INITIAL_FORMS": "0",
-            "phones-MIN_NUM_FORMS": "0",
-            "phones-MAX_NUM_FORMS": "1000",
-        })
-        self.assertIn(response.status_code, [302, 200])
-        self.assertTrue(
-            Contact.objects.filter(company=self.company, last_name="Иванов").exists()
+        response = self.client.post(
+            url,
+            {
+                "last_name": "Иванов",
+                "first_name": "Иван",
+                "position": "Директор",
+                "status": "",
+                "note": "",
+                # Пустые инлайн-формсеты
+                "emails-TOTAL_FORMS": "0",
+                "emails-INITIAL_FORMS": "0",
+                "emails-MIN_NUM_FORMS": "0",
+                "emails-MAX_NUM_FORMS": "1000",
+                "phones-TOTAL_FORMS": "0",
+                "phones-INITIAL_FORMS": "0",
+                "phones-MIN_NUM_FORMS": "0",
+                "phones-MAX_NUM_FORMS": "1000",
+            },
         )
+        self.assertIn(response.status_code, [302, 200])
+        self.assertTrue(Contact.objects.filter(company=self.company, last_name="Иванов").exists())
 
     def test_contact_create_forbidden_for_other_company(self):
         """Нельзя добавить контакт в чужую компанию."""
@@ -145,18 +150,21 @@ class CompanyDetailViewTestCase(TestCase):
             responsible=other_user,
         )
         url = reverse("contact_create", kwargs={"company_id": other_company.id})
-        response = self.client.post(url, {
-            "last_name": "Взломщик",
-            "first_name": "Тест",
-            "emails-TOTAL_FORMS": "0",
-            "emails-INITIAL_FORMS": "0",
-            "emails-MIN_NUM_FORMS": "0",
-            "emails-MAX_NUM_FORMS": "1000",
-            "phones-TOTAL_FORMS": "0",
-            "phones-INITIAL_FORMS": "0",
-            "phones-MIN_NUM_FORMS": "0",
-            "phones-MAX_NUM_FORMS": "1000",
-        })
+        response = self.client.post(
+            url,
+            {
+                "last_name": "Взломщик",
+                "first_name": "Тест",
+                "emails-TOTAL_FORMS": "0",
+                "emails-INITIAL_FORMS": "0",
+                "emails-MIN_NUM_FORMS": "0",
+                "emails-MAX_NUM_FORMS": "1000",
+                "phones-TOTAL_FORMS": "0",
+                "phones-INITIAL_FORMS": "0",
+                "phones-MIN_NUM_FORMS": "0",
+                "phones-MAX_NUM_FORMS": "1000",
+            },
+        )
         self.assertFalse(
             Contact.objects.filter(company=other_company, last_name="Взломщик").exists()
         )
@@ -173,21 +181,24 @@ class CompanyDetailViewTestCase(TestCase):
             first_name="Пётр",
         )
         url = reverse("contact_edit", kwargs={"contact_id": contact.id})
-        response = self.client.post(url, {
-            "last_name": "Сидоров",
-            "first_name": "Сидор",
-            "position": "",
-            "status": "",
-            "note": "",
-            "emails-TOTAL_FORMS": "0",
-            "emails-INITIAL_FORMS": "0",
-            "emails-MIN_NUM_FORMS": "0",
-            "emails-MAX_NUM_FORMS": "1000",
-            "phones-TOTAL_FORMS": "0",
-            "phones-INITIAL_FORMS": "0",
-            "phones-MIN_NUM_FORMS": "0",
-            "phones-MAX_NUM_FORMS": "1000",
-        })
+        response = self.client.post(
+            url,
+            {
+                "last_name": "Сидоров",
+                "first_name": "Сидор",
+                "position": "",
+                "status": "",
+                "note": "",
+                "emails-TOTAL_FORMS": "0",
+                "emails-INITIAL_FORMS": "0",
+                "emails-MIN_NUM_FORMS": "0",
+                "emails-MAX_NUM_FORMS": "1000",
+                "phones-TOTAL_FORMS": "0",
+                "phones-INITIAL_FORMS": "0",
+                "phones-MIN_NUM_FORMS": "0",
+                "phones-MAX_NUM_FORMS": "1000",
+            },
+        )
         self.assertIn(response.status_code, [302, 200])
         contact.refresh_from_db()
         self.assertEqual(contact.last_name, "Сидоров")
@@ -199,9 +210,12 @@ class CompanyDetailViewTestCase(TestCase):
     def test_company_note_add_creates_note(self):
         """POST /companies/<id>/notes/add/ создаёт заметку."""
         url = reverse("company_note_add", kwargs={"company_id": self.company.id})
-        response = self.client.post(url, {
-            "text": "Тестовая заметка",
-        })
+        response = self.client.post(
+            url,
+            {
+                "text": "Тестовая заметка",
+            },
+        )
         self.assertIn(response.status_code, [302, 200])
         self.assertTrue(
             CompanyNote.objects.filter(

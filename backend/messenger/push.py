@@ -6,6 +6,7 @@ Web Push уведомления для операторов (аналог Chatwo
 раньше был `threading.Thread(daemon=True)`, но daemon-поток умирал вместе
 с gunicorn при рестартах и терял payload (P1-8 bug-hunt).
 """
+
 import json
 import logging
 

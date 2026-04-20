@@ -2,6 +2,7 @@
 Общие вспомогательные функции для view-модулей mailer.
 Вынесены сюда чтобы избежать циклических импортов.
 """
+
 from __future__ import annotations
 
 import json
@@ -55,11 +56,31 @@ def _smtp_bz_today_stats_cached(*, api_key: str, today_str: str) -> dict:
     try:
         from mailer.smtp_bz_api import get_message_logs
 
-        bounce = _smtp_bz_extract_total(get_message_logs(api_key, status="bounce", limit=1, start_date=today_str, end_date=today_str))
-        returned = _smtp_bz_extract_total(get_message_logs(api_key, status="return", limit=1, start_date=today_str, end_date=today_str))
-        cancelled = _smtp_bz_extract_total(get_message_logs(api_key, status="cancel", limit=1, start_date=today_str, end_date=today_str))
-        opened = _smtp_bz_extract_total(get_message_logs(api_key, is_open=True, limit=1, start_date=today_str, end_date=today_str))
-        unsub = _smtp_bz_extract_total(get_message_logs(api_key, is_unsubscribe=True, limit=1, start_date=today_str, end_date=today_str))
+        bounce = _smtp_bz_extract_total(
+            get_message_logs(
+                api_key, status="bounce", limit=1, start_date=today_str, end_date=today_str
+            )
+        )
+        returned = _smtp_bz_extract_total(
+            get_message_logs(
+                api_key, status="return", limit=1, start_date=today_str, end_date=today_str
+            )
+        )
+        cancelled = _smtp_bz_extract_total(
+            get_message_logs(
+                api_key, status="cancel", limit=1, start_date=today_str, end_date=today_str
+            )
+        )
+        opened = _smtp_bz_extract_total(
+            get_message_logs(
+                api_key, is_open=True, limit=1, start_date=today_str, end_date=today_str
+            )
+        )
+        unsub = _smtp_bz_extract_total(
+            get_message_logs(
+                api_key, is_unsubscribe=True, limit=1, start_date=today_str, end_date=today_str
+            )
+        )
 
         result = {
             "bounce": bounce,
@@ -118,14 +139,24 @@ def _dispatch_test_email(request: HttpRequest, cfg: GlobalMailAccount, x_tag: st
         return False
 
     from django.conf import settings as _dj_settings
+
     throttle_limit = getattr(_dj_settings, "MAILER_THROTTLE_TEST_EMAIL_PER_HOUR", 5)
-    is_throttled, _current, _ = is_user_throttled(request.user.id, "send_test_email", max_requests=throttle_limit, window_seconds=3600)
+    is_throttled, _current, _ = is_user_throttled(
+        request.user.id, "send_test_email", max_requests=throttle_limit, window_seconds=3600
+    )
     if is_throttled:
-        messages.error(request, f"Превышен лимит тестовых писем ({throttle_limit}/час). Попробуйте позже.")
+        messages.error(
+            request, f"Превышен лимит тестовых писем ({throttle_limit}/час). Попробуйте позже."
+        )
         return False
 
-    from mailer.mail_content import ensure_unsubscribe_tokens, build_unsubscribe_url, append_unsubscribe_footer
+    from mailer.mail_content import (
+        ensure_unsubscribe_tokens,
+        build_unsubscribe_url,
+        append_unsubscribe_footer,
+    )
     from mailer.tasks import send_test_email
+
     try:
         token = ensure_unsubscribe_tokens([to_email]).get(to_email.lower(), "")
         unsub_url = build_unsubscribe_url(token) if token else ""
@@ -135,7 +166,9 @@ def _dispatch_test_email(request: HttpRequest, cfg: GlobalMailAccount, x_tag: st
     body_html = "<p>Тестовое письмо из CRM ПРОФИ.</p><p>Если вы это читаете — SMTP настроен.</p>"
     body_text = "Тестовое письмо из CRM ПРОФИ.\n\nЕсли вы это читаете — SMTP настроен.\n"
     if unsub_url:
-        body_html, body_text = append_unsubscribe_footer(body_html=body_html, body_text=body_text, unsubscribe_url=unsub_url)
+        body_html, body_text = append_unsubscribe_footer(
+            body_html=body_html, body_text=body_text, unsubscribe_url=unsub_url
+        )
 
     send_test_email.delay(
         to_email=to_email,
@@ -147,5 +180,8 @@ def _dispatch_test_email(request: HttpRequest, cfg: GlobalMailAccount, x_tag: st
         reply_to=to_email,
         x_tag=x_tag,
     )
-    messages.success(request, f"Тестовое письмо поставлено в очередь. Проверьте ящик {to_email} через несколько секунд.")
+    messages.success(
+        request,
+        f"Тестовое письмо поставлено в очередь. Проверьте ящик {to_email} через несколько секунд.",
+    )
     return True

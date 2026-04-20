@@ -25,7 +25,7 @@ class Command(BaseCommand):
             type=int,
             default=2025,
             help="Оставляем задачи с дедлайном начиная с этого года (включительно). "
-                 "Все задачи с due_at.year < year будут удалены (по умолчанию 2025).",
+            "Все задачи с due_at.year < year будут удалены (по умолчанию 2025).",
         )
         parser.add_argument(
             "--months",
@@ -43,7 +43,7 @@ class Command(BaseCommand):
             type=int,
             default=None,
             help="ID пользователя, от имени которого будут созданы заметки. "
-                 "Если не указан, берётся первый активный администратор/управляющий.",
+            "Если не указан, берётся первый активный администратор/управляющий.",
         )
 
     def _get_note_author(self, user_id: int | None) -> User:
@@ -70,7 +70,9 @@ class Command(BaseCommand):
         ).order_by("id")
         user = qs.first()
         if not user:
-            raise RuntimeError("Не найден ни один активный пользователь с правами администратора/управляющего.")
+            raise RuntimeError(
+                "Не найден ни один активный пользователь с правами администратора/управляющего."
+            )
         return user
 
     def handle(self, *args, **options):
@@ -78,50 +80,42 @@ class Command(BaseCommand):
         months = int(options["months"])
         dry_run = bool(options["dry_run"])
         user_id = options.get("user_id")
-        
+
         # Сначала обрабатываем выполненные задачи старше N месяцев
         self._cleanup_completed_tasks(months, dry_run)
-        
+
         # Затем обрабатываем старые задачи по году дедлайна
 
         self._cleanup_old_tasks_by_year(target_year, dry_run, user_id)
-    
+
     def _cleanup_completed_tasks(self, months: int, dry_run: bool):
         """Удаляет задачи со статусом 'Выполнено' старше указанного количества месяцев."""
         from datetime import timedelta
-        
+
         cutoff_date = timezone.now() - timedelta(days=months * 30)
-        
+
         self.stdout.write(
             self.style.WARNING(
                 f"Поиск выполненных задач старше {months} месяцев (completed_at < {cutoff_date.date()})."
             )
         )
-        
+
         qs = Task.objects.filter(
-            status=Task.Status.DONE,
-            completed_at__isnull=False,
-            completed_at__lt=cutoff_date
+            status=Task.Status.DONE, completed_at__isnull=False, completed_at__lt=cutoff_date
         )
-        
+
         total = qs.count()
         if total == 0:
             self.stdout.write(self.style.SUCCESS("Выполненных задач для удаления не найдено."))
             return
-        
-        self.stdout.write(
-            self.style.WARNING(
-                f"Найдено выполненных задач для удаления: {total}."
-            )
-        )
-        
+
+        self.stdout.write(self.style.WARNING(f"Найдено выполненных задач для удаления: {total}."))
+
         if dry_run:
             examples = qs[:5]
             self.stdout.write("Примеры задач для удаления:")
             for t in examples:
-                self.stdout.write(
-                    f"- {t.id} | completed_at={t.completed_at} | title={t.title!r}"
-                )
+                self.stdout.write(f"- {t.id} | completed_at={t.completed_at} | title={t.title!r}")
             self.stdout.write(
                 self.style.WARNING(
                     "\nЭто DRY RUN, никаких изменений не внесено. "
@@ -129,23 +123,21 @@ class Command(BaseCommand):
                 )
             )
             return
-        
+
         deleted_count = 0
         batch_size = 500
         ids = list(qs.values_list("id", flat=True))
-        
+
         for i in range(0, len(ids), batch_size):
             batch_ids = ids[i : i + batch_size]
             with transaction.atomic():
                 Task.objects.filter(id__in=batch_ids).delete()
                 deleted_count += len(batch_ids)
-        
+
         self.stdout.write(
-            self.style.SUCCESS(
-                f"Готово. Удалено выполненных задач: {deleted_count}."
-            )
+            self.style.SUCCESS(f"Готово. Удалено выполненных задач: {deleted_count}.")
         )
-    
+
     def _cleanup_old_tasks_by_year(self, target_year: int, dry_run: bool, user_id: int | None):
         """Переносит старые задачи (по году дедлайна) в заметки компании и удаляет их."""
         self.stdout.write(
@@ -189,7 +181,11 @@ class Command(BaseCommand):
             return
 
         author = self._get_note_author(user_id)
-        self.stdout.write(self.style.SUCCESS(f"Заметки будут создаваться от имени пользователя: {author} (id={author.id})"))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Заметки будут создаваться от имени пользователя: {author} (id={author.id})"
+            )
+        )
 
         # Импортируем здесь, чтобы избежать циклических импортов на уровне модуля
         from ui.views import _create_note_from_task
@@ -203,10 +199,7 @@ class Command(BaseCommand):
 
         for i in range(0, len(ids), batch_size):
             batch_ids = ids[i : i + batch_size]
-            batch_qs = (
-                Task.objects.filter(id__in=batch_ids)
-                .select_related("company", "type")
-            )
+            batch_qs = Task.objects.filter(id__in=batch_ids).select_related("company", "type")
             with transaction.atomic():
                 for task in batch_qs:
                     if task.company_id:
@@ -220,4 +213,3 @@ class Command(BaseCommand):
                 f"Готово. Создано заметок: {created_notes}, удалено задач: {deleted_tasks}."
             )
         )
-

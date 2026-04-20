@@ -18,12 +18,12 @@ def apply_signature(*, user: User, body_html: str, body_text: str) -> tuple[str,
     if not sig_html:
         return body_html, body_text
     sig_text = (html_to_text(sig_html or "") or "").strip()
-    new_html = (body_html or "")
+    new_html = body_html or ""
     if new_html:
         new_html = new_html + "<br><br>" + sig_html
     else:
         new_html = sig_html
-    new_text = (body_text or "")
+    new_text = body_text or ""
     if sig_text:
         new_text = (new_text + "\n\n" + sig_text) if new_text else sig_text
     return new_html, new_text
@@ -69,7 +69,9 @@ def ensure_unsubscribe_tokens(emails: Iterable[str]) -> dict[str, str]:
     return existing
 
 
-def append_unsubscribe_footer(*, body_html: str, body_text: str, unsubscribe_url: str) -> tuple[str, str]:
+def append_unsubscribe_footer(
+    *, body_html: str, body_text: str, unsubscribe_url: str
+) -> tuple[str, str]:
     """
     Добавляет ссылку отписки в HTML и text.
     """
@@ -83,9 +85,8 @@ def append_unsubscribe_footer(*, body_html: str, body_text: str, unsubscribe_url
         f'<div style="font-size:12px;color:#6b7280">Отписаться: <a href="{url}">{url}</a></div>'
     )
 
-    out_html = (body_html or "")
-    out_text = (body_text or "")
+    out_html = body_html or ""
+    out_text = body_text or ""
     out_html = out_html + footer_html if out_html else footer_html
     out_text = (out_text + footer_text) if out_text else footer_text.strip()
     return out_html, out_text
-

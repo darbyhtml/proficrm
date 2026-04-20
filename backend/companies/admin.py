@@ -109,11 +109,23 @@ class CompanyAdmin(admin.ModelAdmin):
 
 @admin.register(CompanyDeletionRequest)
 class CompanyDeletionRequestAdmin(admin.ModelAdmin):
-    list_display = ("company_name_snapshot", "requested_by", "status", "decided_by", "created_at", "decided_at")
+    list_display = (
+        "company_name_snapshot",
+        "requested_by",
+        "status",
+        "decided_by",
+        "created_at",
+        "decided_at",
+    )
     list_filter = ("status", "created_at", "decided_at")
     search_fields = ("company_name_snapshot", "requested_by__username", "note", "decision_note")
-    readonly_fields = ("company_id_snapshot", "company_name_snapshot", "requested_by", "requested_by_branch", "created_at")
-
+    readonly_fields = (
+        "company_id_snapshot",
+        "company_name_snapshot",
+        "requested_by",
+        "requested_by_branch",
+        "created_at",
+    )
 
 
 # Register your models here.

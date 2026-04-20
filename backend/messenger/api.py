@@ -18,6 +18,7 @@ class EventStreamRenderer(BaseRenderer):
     def render(self, data, accepted_media_type=None, renderer_context=None):
         return data
 
+
 from accounts.models import Branch, User
 from policy.drf import PolicyPermission
 
@@ -50,7 +51,7 @@ class ConversationViewSet(
 ):
     """
     API для диалогов (conversations) - по образцу Chatwoot.
-    
+
     Оптимизирован для производительности:
     - select_related для ForeignKey связей
     - prefetch_related для обратных связей
@@ -86,21 +87,20 @@ class ConversationViewSet(
         """
         Возвращает только диалоги, видимые текущему пользователю через selectors.
         Никаких .objects.all() для не-админов.
-        
+
         Оптимизация запросов (по образцу Chatwoot):
         - select_related для ForeignKey связей (убирает N+1 запросы)
         - prefetch_related для обратных связей (messages)
         """
         user = self.request.user
-        qs = selectors.visible_conversations_qs(user).select_related(
-            "contact", 
-            "branch", 
-            "region", 
-            "assignee", 
-            "inbox"
-        ).prefetch_related(
-            # Предзагружаем сообщения и метки для уменьшения запросов при сериализации
-            "messages", "labels"
+        qs = (
+            selectors.visible_conversations_qs(user)
+            .select_related("contact", "branch", "region", "assignee", "inbox")
+            .prefetch_related(
+                # Предзагружаем сообщения и метки для уменьшения запросов при сериализации
+                "messages",
+                "labels",
+            )
         )
 
         # Аннотации: превью последнего сообщения + unread_count (для текущего пользователя)
@@ -115,14 +115,15 @@ class ConversationViewSet(
         # Аннотируем последнее сообщение, но НЕ фильтруем здесь по last_message_body,
         # чтобы retrieve/detail продолжал работать даже для диалогов без сообщений.
         qs = qs.annotate(last_message_body=Subquery(last_message))
-        
+
         # Аннотируем last_activity_at_fallback (fallback на created_at как в Chatwoot)
         from django.db.models import Case, When, DateTimeField
+
         qs = qs.annotate(
             last_activity_at_fallback=Case(
-                When(last_activity_at__isnull=False, then=F('last_activity_at')),
-                default=F('created_at'),
-                output_field=DateTimeField()
+                When(last_activity_at__isnull=False, then=F("last_activity_at")),
+                default=F("created_at"),
+                output_field=DateTimeField(),
             )
         )
 
@@ -147,7 +148,11 @@ class ConversationViewSet(
         q = (qp.get("q") or "").strip()
         if q:
             q_digits = "".join([c for c in q if c.isdigit()])
-            q_obj = Q(contact__name__icontains=q) | Q(contact__email__icontains=q) | Q(contact__phone__icontains=q)
+            q_obj = (
+                Q(contact__name__icontains=q)
+                | Q(contact__email__icontains=q)
+                | Q(contact__phone__icontains=q)
+            )
             if q_digits:
                 try:
                     q_obj = q_obj | Q(id=int(q_digits))
@@ -159,7 +164,11 @@ class ConversationViewSet(
         status_filter = (qp.get("status") or "").strip()
         if status_filter:
             if "," in status_filter:
-                statuses = [s.strip() for s in status_filter.split(",") if s.strip() and s.strip() in valid_statuses]
+                statuses = [
+                    s.strip()
+                    for s in status_filter.split(",")
+                    if s.strip() and s.strip() in valid_statuses
+                ]
                 if statuses:
                     qs = qs.filter(status__in=statuses)
             elif status_filter in valid_statuses:
@@ -185,9 +194,7 @@ class ConversationViewSet(
         чтобы у операторов не появлялись пустые чаты, созданные только bootstrap'ом виджета.
         """
         # Оптимизация: фильтруем диалоги без сообщений, но используем оптимизированный queryset
-        base_qs = self.filter_queryset(
-            self.get_queryset().filter(last_message_body__isnull=False)
-        )
+        base_qs = self.filter_queryset(self.get_queryset().filter(last_message_body__isnull=False))
 
         page = self.paginate_queryset(base_qs)
         if page is not None:
@@ -214,7 +221,9 @@ class ConversationViewSet(
         непрочитанные IN-сообщения — чтобы виджет мог показать чекмарки.
         """
         # Менеджеры, админы и суперюзеры могут помечать прочитанным
-        if not (request.user.is_superuser or request.user.role in (User.Role.MANAGER, User.Role.ADMIN)):
+        if not (
+            request.user.is_superuser or request.user.role in (User.Role.MANAGER, User.Role.ADMIN)
+        ):
             return Response({"status": "ignored"}, status=status.HTTP_200_OK)
 
         conversation = self.get_object()
@@ -246,15 +255,24 @@ class ConversationViewSet(
         Аналог Chatwoot contact merge. Только для администраторов.
         """
         if not (request.user.is_superuser or request.user.role == User.Role.ADMIN):
-            return Response({"detail": "Only administrators can merge contacts."}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": "Only administrators can merge contacts."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         primary_id = request.data.get("primary_contact_id")
         merge_id = request.data.get("merge_contact_id")
         if not primary_id or not merge_id:
-            return Response({"detail": "primary_contact_id and merge_contact_id required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "primary_contact_id and merge_contact_id required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if str(primary_id) == str(merge_id):
-            return Response({"detail": "Cannot merge contact with itself"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Cannot merge contact with itself"}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         from django.core.exceptions import ValidationError as DjangoValidationError
+
         try:
             primary = models.Contact.objects.get(pk=primary_id)
             merge = models.Contact.objects.get(pk=merge_id)
@@ -262,6 +280,7 @@ class ConversationViewSet(
             return Response({"detail": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
 
         from django.db import transaction
+
         with transaction.atomic():
             # Перенести диалоги
             moved = models.Conversation.objects.filter(contact=merge).update(contact=primary)
@@ -277,11 +296,13 @@ class ConversationViewSet(
             # Удалить merge-контакт
             merge.delete()
 
-        return Response({
-            "status": "ok",
-            "primary_contact_id": str(primary.id),
-            "conversations_moved": moved,
-        })
+        return Response(
+            {
+                "status": "ok",
+                "primary_contact_id": str(primary.id),
+                "conversations_moved": moved,
+            }
+        )
 
     @action(detail=False, methods=["get"], url_path="unread-count")
     def unread_count(self, request):
@@ -321,7 +342,10 @@ class ConversationViewSet(
             qs = qs.filter(messenger_online=True)
 
         users = qs.values(
-            "id", "username", "first_name", "last_name",
+            "id",
+            "username",
+            "first_name",
+            "last_name",
         ).order_by("first_name", "last_name")
         result = [
             {
@@ -352,9 +376,7 @@ class ConversationViewSet(
             User.Role.BRANCH_DIRECTOR,
             User.Role.SALES_HEAD,
         }
-        is_elevated = (
-            user.is_superuser or getattr(user, "role", None) in elevated_roles
-        )
+        is_elevated = user.is_superuser or getattr(user, "role", None) in elevated_roles
         if not (is_assignee or is_elevated):
             return Response(
                 {"detail": "Только назначенный оператор или руководитель могут запросить помощь."},
@@ -394,17 +416,14 @@ class ConversationViewSet(
 
         is_assignee = conv.assignee_id == user.id
         is_same_branch = (
-            getattr(user, "branch_id", None) is not None
-            and user.branch_id == conv.branch_id
+            getattr(user, "branch_id", None) is not None and user.branch_id == conv.branch_id
         )
         elevated_roles = {
             User.Role.ADMIN,
             User.Role.BRANCH_DIRECTOR,
             User.Role.SALES_HEAD,
         }
-        is_elevated = (
-            user.is_superuser or getattr(user, "role", None) in elevated_roles
-        )
+        is_elevated = user.is_superuser or getattr(user, "role", None) in elevated_roles
         if not (is_assignee or is_same_branch or is_elevated):
             return Response(
                 {"detail": "Нет прав на это действие."},
@@ -419,7 +438,11 @@ class ConversationViewSet(
         }
         # Если assignee пуст и текущий пользователь — менеджер этого подразделения,
         # берём диалог на себя автоматически.
-        if not conv.assignee_id and getattr(user, "role", None) == User.Role.MANAGER and is_same_branch:
+        if (
+            not conv.assignee_id
+            and getattr(user, "role", None) == User.Role.MANAGER
+            and is_same_branch
+        ):
             update_fields["assignee"] = user
             update_fields["assignee_assigned_at"] = now_ts
 
@@ -431,7 +454,7 @@ class ConversationViewSet(
                 conversation=conv,
                 direction=models.Message.Direction.INTERNAL,
                 body=f"✅ Менеджер {user.get_full_name() or user.username} "
-                     f"отметил «Я связался» по off-hours заявке.",
+                f"отметил «Я связался» по off-hours заявке.",
                 sender_user=user,
                 is_private=True,
             )
@@ -444,29 +467,29 @@ class ConversationViewSet(
     def destroy(self, request, pk=None):
         """
         Удалить диалог (только для администраторов) - по образцу Chatwoot.
-        
+
         Args:
             request: HTTP запрос
             pk: ID диалога
-        
+
         Returns:
             Response с подтверждением удаления
-        
+
         Raises:
             403 Forbidden: Если пользователь не является администратором
         """
         conversation = self.get_object()
-        
+
         # Проверка прав доступа: только администраторы могут удалять чаты
         if not (request.user.is_superuser or request.user.role == User.Role.ADMIN):
             return Response(
                 {"detail": "У вас нет прав для удаления диалогов."},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        
+
         conversation_id = conversation.id
         conversation.delete()
-        
+
         return Response(
             {"status": "ok", "message": "Диалог успешно удалён"},
             status=status.HTTP_200_OK,
@@ -503,8 +526,12 @@ class ConversationViewSet(
 
         return Response({"status": "ok", "updated": updated})
 
-    @action(detail=False, methods=["get"], url_path="notifications/stream",
-            renderer_classes=[EventStreamRenderer])
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="notifications/stream",
+        renderer_classes=[EventStreamRenderer],
+    )
     def notifications_stream(self, request):
         """
         Глобальный SSE стрим уведомлений оператора (аналог Chatwoot account-wide ActionCable).
@@ -529,14 +556,16 @@ class ConversationViewSet(
             last_keepalive = 0.0
             # Запоминаем последний ID сообщения на старте, чтобы отдавать только новые
             from django.db.models import Max
-            last_seen_msg_id = models.Message.objects.filter(
-                conversation_id__in=visible_ids
-            ).aggregate(max_id=Max("id"))["max_id"] or 0
+
+            last_seen_msg_id = (
+                models.Message.objects.filter(conversation_id__in=visible_ids).aggregate(
+                    max_id=Max("id")
+                )["max_id"]
+                or 0
+            )
 
             # Запоминаем текущие assignee для отслеживания новых назначений
-            my_assigned_ids = set(
-                visible_qs.filter(assignee=user).values_list("id", flat=True)
-            )
+            my_assigned_ids = set(visible_qs.filter(assignee=user).values_list("id", flat=True))
 
             yield "event: ready\ndata: {}\n\n"
 
@@ -551,9 +580,9 @@ class ConversationViewSet(
                         conversation_id__in=visible_ids,
                         id__gt=last_seen_msg_id,
                         direction=models.Message.Direction.IN,
-                    ).select_related(
-                        "conversation__contact", "sender_contact"
-                    ).order_by("id")[:20]
+                    )
+                    .select_related("conversation__contact", "sender_contact")
+                    .order_by("id")[:20]
                 )
 
                 for msg in new_messages:
@@ -581,7 +610,9 @@ class ConversationViewSet(
                         conv = visible_qs.get(id=conv_id)
                         contact_name = ""
                         if conv.contact:
-                            contact_name = conv.contact.name or conv.contact.email or conv.contact.phone or ""
+                            contact_name = (
+                                conv.contact.name or conv.contact.email or conv.contact.phone or ""
+                            )
                         payload = {
                             "conversation_id": conv_id,
                             "contact_name": contact_name,
@@ -630,9 +661,11 @@ class ConversationViewSet(
             # Оптимизация запросов (по образцу Chatwoot):
             # - prefetch_related для attachments (убирает N+1)
             # - select_related для sender_user и sender_contact (если используются в сериализаторе)
-            messages = conversation.messages.all().select_related(
-                "sender_user", "sender_contact"
-            ).prefetch_related("attachments")
+            messages = (
+                conversation.messages.all()
+                .select_related("sender_user", "sender_contact")
+                .prefetch_related("attachments")
+            )
 
             from django.utils.dateparse import parse_datetime
 
@@ -666,10 +699,10 @@ class ConversationViewSet(
                         messages.filter(created_at__lt=before_dt)
                         if not before_id
                         else messages.filter(
-                            Q(created_at__lt=before_dt) | (Q(created_at=before_dt) & Q(id__lt=before_id))
+                            Q(created_at__lt=before_dt)
+                            | (Q(created_at=before_dt) & Q(id__lt=before_id))
                         )
-                    )
-                    .order_by("-created_at", "-id")[:limit]
+                    ).order_by("-created_at", "-id")[:limit]
                 )
                 chunk.reverse()
                 serializer = serializers.MessageSerializer(chunk, many=True)
@@ -683,14 +716,19 @@ class ConversationViewSet(
 
         elif request.method == "POST":
             # Менеджеры, админы и суперюзеры могут отправлять сообщения клиентам
-            if not (request.user.is_superuser or request.user.role in (User.Role.MANAGER, User.Role.ADMIN)):
+            if not (
+                request.user.is_superuser
+                or request.user.role in (User.Role.MANAGER, User.Role.ADMIN)
+            ):
                 return Response(
                     {"detail": "Только менеджеры могут отвечать в чатах."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
             # POST: создание сообщения оператором (+ вложения)
-            direction = (request.data.get("direction") or models.Message.Direction.OUT).strip().lower()
+            direction = (
+                (request.data.get("direction") or models.Message.Direction.OUT).strip().lower()
+            )
             body = (request.data.get("body") or "").strip()
             files = []
             try:
@@ -708,7 +746,9 @@ class ConversationViewSet(
             # Разрешаем только OUT и INTERNAL
             if direction not in (models.Message.Direction.OUT, models.Message.Direction.INTERNAL):
                 return Response(
-                    {"detail": "Разрешены только исходящие (out) или внутренние (internal) сообщения."},
+                    {
+                        "detail": "Разрешены только исходящие (out) или внутренние (internal) сообщения."
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -720,7 +760,9 @@ class ConversationViewSet(
 
             if len(body) > models.Message.MAX_CONTENT_LENGTH:
                 return Response(
-                    {"detail": f"Текст сообщения слишком длинный (максимум {models.Message.MAX_CONTENT_LENGTH} символов)."},
+                    {
+                        "detail": f"Текст сообщения слишком длинный (максимум {models.Message.MAX_CONTENT_LENGTH} символов)."
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -752,19 +794,25 @@ class ConversationViewSet(
             # Перезагрузить сообщение из БД, чтобы получить вложения в сериализаторе
             message.refresh_from_db()
 
-            return Response(serializers.MessageSerializer(message).data, status=status.HTTP_201_CREATED)
+            return Response(
+                serializers.MessageSerializer(message).data, status=status.HTTP_201_CREATED
+            )
 
     @staticmethod
     def _process_mentions(body, conversation, author):
         """Найти @username в тексте и отправить уведомления упомянутым пользователям."""
         import re
-        mentions = set(re.findall(r'@(\w+)', body))
+
+        mentions = set(re.findall(r"@(\w+)", body))
         if not mentions:
             return
-        mentioned_users = User.objects.filter(username__in=mentions, is_active=True).exclude(pk=author.pk)
+        mentioned_users = User.objects.filter(username__in=mentions, is_active=True).exclude(
+            pk=author.pk
+        )
         for user in mentioned_users:
             try:
                 from notifications.service import notify
+
                 notify(
                     user=user,
                     title=f"{author.get_full_name() or author.username} упомянул вас",
@@ -775,6 +823,7 @@ class ConversationViewSet(
                 )
                 # Также отправить push-уведомление
                 from .push import send_push_to_user
+
                 send_push_to_user(
                     user=user,
                     title=f"Упоминание от {author.get_full_name() or author.username}",
@@ -789,27 +838,27 @@ class ConversationViewSet(
     def stream(self, request, pk=None):
         """
         SSE стрим обновлений для операторской панели (по образцу Chatwoot).
-        
+
         Args:
             request: HTTP запрос
             pk: ID диалога
-        
+
         Returns:
             StreamingHttpResponse с событиями SSE
-        
+
         События:
         - ready: начальное событие (handshake)
         - message.created: новое сообщение
         - conversation.updated: обновление диалога (статус, назначение)
         - conversation.typing_started/stopped: статус печати контакта
         - keep-alive: каждые 5 секунд для поддержания соединения
-        
+
         Note:
             Соединение закрывается через 30 секунд, клиент должен переподключаться.
             Использует prefetch_related для оптимизации запросов сообщений.
         """
         conversation = self.get_object()
-        
+
         # Проверка прав доступа
         user = request.user
         if not (user.is_superuser or user.role == User.Role.ADMIN):
@@ -822,9 +871,9 @@ class ConversationViewSet(
                         {"detail": "У вас нет доступа к этому диалогу."},
                         status=status.HTTP_403_FORBIDDEN,
                     )
-        
+
         from .typing import get_typing_status
-        
+
         def event_stream():
             """SSE стрим для операторской панели."""
             started = time.time()
@@ -835,85 +884,90 @@ class ConversationViewSet(
             )
             last_typing = None
             last_conversation_data = None
-            
+
             # Первое событие (handshake)
             yield "event: ready\ndata: {}\n\n"
-            
+
             while True:
                 now = time.time()
                 # Закрываем соединение через 30 секунд (по образцу Chatwoot)
                 if now - started > 30:
                     break
-                
+
                 # Получаем новые сообщения
-                new_messages = conversation.messages.filter(
-                    id__gt=last_message_id
-                ).select_related(
-                    "sender_user", "sender_contact"
-                ).prefetch_related("attachments").order_by("created_at", "id")
-                
+                new_messages = (
+                    conversation.messages.filter(id__gt=last_message_id)
+                    .select_related("sender_user", "sender_contact")
+                    .prefetch_related("attachments")
+                    .order_by("created_at", "id")
+                )
+
                 messages_list = list(new_messages)
-                
+
                 # Отправляем события для новых сообщений
                 for msg in messages_list:
                     if msg.id > last_message_id:
                         last_message_id = msg.id
-                    
+
                     serializer = serializers.MessageSerializer(msg)
                     yield f"event: message.created\ndata: {json.dumps(serializer.data, ensure_ascii=False)}\n\n"
-                
+
                 # Проверяем статус печати
                 typing_status = get_typing_status(conversation.id)
                 contact_typing = typing_status.get("contact_typing") is True
-                
+
                 if last_typing != contact_typing:
                     last_typing = contact_typing
                     if contact_typing:
                         yield "event: conversation.typing_started\ndata: {}\n\n"
                     else:
                         yield "event: conversation.typing_stopped\ndata: {}\n\n"
-                
+
                 # Проверяем обновления диалога (статус, назначение и т.д.)
                 conversation.refresh_from_db()
                 current_data = {
                     "id": conversation.id,
                     "status": conversation.status,
                     "assignee_id": conversation.assignee_id,
-                    "last_activity_at": conversation.last_activity_at.isoformat() if conversation.last_activity_at else None,
+                    "last_activity_at": (
+                        conversation.last_activity_at.isoformat()
+                        if conversation.last_activity_at
+                        else None
+                    ),
                 }
-                
+
                 if last_conversation_data != current_data:
                     last_conversation_data = current_data
                     yield f"event: conversation.updated\ndata: {json.dumps(current_data, ensure_ascii=False)}\n\n"
-                
+
                 # Keep-alive каждые 5 секунд
                 if now - last_keepalive > 5:
                     last_keepalive = now
                     yield ": keep-alive\n\n"
-                
+
                 time.sleep(1)
-        
+
         resp = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
         resp["Cache-Control"] = "no-cache"
         resp["X-Accel-Buffering"] = "no"  # nginx: не буферизовать SSE
-        
+
         return resp
 
     @action(detail=True, methods=["get", "post"], url_path="typing")
     def typing(self, request, pk=None):
         """
         Управление статусом печати (по образцу Chatwoot).
-        
+
         Args:
             request: HTTP запрос
             pk: ID диалога
-        
+
         GET:
             Возвращает статус печати оператора и контакта.
-        
+
         POST:
             Отмечает, что оператор печатает (TTL 8 секунд в Redis).
-        
+
         Returns:
             GET: { operator_typing: bool, contact_typing: bool }
             POST: { status: "ok" }
@@ -962,8 +1016,10 @@ class ConversationViewSet(
                 "branch_id": c.branch_id,
                 "responsible_id": c.responsible_id,
                 "responsible_name": (
-                    c.responsible.get_full_name() or c.responsible.username
-                ) if c.responsible_id else None,
+                    (c.responsible.get_full_name() or c.responsible.username)
+                    if c.responsible_id
+                    else None
+                ),
                 "url": f"/companies/{c.id}/",
             }
             if hasattr(c, "deals"):
@@ -973,8 +1029,7 @@ class ConversationViewSet(
                     company_block["deals_count"] = 0
 
         previous_qs = (
-            models.Conversation.objects
-            .filter(contact=contact)
+            models.Conversation.objects.filter(contact=contact)
             .exclude(pk=conv.pk)
             .order_by("-created_at")[:20]
         )
@@ -990,47 +1045,54 @@ class ConversationViewSet(
         ]
 
         audit_log = []
-        transfers_qs = (
-            conv.transfers
-            .select_related("from_user", "to_user", "from_branch", "to_branch")
-            .order_by("-created_at")[:20]
-        )
+        transfers_qs = conv.transfers.select_related(
+            "from_user", "to_user", "from_branch", "to_branch"
+        ).order_by("-created_at")[:20]
         for t in transfers_qs:
-            audit_log.append({
-                "kind": "transfer",
-                "created_at": t.created_at,
-                "from_user": (
-                    t.from_user.get_full_name() or t.from_user.username
-                ) if t.from_user_id else None,
-                "to_user": (
-                    t.to_user.get_full_name() or t.to_user.username
-                ) if t.to_user_id else None,
-                "from_branch": t.from_branch.name if t.from_branch_id else None,
-                "to_branch": t.to_branch.name if t.to_branch_id else None,
-                "cross_branch": t.cross_branch,
-                "text": t.reason or "",
-            })
+            audit_log.append(
+                {
+                    "kind": "transfer",
+                    "created_at": t.created_at,
+                    "from_user": (
+                        (t.from_user.get_full_name() or t.from_user.username)
+                        if t.from_user_id
+                        else None
+                    ),
+                    "to_user": (
+                        (t.to_user.get_full_name() or t.to_user.username) if t.to_user_id else None
+                    ),
+                    "from_branch": t.from_branch.name if t.from_branch_id else None,
+                    "to_branch": t.to_branch.name if t.to_branch_id else None,
+                    "cross_branch": t.cross_branch,
+                    "text": t.reason or "",
+                }
+            )
 
         if conv.resolution and isinstance(conv.resolution, dict) and conv.resolution.get("outcome"):
-            audit_log.insert(0, {
-                "kind": "resolution",
-                "created_at": conv.resolution.get("resolved_at"),
-                "text": conv.resolution.get("comment", ""),
-                "outcome": conv.resolution.get("outcome"),
-            })
+            audit_log.insert(
+                0,
+                {
+                    "kind": "resolution",
+                    "created_at": conv.resolution.get("resolved_at"),
+                    "text": conv.resolution.get("comment", ""),
+                    "outcome": conv.resolution.get("outcome"),
+                },
+            )
 
-        return Response({
-            "client": client_block,
-            "company": company_block,
-            "previous_conversations": previous_list,
-            "audit_log": audit_log,
-        })
+        return Response(
+            {
+                "client": client_block,
+                "company": company_block,
+                "previous_conversations": previous_list,
+                "audit_log": audit_log,
+            }
+        )
 
 
 class CannedResponseViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
     """
     API для шаблонов ответов (canned responses) - по образцу Chatwoot.
-    
+
     Оптимизирован для работы с фильтрацией по филиалу пользователя.
     """
 
@@ -1055,7 +1117,7 @@ class CannedResponseViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """
         Сохранить шаблон ответа с автоматическим указанием создателя.
-        
+
         Args:
             serializer: Сериализатор с валидированными данными
         """
@@ -1064,6 +1126,7 @@ class CannedResponseViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
 
 class ConversationLabelViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
     """API для меток диалогов."""
+
     queryset = models.ConversationLabel.objects.all()
     serializer_class = serializers.ConversationLabelSerializer
     permission_classes = [IsAuthenticated]
@@ -1077,15 +1140,19 @@ class PushSubscriptionViewSet(MessengerEnabledApiMixin, viewsets.ViewSet):
     API для управления Browser Push подписками (Web Push API + VAPID).
     Аналог Chatwoot notification_subscriptions.
     """
+
     permission_classes = [IsAuthenticated]
 
     @action(detail=False, methods=["get"], url_path="vapid-key")
     def vapid_key(self, request):
         """GET /api/push/vapid-key/ — публичный VAPID-ключ для подписки."""
         from django.conf import settings
-        return Response({
-            "public_key": getattr(settings, "VAPID_PUBLIC_KEY", ""),
-        })
+
+        return Response(
+            {
+                "public_key": getattr(settings, "VAPID_PUBLIC_KEY", ""),
+            }
+        )
 
     @action(detail=False, methods=["post"], url_path="subscribe")
     def subscribe(self, request):
@@ -1116,14 +1183,15 @@ class PushSubscriptionViewSet(MessengerEnabledApiMixin, viewsets.ViewSet):
         """POST /api/push/unsubscribe/ — деактивировать push-подписку."""
         endpoint = request.data.get("endpoint", "")
         if endpoint:
-            models.PushSubscription.objects.filter(
-                user=request.user, endpoint=endpoint
-            ).update(is_active=False)
+            models.PushSubscription.objects.filter(user=request.user, endpoint=endpoint).update(
+                is_active=False
+            )
         return Response({"status": "unsubscribed"})
 
 
 class CampaignViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
     """API для проактивных кампаний (CRUD для операторов)."""
+
     queryset = models.Campaign.objects.all()
     permission_classes = [IsAuthenticated]
 
@@ -1131,8 +1199,14 @@ class CampaignViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
         class Meta:
             model = models.Campaign
             fields = (
-                "id", "inbox", "title", "message", "url_pattern",
-                "time_on_page", "status", "only_during_business_hours",
+                "id",
+                "inbox",
+                "title",
+                "message",
+                "url_pattern",
+                "time_on_page",
+                "status",
+                "only_during_business_hours",
                 "created_at",
             )
 
@@ -1144,6 +1218,7 @@ class CampaignViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
 
 class AutomationRuleViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
     """API для правил автоматизации (CRUD для администраторов)."""
+
     queryset = models.AutomationRule.objects.all()
     permission_classes = [IsAuthenticated]
 
@@ -1151,8 +1226,15 @@ class AutomationRuleViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
         class Meta:
             model = models.AutomationRule
             fields = (
-                "id", "inbox", "name", "description", "event_name",
-                "conditions", "actions", "is_active", "created_at",
+                "id",
+                "inbox",
+                "name",
+                "description",
+                "event_name",
+                "conditions",
+                "actions",
+                "is_active",
+                "created_at",
             )
 
     serializer_class = AutomationRuleSerializer
@@ -1166,6 +1248,7 @@ class ReportingViewSet(MessengerEnabledApiMixin, viewsets.ViewSet):
     API аналитики мессенджера (аналог Chatwoot reports).
     GET /api/messenger-reports/overview/ — обзор метрик.
     """
+
     permission_classes = [IsAuthenticated]
 
     @action(detail=False, methods=["get"], url_path="overview")
@@ -1180,14 +1263,14 @@ class ReportingViewSet(MessengerEnabledApiMixin, viewsets.ViewSet):
         events = models.ReportingEvent.objects.filter(created_at__gte=since)
 
         # Средний FRT
-        avg_frt = events.filter(
-            name=models.ReportingEvent.EventType.FIRST_RESPONSE
-        ).aggregate(avg=Avg("value"))["avg"]
+        avg_frt = events.filter(name=models.ReportingEvent.EventType.FIRST_RESPONSE).aggregate(
+            avg=Avg("value")
+        )["avg"]
 
         # Средний reply time
-        avg_reply = events.filter(
-            name=models.ReportingEvent.EventType.REPLY_TIME
-        ).aggregate(avg=Avg("value"))["avg"]
+        avg_reply = events.filter(name=models.ReportingEvent.EventType.REPLY_TIME).aggregate(
+            avg=Avg("value")
+        )["avg"]
 
         # Решённые диалоги
         resolved_count = events.filter(
@@ -1195,26 +1278,24 @@ class ReportingViewSet(MessengerEnabledApiMixin, viewsets.ViewSet):
         ).count()
 
         # Общее кол-во диалогов за период
-        total_conversations = models.Conversation.objects.filter(
-            created_at__gte=since
-        ).count()
+        total_conversations = models.Conversation.objects.filter(created_at__gte=since).count()
 
         # CSAT
-        rated = models.Conversation.objects.filter(
-            rated_at__gte=since, rating_score__gt=0
-        )
+        rated = models.Conversation.objects.filter(rated_at__gte=since, rating_score__gt=0)
         avg_csat = rated.aggregate(avg=Avg("rating_score"))["avg"]
         csat_count = rated.count()
 
-        return Response({
-            "period_days": days,
-            "total_conversations": total_conversations,
-            "resolved_conversations": resolved_count,
-            "avg_first_response_time_seconds": round(avg_frt, 1) if avg_frt else None,
-            "avg_reply_time_seconds": round(avg_reply, 1) if avg_reply else None,
-            "avg_csat_score": round(avg_csat, 2) if avg_csat else None,
-            "csat_responses_count": csat_count,
-        })
+        return Response(
+            {
+                "period_days": days,
+                "total_conversations": total_conversations,
+                "resolved_conversations": resolved_count,
+                "avg_first_response_time_seconds": round(avg_frt, 1) if avg_frt else None,
+                "avg_reply_time_seconds": round(avg_reply, 1) if avg_reply else None,
+                "avg_csat_score": round(avg_csat, 2) if avg_csat else None,
+                "csat_responses_count": csat_count,
+            }
+        )
 
 
 class MacroSerializer(drf_serializers.ModelSerializer):
@@ -1229,15 +1310,15 @@ class MacroViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
     CRUD для макросов (аналог Chatwoot /api/v1/accounts/:id/macros).
     Личные + общие макросы. Есть action execute для применения к диалогу.
     """
+
     serializer_class = MacroSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         from django.db.models import Q
+
         user = self.request.user
-        return models.Macro.objects.filter(
-            Q(user=user) | Q(visibility="global")
-        ).order_by("name")
+        return models.Macro.objects.filter(Q(user=user) | Q(visibility="global")).order_by("name")
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -1252,7 +1333,9 @@ class MacroViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
         macro = self.get_object()
         conversation_id = request.data.get("conversation_id")
         if not conversation_id:
-            return Response({"detail": "conversation_id required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "conversation_id required"}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             conversation = selectors.visible_conversations_qs(request.user).get(pk=conversation_id)
@@ -1260,6 +1343,7 @@ class MacroViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
             return Response({"detail": "Conversation not found"}, status=status.HTTP_404_NOT_FOUND)
 
         from .automation import _execute_actions
+
         _execute_actions(macro.actions, conversation, message=None)
 
         return Response({"status": "ok", "actions_count": len(macro.actions)})
@@ -1275,8 +1359,14 @@ def branches_list_view(request):
     """
     ensure_messenger_enabled_api()
 
-    branches = Branch.objects.filter(is_active=True).order_by("name").values(
-        "id", "name", "code",
+    branches = (
+        Branch.objects.filter(is_active=True)
+        .order_by("name")
+        .values(
+            "id",
+            "name",
+            "code",
+        )
     )
     return Response(list(branches))
 
@@ -1324,9 +1414,7 @@ def transfer_conversation(request, conversation_id):
     from_user = conv.assignee
     from_branch = conv.branch
     to_branch = to_user.branch
-    cross_branch = bool(
-        from_branch and to_branch and from_branch.id != to_branch.id
-    )
+    cross_branch = bool(from_branch and to_branch and from_branch.id != to_branch.id)
 
     ConversationTransfer.objects.create(
         conversation=conv,

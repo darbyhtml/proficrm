@@ -1,6 +1,7 @@
 """
 Утилиты для работы с регионами: нормализация названий, поиск по алиасам.
 """
+
 import re
 
 from companies.models import Region
@@ -53,28 +54,28 @@ def find_region_by_name(label: str) -> Region | None:
     label = label.strip()
     if not label:
         return None
-    
+
     # Нормализуем множественные пробелы (два и более пробела -> один)
-    label_normalized_spaces = re.sub(r'\s+', ' ', label)
-    
+    label_normalized_spaces = re.sub(r"\s+", " ", label)
+
     # Сначала пробуем точное совпадение (case-insensitive)
     region = Region.objects.filter(name__iexact=label).first()
     if region:
         return region
-    
+
     # Пробуем с нормализованными пробелами
     if label_normalized_spaces != label:
         region = Region.objects.filter(name__iexact=label_normalized_spaces).first()
         if region:
             return region
-    
+
     # Пробуем нормализованное название через алиасы
     normalized = normalize_region_name(label)
     if normalized != label:
         region = Region.objects.filter(name__iexact=normalized).first()
         if region:
             return region
-    
+
     # Пробуем с заменой дефисов на пробелы и наоборот (для автономных округов)
     # "Ненецкий-автономный округ" -> "Ненецкий автономный округ"
     label_with_spaces = label.replace("-", " ")
@@ -82,13 +83,13 @@ def find_region_by_name(label: str) -> Region | None:
         region = Region.objects.filter(name__iexact=label_with_spaces).first()
         if region:
             return region
-    
+
     label_with_dash = label.replace(" ", "-")
     if label_with_dash != label:
         region = Region.objects.filter(name__iexact=label_with_dash).first()
         if region:
             return region
-    
+
     # Пробуем частичное совпадение (если label содержит часть названия региона)
     # Например, "ХМАО" -> "Ханты-Мансийский автономный округ — Югра"
     if len(label) < 15:  # Короткие названия могут быть аббревиатурами или неполными
@@ -99,5 +100,5 @@ def find_region_by_name(label: str) -> Region | None:
         regions = Region.objects.filter(name__istartswith=label)
         if regions.count() == 1:
             return regions.first()
-    
+
     return None

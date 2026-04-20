@@ -16,9 +16,7 @@ class VisibilityTests(TestCase):
         # Отключаем сигнал auto_assign: иначе pool-диалоги (assignee=None)
         # были бы автоматически назначены менеджерам и тесты потеряли бы смысл.
         post_save.disconnect(auto_assign_new_conversation, sender=Conversation)
-        self.addCleanup(
-            post_save.connect, auto_assign_new_conversation, sender=Conversation
-        )
+        self.addCleanup(post_save.connect, auto_assign_new_conversation, sender=Conversation)
 
         # Два филиала.
         self.ekb = Branch.objects.create(name="ЕКБ", code="ekb")

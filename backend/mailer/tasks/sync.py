@@ -1,6 +1,7 @@
 """
 Celery-задачи синхронизации smtp.bz: квота, статусы доставки, отписки.
 """
+
 from __future__ import annotations
 
 import logging
@@ -49,10 +50,16 @@ def sync_smtp_bz_delivery_events():
         offset = 0
         limit = 200
         for _page in range(SMTP_BZ_SYNC_MAX_PAGES):
-            resp = get_message_logs(api_key, status=st, limit=limit, offset=offset, start_date=today, end_date=today)
+            resp = get_message_logs(
+                api_key, status=st, limit=limit, offset=offset, start_date=today, end_date=today
+            )
             if not resp:
                 break
-            rows = resp.get("data", []) if isinstance(resp, dict) else (resp if isinstance(resp, list) else [])
+            rows = (
+                resp.get("data", [])
+                if isinstance(resp, dict)
+                else (resp if isinstance(resp, list) else [])
+            )
             if not rows:
                 break
 
@@ -84,7 +91,10 @@ def sync_smtp_bz_delivery_events():
                 qs = CampaignRecipient.objects.filter(id__in=ids).select_related("campaign")
                 for r in qs:
                     st_i, reason_i = meta.get(str(r.id), (st, ""))
-                    if r.status in (CampaignRecipient.Status.UNSUBSCRIBED, CampaignRecipient.Status.PENDING):
+                    if r.status in (
+                        CampaignRecipient.Status.UNSUBSCRIBED,
+                        CampaignRecipient.Status.PENDING,
+                    ):
                         continue
 
                     msg = f"smtp.bz status={st_i}"
@@ -115,7 +125,9 @@ def sync_smtp_bz_delivery_events():
                 if to_update or batch_logs:
                     with transaction.atomic():
                         if to_update:
-                            CampaignRecipient.objects.bulk_update(to_update, ["status", "last_error", "updated_at"])
+                            CampaignRecipient.objects.bulk_update(
+                                to_update, ["status", "last_error", "updated_at"]
+                            )
                         if batch_logs:
                             SendLog.objects.bulk_create(batch_logs)
                     updated += len(to_update)
@@ -162,7 +174,9 @@ def sync_smtp_bz_quota():
         quota.sync_error = ""
         quota.save()
 
-        logger.info(f"smtp.bz quota synced: {quota.emails_available}/{quota.emails_limit} available")
+        logger.info(
+            f"smtp.bz quota synced: {quota.emails_available}/{quota.emails_limit} available"
+        )
         return {
             "status": "success",
             "emails_available": quota.emails_available,
@@ -232,7 +246,9 @@ def sync_smtp_bz_unsubscribes():
                 u.last_seen_at = now
                 to_update.append(u)
             else:
-                to_create.append(Unsubscribe(email=email, source="smtp_bz", reason=rsn or "", last_seen_at=now))
+                to_create.append(
+                    Unsubscribe(email=email, source="smtp_bz", reason=rsn or "", last_seen_at=now)
+                )
 
         if to_create:
             Unsubscribe.objects.bulk_create(to_create, ignore_conflicts=True)

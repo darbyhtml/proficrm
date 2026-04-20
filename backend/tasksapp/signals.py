@@ -36,15 +36,15 @@ def notify_task_assigned(sender, instance: Task, created: bool, **kwargs):
     # Отправляем уведомление только при создании новой задачи
     if not created:
         return
-    
+
     # Если задача не назначена никому, уведомление не нужно
     if not instance.assigned_to:
         return
-    
+
     # Не отправляем уведомление, если задача назначена самому создателю
     if instance.created_by_id and instance.assigned_to_id == instance.created_by_id:
         return
-    
+
     # Формируем payload с данными задачи
     payload = {
         "task_id": str(instance.id),
@@ -53,7 +53,7 @@ def notify_task_assigned(sender, instance: Task, created: bool, **kwargs):
         "due_at": instance.due_at.isoformat() if instance.due_at else None,
         "is_urgent": instance.is_urgent,
     }
-    
+
     # Определяем роль создателя для отображения иконки
     creator_role = None
     if instance.created_by:
@@ -63,29 +63,32 @@ def notify_task_assigned(sender, instance: Task, created: bool, **kwargs):
             creator_role = "branch_director"  # Директор филиала
         elif instance.created_by.role == User.Role.ADMIN:
             creator_role = "admin"
-    
+
     payload["creator_role"] = creator_role
-    
+
     # Формируем текст уведомления
     title = "Вам назначена задача"
     body_parts = []
-    
+
     if instance.company:
         body_parts.append(f"Компания: {instance.company.name}")
-    
+
     if instance.created_by:
-        creator_name = f"{instance.created_by.last_name} {instance.created_by.first_name}".strip() or instance.created_by.get_username()
+        creator_name = (
+            f"{instance.created_by.last_name} {instance.created_by.first_name}".strip()
+            or instance.created_by.get_username()
+        )
         body_parts.append(f"Поставил: {creator_name}")
-    
+
     if instance.is_urgent:
         body_parts.append("СРОЧНО")
-    
+
     body = " · ".join(body_parts) if body_parts else instance.title
-    
+
     # URL для перехода к задаче: отдельного /tasks/<id>/ маршрута нет,
     # список открывается параметром view_task.
     url = f"/tasks/?view_task={instance.id}"
-    
+
     # Создаём уведомление с payload
     notify(
         user=instance.assigned_to,

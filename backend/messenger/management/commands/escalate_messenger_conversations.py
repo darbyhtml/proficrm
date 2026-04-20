@@ -44,7 +44,9 @@ class Command(BaseCommand):
             self.stdout.write("Нет диалогов для эскалации.")
             return
 
-        self.stdout.write(f"Найдено диалогов для эскалации: {len(conversations)} (таймаут {timeout} с)")
+        self.stdout.write(
+            f"Найдено диалогов для эскалации: {len(conversations)} (таймаут {timeout} с)"
+        )
 
         if dry_run:
             for c in conversations:

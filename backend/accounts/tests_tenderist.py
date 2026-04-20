@@ -6,6 +6,7 @@
 - policy engine: доступ к страницам/экшенам по матрице
 - messenger: полностью исключён (visible_* пустые)
 """
+
 from django.test import TestCase
 
 from accounts.models import Branch, User
@@ -27,15 +28,21 @@ class TenderistPermissionsTests(TestCase):
     def setUpTestData(cls):
         cls.branch = Branch.objects.create(code="msk", name="Москва")
         cls.tenderist = User.objects.create_user(
-            username="t1", password="pwd12345",
-            role=User.Role.TENDERIST, branch=cls.branch,
+            username="t1",
+            password="pwd12345",
+            role=User.Role.TENDERIST,
+            branch=cls.branch,
         )
         cls.manager = User.objects.create_user(
-            username="m1", password="pwd12345",
-            role=User.Role.MANAGER, branch=cls.branch,
+            username="m1",
+            password="pwd12345",
+            role=User.Role.MANAGER,
+            branch=cls.branch,
         )
         cls.company = Company.objects.create(
-            name="ООО Тест", responsible=cls.manager, branch=cls.branch,
+            name="ООО Тест",
+            responsible=cls.manager,
+            branch=cls.branch,
         )
 
     def test_tenderist_cannot_edit_company(self):
@@ -77,23 +84,36 @@ class TenderistPolicyBaselineTests(TestCase):
         )
 
     def test_pages_allowed(self):
-        for key in ("ui:dashboard", "ui:companies:list", "ui:companies:detail",
-                    "ui:tasks:list", "ui:tasks:detail"):
+        for key in (
+            "ui:dashboard",
+            "ui:companies:list",
+            "ui:companies:detail",
+            "ui:tasks:list",
+            "ui:tasks:detail",
+        ):
             self.assertTrue(self._page(key), f"должен видеть {key}")
 
     def test_pages_denied(self):
-        for key in ("ui:mail", "ui:analytics", "ui:settings",
-                    "ui:mail:campaigns", "ui:mail:settings"):
+        for key in (
+            "ui:mail",
+            "ui:analytics",
+            "ui:settings",
+            "ui:mail:campaigns",
+            "ui:mail:settings",
+        ):
             self.assertFalse(self._page(key), f"не должен видеть {key}")
 
     def test_company_write_denied(self):
-        for key in ("ui:companies:create", "ui:companies:update",
-                    "ui:companies:delete", "ui:companies:transfer"):
+        for key in (
+            "ui:companies:create",
+            "ui:companies:update",
+            "ui:companies:delete",
+            "ui:companies:transfer",
+        ):
             self.assertFalse(self._action(key), f"нельзя {key}")
 
     def test_tasks_allowed(self):
-        for key in ("ui:tasks:create", "ui:tasks:update",
-                    "ui:tasks:status", "ui:tasks:delete"):
+        for key in ("ui:tasks:create", "ui:tasks:update", "ui:tasks:status", "ui:tasks:delete"):
             self.assertTrue(self._action(key), f"должен мочь {key}")
 
     def test_mail_campaigns_denied(self):
@@ -112,8 +132,10 @@ class TenderistMessengerTests(TestCase):
     def setUpTestData(cls):
         cls.branch = Branch.objects.create(code="spb", name="СПб")
         cls.tenderist = User.objects.create_user(
-            username="t2", password="pwd12345",
-            role=User.Role.TENDERIST, branch=cls.branch,
+            username="t2",
+            password="pwd12345",
+            role=User.Role.TENDERIST,
+            branch=cls.branch,
         )
 
     def test_tenderist_sees_no_inboxes(self):

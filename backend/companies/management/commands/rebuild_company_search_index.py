@@ -13,8 +13,12 @@ class Command(BaseCommand):
     help = "Перестроить CompanySearchIndex (полный поиск компаний)."
 
     def add_arguments(self, parser):
-        parser.add_argument("--company-id", type=str, default="", help="UUID компании (перестроить только одну).")
-        parser.add_argument("--chunk", type=int, default=200, help="Размер чанка (по умолчанию 200).")
+        parser.add_argument(
+            "--company-id", type=str, default="", help="UUID компании (перестроить только одну)."
+        )
+        parser.add_argument(
+            "--chunk", type=int, default=200, help="Размер чанка (по умолчанию 200)."
+        )
 
     def handle(self, *args, **options):
         if connection.vendor != "postgresql":
@@ -53,16 +57,13 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("OK"))
 
     def _process_chunk(self, ids: list[UUID]) -> int:
-        companies = (
-            Company.objects.filter(id__in=ids)
-            .prefetch_related(
-                "phones",
-                "emails",
-                "contacts__phones",
-                "contacts__emails",
-                "notes",
-                "tasks",
-            )
+        companies = Company.objects.filter(id__in=ids).prefetch_related(
+            "phones",
+            "emails",
+            "contacts__phones",
+            "contacts__emails",
+            "notes",
+            "tasks",
         )
         companies_by_id = {c.id: c for c in companies}
 
@@ -98,4 +99,3 @@ class Command(BaseCommand):
                 )
 
         return len(ids)
-

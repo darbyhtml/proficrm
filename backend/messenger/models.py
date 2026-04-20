@@ -138,7 +138,7 @@ class Contact(models.Model):
 
     def __str__(self) -> str:
         return self.name or self.email or self.phone or str(self.id)
-    
+
     # Валидация формата телефона: E.164-ish — от 7 до 15 цифр, опционально '+' в начале.
     # Пробелы/скобки/дефисы допустимы на входе — чистим в clean().
     _PHONE_RE = re.compile(r"^\+?\d{7,15}$")
@@ -168,9 +168,13 @@ class Contact(models.Model):
         if self.phone:
             # Вычищаем все разделители, оставляем только цифры и опциональный '+'
             raw = self.phone.strip()
-            cleaned = "+" + re.sub(r"\D", "", raw) if raw.startswith("+") else re.sub(r"\D", "", raw)
+            cleaned = (
+                "+" + re.sub(r"\D", "", raw) if raw.startswith("+") else re.sub(r"\D", "", raw)
+            )
             if not self._PHONE_RE.match(cleaned):
-                errors["phone"] = ["Телефон должен быть в формате E.164 (7–15 цифр, опционально с '+')."]
+                errors["phone"] = [
+                    "Телефон должен быть в формате E.164 (7–15 цифр, опционально с '+')."
+                ]
             else:
                 self.phone = cleaned
 
@@ -480,9 +484,13 @@ class Conversation(models.Model):
             models.Index(fields=["waiting_since"]),
             models.Index(fields=["first_reply_created_at"]),
             # Составные индексы для производительности (по образцу Chatwoot)
-            models.Index(fields=["inbox", "status", "assignee"], name="msg_conv_inbox_st_assign_idx"),
+            models.Index(
+                fields=["inbox", "status", "assignee"], name="msg_conv_inbox_st_assign_idx"
+            ),
             models.Index(fields=["status", "priority"], name="msg_conv_status_priority_idx"),
-            models.Index(fields=["branch", "status", "assignee"], name="msg_conv_branch_st_assign_idx"),
+            models.Index(
+                fields=["branch", "status", "assignee"], name="msg_conv_branch_st_assign_idx"
+            ),
             models.Index(fields=["contact", "inbox", "status"], name="msg_conv_cont_inbox_st_idx"),
             # Индекс для сортировки по waiting_since (уже есть в базовых, но добавляем для явности)
         ]
@@ -491,7 +499,9 @@ class Conversation(models.Model):
                 # waiting_offline добавлен (2026-04-20) — соответствует choices.
                 # Без него INSERT с status='waiting_offline' падал IntegrityError
                 # (ломал test_widget_offhours и off-hours functionality в целом).
-                condition=models.Q(status__in=["open", "pending", "waiting_offline", "resolved", "closed"]),
+                condition=models.Q(
+                    status__in=["open", "pending", "waiting_offline", "resolved", "closed"]
+                ),
                 name="conversation_valid_status",
             ),
         ]
@@ -525,6 +535,7 @@ class Conversation(models.Model):
         if not self.last_customer_msg_at:
             return 0
         from django.utils import timezone
+
         delta = timezone.now() - self.last_customer_msg_at
         return int(delta.total_seconds() // 60)
 
@@ -542,6 +553,7 @@ class Conversation(models.Model):
         }
         try:
             from policy.models import PolicyConfig
+
             cfg = None
             if hasattr(PolicyConfig, "load"):
                 cfg = PolicyConfig.load()
@@ -572,17 +584,21 @@ class Conversation(models.Model):
         if inbox_branch_id is not None:
             # Inbox с подразделением: branch диалога должен совпадать с inbox.
             if self.branch_id != inbox_branch_id:
-                raise ValidationError("Подразделение диалога должно совпадать с подразделением inbox.")
+                raise ValidationError(
+                    "Подразделение диалога должно совпадать с подразделением inbox."
+                )
         else:
             # Глобальный inbox: branch задаётся при создании из маршрутизации; должен быть заполнен.
             if not self.branch_id:
-                raise ValidationError("Для глобального inbox подразделение диалога должно быть задано из правил маршрутизации.")
+                raise ValidationError(
+                    "Для глобального inbox подразделение диалога должно быть задано из правил маршрутизации."
+                )
 
     def save(self, *args, **kwargs):
         """
         Проставляет branch из inbox.branch для не-глобального inbox.
         Для глобального inbox (inbox.branch_id is None) branch не перезаписывается (устанавливается при создании).
-        
+
         По образцу Chatwoot: устанавливает waiting_since при создании диалога и отправляет события.
         """
         is_new = self.pk is None
@@ -592,9 +608,11 @@ class Conversation(models.Model):
         # Один SELECT для старых значений (вместо двух отдельных)
         if not is_new:
             try:
-                old = type(self).objects.only(
-                    "status", "assignee_id", "inbox_id", "branch_id"
-                ).get(pk=self.pk)
+                old = (
+                    type(self)
+                    .objects.only("status", "assignee_id", "inbox_id", "branch_id")
+                    .get(pk=self.pk)
+                )
                 old_status = old.status
                 old_assignee_id = old.assignee_id
             except type(self).DoesNotExist:
@@ -611,75 +629,55 @@ class Conversation(models.Model):
                     raise ValidationError("Нельзя изменить подразделение существующего диалога.")
             if inbox_branch_id is not None:
                 self.branch_id = inbox_branch_id
-        
+
         # Устанавливаем waiting_since при создании (по образцу Chatwoot)
         if is_new and not self.waiting_since:
             self.waiting_since = timezone.now()
-        
+
         # Инициализируем JSON поля если пустые
         if not self.additional_attributes:
             self.additional_attributes = {}
         if not self.custom_attributes:
             self.custom_attributes = {}
-        
+
         super().save(*args, **kwargs)
-        
+
         # Отправка событий через Event Dispatcher (по образцу Chatwoot)
         from .dispatchers import get_dispatcher, Events
-        
+
         dispatcher = get_dispatcher()
         now = timezone.now()
-        
+
         if is_new:
             # Событие создания диалога
-            dispatcher.dispatch(
-                Events.CONVERSATION_CREATED,
-                now,
-                {"conversation": self}
-            )
+            dispatcher.dispatch(Events.CONVERSATION_CREATED, now, {"conversation": self})
         else:
             # События обновления
             if old_status != self.status:
                 dispatcher.dispatch(
                     Events.CONVERSATION_STATUS_CHANGED,
                     now,
-                    {"conversation": self, "old_status": old_status}
+                    {"conversation": self, "old_status": old_status},
                 )
-                
+
                 # Специфичные события по статусу
                 if self.status == self.Status.OPEN:
-                    dispatcher.dispatch(
-                        Events.CONVERSATION_OPENED,
-                        now,
-                        {"conversation": self}
-                    )
+                    dispatcher.dispatch(Events.CONVERSATION_OPENED, now, {"conversation": self})
                 elif self.status == self.Status.RESOLVED:
-                    dispatcher.dispatch(
-                        Events.CONVERSATION_RESOLVED,
-                        now,
-                        {"conversation": self}
-                    )
+                    dispatcher.dispatch(Events.CONVERSATION_RESOLVED, now, {"conversation": self})
                 elif self.status == self.Status.CLOSED:
-                    dispatcher.dispatch(
-                        Events.CONVERSATION_CLOSED,
-                        now,
-                        {"conversation": self}
-                    )
-            
+                    dispatcher.dispatch(Events.CONVERSATION_CLOSED, now, {"conversation": self})
+
             if old_assignee_id != self.assignee_id:
                 dispatcher.dispatch(
                     Events.ASSIGNEE_CHANGED,
                     now,
-                    {"conversation": self, "old_assignee_id": old_assignee_id}
+                    {"conversation": self, "old_assignee_id": old_assignee_id},
                 )
-            
+
             # Общее событие обновления
-            dispatcher.dispatch(
-                Events.CONVERSATION_UPDATED,
-                now,
-                {"conversation": self}
-            )
-    
+            dispatcher.dispatch(Events.CONVERSATION_UPDATED, now, {"conversation": self})
+
     def last_activity_at_fallback(self):
         """
         Fallback на created_at если last_activity_at не задан (по образцу Chatwoot).
@@ -769,7 +767,7 @@ class Message(models.Model):
 
     # Временный ID из фронтенда (не сохраняется в БД)
     echo_id = None
-    
+
     # Лимиты (по образцу Chatwoot)
     NUMBER_OF_PERMITTED_ATTACHMENTS = 15
     MAX_CONTENT_LENGTH = 150000  # Максимум символов в сообщении
@@ -784,8 +782,13 @@ class Message(models.Model):
             models.Index(fields=["conversation", "direction", "created_at"]),
             models.Index(fields=["source_id"]),
             # Составные индексы для производительности (по образцу Chatwoot)
-            models.Index(fields=["sender_contact", "direction", "created_at"], name="msg_msg_cont_dir_crt_idx"),
-            models.Index(fields=["sender_user", "direction", "created_at"], name="msg_msg_user_dir_crt_idx"),
+            models.Index(
+                fields=["sender_contact", "direction", "created_at"],
+                name="msg_msg_cont_dir_crt_idx",
+            ),
+            models.Index(
+                fields=["sender_user", "direction", "created_at"], name="msg_msg_user_dir_crt_idx"
+            ),
             models.Index(
                 fields=["conversation", "is_private", "created_at"],
                 name="msg_conv_private_idx",
@@ -805,55 +808,74 @@ class Message(models.Model):
             if not self.sender_contact_id:
                 errors["sender_contact"] = "Для входящего сообщения обязателен отправитель-контакт."
             if self.sender_user_id:
-                errors["sender_user"] = "Для входящего сообщения пользователь-отправитель не должен быть установлен."
+                errors["sender_user"] = (
+                    "Для входящего сообщения пользователь-отправитель не должен быть установлен."
+                )
         elif self.direction in (self.Direction.OUT, self.Direction.INTERNAL):
             if not self.sender_user_id:
-                errors["sender_user"] = "Для исходящего или внутреннего сообщения обязателен пользователь-отправитель."
+                errors["sender_user"] = (
+                    "Для исходящего или внутреннего сообщения обязателен пользователь-отправитель."
+                )
             if self.sender_contact_id:
-                errors["sender_contact"] = "Для исходящего или внутреннего сообщения отправитель-контакт не должен быть установлен."
+                errors["sender_contact"] = (
+                    "Для исходящего или внутреннего сообщения отправитель-контакт не должен быть установлен."
+                )
         if errors:
             raise ValidationError(errors)
-        
+
         # Защита от флуда (по образцу Chatwoot)
         if self.conversation_id:
             from datetime import timedelta
-            recent_count = Message.objects.filter(
-                conversation_id=self.conversation_id,
-                created_at__gte=timezone.now() - timedelta(minutes=1)
-            ).exclude(pk=self.pk if self.pk else None).count()
+
+            recent_count = (
+                Message.objects.filter(
+                    conversation_id=self.conversation_id,
+                    created_at__gte=timezone.now() - timedelta(minutes=1),
+                )
+                .exclude(pk=self.pk if self.pk else None)
+                .count()
+            )
             if recent_count >= self.MESSAGE_PER_MINUTE_LIMIT:
                 raise ValidationError("Too many messages")
-        
+
         # Валидация длины контента
         if len(self.body) > self.MAX_CONTENT_LENGTH:
-            raise ValidationError(f"Message content is too long (maximum is {self.MAX_CONTENT_LENGTH} characters)")
-        if self.processed_message_content and len(self.processed_message_content) > self.MAX_CONTENT_LENGTH:
-            raise ValidationError(f"Processed message content is too long (maximum is {self.MAX_CONTENT_LENGTH} characters)")
-        
+            raise ValidationError(
+                f"Message content is too long (maximum is {self.MAX_CONTENT_LENGTH} characters)"
+            )
+        if (
+            self.processed_message_content
+            and len(self.processed_message_content) > self.MAX_CONTENT_LENGTH
+        ):
+            raise ValidationError(
+                f"Processed message content is too long (maximum is {self.MAX_CONTENT_LENGTH} characters)"
+            )
+
         # Валидация вложений (проверяется при сохранении через сигнал или в save())
-    
+
     def save(self, *args, **kwargs):
         """
         Обновление processed_message_content и last_activity_at диалога (по образцу Chatwoot).
         Отправка событий через Event Dispatcher.
         """
         is_new = self.pk is None
-        
+
         # Обработка контента
         if not self.processed_message_content and self.body:
-            self.processed_message_content = self.body[:self.MAX_CONTENT_LENGTH]
-        
+            self.processed_message_content = self.body[: self.MAX_CONTENT_LENGTH]
+
         # Сохраняем created_at до super().save() для использования после сохранения
         created_at_before = self.created_at
-        
+
         super().save(*args, **kwargs)
-        
+
         # Используем created_at после сохранения (может быть установлен auto_now_add)
         created_at_used = self.created_at or timezone.now()
-        
+
         # Обновить last_activity_at диалога с защитой от race condition (по образцу Chatwoot)
         # Используем update с F() для атомарного обновления, чтобы избежать race condition
         from django.db.models import F
+
         update_kwargs = {"last_activity_at": created_at_used}
         if is_new:
             if self.direction == self.Direction.IN:
@@ -862,55 +884,39 @@ class Message(models.Model):
                 update_kwargs["last_agent_msg_at"] = created_at_used
             # INTERNAL: служебная заметка не меняет метки клиента/оператора.
         Conversation.objects.filter(pk=self.conversation_id).update(**update_kwargs)
-        
+
         # Обновить waiting_since логику (по образцу Chatwoot)
         self._update_waiting_since(created_at_used)
-        
+
         # Обновить first_reply_created_at (по образцу Chatwoot)
         self._update_first_reply(created_at_used)
-        
+
         # Отправка событий через Event Dispatcher (по образцу Chatwoot)
         from .dispatchers import get_dispatcher, Events
-        
+
         dispatcher = get_dispatcher()
         now = timezone.now()
-        
+
         if is_new:
             # Событие создания сообщения
-            dispatcher.dispatch(
-                Events.MESSAGE_CREATED,
-                now,
-                {"message": self}
-            )
-            
+            dispatcher.dispatch(Events.MESSAGE_CREATED, now, {"message": self})
+
             # Проверка первого ответа (уже обработано в _update_first_reply)
             if self._is_human_response():
                 conversation = self.conversation
                 if conversation.first_reply_created_at == created_at_used:
-                    dispatcher.dispatch(
-                        Events.FIRST_REPLY_CREATED,
-                        now,
-                        {"message": self}
-                    )
-                
+                    dispatcher.dispatch(Events.FIRST_REPLY_CREATED, now, {"message": self})
+
                 if self.direction == self.Direction.OUT:
-                    dispatcher.dispatch(
-                        Events.REPLY_CREATED,
-                        now,
-                        {"message": self}
-                    )
+                    dispatcher.dispatch(Events.REPLY_CREATED, now, {"message": self})
         else:
             # Событие обновления сообщения
-            dispatcher.dispatch(
-                Events.MESSAGE_UPDATED,
-                now,
-                {"message": self}
-            )
-    
+            dispatcher.dispatch(Events.MESSAGE_UPDATED, now, {"message": self})
+
     def _update_waiting_since(self, created_at_used):
         """Обновление waiting_since по образцу Chatwoot."""
         conversation = self.conversation
-        
+
         if self.direction == self.Direction.IN:
             # Входящее сообщение: устанавливаем waiting_since если пусто
             if not conversation.waiting_since:
@@ -920,10 +926,8 @@ class Message(models.Model):
         elif self.direction == self.Direction.OUT:
             # Исходящее сообщение: очищаем waiting_since если это человеческий ответ
             if self._is_human_response() and conversation.waiting_since:
-                Conversation.objects.filter(pk=conversation.pk).update(
-                    waiting_since=None
-                )
-    
+                Conversation.objects.filter(pk=conversation.pk).update(waiting_since=None)
+
     def _is_human_response(self):
         """Проверка, что это человеческий ответ (по образцу Chatwoot)."""
         # Проверки:
@@ -932,38 +936,41 @@ class Message(models.Model):
         # 3. Нет automation_rule_id в content_attributes
         if self.direction != self.Direction.OUT:
             return False
-        
+
         if not self.sender_user_id:
             return False
-        
+
         # Проверка на automation_rule_id (если будет)
-        if self.content_attributes and self.content_attributes.get('automation_rule_id'):
+        if self.content_attributes and self.content_attributes.get("automation_rule_id"):
             return False
-        
+
         return True
-    
+
     def _update_first_reply(self, created_at_used):
         """Обновление first_reply_created_at по образцу Chatwoot."""
         if not self._is_human_response():
             return
-        
+
         conversation = self.conversation
-        
+
         # Проверяем, что это первый ответ
         if conversation.first_reply_created_at:
             return
-        
+
         # Проверяем, что нет других исходящих сообщений от пользователей
-        other_outgoing = Message.objects.filter(
-            conversation=conversation,
-            direction=self.Direction.OUT,
-            sender_user__isnull=False,
-        ).exclude(pk=self.pk).exists()
-        
+        other_outgoing = (
+            Message.objects.filter(
+                conversation=conversation,
+                direction=self.Direction.OUT,
+                sender_user__isnull=False,
+            )
+            .exclude(pk=self.pk)
+            .exists()
+        )
+
         if not other_outgoing:
             Conversation.objects.filter(pk=conversation.pk).update(
-                first_reply_created_at=created_at_used,
-                waiting_since=None  # Очищаем waiting_since
+                first_reply_created_at=created_at_used, waiting_since=None  # Очищаем waiting_since
             )
 
 
@@ -1000,48 +1007,51 @@ class MessageAttachment(models.Model):
                     self.size = 0
             if not self.content_type:
                 self.content_type = (getattr(f, "content_type", "") or "").strip()[:120]
-        
+
         # Валидация лимита вложений (по образцу Chatwoot)
         if self.message_id:
-            attachment_count = MessageAttachment.objects.filter(
-                message_id=self.message_id
-            ).exclude(pk=self.pk if self.pk else None).count()
+            attachment_count = (
+                MessageAttachment.objects.filter(message_id=self.message_id)
+                .exclude(pk=self.pk if self.pk else None)
+                .count()
+            )
             if attachment_count >= Message.NUMBER_OF_PERMITTED_ATTACHMENTS:
                 from django.core.exceptions import ValidationError
+
                 raise ValidationError(
                     f"Too many attachments (maximum {Message.NUMBER_OF_PERMITTED_ATTACHMENTS})"
                 )
-        
+
         super().save(*args, **kwargs)
 
 
 class ContactInbox(models.Model):
     """
     Связь контакта с конкретным inbox (по образцу Chatwoot).
-    
+
     Один контакт может быть в нескольких inbox (мультитенантность).
     Хранит source_id (идентификатор контакта в inbox) и pubsub_token (для WebSocket).
     """
-    
+
     contact = models.ForeignKey(
         Contact,
         verbose_name="Контакт",
         on_delete=models.CASCADE,
         related_name="contact_inboxes",
     )
-    
+
     inbox = models.ForeignKey(
         Inbox,
         verbose_name="Inbox",
         on_delete=models.CASCADE,
         related_name="contact_inboxes",
     )
-    
+
     source_id = models.TextField(
         "ID источника",
         help_text="Идентификатор контакта в inbox (например, visitor_id для виджета).",
     )
-    
+
     pubsub_token = models.CharField(
         "PubSub токен",
         max_length=64,
@@ -1049,24 +1059,24 @@ class ContactInbox(models.Model):
         blank=True,
         help_text="Токен для WebSocket подключения (генерируется автоматически).",
     )
-    
+
     created_at = models.DateTimeField("Создано", auto_now_add=True)
-    
+
     class Meta:
         verbose_name = "Связь контакта с inbox"
         verbose_name_plural = "Связи контактов с inbox"
-        unique_together = [('inbox', 'source_id')]
+        unique_together = [("inbox", "source_id")]
         indexes = [
-            models.Index(fields=['inbox', 'source_id']),
-            models.Index(fields=['pubsub_token']),
+            models.Index(fields=["inbox", "source_id"]),
+            models.Index(fields=["pubsub_token"]),
         ]
-    
+
     def save(self, *args, **kwargs):
         """Генерировать pubsub_token автоматически (по образцу Chatwoot)."""
         if not self.pubsub_token:
             self.pubsub_token = secrets.token_urlsafe(32)
         super().save(*args, **kwargs)
-    
+
     def __str__(self) -> str:
         return f"{self.contact} / {self.inbox}"
 
@@ -1208,6 +1218,7 @@ class PushSubscription(models.Model):
     Browser Push подписки операторов (Web Push API + VAPID).
     Аналог Chatwoot notification_subscriptions.
     """
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -1236,28 +1247,39 @@ class Campaign(models.Model):
     Показывают сообщение посетителю после N секунд на странице с URL-match.
     Вся логика триггера — на клиенте (как у Chatwoot).
     """
+
     class Status(models.TextChoices):
         ACTIVE = "active", "Активна"
         DISABLED = "disabled", "Отключена"
 
     inbox = models.ForeignKey(
-        Inbox, on_delete=models.CASCADE, related_name="campaigns",
+        Inbox,
+        on_delete=models.CASCADE,
+        related_name="campaigns",
     )
     title = models.CharField("Название", max_length=255)
     message = models.TextField("Сообщение")
     url_pattern = models.CharField(
-        "URL-паттерн", max_length=500, blank=True, default="*",
+        "URL-паттерн",
+        max_length=500,
+        blank=True,
+        default="*",
         help_text="Wildcard-паттерн URL страницы (например, */pricing*)",
     )
     time_on_page = models.PositiveIntegerField(
-        "Секунд на странице", default=10,
+        "Секунд на странице",
+        default=10,
         help_text="Через сколько секунд показать сообщение",
     )
     status = models.CharField(
-        "Статус", max_length=16, choices=Status.choices, default=Status.ACTIVE,
+        "Статус",
+        max_length=16,
+        choices=Status.choices,
+        default=Status.ACTIVE,
     )
     only_during_business_hours = models.BooleanField(
-        "Только в рабочее время", default=False,
+        "Только в рабочее время",
+        default=False,
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -1277,27 +1299,35 @@ class AutomationRule(models.Model):
     Правила автоматизации (аналог Chatwoot automation_rules).
     Event-driven: при событии проверяются условия → выполняются действия.
     """
+
     class EventName(models.TextChoices):
         CONVERSATION_CREATED = "conversation_created", "Диалог создан"
         MESSAGE_CREATED = "message_created", "Сообщение создано"
         CONVERSATION_UPDATED = "conversation_updated", "Диалог обновлён"
 
     inbox = models.ForeignKey(
-        Inbox, on_delete=models.CASCADE, related_name="automation_rules",
-        null=True, blank=True,
+        Inbox,
+        on_delete=models.CASCADE,
+        related_name="automation_rules",
+        null=True,
+        blank=True,
         help_text="Если пусто — правило для всех инбоксов",
     )
     name = models.CharField("Название", max_length=255)
     description = models.TextField("Описание", blank=True, default="")
     event_name = models.CharField(
-        "Событие", max_length=32, choices=EventName.choices,
+        "Событие",
+        max_length=32,
+        choices=EventName.choices,
     )
     conditions = models.JSONField(
-        "Условия", default=list,
+        "Условия",
+        default=list,
         help_text='[{"attribute_key": "status", "filter_operator": "equal_to", "values": ["open"]}]',
     )
     actions = models.JSONField(
-        "Действия", default=list,
+        "Действия",
+        default=list,
         help_text='[{"action_name": "assign_agent", "action_params": [42]}]',
     )
     is_active = models.BooleanField("Активно", default=True)
@@ -1319,6 +1349,7 @@ class ReportingEvent(models.Model):
     События для аналитики (аналог Chatwoot reporting_events).
     Создаются при ключевых событиях для агрегации в дашборде.
     """
+
     class EventType(models.TextChoices):
         FIRST_RESPONSE = "first_response", "Первый ответ"
         REPLY_TIME = "reply_time", "Время ответа"
@@ -1328,15 +1359,23 @@ class ReportingEvent(models.Model):
     name = models.CharField("Тип", max_length=32, choices=EventType.choices)
     value = models.FloatField("Значение (секунды)", default=0)
     conversation = models.ForeignKey(
-        Conversation, on_delete=models.CASCADE, related_name="reporting_events",
-        null=True, blank=True,
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name="reporting_events",
+        null=True,
+        blank=True,
     )
     inbox = models.ForeignKey(
-        Inbox, on_delete=models.SET_NULL, null=True, blank=True,
+        Inbox,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
     )
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
-        null=True, blank=True,
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         help_text="Оператор (для метрик по агентам)",
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1360,20 +1399,25 @@ class Macro(models.Model):
     Один клик = несколько действий (назначить + метка + ответ + статус).
     Могут быть личные (user) или общие (user=null).
     """
+
     name = models.CharField("Название", max_length=255)
     actions = models.JSONField(
-        "Действия", default=list,
+        "Действия",
+        default=list,
         help_text='[{"action_name": "assign_agent", "action_params": [42]}, {"action_name": "send_message", "action_params": ["Спасибо!"]}]',
     )
     visibility = models.CharField(
-        "Видимость", max_length=16,
+        "Видимость",
+        max_length=16,
         choices=[("personal", "Личный"), ("global", "Общий")],
         default="personal",
     )
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
         related_name="messenger_macros",
-        null=True, blank=True,
+        null=True,
+        blank=True,
         help_text="Владелец макроса (null = общий)",
     )
     created_at = models.DateTimeField(auto_now_add=True)

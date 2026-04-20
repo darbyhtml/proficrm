@@ -30,5 +30,3 @@ def company_scope_q(user: User) -> Q:
 
 def apply_company_scope(qs: QuerySet, user: User) -> QuerySet:
     return qs.filter(company_scope_q(user)).distinct()
-
-

@@ -21,7 +21,10 @@ class CompanySearchFilterBackend(BaseFilterBackend):
         if not q:
             return queryset
         from companies.search_service import get_company_search_backend
+
         return get_company_search_backend().apply(qs=queryset, query=q)
+
+
 from .models import Company, Contact, CompanyNote
 from .normalizers import normalize_phone, normalize_inn, normalize_work_schedule
 from .policy import visible_companies_qs, visible_company_notes_qs, visible_contacts_qs
@@ -43,25 +46,25 @@ class CompanySerializer(serializers.ModelSerializer):
     email = serializers.EmailField(max_length=254, required=False, allow_blank=True)
     work_schedule = serializers.CharField(required=False, allow_blank=True)
     work_timezone = serializers.CharField(max_length=64, required=False, allow_blank=True)
-    
+
     def validate_phone(self, value):
         """Нормализует телефон используя единый нормализатор"""
         if value:
             return normalize_phone(value)
         return value
-    
+
     def validate_inn(self, value):
         """Нормализует ИНН используя единый нормализатор"""
         if not value or not str(value).strip():
             raise serializers.ValidationError("ИНН обязателен для заполнения.")
         return normalize_inn(value)
-    
+
     def validate_work_schedule(self, value):
         """Нормализует расписание работы используя единый нормализатор"""
         if value:
             return normalize_work_schedule(value)
         return value
-    
+
     class Meta:
         model = Company
         fields = [
@@ -175,19 +178,29 @@ class CompanyViewSet(viewsets.ModelViewSet):
         if user.role == User.Role.MANAGER:
             # менеджер не может менять ответственного/филиал у существующей компании
             if "responsible" in data and obj.responsible_id != new_responsible.id:
-                raise PermissionDenied("Менеджер не может менять ответственного у существующей компании.")
+                raise PermissionDenied(
+                    "Менеджер не может менять ответственного у существующей компании."
+                )
             if "branch" in data and (obj.branch_id != (new_branch.id if new_branch else None)):
                 raise PermissionDenied("Менеджер не может менять филиал у существующей компании.")
 
         if user.role == User.Role.BRANCH_DIRECTOR and user.branch_id:
             # директор филиала может переназначать только внутри филиала
-            if new_responsible and new_responsible.branch_id and new_responsible.branch_id != user.branch_id:
+            if (
+                new_responsible
+                and new_responsible.branch_id
+                and new_responsible.branch_id != user.branch_id
+            ):
                 raise PermissionDenied("Можно назначать ответственного только в своём филиале.")
             if new_branch and new_branch.id != user.branch_id:
                 raise PermissionDenied("Нельзя назначать компании другой филиал.")
         if user.role == User.Role.SALES_HEAD and user.branch_id:
             # РОП может переназначать только внутри филиала
-            if new_responsible and new_responsible.branch_id and new_responsible.branch_id != user.branch_id:
+            if (
+                new_responsible
+                and new_responsible.branch_id
+                and new_responsible.branch_id != user.branch_id
+            ):
                 raise PermissionDenied("Можно назначать ответственного только в своём филиале.")
             if new_branch and new_branch.id != user.branch_id:
                 raise PermissionDenied("Нельзя назначать компании другой филиал.")
@@ -222,9 +235,7 @@ class ContactViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return (
-            visible_contacts_qs(self.request.user)
-            .select_related("company")
-            .order_by("-updated_at")
+            visible_contacts_qs(self.request.user).select_related("company").order_by("-updated_at")
         )
 
     def perform_create(self, serializer):
@@ -287,7 +298,9 @@ class CompanyNoteViewSet(viewsets.ModelViewSet):
             if obj.author_id != user.id:
                 # Проверяем, может ли пользователь редактировать заметку без автора (если он ответственный)
                 if obj.author_id is not None or obj.company.responsible_id != user.id:
-                    raise PermissionDenied("Можно редактировать только свои заметки или заметки без автора (если вы ответственный за компанию).")
+                    raise PermissionDenied(
+                        "Можно редактировать только свои заметки или заметки без автора (если вы ответственный за компанию)."
+                    )
         serializer.save()
 
     def perform_destroy(self, instance):
@@ -299,7 +312,7 @@ class CompanyNoteViewSet(viewsets.ModelViewSet):
             if instance.author_id != user.id:
                 # Проверяем, может ли пользователь удалять заметку без автора (если он ответственный)
                 if instance.author_id is not None or instance.company.responsible_id != user.id:
-                    raise PermissionDenied("Можно удалять только свои заметки или заметки без автора (если вы ответственный за компанию).")
+                    raise PermissionDenied(
+                        "Можно удалять только свои заметки или заметки без автора (если вы ответственный за компанию)."
+                    )
         instance.delete()
-
-

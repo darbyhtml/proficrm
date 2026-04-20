@@ -25,7 +25,9 @@ def visible_tasks_qs(user: User) -> QuerySet[Task]:
     - директор/РОП: задачи своего филиала + свои,
     - админ/управляющий: все активные задачи.
     """
-    qs = Task.objects.select_related("company", "assigned_to", "created_by", "type").order_by("-created_at")
+    qs = Task.objects.select_related("company", "assigned_to", "created_by", "type").order_by(
+        "-created_at"
+    )
 
     if not user or not user.is_authenticated or not user.is_active:
         return qs.none()
@@ -98,4 +100,3 @@ def can_manage_task_status(user: User, task: Task) -> bool:
             branch_id = getattr(task.assigned_to, "branch_id", None)
         return bool(branch_id and branch_id == user.branch_id)
     return False
-

@@ -5,6 +5,7 @@
 
 URL: /companies/<uuid>/v3/<a|b|c>/
 """
+
 from __future__ import annotations
 
 import json
@@ -25,8 +26,17 @@ from accounts.models import Branch
 from audit.models import ActivityEvent
 from audit.service import log_event
 from companies.models import (
-    Company, CompanyDeal, CompanyDeletionRequest, CompanyNote, CompanySphere,
-    CompanyStatus, Contact, ContactEmail, ContactPhone, ContractType, Region,
+    Company,
+    CompanyDeal,
+    CompanyDeletionRequest,
+    CompanyNote,
+    CompanySphere,
+    CompanyStatus,
+    Contact,
+    ContactEmail,
+    ContactPhone,
+    ContractType,
+    Region,
 )
 from tasksapp.models import Task
 from ui.views._base import policy_required, require_can_view_company, _safe_next_v3
@@ -41,9 +51,7 @@ _VALID_VARIANTS = {"a", "b", "c"}
 @login_required
 @policy_required(resource_type="page", resource="ui:companies:detail")
 @require_can_view_company
-def company_detail_v3_preview(
-    request: HttpRequest, company_id, variant: str
-) -> HttpResponse:
+def company_detail_v3_preview(request: HttpRequest, company_id, variant: str) -> HttpResponse:
     """Preview-страница редизайна. variant ∈ {a,b,c} → разный layout,
     одинаковые данные.
     """
@@ -51,24 +59,22 @@ def company_detail_v3_preview(
         raise Http404("Unknown variant")
 
     company = get_object_or_404(
-        Company.objects
-        .select_related("responsible", "branch", "status", "contract_type", "head_company", "region")
-        .prefetch_related("phones", "emails", "spheres"),
+        Company.objects.select_related(
+            "responsible", "branch", "status", "contract_type", "head_company", "region"
+        ).prefetch_related("phones", "emails", "spheres"),
         id=company_id,
     )
 
     # P0: Pending delete request — предупреждение в шапке (classic-паттерн)
     delete_req = (
-        CompanyDeletionRequest.objects
-        .filter(company_id=company.id, status="pending")
+        CompanyDeletionRequest.objects.filter(company_id=company.id, status="pending")
         .select_related("requested_by")
         .first()
     )
 
     # F4 Этап 4: группа компаний — head_company + client_branches (топ-5)
     client_branches = list(
-        Company.objects
-        .filter(head_company=company)
+        Company.objects.filter(head_company=company)
         .only("id", "name", "inn", "status_id", "branch_id")
         .select_related("status", "branch")
         .order_by("name")[:5]
@@ -78,6 +84,7 @@ def company_detail_v3_preview(
     # F4 Этап 5: ActivityEvent для служебного аккордеона — топ-10 событий.
     try:
         from audit.models import ActivityEvent
+
         activity_events = list(
             ActivityEvent.objects.filter(company_id=company.id)
             .select_related("actor")
@@ -131,39 +138,46 @@ def company_detail_v3_preview(
     # Унифицированный timeline top-5 (самое свежее из всех источников)
     timeline_raw = []
     for n in recent_notes[:5]:
-        timeline_raw.append({
-            "kind": "note",
-            "icon": "📝",
-            "title": (n.text or "").strip().split("\n")[0][:120] or "Заметка",
-            "meta": n.author.get_full_name() if n.author_id else "",
-            "at": n.created_at,
-            "obj": n,
-        })
+        timeline_raw.append(
+            {
+                "kind": "note",
+                "icon": "📝",
+                "title": (n.text or "").strip().split("\n")[0][:120] or "Заметка",
+                "meta": n.author.get_full_name() if n.author_id else "",
+                "at": n.created_at,
+                "obj": n,
+            }
+        )
     for t in open_tasks[:3]:
-        timeline_raw.append({
-            "kind": "task",
-            "icon": "✓",
-            "title": t.title or (t.type.name if t.type_id else "Задача"),
-            "meta": t.assigned_to.get_full_name() if t.assigned_to_id else "—",
-            "at": t.created_at,
-            "obj": t,
-        })
+        timeline_raw.append(
+            {
+                "kind": "task",
+                "icon": "✓",
+                "title": t.title or (t.type.name if t.type_id else "Задача"),
+                "meta": t.assigned_to.get_full_name() if t.assigned_to_id else "—",
+                "at": t.created_at,
+                "obj": t,
+            }
+        )
     for d in deals[:3]:
         program = (d.program or "").strip() or "Сделка"
-        timeline_raw.append({
-            "kind": "deal",
-            "icon": "💰",
-            "title": program[:120],
-            "meta": d.created_by.get_full_name() if d.created_by_id else "",
-            "at": d.created_at,
-            "obj": d,
-        })
+        timeline_raw.append(
+            {
+                "kind": "deal",
+                "icon": "💰",
+                "title": program[:120],
+                "meta": d.created_by.get_full_name() if d.created_by_id else "",
+                "at": d.created_at,
+                "obj": d,
+            }
+        )
     timeline_raw.sort(key=lambda x: x["at"], reverse=True)
     timeline = timeline_raw[:5]
 
     # Договор: единая точка правды — берём бейдж/уровень из companies.services,
     # чтобы логика совпадала с дашбордом и classic.
     from companies.services import get_contract_alert, _get_annual_contract_alert
+
     contract_days_left = None
     contract_level = None  # danger / warn / ok / expired / none
     contract_is_annual = bool(company.contract_type and company.contract_type.is_annual)
@@ -191,29 +205,21 @@ def company_detail_v3_preview(
     # Справочники для combobox'ов (JSON-сериализуем прямо тут, чтобы шаблон
     # мог встроить их в data-edit-options)
     status_options = [
-        {"id": str(s.id), "label": s.name}
-        for s in CompanyStatus.objects.order_by("name")
+        {"id": str(s.id), "label": s.name} for s in CompanyStatus.objects.order_by("name")
     ]
     sphere_options = [
-        {"id": str(s.id), "label": s.name}
-        for s in CompanySphere.objects.order_by("name")
+        {"id": str(s.id), "label": s.name} for s in CompanySphere.objects.order_by("name")
     ]
     contract_type_options = [
-        {"id": str(ct.id), "label": ct.name}
-        for ct in ContractType.objects.order_by("name")
+        {"id": str(ct.id), "label": ct.name} for ct in ContractType.objects.order_by("name")
     ]
     # P0: регионы — 77.6% компаний на проде имеют регион; 334 правки/период
-    region_options = [
-        {"id": str(r.id), "label": r.name}
-        for r in Region.objects.order_by("name")
-    ]
+    region_options = [{"id": str(r.id), "label": r.name} for r in Region.objects.order_by("name")]
     # P1: рабочие часовые пояса (186 правок/период на проде)
     from core.timezone_utils import RUS_TZ_CHOICES
+
     timezone_options = [{"id": v, "label": lbl} for v, lbl in RUS_TZ_CHOICES]
-    branch_options = [
-        {"id": str(b.id), "label": b.name}
-        for b in Branch.objects.order_by("name")
-    ]
+    branch_options = [{"id": str(b.id), "label": b.name} for b in Branch.objects.order_by("name")]
     # Менеджеры для «Ответственный» — активные, с группировкой по подразделению
     resp_qs = (
         User.objects.filter(is_active=True)
@@ -232,8 +238,7 @@ def company_detail_v3_preview(
 
     # Флаг админа (нужен для условного показа «Снять холодный» в popup-меню)
     is_admin_user = bool(
-        request.user.is_superuser
-        or getattr(request.user, "role", None) == User.Role.ADMIN
+        request.user.is_superuser or getattr(request.user, "role", None) == User.Role.ADMIN
     )
 
     ctx = {
@@ -316,17 +321,17 @@ def contact_quick_create(request: HttpRequest, company_id) -> HttpResponse:
     if email:
         from django.core.validators import validate_email
         from django.core.exceptions import ValidationError
+
         try:
             validate_email(email)
         except ValidationError:
-            return JsonResponse(
-                {"ok": False, "error": f"Невалидный email: {email}"}, status=400
-            )
+            return JsonResponse({"ok": False, "error": f"Невалидный email: {email}"}, status=400)
 
     # Валидация phone — только цифры, +, пробелы, скобки, дефис
     # Блокируем кириллицу и не-ASCII символы (защита от copy-paste из Word)
     if phone:
         import re
+
         if re.search(r"[^\d+\s\-()]", phone):
             return JsonResponse(
                 {"ok": False, "error": "Телефон содержит недопустимые символы"},
@@ -346,10 +351,12 @@ def contact_quick_create(request: HttpRequest, company_id) -> HttpResponse:
             phone = "+" + digits if digits else phone
 
     # Null-byte / control-chars защита (PostgreSQL отклоняет NUL)
-    for fld_name, fld_val in (("ФИО", f"{first_name} {last_name}"),
-                               ("Должность", position),
-                               ("Email", email),
-                               ("Телефон", phone)):
+    for fld_name, fld_val in (
+        ("ФИО", f"{first_name} {last_name}"),
+        ("Должность", position),
+        ("Email", email),
+        ("Телефон", phone),
+    ):
         if "\x00" in (fld_val or ""):
             return JsonResponse(
                 {"ok": False, "error": f"Поле «{fld_name}» содержит недопустимые символы."},
@@ -388,5 +395,6 @@ def contact_quick_create(request: HttpRequest, company_id) -> HttpResponse:
 
     # Redirect на next (если безопасный) или на v3/b/ по умолчанию
     from django.shortcuts import redirect
+
     nxt = _safe_next_v3(request, company.id)
     return redirect(nxt or f"/companies/{company.id}/v3/b/")

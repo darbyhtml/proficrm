@@ -15,27 +15,27 @@ ui_logger = logging.getLogger("messenger.ui")
 def mask_token(token: str | None, show_chars: int = 4) -> str:
     """
     Маскирует токен для безопасного логирования.
-    
+
     Показывает только первые и последние N символов.
     Если токен короче 2*N символов - показывает только первые N.
-    
+
     Args:
         token: Токен для маскировки
         show_chars: Количество символов с начала и конца (по умолчанию 4)
-    
+
     Returns:
         Замаскированный токен (например, "abcd...xyz1" или "abcd..." если короткий)
     """
     if not token:
         return "<empty>"
-    
+
     token_str = str(token)
     token_len = len(token_str)
-    
+
     if token_len <= show_chars * 2:
         # Токен слишком короткий - показываем только начало
         return f"{token_str[:show_chars]}..."
-    
+
     return f"{token_str[:show_chars]}...{token_str[-show_chars:]}"
 
 
@@ -60,7 +60,7 @@ def safe_log_widget_error(
     safe_data = {
         "log_message": message,
     }
-    
+
     if widget_token is not None:
         safe_data["widget_token"] = mask_token(widget_token)
     if session_token is not None:
@@ -77,7 +77,7 @@ def safe_log_widget_error(
         extra.pop("message", None)
         extra.pop("msg", None)
         safe_data.update(extra)
-    
+
     if error:
         logger.log(level, message, extra=safe_data, exc_info=True)
     else:

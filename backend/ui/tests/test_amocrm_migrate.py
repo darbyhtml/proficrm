@@ -68,7 +68,10 @@ class AmocrmMigrateViewTestCase(TestCase):
     def _migrate_patchers(self, result=None):
         if result is None:
             result = _make_result()
-        p1 = patch("ui.views.settings_integrations.fetch_amo_users", return_value=[{"id": 1, "name": "M1"}, {"id": 2, "name": "M2"}])
+        p1 = patch(
+            "ui.views.settings_integrations.fetch_amo_users",
+            return_value=[{"id": 1, "name": "M1"}, {"id": 2, "name": "M2"}],
+        )
         p2 = patch("ui.views.settings_integrations.fetch_company_custom_fields", return_value=[])
         p3 = patch("ui.views.settings_integrations.migrate_filtered", return_value=result)
         with p1, p2, p3 as m3:
@@ -88,7 +91,14 @@ class AmocrmMigrateViewTestCase(TestCase):
     def test_progress_returns_active_run_when_lock_set(self):
         """GET progress: active_run с run_id при установленной блокировке (ключ per-user)."""
         import json
-        cache.set(self._run_key(), json.dumps({"run_id": "abc-123", "status": "running", "started_at": "2025-01-01T12:00:00"}), timeout=60)
+
+        cache.set(
+            self._run_key(),
+            json.dumps(
+                {"run_id": "abc-123", "status": "running", "started_at": "2025-01-01T12:00:00"}
+            ),
+            timeout=60,
+        )
         r = self.client.get("/admin/amocrm/migrate/progress/")
         self.assertEqual(r.status_code, 200)
         data = r.json()
@@ -100,6 +110,7 @@ class AmocrmMigrateViewTestCase(TestCase):
     def test_progress_done_not_active(self):
         """GET progress: статус done/failed не считается активным → active_run: null (и self-clean ключа)."""
         import json
+
         cache.set(self._run_key(), json.dumps({"run_id": "x", "status": "done"}), timeout=60)
         r = self.client.get("/admin/amocrm/migrate/progress/")
         self.assertEqual(r.status_code, 200)
@@ -109,6 +120,7 @@ class AmocrmMigrateViewTestCase(TestCase):
     def test_progress_null_when_key_expired_or_deleted(self):
         """Lock/ключ исчёк по TTL или удалён (падение до finally): progress → active_run: null."""
         import json
+
         cache.set(self._run_key(), json.dumps({"run_id": "z", "status": "running"}), timeout=60)
         cache.delete(self._run_key())  # эмуляция TTL или падения до finally
         r = self.client.get("/admin/amocrm/migrate/progress/")
@@ -137,7 +149,9 @@ class AmocrmMigrateViewTestCase(TestCase):
 
     def test_new_import_after_done_new_run_id_progress_from_zero(self):
         """Новый импорт после done: новый run_id, прогресс с 0 (отдельный запуск)."""
-        with self._migrate_patchers(_make_result(companies_matched=3, companies_next_offset=3, companies_has_more=False)):
+        with self._migrate_patchers(
+            _make_result(companies_matched=3, companies_next_offset=3, companies_has_more=False)
+        ):
             csrf = _get_csrf(self.client)
             post = {
                 "csrfmiddlewaretoken": csrf,
@@ -153,10 +167,21 @@ class AmocrmMigrateViewTestCase(TestCase):
             r1 = self.client.post("/admin/amocrm/migrate/", post)
         self.assertEqual(r1.status_code, 200)
         self.assertIn("run_id", r1.context or {})
-        with self._migrate_patchers(_make_result(companies_matched=2, companies_next_offset=2, companies_has_more=False)):
+        with self._migrate_patchers(
+            _make_result(companies_matched=2, companies_next_offset=2, companies_has_more=False)
+        ):
             csrf2 = _get_csrf(self.client)
-            post2 = {"csrfmiddlewaretoken": csrf2, "responsible_user_id": "2", "offset": "0", "dry_run": "on",
-                     "limit_companies": "10", "migrate_all_companies": "on", "import_tasks": "on", "import_notes": "on", "import_contacts": ""}
+            post2 = {
+                "csrfmiddlewaretoken": csrf2,
+                "responsible_user_id": "2",
+                "offset": "0",
+                "dry_run": "on",
+                "limit_companies": "10",
+                "migrate_all_companies": "on",
+                "import_tasks": "on",
+                "import_notes": "on",
+                "import_contacts": "",
+            }
             r2 = self.client.post("/admin/amocrm/migrate/", post2)
         self.assertEqual(r2.status_code, 200)
         self.assertIsNotNone(r2.context.get("result"))
@@ -166,7 +191,10 @@ class AmocrmMigrateViewTestCase(TestCase):
     def test_import_already_running_rejected(self):
         """При активном импорте (свой ключ per-user) второй старт — «Импорт уже выполняется»."""
         import json
-        cache.set(self._run_key(), json.dumps({"run_id": "lock", "status": "running"}), timeout=3600)
+
+        cache.set(
+            self._run_key(), json.dumps({"run_id": "lock", "status": "running"}), timeout=3600
+        )
         with self._migrate_patchers() as mocks:
             csrf = _get_csrf(self.client)
             post = {
@@ -189,16 +217,27 @@ class AmocrmMigrateViewTestCase(TestCase):
     def test_multiple_managers_rejected(self):
         """При передаче нескольких responsible_user_id — ошибка «Выберите только одного менеджера», migrate не вызывается."""
         from urllib.parse import urlencode
+
         with self._migrate_patchers() as mocks:
             csrf = _get_csrf(self.client)
             # Два значения для одного ключа: getlist вернёт [1, 2]
-            body = urlencode([
-                ("csrfmiddlewaretoken", csrf),
-                ("responsible_user_id", "1"), ("responsible_user_id", "2"),
-                ("offset", "0"), ("dry_run", "on"), ("limit_companies", "10"),
-                ("migrate_all_companies", "on"), ("import_tasks", "on"), ("import_notes", "on"), ("import_contacts", ""),
-                ("custom_field_id", ""), ("custom_value_label", ""), ("custom_value_enum_id", ""),
-            ])
+            body = urlencode(
+                [
+                    ("csrfmiddlewaretoken", csrf),
+                    ("responsible_user_id", "1"),
+                    ("responsible_user_id", "2"),
+                    ("offset", "0"),
+                    ("dry_run", "on"),
+                    ("limit_companies", "10"),
+                    ("migrate_all_companies", "on"),
+                    ("import_tasks", "on"),
+                    ("import_notes", "on"),
+                    ("import_contacts", ""),
+                    ("custom_field_id", ""),
+                    ("custom_value_label", ""),
+                    ("custom_value_enum_id", ""),
+                ]
+            )
             r = self.client.post(
                 "/admin/amocrm/migrate/",
                 body,

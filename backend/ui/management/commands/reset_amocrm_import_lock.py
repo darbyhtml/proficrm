@@ -3,6 +3,7 @@
 
 Используется, если блокировка импорта "зависла" и не позволяет запустить новый импорт.
 """
+
 from django.core.cache import cache
 from django.core.management.base import BaseCommand
 from accounts.models import User
@@ -39,13 +40,9 @@ class Command(BaseCommand):
                     )
                 )
             except User.DoesNotExist:
-                self.stdout.write(
-                    self.style.ERROR(f"✗ Пользователь с ID {user_id} не найден")
-                )
+                self.stdout.write(self.style.ERROR(f"✗ Пользователь с ID {user_id} не найден"))
             except Exception as e:
-                self.stdout.write(
-                    self.style.ERROR(f"✗ Ошибка при сбросе блокировки: {e}")
-                )
+                self.stdout.write(self.style.ERROR(f"✗ Ошибка при сбросе блокировки: {e}"))
         elif reset_all:
             # Сброс для всех пользователей
             deleted_count = 0
@@ -55,11 +52,7 @@ class Command(BaseCommand):
                 if cache.get(lock_key) is not None:
                     cache.delete(lock_key)
                     deleted_count += 1
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"✓ Сброшено блокировок импорта: {deleted_count}"
-                )
-            )
+            self.stdout.write(self.style.SUCCESS(f"✓ Сброшено блокировок импорта: {deleted_count}"))
         else:
             # Показываем текущие блокировки
             self.stdout.write("Текущие блокировки импорта:")
@@ -75,8 +68,10 @@ class Command(BaseCommand):
                             f"  - Пользователь: {user.username} (ID: {uid}), ключ: {lock_key}"
                         )
                     except User.DoesNotExist:
-                        self.stdout.write(f"  - Пользователь ID: {uid} (не найден), ключ: {lock_key}")
-            
+                        self.stdout.write(
+                            f"  - Пользователь ID: {uid} (не найден), ключ: {lock_key}"
+                        )
+
             if not found_any:
                 self.stdout.write(self.style.SUCCESS("  Блокировок не найдено"))
             else:

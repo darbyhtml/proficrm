@@ -3,6 +3,7 @@
 
 Разлогинивает всех пользователей и генерирует для них ключи доступа.
 """
+
 from django.core.management.base import BaseCommand
 from django.contrib.sessions.models import Session
 from django.contrib.auth import SESSION_KEY
@@ -51,9 +52,7 @@ class Command(BaseCommand):
             admin_user = None
 
         if not admin_user:
-            admin_user = User.objects.filter(
-                role=User.Role.ADMIN, is_active=True
-            ).first()
+            admin_user = User.objects.filter(role=User.Role.ADMIN, is_active=True).first()
             if not admin_user:
                 admin_user = User.objects.filter(is_superuser=True, is_active=True).first()
 
@@ -123,9 +122,7 @@ class Command(BaseCommand):
             ).exists()
 
             if has_active_key:
-                self.stdout.write(
-                    f"  Пропущен {user}: уже есть активный ключ доступа"
-                )
+                self.stdout.write(f"  Пропущен {user}: уже есть активный ключ доступа")
                 continue
 
             if not dry_run:
@@ -152,9 +149,7 @@ class Command(BaseCommand):
                 self.style.SUCCESS(f"\n✅ Миграция завершена. Создано ключей: {keys_created}")
             )
         else:
-            self.stdout.write(
-                f"\n[DRY-RUN] Будет создано ключей: {keys_created}"
-            )
+            self.stdout.write(f"\n[DRY-RUN] Будет создано ключей: {keys_created}")
             self.stdout.write(
                 self.style.WARNING(
                     "\nДля выполнения миграции запустите команду без флага --dry-run"

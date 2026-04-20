@@ -4,6 +4,7 @@
 Альтернатива /django-admin/phonebridge/mobileappbuild/ — та же функция,
 но в кастомной v3-админке CRM без тех-интерфейса Django.
 """
+
 from __future__ import annotations
 
 import logging
@@ -30,9 +31,9 @@ def settings_mobile_apps(request: HttpRequest) -> HttpResponse:
         return redirect("dashboard")
 
     builds = list(
-        MobileAppBuild.objects
-        .select_related("uploaded_by")
-        .order_by("-version_code", "-uploaded_at")[:50]
+        MobileAppBuild.objects.select_related("uploaded_by").order_by(
+            "-version_code", "-uploaded_at"
+        )[:50]
     )
     return render(
         request,
@@ -60,7 +61,9 @@ def settings_mobile_apps_upload(request: HttpRequest) -> HttpResponse:
     try:
         version_code = int(version_code_raw)
     except ValueError:
-        messages.error(request, f"version_code должен быть целым числом, получено: {version_code_raw}")
+        messages.error(
+            request, f"version_code должен быть целым числом, получено: {version_code_raw}"
+        )
         return redirect("settings_mobile_apps")
 
     if version_code < 1:

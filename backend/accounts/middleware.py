@@ -1,6 +1,7 @@
 """
 Middleware для защиты от DDoS и rate limiting.
 """
+
 from __future__ import annotations
 
 from django.http import HttpResponse, JsonResponse
@@ -15,21 +16,21 @@ class RateLimitMiddleware(MiddlewareMixin):
     Применяется только к критическим путям (логин, API токены).
     Обычная навигация по сайту не ограничивается.
     """
-    
+
     # Пути, которые не требуют rate limiting
     EXEMPT_PATHS = [
         "/static/",
         "/media/",
         "/favicon.ico",
     ]
-    
+
     # Пути с защитой от брутфорса (строгий лимит для логина/токенов)
     PROTECTED_AUTH_PATHS = [
         "/login/",
         "/api/token/",
         "/api/token/refresh/",
     ]
-    
+
     # Phone API (Android приложение) — более мягкий лимит, отдельный бакет
     PHONE_API_PATH = "/api/phone/"
 
@@ -42,9 +43,7 @@ class RateLimitMiddleware(MiddlewareMixin):
     # одной задачи, обычный паттерн: 1-3 req/min. Лимит 60 req/min защищает
     # от бот-перебора или скрипт-автоматизации без блокировки легитимных
     # bulk-операций (bulk идут через отдельные эндпоинты).
-    TASK_MUTATION_PATTERNS = (
-        "/tasks/",  # будет сужено до POST-методов и нужных путей ниже
-    )
+    TASK_MUTATION_PATTERNS = ("/tasks/",)  # будет сужено до POST-методов и нужных путей ниже
 
     def process_request(self, request):
         # Пропускаем статические файлы
@@ -96,11 +95,10 @@ class RateLimitMiddleware(MiddlewareMixin):
             # Это позволяет приложению делать частые polling запросы
             if is_ip_rate_limited(ip, "phone_api", RATE_LIMIT_API_PER_MINUTE, 60):
                 return JsonResponse(
-                    {"detail": "Превышен лимит запросов. Попробуйте позже."},
-                    status=429
+                    {"detail": "Превышен лимит запросов. Попробуйте позже."}, status=429
                 )
             return None
-        
+
         # Проверяем защищенные пути авторизации (строгий лимит только для попыток входа)
         # GET/HEAD к /login/ не считаем — иначе после выхода редирект на страницу входа даёт 429
         is_auth_protected = any(path.startswith(p) for p in self.PROTECTED_AUTH_PATHS)
@@ -109,14 +107,9 @@ class RateLimitMiddleware(MiddlewareMixin):
             if is_ip_rate_limited(ip, "auth", 10, 60):
                 if request.path.startswith("/api/"):
                     return JsonResponse(
-                        {"detail": "Превышен лимит запросов. Попробуйте позже."},
-                        status=429
+                        {"detail": "Превышен лимит запросов. Попробуйте позже."}, status=429
                     )
                 else:
-                    return HttpResponse(
-                        "Превышен лимит запросов. Попробуйте позже.",
-                        status=429
-                    )
-        
-        return None
+                    return HttpResponse("Превышен лимит запросов. Попробуйте позже.", status=429)
 
+        return None

@@ -53,7 +53,9 @@ from ui.views._base import (
     visible_companies_qs,
 )
 import logging
+
 logger = logging.getLogger(__name__)
+
 
 @login_required
 @policy_required(resource_type="page", resource="ui:companies:list")
@@ -78,7 +80,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
             view_as_branch_id = int(request.session.get("view_as_branch_id"))
         except (TypeError, ValueError):
             view_as_branch_id = None
-    
+
     # Создаем уникальный ключ кэша с учетом прав доступа
     cache_key_parts = ["companies_total_count", str(effective_user_id)]
     if view_as_role:
@@ -86,7 +88,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
     if view_as_branch_id:
         cache_key_parts.append(f"branch_{view_as_branch_id}")
     cache_key_total = "_".join(cache_key_parts)
-    
+
     companies_total = cache.get(cache_key_total)
     if companies_total is None:
         # Применяем те же фильтры, что могут быть в view_as
@@ -117,6 +119,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
     qs = f["qs"]
     if q:
         from companies.search_service import get_company_search_backend
+
         qs = get_company_search_backend().apply(qs=qs, query=q)
 
     # Sorting (asc/desc) — как в задачах
@@ -156,6 +159,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
 
     # Количество элементов на странице: UiUserPreference.companies_per_page
     from ui.models import UiUserPreference
+
     _ui_prefs = UiUserPreference.load_for_user(user)
     per_page = int(_ui_prefs.companies_per_page or 25)
     per_page_param = request.GET.get("per_page", "").strip()
@@ -173,7 +177,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
     # Избегаем повторного COUNT внутри Paginator — используем уже посчитанный результат.
     paginator._count = companies_filtered
     page = paginator.get_page(request.GET.get("page"))
-    
+
     # Оптимизация: пакетная проверка прав на передачу вместо проверки для каждой компании
     company_ids = [c.id for c in page.object_list]
     transfer_check = can_transfer_companies(user, company_ids)
@@ -186,7 +190,10 @@ def company_list(request: HttpRequest) -> HttpResponse:
     if q:
         try:
             from companies.search_service import get_company_search_backend
-            explain_map = get_company_search_backend().explain(companies=list(page.object_list), query=q)
+
+            explain_map = get_company_search_backend().explain(
+                companies=list(page.object_list), query=q
+            )
             for company in page.object_list:
                 ex = explain_map.get(company.id)
                 if not (ex and ex.reasons):
@@ -201,6 +208,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
                     else:
                         from companies.search_index import parse_query
                         from companies.search_service import SearchReason, highlight_html
+
                         pq = parse_query(q)
                         dig = pq.strong_digit_tokens + pq.weak_digit_tokens
                         company.search_name_html = highlight_html(company.name or "", text_tokens=pq.text_tokens, digit_tokens=dig)  # type: ignore[attr-defined]
@@ -222,6 +230,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
             # даже если explain-логика упала.
             from companies.search_index import parse_query
             from companies.search_service import SearchReason, highlight_html
+
             pq = parse_query(q)
             for company in page.object_list:
                 dig = pq.strong_digit_tokens + pq.weak_digit_tokens
@@ -235,10 +244,11 @@ def company_list(request: HttpRequest) -> HttpResponse:
                 ]
                 company.search_reasons = tuple([r for r in reasons if r.value])  # type: ignore[attr-defined]
                 company.search_reasons_total = len(company.search_reasons)  # type: ignore[attr-defined]
-    
+
     # Формируем qs для пагинации, включая per_page если он отличается от значения по умолчанию
     # Используем filter_params вместо request.GET, чтобы включить default_branch_id для директора филиала
     from urllib.parse import urlencode
+
     qs_params = {}
     for key, value in filter_params.items():
         if key != "page":
@@ -250,6 +260,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
     if per_page != 25:
         # Добавляем per_page в параметры, если он отличается от значения по умолчанию
         from urllib.parse import urlencode, parse_qs
+
         params = parse_qs(qs_no_page) if qs_no_page else {}
         params["per_page"] = [str(per_page)]
         qs_no_page = urlencode(params, doseq=True)
@@ -310,7 +321,6 @@ def company_list(request: HttpRequest) -> HttpResponse:
     )
 
 
-
 @login_required
 @policy_required(resource_type="page", resource="ui:companies:list")
 def company_list_ajax(request: HttpRequest) -> JsonResponse:
@@ -335,7 +345,7 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
             view_as_branch_id = int(request.session.get("view_as_branch_id"))
         except (TypeError, ValueError):
             view_as_branch_id = None
-    
+
     # Создаем уникальный ключ кэша с учетом прав доступа
     cache_key_parts = ["companies_total_count", str(effective_user_id)]
     if view_as_role:
@@ -343,7 +353,7 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
     if view_as_branch_id:
         cache_key_parts.append(f"branch_{view_as_branch_id}")
     cache_key_total = "_".join(cache_key_parts)
-    
+
     companies_total = cache.get(cache_key_total)
     if companies_total is None:
         # Применяем те же фильтры, что и в company_list
@@ -354,7 +364,7 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
         companies_total = qs.order_by().count()
         # Держим TTL консистентным с company_list (60 сек)
         cache.set(cache_key_total, companies_total, 60)
-    
+
     # Оптимизация: предзагружаем только необходимые связанные объекты
     # Используем only() для уменьшения объема загружаемых данных
     qs = (
@@ -363,19 +373,28 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
         .prefetch_related(
             "spheres",
             # Предзагружаем только value для телефонов и email (не все поля)
-            models.Prefetch("phones", queryset=CompanyPhone.objects.only("id", "company_id", "value")),
-            models.Prefetch("emails", queryset=CompanyEmail.objects.only("id", "company_id", "value")),
+            models.Prefetch(
+                "phones", queryset=CompanyPhone.objects.only("id", "company_id", "value")
+            ),
+            models.Prefetch(
+                "emails", queryset=CompanyEmail.objects.only("id", "company_id", "value")
+            ),
             models.Prefetch(
                 "contacts",
-                queryset=Contact.objects.only("id", "company_id", "first_name", "last_name")
-                .prefetch_related(
-                    models.Prefetch("phones", queryset=ContactPhone.objects.only("id", "contact_id", "value")),
-                    models.Prefetch("emails", queryset=ContactEmail.objects.only("id", "contact_id", "value")),
-                )
+                queryset=Contact.objects.only(
+                    "id", "company_id", "first_name", "last_name"
+                ).prefetch_related(
+                    models.Prefetch(
+                        "phones", queryset=ContactPhone.objects.only("id", "contact_id", "value")
+                    ),
+                    models.Prefetch(
+                        "emails", queryset=ContactEmail.objects.only("id", "contact_id", "value")
+                    ),
+                ),
             ),
         )
     )
-    
+
     q = (request.GET.get("q") or "").strip()
     # Важно: QueryDict может содержать несколько значений для одного ключа (например, region=1&region=2),
     # поэтому используем .lists(), чтобы не потерять мультивыбор.
@@ -386,8 +405,9 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
     qs = f["qs"]
     if q:
         from companies.search_service import get_company_search_backend
+
         qs = get_company_search_backend().apply(qs=qs, query=q)
-    
+
     # Sorting
     sort_raw = (request.GET.get("sort") or "").strip()
     sort = sort_raw or "updated_at"
@@ -414,11 +434,12 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
         order = [f"-{f}" for f in order]
     if not (q and not sort_raw):
         qs = qs.order_by(*order)
-    
+
     companies_filtered = qs.order_by().count()
-    
+
     # Пагинация
     from ui.models import UiUserPreference
+
     _ui_prefs = UiUserPreference.load_for_user(user)
     try:
         per_page = int(request.GET.get("per_page") or _ui_prefs.companies_per_page or 25)
@@ -433,23 +454,26 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
     paginator._count = companies_filtered
     page_num = int(request.GET.get("page", 1))
     page = paginator.get_page(page_num)
-    
+
     # Проверка прав на передачу
     company_ids = [c.id for c in page.object_list]
     transfer_check = can_transfer_companies(user, company_ids)
     allowed_ids_set = set(transfer_check["allowed"])
     for company in page.object_list:
         company.can_transfer = company.id in allowed_ids_set  # type: ignore[attr-defined]
-    
+
     # Получаем конфигурацию колонок
     ui_cfg = UiGlobalConfig.load()
     columns = ui_cfg.company_list_columns or ["name"]
-    
+
     # match_reasons + подсветка (детерминированно)
     if q:
         try:
             from companies.search_service import get_company_search_backend
-            explain_map = get_company_search_backend().explain(companies=list(page.object_list), query=q)
+
+            explain_map = get_company_search_backend().explain(
+                companies=list(page.object_list), query=q
+            )
             for company in page.object_list:
                 ex = explain_map.get(company.id)
                 if ex and ex.reasons:
@@ -470,6 +494,7 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
                     else:
                         from companies.search_index import parse_query
                         from companies.search_service import SearchReason, highlight_html
+
                         pq = parse_query(q)
                         dig = pq.strong_digit_tokens + pq.weak_digit_tokens
                         company.search_name_html = highlight_html(company.name or "", text_tokens=pq.text_tokens, digit_tokens=dig)  # type: ignore[attr-defined]
@@ -483,6 +508,7 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
         except Exception:
             from companies.search_index import parse_query
             from companies.search_service import SearchReason, highlight_html
+
             pq = parse_query(q)
             for company in page.object_list:
                 dig = pq.strong_digit_tokens + pq.weak_digit_tokens
@@ -496,9 +522,10 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
                 ]
                 company.search_reasons = tuple([r for r in reasons if r.value])  # type: ignore[attr-defined]
                 company.search_reasons_total = len(company.search_reasons)  # type: ignore[attr-defined]
-    
+
     # Рендерим HTML строк таблицы
     from django.template.loader import render_to_string
+
     rows_html = render_to_string(
         "ui/company_list_rows.html",
         {
@@ -508,17 +535,19 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
         },
         request=request,
     )
-    
-    return JsonResponse({
-        "html": rows_html,
-        "total": companies_total,
-        "filtered": companies_filtered,
-        "page": page_num,
-        "num_pages": paginator.num_pages,
-        "has_previous": page.has_previous(),
-        "has_next": page.has_next(),
-        "per_page": per_page,
-    })
+
+    return JsonResponse(
+        {
+            "html": rows_html,
+            "total": companies_total,
+            "filtered": companies_filtered,
+            "page": page_num,
+            "num_pages": paginator.num_pages,
+            "has_previous": page.has_previous(),
+            "has_next": page.has_next(),
+            "per_page": per_page,
+        }
+    )
 
 
 @login_required
@@ -530,28 +559,35 @@ def company_bulk_transfer_preview(request: HttpRequest) -> JsonResponse:
     """
     if request.method != "POST":
         return JsonResponse({"error": "Method not allowed"}, status=405)
-    
+
     user: User = request.user
     new_resp_id = (request.POST.get("responsible_id") or "").strip()
     apply_mode = (request.POST.get("apply_mode") or "selected").strip().lower()
-    
+
     if not new_resp_id:
         return JsonResponse({"error": "Выберите нового ответственного"}, status=400)
-    
+
     try:
         new_resp = User.objects.get(id=new_resp_id, is_active=True)
     except User.DoesNotExist:
         return JsonResponse({"error": "Ответственный не найден"}, status=404)
-    
+
     # Проверка прав на нового ответственного
     if new_resp.role in (User.Role.GROUP_MANAGER, User.Role.ADMIN):
-        return JsonResponse({"error": "Нельзя передать компании управляющему или администратору"}, status=400)
-    
+        return JsonResponse(
+            {"error": "Нельзя передать компании управляющему или администратору"}, status=400
+        )
+
     if new_resp.role not in (User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD):
-        return JsonResponse({"error": "Нового ответственного можно выбрать только из: менеджер / директор филиала / РОП"}, status=400)
-    
+        return JsonResponse(
+            {
+                "error": "Нового ответственного можно выбрать только из: менеджер / директор филиала / РОП"
+            },
+            status=400,
+        )
+
     editable_qs = _editable_company_qs(user)
-    
+
     # Режим "по фильтру"
     if apply_mode == "filtered":
         now = timezone.now()
@@ -562,9 +598,14 @@ def company_bulk_transfer_preview(request: HttpRequest) -> JsonResponse:
         cap = 5000
         ids = list(qs.values_list("id", flat=True)[:cap])
         if not ids:
-            return JsonResponse({"error": "Нет компаний для переназначения (или нет прав)"}, status=400)
+            return JsonResponse(
+                {"error": "Нет компаний для переназначения (или нет прав)"}, status=400
+            )
         if len(ids) >= cap:
-            return JsonResponse({"error": f"Выбрано слишком много компаний (>{cap}). Сузьте фильтр и повторите"}, status=400)
+            return JsonResponse(
+                {"error": f"Выбрано слишком много компаний (>{cap}). Сузьте фильтр и повторите"},
+                status=400,
+            )
     else:
         ids = request.POST.getlist("company_ids") or []
         ids = [i for i in ids if i]
@@ -572,53 +613,68 @@ def company_bulk_transfer_preview(request: HttpRequest) -> JsonResponse:
             return JsonResponse({"error": "Выберите хотя бы одну компанию"}, status=400)
         ids = list(editable_qs.filter(id__in=ids).values_list("id", flat=True))
         if not ids:
-            return JsonResponse({"error": "Нет выбранных компаний, доступных для переназначения"}, status=400)
-    
+            return JsonResponse(
+                {"error": "Нет выбранных компаний, доступных для переназначения"}, status=400
+            )
+
     # Проверка прав на передачу
     transfer_check = can_transfer_companies(user, ids)
     allowed_ids = transfer_check["allowed"]
     forbidden_list = transfer_check["forbidden"]
-    
+
     # Проверка, что новый ответственный из того же филиала (для РОП/директора)
     if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
         if not new_resp.branch_id:
-            return JsonResponse({
-                "error": f"У сотрудника «{new_resp}» не указан филиал. Обратитесь к администратору для настройки профиля.",
-                "allowed_count": 0,
-                "forbidden_count": len(ids),
-            }, status=400)
+            return JsonResponse(
+                {
+                    "error": f"У сотрудника «{new_resp}» не указан филиал. Обратитесь к администратору для настройки профиля.",
+                    "allowed_count": 0,
+                    "forbidden_count": len(ids),
+                },
+                status=400,
+            )
         if new_resp.branch_id != user.branch_id:
-            return JsonResponse({
-                "error": f"Сотрудник «{new_resp}» из другого филиала. Можно передавать только внутри своего филиала.",
-                "allowed_count": 0,
-                "forbidden_count": len(ids),
-            }, status=400)
-    
+            return JsonResponse(
+                {
+                    "error": f"Сотрудник «{new_resp}» из другого филиала. Можно передавать только внутри своего филиала.",
+                    "allowed_count": 0,
+                    "forbidden_count": len(ids),
+                },
+                status=400,
+            )
+
     # Если есть запрещённые компании, возвращаем детали, но не блокируем полностью
     # (пользователь увидит preview с allowed/forbidden)
-    
+
     # Используем только разрешённые компании для превью
     if not allowed_ids:
-        return JsonResponse({
-            "error": "Нет компаний, доступных для переназначения",
-            "allowed_count": 0,
-            "forbidden_count": len(ids),
-            "forbidden": forbidden_list[:10],  # Первые 10 с причинами
-        }, status=400)
-    
+        return JsonResponse(
+            {
+                "error": "Нет компаний, доступных для переназначения",
+                "allowed_count": 0,
+                "forbidden_count": len(ids),
+                "forbidden": forbidden_list[:10],  # Первые 10 с причинами
+            },
+            status=400,
+        )
+
     # Получаем данные компаний для превью (только разрешённые)
-    companies = Company.objects.filter(id__in=allowed_ids).select_related("responsible", "branch", "status")[:100]
-    
+    companies = Company.objects.filter(id__in=allowed_ids).select_related(
+        "responsible", "branch", "status"
+    )[:100]
+
     companies_preview = []
     old_responsibles = {}
     for company in companies:
-        companies_preview.append({
-            "id": str(company.id),
-            "name": company.name,
-            "inn": company.inn or "",
-            "old_responsible": str(company.responsible) if company.responsible else "—",
-            "old_branch": str(company.branch) if company.branch else "—",
-        })
+        companies_preview.append(
+            {
+                "id": str(company.id),
+                "name": company.name,
+                "inn": company.inn or "",
+                "old_responsible": str(company.responsible) if company.responsible else "—",
+                "old_branch": str(company.branch) if company.branch else "—",
+            }
+        )
         if company.responsible_id:
             old_resp_id = str(company.responsible_id)
             if old_resp_id not in old_responsibles:
@@ -628,23 +684,25 @@ def company_bulk_transfer_preview(request: HttpRequest) -> JsonResponse:
                     "count": 0,
                 }
             old_responsibles[old_resp_id]["count"] += 1
-    
-    return JsonResponse({
-        "total_count": len(ids),
-        "allowed_count": len(allowed_ids),
-        "forbidden_count": len(forbidden_list),
-        "forbidden": forbidden_list[:10],
-        "preview_count": len(companies_preview),
-        "new_responsible": {
-            "id": str(new_resp.id),
-            "name": str(new_resp),
-            "role": new_resp.get_role_display(),
-            "branch": str(new_resp.branch) if new_resp.branch else "—",
-        },
-        "old_responsibles": list(old_responsibles.values()),
-        "companies": companies_preview,
-        "mode": apply_mode,
-    })
+
+    return JsonResponse(
+        {
+            "total_count": len(ids),
+            "allowed_count": len(allowed_ids),
+            "forbidden_count": len(forbidden_list),
+            "forbidden": forbidden_list[:10],
+            "preview_count": len(companies_preview),
+            "new_responsible": {
+                "id": str(new_resp.id),
+                "name": str(new_resp),
+                "role": new_resp.get_role_display(),
+                "branch": str(new_resp.branch) if new_resp.branch else "—",
+            },
+            "old_responsibles": list(old_responsibles.values()),
+            "companies": companies_preview,
+            "mode": apply_mode,
+        }
+    )
 
 
 @login_required
@@ -760,17 +818,23 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
 
     now_ts = timezone.now()
     # Транзакция обеспечивается декоратором @transaction.atomic на функции
-    qs_to_update = Company.objects.select_for_update().filter(id__in=ids).select_related("responsible", "branch", "status")
-    
+    qs_to_update = (
+        Company.objects.select_for_update()
+        .filter(id__in=ids)
+        .select_related("responsible", "branch", "status")
+    )
+
     # Собираем детальную информацию для аудита
     companies_data = []
     old_responsibles_data = {}
     for company in qs_to_update[:50]:  # Первые 50 для детального лога
-        companies_data.append({
-            "id": str(company.id),
-            "name": company.name,
-            "inn": company.inn or "",
-        })
+        companies_data.append(
+            {
+                "id": str(company.id),
+                "name": company.name,
+                "inn": company.inn or "",
+            }
+        )
         if company.responsible_id:
             old_resp_id = str(company.responsible_id)
             if old_resp_id not in old_responsibles_data:
@@ -780,11 +844,11 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
                     "count": 0,
                 }
             old_responsibles_data[old_resp_id]["count"] += 1
-    
+
     # Получаем уникальные ID старых ответственных
     old_resp_ids = list(qs_to_update.values_list("responsible_id", flat=True).distinct()[:20])
     old_resp_ids = [str(rid) for rid in old_resp_ids if rid]
-    
+
     # Собираем информацию о фильтрах (если был режим filtered)
     filters_info = {}
     if apply_mode == "filtered":
@@ -802,14 +866,13 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
             "overdue": request.POST.get("overdue", ""),
             "task_filter": request.POST.get("task_filter", ""),
         }
-    
+
     # Собираем данные ДО обновления (нужен старый ответственный для истории)
     _hist_items = list(qs_to_update.values_list("id", "responsible_id"))
     _old_resp_ids = list({rid for _, rid in _hist_items if rid})
-    _old_resp_map = {
-        str(u.id): u
-        for u in User.objects.filter(id__in=_old_resp_ids)
-    } if _old_resp_ids else {}
+    _old_resp_map = (
+        {str(u.id): u for u in User.objects.filter(id__in=_old_resp_ids)} if _old_resp_ids else {}
+    )
 
     updated = qs_to_update.update(responsible=new_resp, branch=new_resp.branch, updated_at=now_ts)
     _invalidate_company_count_cache()  # Инвалидируем кэш при массовом переназначении
@@ -820,6 +883,7 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
     try:
         from django.db import transaction as _tx
         from companies.search_index import rebuild_company_search_index as _reindex
+
         _ids_snapshot = list(ids)
 
         def _post_commit_reindex():
@@ -835,35 +899,44 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
 
     # Создаём события истории для каждой перенесённой компании
     _hist_now = now_ts
-    CompanyHistoryEvent.objects.bulk_create([
-        CompanyHistoryEvent(
-            company_id=comp_id,
-            event_type=CompanyHistoryEvent.EventType.ASSIGNED,
-            source=CompanyHistoryEvent.Source.LOCAL,
-            actor=user,
-            actor_name=str(user),
-            from_user_id=old_resp_id,
-            from_user_name=str(_old_resp_map[str(old_resp_id)]) if old_resp_id and str(old_resp_id) in _old_resp_map else "",
-            to_user=new_resp,
-            to_user_name=str(new_resp),
-            occurred_at=_hist_now,
-        )
-        for comp_id, old_resp_id in _hist_items
-    ], ignore_conflicts=True)
-    
+    CompanyHistoryEvent.objects.bulk_create(
+        [
+            CompanyHistoryEvent(
+                company_id=comp_id,
+                event_type=CompanyHistoryEvent.EventType.ASSIGNED,
+                source=CompanyHistoryEvent.Source.LOCAL,
+                actor=user,
+                actor_name=str(user),
+                from_user_id=old_resp_id,
+                from_user_name=(
+                    str(_old_resp_map[str(old_resp_id)])
+                    if old_resp_id and str(old_resp_id) in _old_resp_map
+                    else ""
+                ),
+                to_user=new_resp,
+                to_user_name=str(new_resp),
+                occurred_at=_hist_now,
+            )
+            for comp_id, old_resp_id in _hist_items
+        ],
+        ignore_conflicts=True,
+    )
+
     # Аудит-лог массовой передачи
     forbidden_count = len(transfer_check.get("forbidden", []))
     forbidden_list = transfer_check.get("forbidden", [])
-    
+
     # Формируем сообщение с сводкой
     if forbidden_count > 0:
         messages.success(
             request,
-            f"Переназначено компаний: {updated}. Пропущено: {forbidden_count}. Новый ответственный: {new_resp}."
+            f"Переназначено компаний: {updated}. Пропущено: {forbidden_count}. Новый ответственный: {new_resp}.",
         )
     else:
-        messages.success(request, f"Переназначено компаний: {updated}. Новый ответственный: {new_resp}.")
-    
+        messages.success(
+            request, f"Переназначено компаний: {updated}. Новый ответственный: {new_resp}."
+        )
+
     # Расширенное логирование для аудита
     log_event(
         actor=user,
@@ -879,13 +952,17 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
                 "role": new_resp.get_role_display(),
                 "branch": str(new_resp.branch) if new_resp.branch else None,
             },
-            "from": list(old_responsibles_data.values()),  # Детальная информация о старых ответственных
+            "from": list(
+                old_responsibles_data.values()
+            ),  # Детальная информация о старых ответственных
             "old_responsible_ids": old_resp_ids,
             "mode": apply_mode,
             "companies_sample": companies_data,  # Первые 50 компаний для детального лога
             "filters": filters_info if apply_mode == "filtered" else None,
             "forbidden_count": forbidden_count,
-            "forbidden_sample": forbidden_list[:10] if forbidden_list else [],  # Первые 10 запрещённых с причинами
+            "forbidden_sample": (
+                forbidden_list[:10] if forbidden_list else []
+            ),  # Первые 10 запрещённых с причинами
         },
     )
     if new_resp.id != user.id:
@@ -901,12 +978,14 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
     _invalidate_company_count_cache()
 
     if is_ajax:
-        return JsonResponse({
-            "success": True,
-            "updated": updated,
-            "new_responsible": str(new_resp),
-            "skipped": forbidden_count,
-        })
+        return JsonResponse(
+            {
+                "success": True,
+                "updated": updated,
+                "new_responsible": str(new_resp),
+                "skipped": forbidden_count,
+            }
+        )
     return redirect(f"/companies/?responsible={new_resp.id}")
 
 
@@ -932,18 +1011,22 @@ def company_export(request: HttpRequest) -> HttpResponse:
                 "allowed": False,
                 "ip": request.META.get("REMOTE_ADDR"),
                 "user_agent": request.META.get("HTTP_USER_AGENT", "")[:200],
-            "filters": {
-                "q": (request.GET.get("q") or "").strip(),
-                "responsible": (request.GET.get("responsible") or "").strip(),
-                "status": (request.GET.get("status") or "").strip(),
-                "branch": (request.GET.get("branch") or "").strip(),
-                "sphere": (request.GET.get("sphere") or "").strip(),
-                "contract_type": (request.GET.get("contract_type") or "").strip(),
-                "region": ",".join((request.GET.getlist("region") or [])) if hasattr(request.GET, "getlist") else (request.GET.get("region") or "").strip(),
-                "cold_call": (request.GET.get("cold_call") or "").strip(),
-                "overdue": (request.GET.get("overdue") or "").strip(),
-                "task_filter": (request.GET.get("task_filter") or "").strip(),
-            },
+                "filters": {
+                    "q": (request.GET.get("q") or "").strip(),
+                    "responsible": (request.GET.get("responsible") or "").strip(),
+                    "status": (request.GET.get("status") or "").strip(),
+                    "branch": (request.GET.get("branch") or "").strip(),
+                    "sphere": (request.GET.get("sphere") or "").strip(),
+                    "contract_type": (request.GET.get("contract_type") or "").strip(),
+                    "region": (
+                        ",".join((request.GET.getlist("region") or []))
+                        if hasattr(request.GET, "getlist")
+                        else (request.GET.get("region") or "").strip()
+                    ),
+                    "cold_call": (request.GET.get("cold_call") or "").strip(),
+                    "overdue": (request.GET.get("overdue") or "").strip(),
+                    "task_filter": (request.GET.get("task_filter") or "").strip(),
+                },
             },
         )
         messages.error(request, "Экспорт доступен только администратору.")
@@ -1052,7 +1135,9 @@ def company_export(request: HttpRequest) -> HttpResponse:
             txt = (n.text or "").strip()
             if n.attachment:
                 txt = _join_nonempty([txt, f"файл: {n.attachment_name or 'file'}"], " | ")
-            line = _join_nonempty([_fmt_dt(n.created_at), str(n.author) if n.author else "", txt], " — ")
+            line = _join_nonempty(
+                [_fmt_dt(n.created_at), str(n.author) if n.author else "", txt], " — "
+            )
             if line:
                 items.append(line)
         return " || ".join(items)
@@ -1085,7 +1170,14 @@ def company_export(request: HttpRequest) -> HttpResponse:
             (company.address or "").replace("\n", " ").strip(),
             company.website or "",
             company.activity_kind or "",
-            "Да" if (company.primary_contact_is_cold_call or bool(getattr(company, "has_cold_call_contact", False))) else "Нет",
+            (
+                "Да"
+                if (
+                    company.primary_contact_is_cold_call
+                    or bool(getattr(company, "has_cold_call_contact", False))
+                )
+                else "Нет"
+            ),
             _contract_type_display(company),
             _fmt_date(company.contract_until),
             company.status.name if company.status else "",
@@ -1112,10 +1204,16 @@ def company_export(request: HttpRequest) -> HttpResponse:
         # BOM for Excel
         yield "\ufeff"
         import io
+
         buf = io.StringIO()
         writer = csv.writer(buf, delimiter=";")
         # "водяной знак" (первая строка CSV): кто/когда/IP/ID экспорта
-        meta_row = ["EXPORT_ID=" + export_id, f"USER={user.username}", f"IP={request.META.get('REMOTE_ADDR','')}", f"TS={timezone.now().isoformat()}"]
+        meta_row = [
+            "EXPORT_ID=" + export_id,
+            f"USER={user.username}",
+            f"IP={request.META.get('REMOTE_ADDR','')}",
+            f"TS={timezone.now().isoformat()}",
+        ]
         # подгоняем к количеству колонок
         while len(meta_row) < len(headers):
             meta_row.append("")
@@ -1198,7 +1296,7 @@ def company_create(request: HttpRequest) -> HttpResponse:
 
             company.save()
             form.save_m2m()
-            
+
             # Сохраняем дополнительные email адреса
             new_company_emails: list[tuple[int, str]] = []
             for key, value in request.POST.items():
@@ -1211,7 +1309,7 @@ def company_create(request: HttpRequest) -> HttpResponse:
                     except (ValueError, TypeError):
                         continue
                     new_company_emails.append((index, raw))
-            
+
             # Сохраняем дополнительные телефоны компании
             new_company_phones: list[tuple[int, str]] = []
             for key, value in request.POST.items():
@@ -1224,23 +1322,27 @@ def company_create(request: HttpRequest) -> HttpResponse:
                     except (ValueError, TypeError):
                         continue
                     new_company_phones.append((index, raw))
-            
+
             # Валидация телефонов: проверка на дубликаты
             from companies.normalizers import normalize_phone as _normalize_phone
+
             all_phones = []
             if company.phone:
                 normalized_main = _normalize_phone(company.phone)
                 if normalized_main:
                     all_phones.append(normalized_main)
-            
+
             for _order, phone_value in new_company_phones:
                 normalized = _normalize_phone(phone_value)
                 if normalized:
                     all_phones.append(normalized)
-            
+
             # Проверка на дубликаты
             if len(all_phones) != len(set(all_phones)):
-                form.add_error(None, "Есть повторяющиеся телефоны (основной телефон не должен совпадать с дополнительными).")
+                form.add_error(
+                    None,
+                    "Есть повторяющиеся телефоны (основной телефон не должен совпадать с дополнительными).",
+                )
                 # Восстанавливаем введённые значения для отображения ошибки
                 company_emails = []
                 company_phones = []
@@ -1256,20 +1358,24 @@ def company_create(request: HttpRequest) -> HttpResponse:
                 return render(
                     request,
                     "ui/company_create.html",
-                    {"form": form, "company_emails": company_emails, "company_phones": company_phones},
+                    {
+                        "form": form,
+                        "company_emails": company_emails,
+                        "company_phones": company_phones,
+                    },
                 )
-            
+
             # Сохраняем дополнительные email и телефоны
             for order, email_value in sorted(new_company_emails, key=lambda x: x[0]):
                 CompanyEmail.objects.create(company=company, value=email_value, order=order)
-            
+
             for order, phone_value in sorted(new_company_phones, key=lambda x: x[0]):
                 # Нормализуем телефон перед сохранением; если номер не удаётся нормализовать,
                 # не сохраняем его во избежание "мусорных" значений.
                 normalized = _normalize_phone(phone_value)
                 if normalized:
                     CompanyPhone.objects.create(company=company, value=normalized, order=order)
-            
+
             _invalidate_company_count_cache()  # Инвалидируем кэш при создании
             messages.success(request, "Компания создана.")
             log_event(
@@ -1308,12 +1414,16 @@ def company_create(request: HttpRequest) -> HttpResponse:
         _restore_emails = []
         _restore_phones = []
 
-    return render(request, "ui/company_create.html", {
-        "form": form,
-        "company_emails": _restore_emails,
-        "company_phones": _restore_phones,
-        "contract_types": ContractType.objects.order_by("order", "name"),
-    })
+    return render(
+        request,
+        "ui/company_create.html",
+        {
+            "form": form,
+            "company_emails": _restore_emails,
+            "company_phones": _restore_phones,
+            "contract_types": ContractType.objects.order_by("order", "name"),
+        },
+    )
 
 
 @login_required
@@ -1358,6 +1468,7 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
     # чтобы поведение автодополнения и таблицы было одинаковым.
     if not company_id_raw:
         from companies.search_service import get_company_search_backend
+
         base_qs = Company.objects.all()
         qs = get_company_search_backend().apply(qs=base_qs, query=q)
         if exclude_id:
@@ -1367,7 +1478,7 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
             .prefetch_related("phones", "emails", "contacts__phones", "contacts__emails")
             .distinct()[:10]
         )
-    
+
     items = []
     for c in qs:
         # Определяем, где найдено совпадение
@@ -1376,7 +1487,7 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
         match_in_address = q.lower() in (c.address or "").lower()
         match_in_phone = False
         match_in_email = False
-        
+
         # Проверяем совпадение в телефонах
         matched_phone = None
         # Проверяем основной телефон
@@ -1386,53 +1497,62 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
         # Проверяем дополнительные телефоны
         if not matched_phone:
             for phone_obj in c.phones.all():
-                if q in phone_obj.value or (normalized_phone and normalized_phone in phone_obj.value):
+                if q in phone_obj.value or (
+                    normalized_phone and normalized_phone in phone_obj.value
+                ):
                     match_in_phone = True
                     matched_phone = phone_obj.value
                     break
-        
+
         # Проверяем совпадение в email
         matched_email = None
         # Проверяем основной email
-        if c.email and (q.lower() in c.email.lower() or (normalized_email and normalized_email == c.email.lower())):
+        if c.email and (
+            q.lower() in c.email.lower()
+            or (normalized_email and normalized_email == c.email.lower())
+        ):
             match_in_email = True
             matched_email = c.email
         # Проверяем дополнительные email
         if not matched_email:
             for email_obj in c.emails.all():
-                if q.lower() in email_obj.value.lower() or (normalized_email and normalized_email == email_obj.value.lower()):
+                if q.lower() in email_obj.value.lower() or (
+                    normalized_email and normalized_email == email_obj.value.lower()
+                ):
                     match_in_email = True
                     matched_email = email_obj.value
                     break
-        
+
         # Признаки структуры организации для UI:
         # - is_branch: у компании есть головная (сама компания — филиал);
         # - has_branches: у компании есть хотя бы один филиал.
         is_branch = bool(c.head_company_id)
         has_branches = Company.objects.filter(head_company_id=c.id).exists()
 
-        items.append({
-            "id": str(c.id),
-            "name": c.name,
-            "inn": c.inn or "",
-            "address": c.address or "",
-            "status": c.status.name if c.status else "",
-            "responsible": str(c.responsible) if c.responsible else "",
-            "url": f"/companies/{c.id}/",
-            "phone": matched_phone if match_in_phone else None,
-            "email": matched_email if match_in_email else None,
-            "is_branch": is_branch,
-            "has_branches": has_branches,
-            "match_in": {
-                "name": match_in_name,
-                "inn": match_in_inn,
-                "address": match_in_address,
-                "phone": match_in_phone,
-                "email": match_in_email,
-            },
-            "query": q,  # Передаем запрос для подсветки
-        })
-    
+        items.append(
+            {
+                "id": str(c.id),
+                "name": c.name,
+                "inn": c.inn or "",
+                "address": c.address or "",
+                "status": c.status.name if c.status else "",
+                "responsible": str(c.responsible) if c.responsible else "",
+                "url": f"/companies/{c.id}/",
+                "phone": matched_phone if match_in_phone else None,
+                "email": matched_email if match_in_email else None,
+                "is_branch": is_branch,
+                "has_branches": has_branches,
+                "match_in": {
+                    "name": match_in_name,
+                    "inn": match_in_inn,
+                    "address": match_in_address,
+                    "phone": match_in_phone,
+                    "email": match_in_email,
+                },
+                "query": q,  # Передаем запрос для подсветки
+            }
+        )
+
     return JsonResponse({"items": items})
 
 
@@ -1447,6 +1567,7 @@ def company_duplicates(request: HttpRequest) -> HttpResponse:
     user: User = request.user
     inn_raw = (request.GET.get("inn") or "").strip()
     from companies.normalizers import normalize_inn
+
     inn = normalize_inn(inn_raw) if inn_raw else ""
     kpp = (request.GET.get("kpp") or "").strip()
     name = (request.GET.get("name") or "").strip()
@@ -1492,5 +1613,3 @@ def company_duplicates(request: HttpRequest) -> HttpResponse:
             }
         )
     return JsonResponse({"items": items, "hidden_count": hidden_count, "reasons": reasons})
-
-

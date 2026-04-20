@@ -1,4 +1,5 @@
 """Plan 3 Task 3 — Celery task escalate_waiting_conversations."""
+
 from datetime import timedelta
 
 from django.test import TestCase
@@ -87,19 +88,13 @@ class EscalationTaskTests(TestCase):
         self.conv.refresh_from_db()
         self.assertIsNone(self.conv.assignee)
         self.assertEqual(self.conv.escalation_level, 4)
-        self.assertTrue(
-            Notification.objects.filter(
-                payload__conversation_id=self.conv.id
-            ).exists()
-        )
+        self.assertTrue(Notification.objects.filter(payload__conversation_id=self.conv.id).exists())
 
     def test_idempotent_same_level(self):
         self._set_waiting(11)
         escalate_waiting_conversations()
         escalate_waiting_conversations()
-        self.assertEqual(
-            Notification.objects.filter(user=self.manager).count(), 1
-        )
+        self.assertEqual(Notification.objects.filter(user=self.manager).count(), 1)
 
     def test_resolved_conversation_skipped(self):
         Conversation.objects.filter(pk=self.conv.pk).update(

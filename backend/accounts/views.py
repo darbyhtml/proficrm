@@ -1,6 +1,7 @@
 """
 Кастомные views для аутентификации с защитой от брутфорса.
 """
+
 from __future__ import annotations
 
 import logging
@@ -35,17 +36,18 @@ logger = logging.getLogger(__name__)
 
 class SecureLoginView(auth_views.LoginView):
     """Кастомный LoginView с защитой от брутфорса."""
-    
+
     template_name = "registration/login.html"
-    
+
     def dispatch(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
         """Редиректим на главную, если пользователь уже авторизован."""
         if request.user.is_authenticated:
             from django.shortcuts import redirect
             from django.conf import settings
+
             return redirect(settings.LOGIN_REDIRECT_URL)
         return super().dispatch(request, *args, **kwargs)
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         if "error_message" in kwargs:
@@ -53,7 +55,7 @@ class SecureLoginView(auth_views.LoginView):
         # Проверка, включён ли режим "magic link only"
         context["magic_link_only"] = getattr(settings, "MAGIC_LINK_ONLY", False)
         return context
-    
+
     def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
         # Если включён режим "magic link only", не принимаем пароли
         if getattr(settings, "MAGIC_LINK_ONLY", False):
@@ -62,18 +64,18 @@ class SecureLoginView(auth_views.LoginView):
                     error_message="Вход только по одноразовой ссылке. Обратитесь к администратору для получения ссылки входа."
                 )
             )
-        
+
         # Определяем тип входа
         login_type = request.POST.get("login_type", "access_key")
         access_key = request.POST.get("access_key", "").strip()
         username = request.POST.get("username", "").strip()
         password = request.POST.get("password", "").strip()
-        
+
         # Вход по ключу доступа (без логина)
         if login_type == "access_key" and access_key:
             ip = get_client_ip(request)
             user_agent = request.META.get("HTTP_USER_AGENT", "")[:255]
-            
+
             # Rate limiting: не чаще 5 попыток в минуту с одного IP
             if is_ip_rate_limited(ip, "access_key_login", 5, 60):
                 return self.render_to_response(
@@ -81,32 +83,29 @@ class SecureLoginView(auth_views.LoginView):
                         error_message="Слишком много попыток входа. Попробуйте через минуту."
                     )
                 )
-            
+
             # Ищем валидный токен по хэшу (без логина)
             import hashlib
+
             try:
                 token_hash = hashlib.sha256(access_key.encode()).hexdigest()
             except (UnicodeError, AttributeError, TypeError) as exc:
                 logger.warning("SecureLoginView token hash failed: %r", exc)
                 record_failed_login_attempt("", ip, "invalid_token_format")
                 return self.render_to_response(
-                    self.get_context_data(
-                        error_message="Неверный формат ключа доступа."
-                    )
+                    self.get_context_data(error_message="Неверный формат ключа доступа.")
                 )
-            
+
             try:
                 magic_link = MagicLinkToken.objects.get(token_hash=token_hash)
             except MagicLinkToken.DoesNotExist:
                 record_failed_login_attempt("", ip, "token_not_found")
                 return self.render_to_response(
-                    self.get_context_data(
-                        error_message="Неверный ключ доступа."
-                    )
+                    self.get_context_data(error_message="Неверный ключ доступа.")
                 )
-            
+
             user = magic_link.user
-            
+
             # Проверяем валидность токена
             if not magic_link.is_valid():
                 reason = "истёк" if timezone.now() >= magic_link.expires_at else "уже использован"
@@ -116,21 +115,19 @@ class SecureLoginView(auth_views.LoginView):
                         error_message=f"Ключ доступа {reason}. Обратитесь к администратору для получения нового ключа."
                     )
                 )
-            
+
             # Проверяем, что пользователь активен
             if not user.is_active:
                 record_failed_login_attempt(user.username, ip, "user_inactive")
                 return self.render_to_response(
-                    self.get_context_data(
-                        error_message="Аккаунт неактивен."
-                    )
+                    self.get_context_data(error_message="Аккаунт неактивен.")
                 )
-            
+
             # Вход успешен
             login(request, user)
             magic_link.mark_as_used(ip_address=ip, user_agent=user_agent)
             clear_login_attempts(user.username)
-            
+
             # Логируем успешный вход
             try:
                 log_event(
@@ -142,14 +139,19 @@ class SecureLoginView(auth_views.LoginView):
                     meta={"ip": ip, "user_agent": user_agent[:100]},
                 )
             except Exception:
-                logger.exception("SecureLoginView: не удалось записать ActivityEvent для access_key login user_id=%s", user.id)
-            
+                logger.exception(
+                    "SecureLoginView: не удалось записать ActivityEvent для access_key login user_id=%s",
+                    user.id,
+                )
+
             # Редирект
             redirect_to = request.POST.get("next") or ""
-            if not url_has_allowed_host_and_scheme(redirect_to, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+            if not url_has_allowed_host_and_scheme(
+                redirect_to, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+            ):
                 redirect_to = settings.LOGIN_REDIRECT_URL
             return redirect(redirect_to)
-        
+
         # Вход по логину и паролю (только для администраторов)
         if login_type == "password" and username and password:
             ip = get_client_ip(request)
@@ -174,15 +176,13 @@ class SecureLoginView(auth_views.LoginView):
 
             # Аутентифицируем пользователя
             user = authenticate(request, username=username, password=password)
-            
+
             if user is None:
                 record_failed_login_attempt(username, ip, "invalid_credentials")
                 return self.render_to_response(
-                    self.get_context_data(
-                        error_message="Неверный логин или пароль."
-                    )
+                    self.get_context_data(error_message="Неверный логин или пароль.")
                 )
-            
+
             # Проверяем, что пользователь - администратор
             if user.role != User.Role.ADMIN:
                 record_failed_login_attempt(username, ip, "non_admin_password_login")
@@ -191,20 +191,18 @@ class SecureLoginView(auth_views.LoginView):
                         error_message="Вход по логину и паролю доступен только для администраторов. Для входа используйте ключ доступа, обратитесь к администратору."
                     )
                 )
-            
+
             # Проверяем, что пользователь активен
             if not user.is_active:
                 record_failed_login_attempt(username, ip, "user_inactive")
                 return self.render_to_response(
-                    self.get_context_data(
-                        error_message="Аккаунт неактивен."
-                    )
+                    self.get_context_data(error_message="Аккаунт неактивен.")
                 )
-            
+
             # Вход успешен
             login(request, user)
             clear_login_attempts(user.username)
-            
+
             # Логируем успешный вход
             try:
                 log_event(
@@ -216,20 +214,21 @@ class SecureLoginView(auth_views.LoginView):
                     meta={"ip": ip},
                 )
             except Exception:
-                logger.exception("SecureLoginView: не удалось записать ActivityEvent для password login user_id=%s", user.id)
-            
+                logger.exception(
+                    "SecureLoginView: не удалось записать ActivityEvent для password login user_id=%s",
+                    user.id,
+                )
+
             # Редирект
             redirect_to = request.POST.get("next") or ""
-            if not url_has_allowed_host_and_scheme(redirect_to, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+            if not url_has_allowed_host_and_scheme(
+                redirect_to, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+            ):
                 redirect_to = settings.LOGIN_REDIRECT_URL
             return redirect(redirect_to)
-        
+
         # Если не указан тип входа или другие случаи, возвращаем ошибку
-        return self.render_to_response(
-            self.get_context_data(
-                error_message="Неверный тип входа."
-            )
-        )
+        return self.render_to_response(self.get_context_data(error_message="Неверный тип входа."))
 
 
 @require_http_methods(["GET"])
@@ -240,7 +239,7 @@ def magic_link_login(request: HttpRequest, token: str) -> HttpResponse:
     """
     ip = get_client_ip(request)
     user_agent = request.META.get("HTTP_USER_AGENT", "")[:255]
-    
+
     # Rate limiting: не чаще 5 попыток в минуту с одного IP
     if is_ip_rate_limited(ip, "magic_link_login", 5, 60):
         return render(
@@ -251,14 +250,14 @@ def magic_link_login(request: HttpRequest, token: str) -> HttpResponse:
             },
             status=429,
         )
-    
+
     # Вычисляем хэш токена
     try:
         token_hash = hashlib.sha256(token.encode()).hexdigest()
     except (UnicodeError, AttributeError, TypeError) as exc:
         logger.warning("magic_link_login: не удалось захэшировать токен: %r", exc)
         token_hash = None
-    
+
     if not token_hash:
         return render(
             request,
@@ -268,7 +267,7 @@ def magic_link_login(request: HttpRequest, token: str) -> HttpResponse:
             },
             status=400,
         )
-    
+
     # Ищем токен
     try:
         magic_link = MagicLinkToken.objects.get(token_hash=token_hash)
@@ -284,7 +283,9 @@ def magic_link_login(request: HttpRequest, token: str) -> HttpResponse:
                 meta={"ip": ip, "user_agent": user_agent[:100]},
             )
         except Exception:
-            logger.exception("magic_link_login: не удалось записать ActivityEvent для token_not_found")
+            logger.exception(
+                "magic_link_login: не удалось записать ActivityEvent для token_not_found"
+            )
         return render(
             request,
             "registration/magic_link_error.html",
@@ -293,7 +294,7 @@ def magic_link_login(request: HttpRequest, token: str) -> HttpResponse:
             },
             status=404,
         )
-    
+
     # Проверяем валидность
     if not magic_link.is_valid():
         reason = "истёк" if timezone.now() >= magic_link.expires_at else "уже использован"
@@ -307,7 +308,9 @@ def magic_link_login(request: HttpRequest, token: str) -> HttpResponse:
                 meta={"ip": ip, "user_agent": user_agent[:100], "user_id": magic_link.user_id},
             )
         except Exception:
-            logger.exception("magic_link_login: не удалось записать ActivityEvent для token_%s", reason)
+            logger.exception(
+                "magic_link_login: не удалось записать ActivityEvent для token_%s", reason
+            )
         return render(
             request,
             "registration/magic_link_error.html",
@@ -316,14 +319,14 @@ def magic_link_login(request: HttpRequest, token: str) -> HttpResponse:
             },
             status=400,
         )
-    
+
     # Вход успешен
     # Создаём сессию
     login(request, magic_link.user)
-    
+
     # Помечаем токен как использованный
     magic_link.mark_as_used(ip_address=ip, user_agent=user_agent)
-    
+
     # Логируем успешный вход
     try:
         log_event(
@@ -332,10 +335,17 @@ def magic_link_login(request: HttpRequest, token: str) -> HttpResponse:
             entity_type="security",
             entity_id=f"magic_link_success:{magic_link.user.id}",
             message="Успешный вход по magic link",
-            meta={"ip": ip, "user_agent": user_agent[:100], "created_by": str(magic_link.created_by) if magic_link.created_by else None},
+            meta={
+                "ip": ip,
+                "user_agent": user_agent[:100],
+                "created_by": str(magic_link.created_by) if magic_link.created_by else None,
+            },
         )
     except Exception:
-        logger.exception("magic_link_login: не удалось записать ActivityEvent для successful login user_id=%s", magic_link.user_id)
+        logger.exception(
+            "magic_link_login: не удалось записать ActivityEvent для successful login user_id=%s",
+            magic_link.user_id,
+        )
 
     # Редирект в кабинет
     return redirect("dashboard")

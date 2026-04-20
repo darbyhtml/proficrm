@@ -10,7 +10,15 @@ from pathlib import Path
 from django.db import transaction
 
 from accounts.models import User
-from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone
+from companies.models import (
+    Company,
+    CompanyNote,
+    CompanySphere,
+    CompanyStatus,
+    Contact,
+    ContactEmail,
+    ContactPhone,
+)
 
 
 def _clean_str(v) -> str:
@@ -257,7 +265,13 @@ def import_amo_csv(
                     amo_id = _get(row, "ID")
 
                     name = _unescape(_get(row, "Название компании", "Компания", "Наименование"))
-                    legal_name = _unescape(_get(row, "Юридическое название компании", "Юридическое название компании (компания)"))
+                    legal_name = _unescape(
+                        _get(
+                            row,
+                            "Юридическое название компании",
+                            "Юридическое название компании (компания)",
+                        )
+                    )
                     # ИНН: в базе встречаются компании с несколькими ИНН — поддерживаем ввод через любые разделители.
                     inn_raw = _get(row, "ИНН", "ИНН (компания)")
                     inn_list = parse_inns(inn_raw)
@@ -271,13 +285,26 @@ def import_amo_csv(
                     website = _unescape(_get(row, "Web", "Web (компания)"))
 
                     # Статус: в файле встречаются 2 колонки ("Статус" и "Статус из Скайнет") — берём более "живую".
-                    status_name = _unescape(_get(row, "Статус", "Статус из Скайнет", "Статус из Скайнет (компания)"))
+                    status_name = _unescape(
+                        _get(row, "Статус", "Статус из Скайнет", "Статус из Скайнет (компания)")
+                    )
                     spheres_raw = _get(row, "Сферы деятельности", "Сферы деятельности (компания)")
 
                     # Доп. поля карточки
-                    employees_count_raw = _unescape(_get(row, "Численность сотрудников", "Численность сотрудников (Скайнет)", "Сотрудников"))
-                    worktime_raw = _unescape(_get(row, "Рабочее время", "Рабочее время (Скайнет)", "Часы работы"))
-                    timezone_raw = _unescape(_get(row, "Часовой пояс", "Часовой пояс (Скайнет)", "Таймзона", "Timezone"))
+                    employees_count_raw = _unescape(
+                        _get(
+                            row,
+                            "Численность сотрудников",
+                            "Численность сотрудников (Скайнет)",
+                            "Сотрудников",
+                        )
+                    )
+                    worktime_raw = _unescape(
+                        _get(row, "Рабочее время", "Рабочее время (Скайнет)", "Часы работы")
+                    )
+                    timezone_raw = _unescape(
+                        _get(row, "Часовой пояс", "Часовой пояс (Скайнет)", "Таймзона", "Timezone")
+                    )
                     employees_count = _parse_int(employees_count_raw)
                     workday_start, workday_end = _parse_worktime(worktime_raw)
 
@@ -318,9 +345,9 @@ def import_amo_csv(
                             # fallback: "Фамилия Имя Отчество" -> ищем по "Фамилия Имя"
                             ln, fn = _parse_person_name(responsible_key)
                             if ln and fn:
-                                responsible = (
-                                    User.objects.filter(last_name__iexact=ln, first_name__iexact=fn, is_active=True).first()
-                                )
+                                responsible = User.objects.filter(
+                                    last_name__iexact=ln, first_name__iexact=fn, is_active=True
+                                ).first()
 
                     company = None
                     if inn_list:
@@ -333,7 +360,9 @@ def import_amo_csv(
                         key = (_norm_name(name), _norm_name(address))
                         company = company_by_name_addr.get(key)
                         if company is None and key != ("", ""):
-                            company = Company.objects.filter(name__iexact=name, address__iexact=address).first()
+                            company = Company.objects.filter(
+                                name__iexact=name, address__iexact=address
+                            ).first()
 
                     created = False
                     if company is None:
@@ -381,6 +410,7 @@ def import_amo_csv(
                             if field in prev and prev.get(field) == cur:
                                 return True
                             return False
+
                         # Обрезаем значения до max_length перед установкой
                         field_max_lengths = {
                             "name": 255,
@@ -417,13 +447,25 @@ def import_amo_csv(
                                     changed = True
 
                         # новые поля (работаем только если можно обновлять)
-                        if employees_count is not None and can_update("employees_count") and company.employees_count != employees_count:
+                        if (
+                            employees_count is not None
+                            and can_update("employees_count")
+                            and company.employees_count != employees_count
+                        ):
                             company.employees_count = employees_count
                             changed = True
-                        if workday_start and can_update("workday_start") and company.workday_start != workday_start:
+                        if (
+                            workday_start
+                            and can_update("workday_start")
+                            and company.workday_start != workday_start
+                        ):
                             company.workday_start = workday_start
                             changed = True
-                        if workday_end and can_update("workday_end") and company.workday_end != workday_end:
+                        if (
+                            workday_end
+                            and can_update("workday_end")
+                            and company.workday_end != workday_end
+                        ):
                             company.workday_end = workday_end
                             changed = True
                         if timezone_raw and can_update("work_timezone"):
@@ -431,7 +473,11 @@ def import_amo_csv(
                             if company.work_timezone != tzv:
                                 company.work_timezone = tzv
                                 changed = True
-                        if responsible and company.responsible_id != responsible.id and set_responsible:
+                        if (
+                            responsible
+                            and company.responsible_id != responsible.id
+                            and set_responsible
+                        ):
                             company.responsible = responsible
                             changed = True
                         if str(amo_id).isdigit() and company.amocrm_company_id != int(amo_id):
@@ -482,18 +528,28 @@ def import_amo_csv(
                         # Примечания/комментарии -> одна заметка (только при создании, чтобы не плодить дубли при повторном импорте)
                         if created and import_notes:
                             note_parts = []
-                            for k in ("Примечание 1", "Примечание 2", "Примечание 3", "Примечание 4", "Примечание 5"):
+                            for k in (
+                                "Примечание 1",
+                                "Примечание 2",
+                                "Примечание 3",
+                                "Примечание 4",
+                                "Примечание 5",
+                            ):
                                 v = _unescape(_get(row, k))
                                 if v:
                                     note_parts.append(f"{k}: {v}")
                             last_comment = _unescape(_get(row, "Последний комментарий (Скайнет)"))
                             if last_comment:
-                                note_parts.append(f"Последний комментарий (Скайнет): {last_comment}")
+                                note_parts.append(
+                                    f"Последний комментарий (Скайнет): {last_comment}"
+                                )
                             note2 = _unescape(_get(row, "Примечание"))
                             if note2:
                                 note_parts.append(f"Примечание: {note2}")
                             if activity_raw and len(activity_raw) > 255:
-                                note_parts.append(f"Вид деятельности (полный текст): {activity_raw}")
+                                note_parts.append(
+                                    f"Вид деятельности (полный текст): {activity_raw}"
+                                )
 
                             if note_parts:
                                 CompanyNote.objects.create(
@@ -508,7 +564,9 @@ def import_amo_csv(
                             if phone_work:
                                 phones.append((ContactPhone.PhoneType.WORK, phone_work))
                             if phone_work_direct:
-                                phones.append((ContactPhone.PhoneType.WORK_DIRECT, phone_work_direct))
+                                phones.append(
+                                    (ContactPhone.PhoneType.WORK_DIRECT, phone_work_direct)
+                                )
                             if phone_mobile:
                                 phones.append((ContactPhone.PhoneType.MOBILE, phone_mobile))
                             if phone_other:
@@ -561,15 +619,28 @@ def import_amo_csv(
                     # кеш для дедупа
                     if inn:
                         company_by_inn[inn] = company
-                    company_by_name_addr[(_norm_name(company.name), _norm_name(company.address))] = company
+                    company_by_name_addr[
+                        (_norm_name(company.name), _norm_name(company.address))
+                    ] = company
 
                     # превью
-                    if result.preview_companies is not None and len(result.preview_companies) < max(20, limit_companies):
+                    if result.preview_companies is not None and len(result.preview_companies) < max(
+                        20, limit_companies
+                    ):
                         result.preview_companies.append(
-                            {"name": company.name, "inn": company.inn, "address": company.address, "status": status_name}
+                            {
+                                "name": company.name,
+                                "inn": company.inn,
+                                "address": company.address,
+                                "status": status_name,
+                            }
                         )
 
-                    if companies_only and limit_companies and result.created_companies + result.updated_companies >= limit_companies:
+                    if (
+                        companies_only
+                        and limit_companies
+                        and result.created_companies + result.updated_companies >= limit_companies
+                    ):
                         # Быстрый выход: не читаем дальше файл
                         break
 
@@ -578,5 +649,3 @@ def import_amo_csv(
 
     _run()
     return result
-
-

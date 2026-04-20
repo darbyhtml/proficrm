@@ -16,6 +16,7 @@ class Branch(models.Model):
 
     def delete(self, *args, **kwargs):
         from django.core.exceptions import ValidationError
+
         if self.users.filter(is_active=True).exists():
             raise ValidationError(
                 f"Нельзя удалить подразделение «{self.name}»: к нему привязаны активные сотрудники."
@@ -56,10 +57,19 @@ class User(AbstractUser):
         blank=True,
     )
 
-    branch = models.ForeignKey(Branch, verbose_name="Подразделение", null=True, blank=True, on_delete=models.SET_NULL, related_name="users")
+    branch = models.ForeignKey(
+        Branch,
+        verbose_name="Подразделение",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="users",
+    )
 
     # По умолчанию доступ "вся база", но админ может ограничить.
-    data_scope = models.CharField("Доступ к базе", max_length=16, choices=DataScope.choices, default=DataScope.GLOBAL)
+    data_scope = models.CharField(
+        "Доступ к базе", max_length=16, choices=DataScope.choices, default=DataScope.GLOBAL
+    )
 
     email_signature_html = models.TextField("Подпись в письме (HTML)", blank=True, default="")
 
@@ -93,6 +103,7 @@ class User(AbstractUser):
         """
         from django.utils import timezone
         from accounts.models import UserAbsence
+
         today = on_date or timezone.localdate()
         # UserAbsence import здесь (не в топе) — модель определена ниже в этом файле.
         return UserAbsence.objects.filter(
@@ -107,6 +118,7 @@ class MagicLinkToken(models.Model):
     Одноразовый токен для входа в систему.
     Генерируется администратором для конкретного пользователя.
     """
+
     user = models.ForeignKey(
         User,
         verbose_name="Пользователь",
@@ -126,7 +138,9 @@ class MagicLinkToken(models.Model):
         related_name="created_magic_links",
     )
     ip_address = models.GenericIPAddressField("IP адрес при использовании", null=True, blank=True)
-    user_agent = models.CharField("User-Agent при использовании", max_length=255, blank=True, default="")
+    user_agent = models.CharField(
+        "User-Agent при использовании", max_length=255, blank=True, default=""
+    )
 
     class Meta:
         verbose_name = "Токен входа"
@@ -136,7 +150,11 @@ class MagicLinkToken(models.Model):
         ]
 
     def __str__(self) -> str:
-        status = "использован" if self.used_at else ("истёк" if self.expires_at < timezone.now() else "активен")
+        status = (
+            "использован"
+            if self.used_at
+            else ("истёк" if self.expires_at < timezone.now() else "активен")
+        )
         return f"Токен для {self.user} ({status})"
 
     def is_valid(self) -> bool:
@@ -166,7 +184,9 @@ class MagicLinkToken(models.Model):
         return token, token_hash
 
     @staticmethod
-    def create_for_user(user: User, created_by: User, ttl_minutes: int = 1440) -> tuple["MagicLinkToken", str]:
+    def create_for_user(
+        user: User, created_by: User, ttl_minutes: int = 1440
+    ) -> tuple["MagicLinkToken", str]:
         """
         Создаёт новый токен для пользователя.
         По умолчанию TTL = 24 часа (1440 минут).

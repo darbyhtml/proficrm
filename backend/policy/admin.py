@@ -39,4 +39,3 @@ class PolicyRuleAdmin(admin.ModelAdmin):
     list_filter = ("enabled", "subject_type", "resource_type", "effect", "role")
     search_fields = ("resource", "role", "user__username", "user__first_name", "user__last_name")
     ordering = ("priority", "-updated_at")
-

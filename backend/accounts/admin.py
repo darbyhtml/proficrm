@@ -14,8 +14,7 @@ class BranchAdmin(admin.ModelAdmin):
 class UserAdmin(DjangoUserAdmin):
     list_display = ("username", "email", "role", "branch", "is_active", "is_staff")
     list_filter = ("role", "branch", "is_active", "is_staff")
-    fieldsets = DjangoUserAdmin.fieldsets + (
-        ("CRM", {"fields": ("role", "branch")}),
-    )
+    fieldsets = DjangoUserAdmin.fieldsets + (("CRM", {"fields": ("role", "branch")}),)
+
 
 # Register your models here.

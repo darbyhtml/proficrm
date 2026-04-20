@@ -2,6 +2,7 @@
 Вспомогательные функции для Celery-задач модуля mailer.
 Вынесены сюда для удобства тестирования и переиспользования.
 """
+
 from __future__ import annotations
 
 import logging
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 # Rate-limit wrappers (позволяют патчить в тестах через mailer.tasks.*)
 # ---------------------------------------------------------------------------
 
+
 def reserve_rate_limit_token(*args, **kwargs):
     return rate_limiter.reserve_rate_limit_token(*args, **kwargs)
 
@@ -41,6 +43,7 @@ def get_effective_quota_available(*args, **kwargs):
 # ---------------------------------------------------------------------------
 # Определение типа ошибки SMTP
 # ---------------------------------------------------------------------------
+
 
 def _is_transient_send_error(err: str) -> bool:
     """
@@ -165,6 +168,7 @@ def _smtp_bz_enrich_error(api_key: str, msg, campaign_id: str, recipient_id: str
 # Вложение кампании
 # ---------------------------------------------------------------------------
 
+
 def _get_campaign_attachment_bytes(camp) -> tuple[bytes | None, str | None, str | None]:
     """
     Безопасно читает вложение кампании.
@@ -252,6 +256,7 @@ def _sanitize_header_value(value: str) -> str:
 # Рабочее время
 # ---------------------------------------------------------------------------
 
+
 def _is_working_hours(now=None) -> bool:
     """Проверяет, что текущее время МСК в диапазоне 9:00–18:00."""
     if now is None:
@@ -265,11 +270,13 @@ def _is_working_hours(now=None) -> bool:
 # Уведомления о жизненном цикле кампании
 # ---------------------------------------------------------------------------
 
+
 def _notify_campaign_started(user, camp) -> None:
     """Отправляет уведомление «Рассылка началась» в интерфейс пользователя."""
     try:
         from notifications.service import notify
         from notifications.models import Notification
+
         notify(
             user=user,
             kind=Notification.Kind.SYSTEM,
@@ -279,17 +286,24 @@ def _notify_campaign_started(user, camp) -> None:
             dedupe_seconds=3600,
         )
     except Exception:
-        logger.warning("Не удалось отправить уведомление 'кампания началась' для %s", camp.id, exc_info=True)
+        logger.warning(
+            "Не удалось отправить уведомление 'кампания началась' для %s", camp.id, exc_info=True
+        )
 
 
-def _notify_campaign_finished(user, camp, *, sent_count: int, failed_count: int, total_count: int) -> None:
+def _notify_campaign_finished(
+    user, camp, *, sent_count: int, failed_count: int, total_count: int
+) -> None:
     """Отправляет уведомление о завершении рассылки."""
     try:
         from notifications.service import notify
         from notifications.models import Notification
+
         if failed_count > 0:
             title = "Рассылка завершена с ошибками"
-            body = f"«{camp.name}»: отправлено {sent_count} из {total_count}, ошибки у {failed_count}."
+            body = (
+                f"«{camp.name}»: отправлено {sent_count} из {total_count}, ошибки у {failed_count}."
+            )
         else:
             title = "Рассылка завершена"
             body = f"«{camp.name}»: успешно отправлено {sent_count} писем."
@@ -301,7 +315,9 @@ def _notify_campaign_finished(user, camp, *, sent_count: int, failed_count: int,
             url=f"/mail/campaigns/{camp.id}/",
         )
     except Exception:
-        logger.warning("Не удалось отправить уведомление 'кампания завершена' для %s", camp.id, exc_info=True)
+        logger.warning(
+            "Не удалось отправить уведомление 'кампания завершена' для %s", camp.id, exc_info=True
+        )
 
 
 def _notify_circuit_breaker_tripped(user, camp, *, error_count: int) -> None:
@@ -309,6 +325,7 @@ def _notify_circuit_breaker_tripped(user, camp, *, error_count: int) -> None:
     try:
         from notifications.service import notify
         from notifications.models import Notification
+
         notify(
             user=user,
             kind=Notification.Kind.SYSTEM,
@@ -321,7 +338,9 @@ def _notify_circuit_breaker_tripped(user, camp, *, error_count: int) -> None:
             dedupe_seconds=3600,
         )
     except Exception:
-        logger.warning("Не удалось отправить уведомление circuit breaker для %s", camp.id, exc_info=True)
+        logger.warning(
+            "Не удалось отправить уведомление circuit breaker для %s", camp.id, exc_info=True
+        )
 
 
 def _notify_attachment_error(camp, *, error: str) -> None:
@@ -331,6 +350,7 @@ def _notify_attachment_error(camp, *, error: str) -> None:
     try:
         from notifications.service import notify
         from notifications.models import Notification
+
         notify(
             user=camp.created_by,
             kind=Notification.Kind.SYSTEM,
@@ -339,12 +359,15 @@ def _notify_attachment_error(camp, *, error: str) -> None:
             url=f"/mail/campaigns/{camp.id}/",
         )
     except Exception:
-        logger.warning("Не удалось отправить уведомление об ошибке вложения для %s", camp.id, exc_info=True)
+        logger.warning(
+            "Не удалось отправить уведомление об ошибке вложения для %s", camp.id, exc_info=True
+        )
 
 
 # ---------------------------------------------------------------------------
 # Обработка батча получателей
 # ---------------------------------------------------------------------------
+
 
 def _process_batch_recipients(
     *,
@@ -407,12 +430,10 @@ def _process_batch_recipients(
             body_text=(body_text or ""),
             body_html=(body_html or ""),
             from_email=_sanitize_header_value(
-                (smtp_cfg.from_email or "").strip()
-                or (smtp_cfg.smtp_username or "").strip()
+                (smtp_cfg.from_email or "").strip() or (smtp_cfg.smtp_username or "").strip()
             ),
             from_name=_sanitize_header_value(
-                (camp.sender_name or "").strip()
-                or (smtp_cfg.from_name or "CRM ПРОФИ").strip()
+                (camp.sender_name or "").strip() or (smtp_cfg.from_name or "CRM ПРОФИ").strip()
             ),
             reply_to=_sanitize_header_value((user.email or "").strip()),
             attachment_content=attachment_bytes,

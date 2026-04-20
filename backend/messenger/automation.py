@@ -10,6 +10,7 @@ Usage:
     dispatch_event("conversation_created", conversation=conv)
     dispatch_event("message_created", conversation=conv, message=msg)
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,6 +24,7 @@ logger = logging.getLogger("messenger.automation")
 
 
 # ─── Legacy auto-reply (backward compat) ────────────────────────────────
+
 
 def _get_auto_reply_config(inbox) -> Dict[str, Any]:
     cfg = (getattr(inbox, "settings", None) or {}).get("automation") or {}
@@ -59,6 +61,7 @@ def run_automation_for_incoming_message(message: Message) -> None:
         # Защита от дублирования автоответов при параллельных входящих:
         # 1. Redis lock (быстрый путь — отсекает параллельные вызовы)
         from django.core.cache import cache
+
         lock_key = f"messenger:auto_reply_lock:{conversation.id}"
         if not cache.add(lock_key, "1", timeout=30):
             return  # Другой процесс уже обрабатывает автоответ
@@ -66,6 +69,7 @@ def run_automation_for_incoming_message(message: Message) -> None:
         try:
             # 2. Атомарная проверка: select_for_update + has_out
             from django.db import transaction
+
             with transaction.atomic():
                 conv_locked = Conversation.objects.select_for_update().get(pk=conversation.pk)
                 has_out = conv_locked.messages.filter(direction=Message.Direction.OUT).exists()
@@ -73,6 +77,7 @@ def run_automation_for_incoming_message(message: Message) -> None:
                     return
 
                 from .services import record_message
+
                 record_message(
                     conversation=conv_locked,
                     direction=Message.Direction.OUT,
@@ -92,6 +97,7 @@ def run_automation_for_incoming_message(message: Message) -> None:
 
 # ─── AutomationRule engine ───────────────────────────────────────────────
 
+
 def dispatch_event(
     event_name: str,
     conversation: Conversation,
@@ -106,12 +112,16 @@ def dispatch_event(
     Находит подходящие правила, проверяет условия, выполняет действия.
     Возвращает кол-во выполненных правил.
     """
-    rules = AutomationRule.objects.filter(
-        event_name=event_name,
-        is_active=True,
-    ).filter(
-        Q(inbox=conversation.inbox) | Q(inbox__isnull=True),
-    ).order_by("id")
+    rules = (
+        AutomationRule.objects.filter(
+            event_name=event_name,
+            is_active=True,
+        )
+        .filter(
+            Q(inbox=conversation.inbox) | Q(inbox__isnull=True),
+        )
+        .order_by("id")
+    )
 
     executed = 0
     for rule in rules:
@@ -121,18 +131,22 @@ def dispatch_event(
                 executed += 1
                 logger.info(
                     "Automation rule %s (id=%d) fired for conversation %d",
-                    rule.name, rule.id, conversation.id,
+                    rule.name,
+                    rule.id,
+                    conversation.id,
                 )
         except Exception:
             logger.warning(
                 "Automation rule %s (id=%d) failed",
-                rule.name, rule.id,
+                rule.name,
+                rule.id,
                 exc_info=True,
             )
     return executed
 
 
 # ─── Conditions evaluator ────────────────────────────────────────────────
+
 
 def _evaluate_conditions(
     conditions: List[Dict],
@@ -212,6 +226,7 @@ def _check_operator(actual: Any, operator: str, values: list) -> bool:
 
 # ─── Actions executor ────────────────────────────────────────────────────
 
+
 def _execute_actions(
     actions: List[Dict],
     conversation: Conversation,
@@ -271,6 +286,7 @@ def _action_assign_agent(conversation: Conversation, params: list) -> None:
         return
     from accounts.models import User
     from .services import assign_conversation
+
     try:
         user = User.objects.get(pk=int(params[0]), is_active=True)
         assign_conversation(conversation, user)
@@ -288,6 +304,7 @@ def _action_resolve(conversation: Conversation) -> None:
 def _action_add_label(conversation: Conversation, params: list) -> None:
     """Добавить метки. params = [label_id, ...]"""
     from .models import ConversationLabel
+
     for label_id in params:
         try:
             label = ConversationLabel.objects.get(pk=int(label_id))
@@ -313,6 +330,7 @@ def _action_send_message(conversation: Conversation, params: list) -> None:
     if not body:
         return
     from .services import record_message
+
     # Отправляем от назначенного оператора (или без sender, если нет)
     record_message(
         conversation=conversation,
@@ -328,7 +346,11 @@ def _action_set_priority(conversation: Conversation, params: list) -> None:
         return
     try:
         priority = int(params[0])
-        if priority in (Conversation.Priority.LOW, Conversation.Priority.NORMAL, Conversation.Priority.HIGH):
+        if priority in (
+            Conversation.Priority.LOW,
+            Conversation.Priority.NORMAL,
+            Conversation.Priority.HIGH,
+        ):
             conversation.priority = priority
             conversation.save(update_fields=["priority"])
     except (ValueError, TypeError):

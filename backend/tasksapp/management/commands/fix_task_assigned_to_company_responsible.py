@@ -60,7 +60,9 @@ class Command(BaseCommand):
         batch_size = options.get("batch_size", 500)
         skip_completed = bool(options["skip_completed"])
 
-        self.stdout.write(self.style.WARNING("Поиск задач для переноса на ответственного за компанию..."))
+        self.stdout.write(
+            self.style.WARNING("Поиск задач для переноса на ответственного за компанию...")
+        )
 
         # Базовый запрос: задачи с компанией и ответственным за компанию
         qs = Task.objects.filter(
@@ -127,7 +129,7 @@ class Command(BaseCommand):
                 batch_tasks = Task.objects.filter(id__in=batch_ids).select_related(
                     "company", "company__responsible"
                 )
-                
+
                 for task in batch_tasks:
                     if task.company and task.company.responsible_id:
                         try:
@@ -137,9 +139,7 @@ class Command(BaseCommand):
                         except Exception as e:
                             errors += 1
                             self.stdout.write(
-                                self.style.ERROR(
-                                    f"Ошибка при обновлении задачи {task.id}: {e}"
-                                )
+                                self.style.ERROR(f"Ошибка при обновлении задачи {task.id}: {e}")
                             )
                     else:
                         errors += 1
@@ -148,7 +148,7 @@ class Command(BaseCommand):
                                 f"Пропущена задача {task.id}: нет компании или ответственного"
                             )
                         )
-            
+
             self.stdout.write(f"  Обработано: {updated + errors}/{len(ids)}")
 
         self.stdout.write(
@@ -157,6 +157,4 @@ class Command(BaseCommand):
             )
         )
         if errors > 0:
-            self.stdout.write(
-                self.style.WARNING(f"Ошибок/пропущено: {errors}")
-            )
+            self.stdout.write(self.style.WARNING(f"Ошибок/пропущено: {errors}"))

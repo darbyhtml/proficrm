@@ -1,6 +1,7 @@
 """
 Celery tasks для модуля phonebridge.
 """
+
 from __future__ import annotations
 
 import logging
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 def clean_old_call_requests(days_old: int = 30):
     """
     Очистка старых запросов на звонок.
-    
+
     Args:
         days_old: Удалять записи старше N дней (по умолчанию 30)
     """
@@ -29,4 +30,3 @@ def clean_old_call_requests(days_old: int = 30):
     except Exception as exc:
         logger.error(f"Error cleaning old call requests: {exc}", exc_info=True)
         raise
-

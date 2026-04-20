@@ -79,6 +79,4 @@ class Command(BaseCommand):
                 else:
                     skipped += 1
 
-        self.stdout.write(
-            self.style.SUCCESS(f"Готово. Создано: {created}, пропущено: {skipped}")
-        )
+        self.stdout.write(self.style.SUCCESS(f"Готово. Создано: {created}, пропущено: {skipped}"))

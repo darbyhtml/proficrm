@@ -14,6 +14,7 @@
 
 См. docs/runbooks/30-orphan-contacts-cleanup.md для полного процесса.
 """
+
 from __future__ import annotations
 
 import csv
@@ -92,7 +93,9 @@ class Command(BaseCommand):
                 totally_empty += 1
         self.stdout.write(f"  с телефоном: {with_phone}")
         self.stdout.write(f"  с email:     {with_email}")
-        self.stdout.write(self.style.WARNING(f"  полностью пустых (кандидаты на удаление): {totally_empty}"))
+        self.stdout.write(
+            self.style.WARNING(f"  полностью пустых (кандидаты на удаление): {totally_empty}")
+        )
 
     def _export_csv(self, orphans):
         writer = csv.writer(sys.stdout)
@@ -121,7 +124,10 @@ class Command(BaseCommand):
     def _delete_empty(self, orphans):
         empty_ids = []
         for c in orphans.only("id"):
-            if not ContactPhone.objects.filter(contact_id=c.id).exists() and not ContactEmail.objects.filter(contact_id=c.id).exists():
+            if (
+                not ContactPhone.objects.filter(contact_id=c.id).exists()
+                and not ContactEmail.objects.filter(contact_id=c.id).exists()
+            ):
                 empty_ids.append(c.id)
         if not empty_ids:
             self.stdout.write("Пустых orphan-контактов не найдено.")

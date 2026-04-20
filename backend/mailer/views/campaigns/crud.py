@@ -1,6 +1,7 @@
 """
 Views: создание, редактирование, удаление и клонирование кампаний.
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,7 +25,12 @@ logger = logging.getLogger(__name__)
 
 @login_required
 def campaign_create(request: HttpRequest) -> HttpResponse:
-    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:create", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:campaigns:create",
+        context={"path": request.path, "method": request.method},
+    )
     user: User = request.user
     smtp_cfg = GlobalMailAccount.load()
     if request.method == "POST":
@@ -59,7 +65,12 @@ def campaign_create(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def campaign_edit(request: HttpRequest, campaign_id) -> HttpResponse:
-    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:edit", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:campaigns:edit",
+        context={"path": request.path, "method": request.method},
+    )
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
@@ -87,12 +98,23 @@ def campaign_edit(request: HttpRequest, campaign_id) -> HttpResponse:
     attachment_size = None
     if getattr(camp, "attachment", None):
         try:
-            attachment_filename = (camp.attachment_original_name or (camp.attachment.name.split("/")[-1] if camp.attachment and camp.attachment.name else "")).strip()
+            attachment_filename = (
+                camp.attachment_original_name
+                or (
+                    camp.attachment.name.split("/")[-1]
+                    if camp.attachment and camp.attachment.name
+                    else ""
+                )
+            ).strip()
             if attachment_filename and "." in attachment_filename:
                 attachment_ext = attachment_filename.split(".")[-1].upper()
             else:
                 attachment_ext = ""
-            if camp.attachment and camp.attachment.name and default_storage.exists(camp.attachment.name):
+            if (
+                camp.attachment
+                and camp.attachment.name
+                and default_storage.exists(camp.attachment.name)
+            ):
                 try:
                     attachment_size = camp.attachment.size
                 except OSError:
@@ -117,7 +139,12 @@ def campaign_edit(request: HttpRequest, campaign_id) -> HttpResponse:
 
 @login_required
 def campaign_delete(request: HttpRequest, campaign_id) -> HttpResponse:
-    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:delete", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:campaigns:delete",
+        context={"path": request.path, "method": request.method},
+    )
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
@@ -135,14 +162,25 @@ def campaign_delete(request: HttpRequest, campaign_id) -> HttpResponse:
             pass
     camp.delete()
     messages.success(request, f"Кампания «{camp_name}» удалена.")
-    log_event(actor=user, verb=ActivityEvent.Verb.DELETE, entity_type="campaign", entity_id=camp_id_str, message="Удалена рассылочная кампания")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.DELETE,
+        entity_type="campaign",
+        entity_id=camp_id_str,
+        message="Удалена рассылочная кампания",
+    )
     return redirect("campaigns")
 
 
 @login_required
 def campaign_clone(request: HttpRequest, campaign_id) -> HttpResponse:
     """Дублировать кампанию — копирует название, тему, тело. Без получателей."""
-    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:create", context={"path": request.path, "method": request.method})
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:campaigns:create",
+        context={"path": request.path, "method": request.method},
+    )
     if request.method != "POST":
         return redirect("campaign_detail", campaign_id=campaign_id)
     camp = get_object_or_404(Campaign, id=campaign_id)

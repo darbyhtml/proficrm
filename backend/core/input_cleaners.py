@@ -89,4 +89,3 @@ def clean_uuid(value: Any) -> UUID | None:
         return UUID(s)
     except (ValueError, TypeError):
         return None
-

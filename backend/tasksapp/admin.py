@@ -30,4 +30,5 @@ class TaskAdmin(admin.ModelAdmin):
             obj.assigned_to = user
         super().save_model(request, obj, form, change)
 
+
 # Register your models here.

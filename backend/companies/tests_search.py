@@ -15,7 +15,14 @@ from companies.search_index import (
     TEXT_QUERY_COMPANY_OR_GENERAL,
 )
 from companies.search_service import highlight_html, CompanySearchService
-from companies.models import Company, CompanyStatus, Contact, ContactPhone, CompanyPhone, CompanySearchIndex
+from companies.models import (
+    Company,
+    CompanyStatus,
+    Contact,
+    ContactPhone,
+    CompanyPhone,
+    CompanySearchIndex,
+)
 from companies.search_index import rebuild_company_search_index
 
 
@@ -53,8 +60,12 @@ class QueryParseTests(TestCase):
     def test_classify_text_query(self):
         self.assertEqual(classify_text_query("romashka.ru", ("romashka", "ru")), TEXT_QUERY_WEBSITE)
         self.assertEqual(classify_text_query("Иван Петров", ("иван", "петров")), TEXT_QUERY_PERSON)
-        self.assertEqual(classify_text_query("ул Ленина 5", ("ул", "ленина", "5")), TEXT_QUERY_ADDRESS)
-        self.assertEqual(classify_text_query("ООО Ромашка", ("ооо", "ромашка")), TEXT_QUERY_COMPANY_OR_GENERAL)
+        self.assertEqual(
+            classify_text_query("ул Ленина 5", ("ул", "ленина", "5")), TEXT_QUERY_ADDRESS
+        )
+        self.assertEqual(
+            classify_text_query("ООО Ромашка", ("ооо", "ромашка")), TEXT_QUERY_COMPANY_OR_GENERAL
+        )
 
 
 class HighlightTests(TestCase):
@@ -62,17 +73,29 @@ class HighlightTests(TestCase):
         html = highlight_html("<b>ООО</b> Ромашка", text_tokens=("ооо",), digit_tokens=())
         self.assertIn("&lt;b&gt;", html)  # HTML экранирован
         self.assertIn('class="search-highlight"', html)
-        self.assertIn("…", highlight_html("X " * 200 + "ромашка" + " Y" * 200, text_tokens=("ромашка",), digit_tokens=(), max_len=80))
+        self.assertIn(
+            "…",
+            highlight_html(
+                "X " * 200 + "ромашка" + " Y" * 200,
+                text_tokens=("ромашка",),
+                digit_tokens=(),
+                max_len=80,
+            ),
+        )
 
 
-@unittest.skipUnless(connection.vendor == "postgresql", "PostgreSQL required (tsvector/pg_trgm/ArrayField)")
+@unittest.skipUnless(
+    connection.vendor == "postgresql", "PostgreSQL required (tsvector/pg_trgm/ArrayField)"
+)
 class SearchServicePostgresTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.status = CompanyStatus.objects.create(name="Тест")
 
     def test_search_by_inn_has_priority(self):
-        c1 = Company.objects.create(name="ООО Ромашка", inn="7701000000", kpp="770101001", status=self.status)
+        c1 = Company.objects.create(
+            name="ООО Ромашка", inn="7701000000", kpp="770101001", status=self.status
+        )
         c2 = Company.objects.create(name="Ромашка", inn="6600000000", status=self.status)
 
         rebuild_company_search_index(c1.id)
@@ -97,11 +120,15 @@ class SearchServicePostgresTests(TestCase):
 
         qs = CompanySearchService().apply(qs=Company.objects.all(), query="иванов 9261")
         ids = list(qs.values_list("id", flat=True)[:10])
-        self.assertIn(c.id, ids, "Запрос «иванов 9261» должен найти компанию по contact_name и phone.")
+        self.assertIn(
+            c.id, ids, "Запрос «иванов 9261» должен найти компанию по contact_name и phone."
+        )
         self.assertEqual(ids[0], c.id)
 
     def test_explain_returns_reasons(self):
-        c = Company.objects.create(name="ООО Ромашка", inn="7701000000", address="г. Москва", status=self.status)
+        c = Company.objects.create(
+            name="ООО Ромашка", inn="7701000000", address="г. Москва", status=self.status
+        )
         rebuild_company_search_index(c.id)
         # обеспечим наличие индекса (на всякий)
         self.assertTrue(CompanySearchIndex.objects.filter(company=c).exists())
@@ -134,7 +161,9 @@ class SearchServicePostgresTests(TestCase):
         base_qs = Company.objects.filter(id=c.id)
         qs = CompanySearchService().apply(qs=base_qs, query="иванов 8926")
         page = list(qs[:10])
-        self.assertTrue(any(x.id == c.id for x in page), "Компания должна быть в выдаче по AND-запросу.")
+        self.assertTrue(
+            any(x.id == c.id for x in page), "Компания должна быть в выдаче по AND-запросу."
+        )
 
         explain_map = CompanySearchService().explain(companies=page, query="иванов 8926")
         self.assertIn(c.id, explain_map)
@@ -154,12 +183,14 @@ class SearchServicePostgresTests(TestCase):
 
     def test_search_by_company_name_single_token(self):
         """Запрос по одному слову названия (янтарь) находит компанию ФКУ Янтарь / ФГКУ «Янтарь»."""
-        c = Company.objects.create(name='ФКУ Янтарь', inn="7701234567", status=self.status)
+        c = Company.objects.create(name="ФКУ Янтарь", inn="7701234567", status=self.status)
         rebuild_company_search_index(c.id)
 
         qs = CompanySearchService().apply(qs=Company.objects.all(), query="янтарь")
         ids = list(qs.values_list("id", flat=True)[:10])
-        self.assertIn(c.id, ids, "Запрос «янтарь» должен находить компанию с названием «ФКУ Янтарь».")
+        self.assertIn(
+            c.id, ids, "Запрос «янтарь» должен находить компанию с названием «ФКУ Янтарь»."
+        )
 
     def test_search_by_company_name_quoted(self):
         """Поиск по названию с кавычками в карточке (ФГКУ «Янтарь»)."""
@@ -177,7 +208,9 @@ class SearchServicePostgresTests(TestCase):
 
         qs = CompanySearchService().apply(qs=Company.objects.all(), query="янтар")
         ids = list(qs.values_list("id", flat=True)[:10])
-        self.assertIn(c.id, ids, "Запрос «янтар» (опечатка) должен находить компанию «Янтарь» по similarity.")
+        self.assertIn(
+            c.id, ids, "Запрос «янтар» (опечатка) должен находить компанию «Янтарь» по similarity."
+        )
 
     def test_search_short_query_no_spam(self):
         """Короткий/шумовой запрос (1 буква) не возвращает всё подряд."""
@@ -322,7 +355,7 @@ class SearchServicePostgresTests(TestCase):
             self.assertIn(
                 c.id,
                 ids,
-                f"Запрос «{q}» должен находить компанию с названием «ООО \"Сиб-Энерго\" (ЮГ)».",
+                f'Запрос «{q}» должен находить компанию с названием «ООО "Сиб-Энерго" (ЮГ)».',
             )
 
     def test_exact_search_via_index_no_join(self):
@@ -345,7 +378,9 @@ class SearchServicePostgresTests(TestCase):
         rebuild_company_search_index(c1.id)
 
         # Email exact через индекс (не JOIN)
-        qs_email = CompanySearchService().apply(qs=Company.objects.all(), query="contact@example.com")
+        qs_email = CompanySearchService().apply(
+            qs=Company.objects.all(), query="contact@example.com"
+        )
         self.assertIn(c1.id, qs_email.values_list("id", flat=True))
 
         # Phone exact через индекс (не JOIN)
@@ -370,7 +405,9 @@ class SearchServicePostgresTests(TestCase):
             )
 
         # Exact-запросы (email/phone/inn) должны работать даже если короткие
-        c2 = Company.objects.create(name="Тест", inn="1234567890", email="a@b.co", status=self.status)
+        c2 = Company.objects.create(
+            name="Тест", inn="1234567890", email="a@b.co", status=self.status
+        )
         rebuild_company_search_index(c2.id)
         qs_exact = service.apply(qs=Company.objects.all(), query="a@b.co")
         self.assertIn(c2.id, qs_exact.values_list("id", flat=True))
@@ -404,8 +441,10 @@ class SearchServicePostgresTests(TestCase):
     def test_text_legal_name_first(self):
         """Юр. название: нужная компания первой."""
         c1 = Company.objects.create(
-            name="Краткое", legal_name="Общество с ограниченной ответственностью Ромашка",
-            inn="1111111111", status=self.status,
+            name="Краткое",
+            legal_name="Общество с ограниченной ответственностью Ромашка",
+            inn="1111111111",
+            status=self.status,
         )
         c2 = Company.objects.create(name="Другое", inn="2222222222", status=self.status)
         rebuild_company_search_index(c1.id)
@@ -417,13 +456,17 @@ class SearchServicePostgresTests(TestCase):
 
     def test_text_website_first(self):
         """Сайт: компания с этим сайтом первой."""
-        c1 = Company.objects.create(name="Сайтовая", website="https://romashka.ru", inn="1111111111", status=self.status)
+        c1 = Company.objects.create(
+            name="Сайтовая", website="https://romashka.ru", inn="1111111111", status=self.status
+        )
         c2 = Company.objects.create(name="Другая", inn="2222222222", status=self.status)
         rebuild_company_search_index(c1.id)
         rebuild_company_search_index(c2.id)
         qs = CompanySearchService().apply(qs=Company.objects.all(), query="romashka.ru")
         ids = list(qs.values_list("id", flat=True)[:5])
-        self.assertEqual(ids[0], c1.id, "Запрос по домену должен вернуть компанию с этим сайтом первой")
+        self.assertEqual(
+            ids[0], c1.id, "Запрос по домену должен вернуть компанию с этим сайтом первой"
+        )
 
     def test_text_contact_name_in_top(self):
         """ФИО контакта: компания с этим контактом в топе."""
@@ -459,14 +502,18 @@ class SearchServicePostgresTests(TestCase):
 
     def test_regression_exact_phone_unchanged(self):
         """Regression: exact телефон по-прежнему возвращает одну компанию."""
-        c1 = Company.objects.create(name="Тел", inn="4444444444", phone="+7 999 111-22-33", status=self.status)
+        c1 = Company.objects.create(
+            name="Тел", inn="4444444444", phone="+7 999 111-22-33", status=self.status
+        )
         rebuild_company_search_index(c1.id)
         qs = CompanySearchService().apply(qs=Company.objects.all(), query="+7 999 111-22-33")
         self.assertEqual(list(qs.values_list("id", flat=True)), [c1.id])
 
     def test_regression_exact_email_unchanged(self):
         """Regression: exact email по-прежнему возвращает только совпадения."""
-        c1 = Company.objects.create(name="Почта", inn="5555555555", email="unique@test.com", status=self.status)
+        c1 = Company.objects.create(
+            name="Почта", inn="5555555555", email="unique@test.com", status=self.status
+        )
         rebuild_company_search_index(c1.id)
         qs = CompanySearchService().apply(qs=Company.objects.all(), query="unique@test.com")
         self.assertEqual(list(qs.values_list("id", flat=True)), [c1.id])
@@ -483,18 +530,24 @@ class SearchServicePostgresTests(TestCase):
         """Точное название: топ-1 и без мусорного хвоста (phase 1.5 или quality cutoff)."""
         c1 = Company.objects.create(name="ООО Ромашка", inn="1111111111", status=self.status)
         for i in range(5):
-            Company.objects.create(name=f"Другая компания {i}", inn=f"222222222{i}", status=self.status)
+            Company.objects.create(
+                name=f"Другая компания {i}", inn=f"222222222{i}", status=self.status
+            )
         rebuild_company_search_index(c1.id)
         for c in Company.objects.filter(inn__startswith="222"):
             rebuild_company_search_index(c.id)
         qs = CompanySearchService().apply(qs=Company.objects.all(), query="ООО Ромашка")
         ids = list(qs.values_list("id", flat=True))
         self.assertEqual(ids[0], c1.id)
-        self.assertLessEqual(len(ids), 20, "Точное название не должно тянуть десятки мусорных результатов")
+        self.assertLessEqual(
+            len(ids), 20, "Точное название не должно тянуть десятки мусорных результатов"
+        )
 
     def test_exact_site_top1_no_junk(self):
         """Точный сайт: топ-1 и без мусора."""
-        c1 = Company.objects.create(name="Сайтовая", website="https://romashka.ru", inn="1111111111", status=self.status)
+        c1 = Company.objects.create(
+            name="Сайтовая", website="https://romashka.ru", inn="1111111111", status=self.status
+        )
         Company.objects.create(name="Другая", inn="2222222222", status=self.status)
         rebuild_company_search_index(c1.id)
         rebuild_company_search_index(Company.objects.get(inn="2222222222").id)
@@ -510,7 +563,9 @@ class SearchServicePostgresTests(TestCase):
         c1 = Company.objects.create(name="Альфа", inn="1111111111", status=self.status)
         Contact.objects.create(company=c1, first_name="Сидоров", last_name="Иван")
         for i in range(3):
-            co = Company.objects.create(name=f"Компания {i}", inn=f"333333333{i}", status=self.status)
+            co = Company.objects.create(
+                name=f"Компания {i}", inn=f"333333333{i}", status=self.status
+            )
             rebuild_company_search_index(co.id)
         rebuild_company_search_index(c1.id)
         qs = CompanySearchService().apply(qs=Company.objects.all(), query="Иван Сидоров")
@@ -529,7 +584,9 @@ class SearchServicePostgresTests(TestCase):
         qs = CompanySearchService().apply(qs=Company.objects.all(), query="ООО Ромашка")
         ids = list(qs.values_list("id", flat=True))
         self.assertEqual(ids[0], c1.id)
-        self.assertLessEqual(len(ids), 20, "Точное совпадение не должно раздувать выдачу similarity-мусором")
+        self.assertLessEqual(
+            len(ids), 20, "Точное совпадение не должно раздувать выдачу similarity-мусором"
+        )
 
 
 class SearchBackendFacadeTests(TestCase):
@@ -543,4 +600,3 @@ class SearchBackendFacadeTests(TestCase):
                 with self.settings(SEARCH_ENGINE_BACKEND=backend_value):
                     backend = get_company_search_backend()
                 self.assertIsInstance(backend, CompanySearchService)
-

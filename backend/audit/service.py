@@ -60,6 +60,3 @@ def log_event(
             )
 
     return event
-
-
-

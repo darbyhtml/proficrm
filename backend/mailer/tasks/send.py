@@ -1,6 +1,7 @@
 """
 Celery-задачи отправки писем: основная очередь и тестовая отправка.
 """
+
 from __future__ import annotations
 
 import logging
@@ -83,12 +84,14 @@ def send_pending_emails(self, batch_size: int | None = None):
     # Определяем размер батча
     if batch_size is None:
         from django.conf import settings as _s
+
         batch_size = getattr(_s, "MAILER_SEND_BATCH_SIZE", SEND_BATCH_SIZE_DEFAULT)
 
     # Глобальный Redis-лок — не допускаем параллельных запусков
     lock_key = "mailer:send_pending_emails:lock"
     lock_val = str(timezone.now().timestamp())
     from django.conf import settings as _dj_settings
+
     _lock_timeout = getattr(_dj_settings, "MAILER_SEND_LOCK_TIMEOUT", SEND_TASK_LOCK_TIMEOUT)
     if not cache.add(lock_key, lock_val, timeout=_lock_timeout):
         return {"processed": False, "campaigns": 0, "reason": "locked"}
@@ -125,7 +128,10 @@ def send_pending_emails(self, batch_size: int | None = None):
 
         if processing_queue:
             now_check = timezone.now()
-            if getattr(processing_queue, "deferred_until", None) and processing_queue.deferred_until > now_check:
+            if (
+                getattr(processing_queue, "deferred_until", None)
+                and processing_queue.deferred_until > now_check
+            ):
                 processing_queue.status = CampaignQueue.Status.PENDING
                 processing_queue.started_at = None
                 processing_queue.save(update_fields=["status", "started_at"])
@@ -147,8 +153,14 @@ def send_pending_emails(self, batch_size: int | None = None):
                     # Вне рабочего времени — откладываем обработку
                     if not _is_working_hours():
                         next_start = _calc_next_working_start()
-                        defer_queue(processing_queue, DEFER_REASON_OUTSIDE_HOURS, next_start, notify=True)
-                        return {"processed": False, "campaigns": 0, "reason": "outside_working_hours"}
+                        defer_queue(
+                            processing_queue, DEFER_REASON_OUTSIDE_HOURS, next_start, notify=True
+                        )
+                        return {
+                            "processed": False,
+                            "campaigns": 0,
+                            "reason": "outside_working_hours",
+                        }
 
         if not processing_queue:
             # Вне рабочего времени — не начинаем новую кампанию
@@ -173,7 +185,9 @@ def send_pending_emails(self, batch_size: int | None = None):
                         campaign__recipients__status=CampaignRecipient.Status.PENDING,
                     )
                     .filter(Q(deferred_until__isnull=True) | Q(deferred_until__lte=now_atomic))
-                    .filter(Q(campaign__send_at__isnull=True) | Q(campaign__send_at__lte=now_atomic))
+                    .filter(
+                        Q(campaign__send_at__isnull=True) | Q(campaign__send_at__lte=now_atomic)
+                    )
                     .select_related("campaign")
                     .order_by("-priority", "queued_at")
                     .first()
@@ -186,8 +200,11 @@ def send_pending_emails(self, batch_size: int | None = None):
                     next_queue.consecutive_transient_errors = 0
                     next_queue.save(
                         update_fields=[
-                            "status", "started_at", "deferred_until",
-                            "defer_reason", "consecutive_transient_errors",
+                            "status",
+                            "started_at",
+                            "deferred_until",
+                            "defer_reason",
+                            "consecutive_transient_errors",
                         ]
                     )
 
@@ -213,7 +230,9 @@ def send_pending_emails(self, batch_size: int | None = None):
                     .values("campaign__created_by_id")
                     .annotate(sent=Count("id"))
                 )
-                _sent_by_user_id: dict = {row["campaign__created_by_id"]: row["sent"] for row in _sent_agg}
+                _sent_by_user_id: dict = {
+                    row["campaign__created_by_id"]: row["sent"] for row in _sent_agg
+                }
             else:
                 _sent_by_user_id = {}
         else:
@@ -228,7 +247,8 @@ def send_pending_emails(self, batch_size: int | None = None):
             if camp.status == Campaign.Status.PAUSED:
                 queue_entry = getattr(camp, "queue_entry", None)
                 if queue_entry and queue_entry.status in (
-                    CampaignQueue.Status.PROCESSING, CampaignQueue.Status.PENDING
+                    CampaignQueue.Status.PROCESSING,
+                    CampaignQueue.Status.PENDING,
                 ):
                     queue_entry.status = CampaignQueue.Status.CANCELLED
                     queue_entry.completed_at = timezone.now()
@@ -239,7 +259,8 @@ def send_pending_emails(self, batch_size: int | None = None):
             if not smtp_cfg.is_enabled:
                 queue_entry = getattr(camp, "queue_entry", None)
                 if queue_entry and queue_entry.status in (
-                    CampaignQueue.Status.PROCESSING, CampaignQueue.Status.PENDING
+                    CampaignQueue.Status.PROCESSING,
+                    CampaignQueue.Status.PENDING,
                 ):
                     queue_entry.status = CampaignQueue.Status.CANCELLED
                     queue_entry.completed_at = timezone.now()
@@ -274,11 +295,18 @@ def send_pending_emails(self, batch_size: int | None = None):
                 if limit_status.last_limit_reached_date != today_date:
                     limit_status.last_limit_reached_date = today_date
                     limit_status.save(update_fields=["last_limit_reached_date"])
-            elif limit_status.last_limit_reached_date and limit_status.last_limit_reached_date < today_date:
-                if not limit_status.last_notified_date or limit_status.last_notified_date < today_date:
+            elif (
+                limit_status.last_limit_reached_date
+                and limit_status.last_limit_reached_date < today_date
+            ):
+                if (
+                    not limit_status.last_notified_date
+                    or limit_status.last_notified_date < today_date
+                ):
                     try:
                         from notifications.service import notify
                         from notifications.models import Notification
+
                         notify(
                             user=user,
                             kind=Notification.Kind.SYSTEM,
@@ -288,7 +316,9 @@ def send_pending_emails(self, batch_size: int | None = None):
                         )
                         limit_status.last_notified_date = today_date
                         limit_status.last_limit_reached_date = None
-                        limit_status.save(update_fields=["last_notified_date", "last_limit_reached_date"])
+                        limit_status.save(
+                            update_fields=["last_notified_date", "last_limit_reached_date"]
+                        )
                     except Exception:
                         pass
 
@@ -306,6 +336,7 @@ def send_pending_emails(self, batch_size: int | None = None):
             # Проверяем квоту
             if emails_available <= 0:
                 from datetime import timedelta
+
                 next_check = timezone.now() + timedelta(minutes=QUOTA_RECHECK_MINUTES)
                 if quota.last_synced_at:
                     next_check = quota.last_synced_at + timedelta(minutes=QUOTA_RECHECK_MINUTES)
@@ -314,7 +345,9 @@ def send_pending_emails(self, batch_size: int | None = None):
 
             # Сколько писем можно отправить в этом батче
             remaining_quota = emails_available
-            remaining_daily = (per_user_daily_limit - sent_today_user) if per_user_daily_limit else batch_size
+            remaining_daily = (
+                (per_user_daily_limit - sent_today_user) if per_user_daily_limit else batch_size
+            )
             allowed = max(1, min(batch_size, remaining_quota, remaining_daily))
 
             with transaction.atomic():
@@ -330,7 +363,8 @@ def send_pending_emails(self, batch_size: int | None = None):
                             camp.status = Campaign.Status.SENT
                             camp.save(update_fields=["status", "updated_at"])
                         if queue_entry and queue_entry.status in (
-                            CampaignQueue.Status.PROCESSING, CampaignQueue.Status.PENDING
+                            CampaignQueue.Status.PROCESSING,
+                            CampaignQueue.Status.PENDING,
                         ):
                             queue_entry.status = CampaignQueue.Status.COMPLETED
                             queue_entry.completed_at = timezone.now()
@@ -357,9 +391,13 @@ def send_pending_emails(self, batch_size: int | None = None):
             did_work = True
 
             # Prefetch отписок одним запросом
-            batch_emails_norm = [(r.email or "").strip().lower() for r in batch if (r.email or "").strip()]
+            batch_emails_norm = [
+                (r.email or "").strip().lower() for r in batch if (r.email or "").strip()
+            ]
             unsub_set = set(
-                Unsubscribe.objects.filter(email__in=batch_emails_norm).values_list("email", flat=True)
+                Unsubscribe.objects.filter(email__in=batch_emails_norm).values_list(
+                    "email", flat=True
+                )
             )
             unsub_set = {e.strip().lower() for e in unsub_set if (e or "").strip()}
 
@@ -373,7 +411,10 @@ def send_pending_emails(self, batch_size: int | None = None):
             for log in existing_logs:
                 if log["status"] == SendLog.Status.SENT:
                     confirmed_sent_ids.add(log["recipient_id"])
-                elif log["status"] == SendLog.Status.FAILED and log["recipient_id"] not in confirmed_sent_ids:
+                elif (
+                    log["status"] == SendLog.Status.FAILED
+                    and log["recipient_id"] not in confirmed_sent_ids
+                ):
                     confirmed_failed_ids.add(log["recipient_id"])
 
             if confirmed_sent_ids or confirmed_failed_ids:
@@ -389,7 +430,9 @@ def send_pending_emails(self, batch_size: int | None = None):
                         r.updated_at = timezone.now()
                         recovered.append(r)
                 if recovered:
-                    CampaignRecipient.objects.bulk_update(recovered, ["status", "last_error", "updated_at"])
+                    CampaignRecipient.objects.bulk_update(
+                        recovered, ["status", "last_error", "updated_at"]
+                    )
                 already_resolved = confirmed_sent_ids | confirmed_failed_ids
                 batch = [r for r in batch if r.id not in already_resolved]
 
@@ -438,8 +481,13 @@ def send_pending_emails(self, batch_size: int | None = None):
             if transient_blocked and not rate_limited:
                 if queue_entry and queue_entry.status == CampaignQueue.Status.PROCESSING:
                     from django.conf import settings as _cb_settings
-                    threshold = getattr(_cb_settings, "MAILER_CIRCUIT_BREAKER_THRESHOLD", CIRCUIT_BREAKER_THRESHOLD)
-                    queue_entry.consecutive_transient_errors = (queue_entry.consecutive_transient_errors or 0) + 1
+
+                    threshold = getattr(
+                        _cb_settings, "MAILER_CIRCUIT_BREAKER_THRESHOLD", CIRCUIT_BREAKER_THRESHOLD
+                    )
+                    queue_entry.consecutive_transient_errors = (
+                        queue_entry.consecutive_transient_errors or 0
+                    ) + 1
 
                     if queue_entry.consecutive_transient_errors >= threshold:
                         logger.error(
@@ -452,15 +500,21 @@ def send_pending_emails(self, batch_size: int | None = None):
                             queue_entry.status = CampaignQueue.Status.CANCELLED
                             queue_entry.completed_at = timezone.now()
                             queue_entry.save(
-                                update_fields=["status", "completed_at", "consecutive_transient_errors"]
+                                update_fields=[
+                                    "status",
+                                    "completed_at",
+                                    "consecutive_transient_errors",
+                                ]
                             )
                         _notify_circuit_breaker_tripped(
-                            user, camp,
+                            user,
+                            camp,
                             error_count=queue_entry.consecutive_transient_errors,
                         )
                     else:
                         from datetime import timedelta
                         from django.conf import settings as _rt_settings
+
                         base_delay = getattr(
                             _rt_settings,
                             "MAILER_TRANSIENT_RETRY_DELAY_MINUTES",
@@ -469,13 +523,13 @@ def send_pending_emails(self, batch_size: int | None = None):
                         errors = queue_entry.consecutive_transient_errors or 1
                         delay_minutes = min(base_delay * (2 ** (errors - 1)), 60)
                         next_retry = timezone.now() + timedelta(minutes=delay_minutes)
-                        defer_queue(queue_entry, DEFER_REASON_TRANSIENT_ERROR, next_retry, notify=False)
+                        defer_queue(
+                            queue_entry, DEFER_REASON_TRANSIENT_ERROR, next_retry, notify=False
+                        )
                         queue_entry.save(update_fields=["consecutive_transient_errors"])
 
             # Завершение кампании — один агрегатный запрос вместо трёх
-            _status_counts = dict(
-                camp.recipients.values_list("status").annotate(n=Count("id"))
-            )
+            _status_counts = dict(camp.recipients.values_list("status").annotate(n=Count("id")))
             if not _status_counts.get(CampaignRecipient.Status.PENDING, 0):
                 sent_count = _status_counts.get(CampaignRecipient.Status.SENT, 0)
                 failed_count = _status_counts.get(CampaignRecipient.Status.FAILED, 0)
@@ -501,7 +555,8 @@ def send_pending_emails(self, batch_size: int | None = None):
                 )
                 if camp.created_by:
                     _notify_campaign_finished(
-                        camp.created_by, camp,
+                        camp.created_by,
+                        camp,
                         sent_count=sent_count,
                         failed_count=failed_count,
                         total_count=total_count,
@@ -547,7 +602,10 @@ def send_test_email(
 
     token_reserved, token_count, _ = reserve_rate_limit_token(max_per_hour)
     if not token_reserved:
-        return {"success": False, "error": f"Лимит отправки достигнут ({token_count}/{max_per_hour})."}
+        return {
+            "success": False,
+            "error": f"Лимит отправки достигнут ({token_count}/{max_per_hour}).",
+        }
 
     try:
         temp_account = MailAccount()
@@ -559,8 +617,11 @@ def send_test_email(
         if attachment_path and campaign_id:
             try:
                 from mailer.models import Campaign as _Campaign
+
                 camp = _Campaign.objects.get(id=campaign_id)
-                attachment_bytes, attachment_filename, att_err = _get_campaign_attachment_bytes(camp)
+                attachment_bytes, attachment_filename, att_err = _get_campaign_attachment_bytes(
+                    camp
+                )
                 if att_err:
                     return {"success": False, "error": f"Ошибка вложения: {att_err}"}
                 if attachment_original_name:
@@ -589,6 +650,7 @@ def send_test_email(
         if campaign_id:
             try:
                 from mailer.models import Campaign as _Campaign
+
                 camp_obj = _Campaign.objects.get(id=campaign_id)
                 SendLog.objects.create(
                     campaign=camp_obj,
@@ -614,11 +676,15 @@ def send_test_email(
         logger.error(
             "Test email failed",
             exc_info=True,
-            extra={**get_pii_log_fields(to_email, log_level=logging.ERROR), "campaign_id": campaign_id},
+            extra={
+                **get_pii_log_fields(to_email, log_level=logging.ERROR),
+                "campaign_id": campaign_id,
+            },
         )
         if campaign_id:
             try:
                 from mailer.models import Campaign as _Campaign
+
                 camp_obj = _Campaign.objects.get(id=campaign_id)
                 SendLog.objects.create(
                     campaign=camp_obj,

@@ -7,6 +7,7 @@
 - % задач в срок.
 - Workload (компании с активными задачами / без).
 """
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -112,7 +113,9 @@ class ManagerDashboardServiceTests(TestCase):
         c2 = Company.objects.create(name="C2", responsible=self.mgr, branch=self.branch)
         Company.objects.create(name="C3", responsible=self.mgr, branch=self.branch)
         Task.objects.create(assigned_to=self.mgr, title="t1", status=Task.Status.NEW, company=c1)
-        Task.objects.create(assigned_to=self.mgr, title="t2", status=Task.Status.IN_PROGRESS, company=c2)
+        Task.objects.create(
+            assigned_to=self.mgr, title="t2", status=Task.Status.IN_PROGRESS, company=c2
+        )
 
         data = get_manager_dashboard(self.mgr)
         self.assertEqual(data["workload"]["total"], 3)
@@ -204,20 +207,29 @@ class SalesHeadDashboardTests(TestCase):
         self.branch = Branch.objects.create(code="sh", name="Sales Head Branch")
         self.other_branch = Branch.objects.create(code="sh2", name="Other Branch")
         self.rop = User.objects.create_user(
-            username="sh_rop", email="rop@x.ru",
-            role=User.Role.SALES_HEAD, branch=self.branch,
+            username="sh_rop",
+            email="rop@x.ru",
+            role=User.Role.SALES_HEAD,
+            branch=self.branch,
         )
         self.mgr_a = User.objects.create_user(
-            username="sh_a", email="a@x.ru",
-            role=User.Role.MANAGER, branch=self.branch, messenger_online=True,
+            username="sh_a",
+            email="a@x.ru",
+            role=User.Role.MANAGER,
+            branch=self.branch,
+            messenger_online=True,
         )
         self.mgr_b = User.objects.create_user(
-            username="sh_b", email="b@x.ru",
-            role=User.Role.MANAGER, branch=self.branch,
+            username="sh_b",
+            email="b@x.ru",
+            role=User.Role.MANAGER,
+            branch=self.branch,
         )
         self.mgr_other = User.objects.create_user(
-            username="sh_other", email="o@x.ru",
-            role=User.Role.MANAGER, branch=self.other_branch,
+            username="sh_other",
+            email="o@x.ru",
+            role=User.Role.MANAGER,
+            branch=self.other_branch,
         )
         # Выполненные задачи за месяц: mgr_a — 3, mgr_b — 1, mgr_other — 10.
         now = timezone.now()
@@ -258,13 +270,17 @@ class BranchDirectorDashboardTests(TestCase):
         b1 = Branch.objects.create(code="bd1", name="B1")
         b2 = Branch.objects.create(code="bd2", name="B2")
         director = User.objects.create_user(
-            username="bd_director", email="d@x.ru",
-            role=User.Role.BRANCH_DIRECTOR, branch=b1,
+            username="bd_director",
+            email="d@x.ru",
+            role=User.Role.BRANCH_DIRECTOR,
+            branch=b1,
         )
-        m1 = User.objects.create_user(username="bd_m1", email="m1@x.ru",
-                                       role=User.Role.MANAGER, branch=b1)
-        m2 = User.objects.create_user(username="bd_m2", email="m2@x.ru",
-                                       role=User.Role.MANAGER, branch=b2)
+        m1 = User.objects.create_user(
+            username="bd_m1", email="m1@x.ru", role=User.Role.MANAGER, branch=b1
+        )
+        m2 = User.objects.create_user(
+            username="bd_m2", email="m2@x.ru", role=User.Role.MANAGER, branch=b2
+        )
         # b2 имеет больше выполненных задач.
         Task.objects.create(assigned_to=m1, title="t", status=Task.Status.DONE)
         for _ in range(5):
@@ -289,13 +305,20 @@ class GroupManagerDashboardTests(TestCase):
         b1 = Branch.objects.create(code="gm1", name="GM1")
         b2 = Branch.objects.create(code="gm2", name="GM2")
         gm = User.objects.create_user(
-            username="gm", email="g@x.ru", role=User.Role.GROUP_MANAGER,
+            username="gm",
+            email="g@x.ru",
+            role=User.Role.GROUP_MANAGER,
         )
-        m1 = User.objects.create_user(username="gm_m1", email="m1@g.ru",
-                                       role=User.Role.MANAGER, branch=b1,
-                                       messenger_online=True)
-        m2 = User.objects.create_user(username="gm_m2", email="m2@g.ru",
-                                       role=User.Role.MANAGER, branch=b2)
+        m1 = User.objects.create_user(
+            username="gm_m1",
+            email="m1@g.ru",
+            role=User.Role.MANAGER,
+            branch=b1,
+            messenger_online=True,
+        )
+        m2 = User.objects.create_user(
+            username="gm_m2", email="m2@g.ru", role=User.Role.MANAGER, branch=b2
+        )
         Task.objects.create(assigned_to=m1, title="x", status=Task.Status.DONE)
         Task.objects.create(assigned_to=m2, title="y", status=Task.Status.DONE)
 
@@ -317,12 +340,15 @@ class TenderistDashboardTests(TestCase):
     def test_tenderist_counters_populate(self):
         b = Branch.objects.create(code="tb", name="Tendb")
         tend = User.objects.create_user(
-            username="tendx", email="t@x.ru", role=User.Role.TENDERIST,
+            username="tendx",
+            email="t@x.ru",
+            role=User.Role.TENDERIST,
         )
         # 2 компании: одна с истекающим договором.
         today = timezone.localdate()
         Company.objects.create(
-            name="C1", branch=b,
+            name="C1",
+            branch=b,
             contract_until=today + timedelta(days=15),
         )
         Company.objects.create(name="C2", branch=b)

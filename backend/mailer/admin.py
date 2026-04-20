@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, UnsubscribeToken
+from .models import (
+    Campaign,
+    CampaignRecipient,
+    MailAccount,
+    GlobalMailAccount,
+    SendLog,
+    Unsubscribe,
+    UnsubscribeToken,
+)
 
 
 @admin.register(MailAccount)
@@ -47,5 +55,6 @@ class SendLogAdmin(admin.ModelAdmin):
     list_display = ("campaign", "recipient", "status", "created_at")
     list_filter = ("status", "provider")
     search_fields = ("campaign__name", "recipient__email", "error")
+
 
 # Register your models here.

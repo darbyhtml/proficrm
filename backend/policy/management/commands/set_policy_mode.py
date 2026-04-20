@@ -8,6 +8,7 @@ Management command для переключения режима Policy.
 Это безопасный способ переключить PolicyConfig.mode без Django admin UI.
 Удобно для deployment-скриптов и миграций данных.
 """
+
 from django.core.management.base import BaseCommand, CommandError
 
 from policy.models import PolicyConfig
@@ -30,15 +31,15 @@ class Command(BaseCommand):
         old_mode = cfg.mode
 
         if old_mode == mode:
-            self.stdout.write(self.style.WARNING(f"PolicyConfig уже в режиме '{mode}'. Без изменений."))
+            self.stdout.write(
+                self.style.WARNING(f"PolicyConfig уже в режиме '{mode}'. Без изменений.")
+            )
             return
 
         cfg.mode = mode
         cfg.save(update_fields=["mode", "updated_at"])
 
-        self.stdout.write(
-            self.style.SUCCESS(f"PolicyConfig: '{old_mode}' → '{mode}'")
-        )
+        self.stdout.write(self.style.SUCCESS(f"PolicyConfig: '{old_mode}' → '{mode}'"))
         if mode == PolicyConfig.Mode.ENFORCE:
             self.stdout.write(
                 self.style.WARNING(

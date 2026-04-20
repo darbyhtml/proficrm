@@ -20,6 +20,7 @@ use_starttls + лимиты rate_per_minute/day/per_user), toggle is_enabled,
 
 Доступ — только ADMIN/superuser.
 """
+
 from __future__ import annotations
 
 import logging
@@ -181,7 +182,7 @@ def settings_mail_test_send(request: HttpRequest) -> HttpResponse:
             to_email=user.email,
             subject="Тестовое письмо — CRM ПРОФИ",
             body_html="<p>Это тестовое сообщение из настроек SMTP CRM ПРОФИ.</p>"
-                      "<p>Если вы получили его — отправка работает корректно.</p>",
+            "<p>Если вы получили его — отправка работает корректно.</p>",
             body_text="Это тестовое сообщение из настроек SMTP CRM ПРОФИ.",
             reply_to="",
         )

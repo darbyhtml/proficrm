@@ -4,6 +4,7 @@
 - view_as_update / view_as_reset
 - dashboard_poll
 """
+
 import json
 from datetime import timedelta
 
@@ -20,6 +21,7 @@ User = get_user_model()
 # ---------------------------------------------------------------------------
 # Reports views
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class ColdCallsReportDayTest(TestCase):
@@ -115,7 +117,17 @@ class ColdCallsReportMonthTest(TestCase):
     def test_response_has_expected_keys(self):
         resp = self.client.get("/reports/cold-calls/month/")
         data = json.loads(resp.content)
-        for key in ("ok", "range", "month", "month_label", "available_months", "count", "items", "text", "stats"):
+        for key in (
+            "ok",
+            "range",
+            "month",
+            "month_label",
+            "available_months",
+            "count",
+            "items",
+            "text",
+            "stats",
+        ):
             self.assertIn(key, data, f"Missing key: {key}")
 
     def test_available_months_is_list(self):
@@ -191,6 +203,7 @@ class ColdCallsReportLast7DaysTest(TestCase):
 # ---------------------------------------------------------------------------
 # view_as_update / view_as_reset
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class ViewAsUpdateTest(TestCase):
@@ -319,6 +332,7 @@ class ViewAsResetTest(TestCase):
 # ---------------------------------------------------------------------------
 # dashboard_poll
 # ---------------------------------------------------------------------------
+
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class DashboardPollTest(TestCase):

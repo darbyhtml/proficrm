@@ -52,7 +52,10 @@ class AgentsActionFilterTests(TestCase):
         )
 
         self.admin = User.objects.create_user(
-            "admin", password="pw", role=User.Role.ADMIN, is_superuser=True,
+            "admin",
+            password="pw",
+            role=User.Role.ADMIN,
+            is_superuser=True,
         )
         self.client = APIClient()
         self.client.force_authenticate(self.admin)
@@ -68,14 +71,10 @@ class AgentsActionFilterTests(TestCase):
         self.assertNotIn(self.admin.id, ids)
 
     def test_agents_filter_by_branch(self):
-        resp = self.client.get(
-            f"/api/conversations/agents/?branch_id={self.ekb.id}"
-        )
+        resp = self.client.get(f"/api/conversations/agents/?branch_id={self.ekb.id}")
         self.assertEqual(resp.status_code, 200)
         ids = {a["id"] for a in resp.data}
-        self.assertEqual(
-            ids, {self.op_ekb_online.id, self.op_ekb_offline.id}
-        )
+        self.assertEqual(ids, {self.op_ekb_online.id, self.op_ekb_offline.id})
 
     def test_agents_filter_online_only(self):
         resp = self.client.get("/api/conversations/agents/?online=1")
@@ -86,9 +85,7 @@ class AgentsActionFilterTests(TestCase):
         self.assertNotIn(self.op_ekb_offline.id, ids)
 
     def test_agents_filter_branch_and_online(self):
-        resp = self.client.get(
-            f"/api/conversations/agents/?branch_id={self.ekb.id}&online=true"
-        )
+        resp = self.client.get(f"/api/conversations/agents/?branch_id={self.ekb.id}&online=true")
         self.assertEqual(resp.status_code, 200)
         ids = {a["id"] for a in resp.data}
         self.assertEqual(ids, {self.op_ekb_online.id})
@@ -102,10 +99,15 @@ class BranchesEndpointTests(TestCase):
         self.ekb = Branch.objects.create(name="ЕКБ", code="ekb")
         self.krd = Branch.objects.create(name="КРД", code="krd")
         self.inactive = Branch.objects.create(
-            name="Неактивный", code="old", is_active=False,
+            name="Неактивный",
+            code="old",
+            is_active=False,
         )
         self.user = User.objects.create_user(
-            "u", password="pw", role=User.Role.MANAGER, branch=self.ekb,
+            "u",
+            password="pw",
+            role=User.Role.MANAGER,
+            branch=self.ekb,
         )
         self.client = APIClient()
 
@@ -136,9 +138,7 @@ class NeedsHelpActionTests(TestCase):
     def setUp(self):
         # Отключаем авто-назначение, чтобы контролировать assignee вручную.
         post_save.disconnect(auto_assign_new_conversation, sender=Conversation)
-        self.addCleanup(
-            post_save.connect, auto_assign_new_conversation, sender=Conversation
-        )
+        self.addCleanup(post_save.connect, auto_assign_new_conversation, sender=Conversation)
 
         self.branch = Branch.objects.create(name="ЕКБ", code="ekb")
         self.assignee = User.objects.create_user(
@@ -171,9 +171,7 @@ class NeedsHelpActionTests(TestCase):
 
     def test_assignee_can_raise_needs_help(self):
         self.client.force_authenticate(self.assignee)
-        resp = self.client.post(
-            f"/api/conversations/{self.conv.id}/needs-help/"
-        )
+        resp = self.client.post(f"/api/conversations/{self.conv.id}/needs-help/")
         self.assertEqual(resp.status_code, 200, resp.data)
         self.conv.refresh_from_db()
         self.assertTrue(self.conv.needs_help)
@@ -182,9 +180,7 @@ class NeedsHelpActionTests(TestCase):
     def test_needs_help_fields_exposed_in_serializer(self):
         """После POST /needs-help/ GET диалога отдаёт needs_help и needs_help_at."""
         self.client.force_authenticate(self.assignee)
-        post_resp = self.client.post(
-            f"/api/conversations/{self.conv.id}/needs-help/"
-        )
+        post_resp = self.client.post(f"/api/conversations/{self.conv.id}/needs-help/")
         self.assertEqual(post_resp.status_code, 200, post_resp.data)
 
         get_resp = self.client.get(f"/api/conversations/{self.conv.id}/")
@@ -196,18 +192,14 @@ class NeedsHelpActionTests(TestCase):
 
     def test_admin_can_raise_needs_help(self):
         self.client.force_authenticate(self.admin)
-        resp = self.client.post(
-            f"/api/conversations/{self.conv.id}/needs-help/"
-        )
+        resp = self.client.post(f"/api/conversations/{self.conv.id}/needs-help/")
         self.assertEqual(resp.status_code, 200, resp.data)
         self.conv.refresh_from_db()
         self.assertTrue(self.conv.needs_help)
 
     def test_foreign_manager_forbidden(self):
         self.client.force_authenticate(self.other)
-        resp = self.client.post(
-            f"/api/conversations/{self.conv.id}/needs-help/"
-        )
+        resp = self.client.post(f"/api/conversations/{self.conv.id}/needs-help/")
         self.assertEqual(resp.status_code, 403)
         self.conv.refresh_from_db()
         self.assertFalse(self.conv.needs_help)
@@ -221,9 +213,7 @@ class NeedsHelpActionTests(TestCase):
             branch=self.branch,
         )
         self.client.force_authenticate(director)
-        resp = self.client.post(
-            f"/api/conversations/{self.conv.id}/needs-help/"
-        )
+        resp = self.client.post(f"/api/conversations/{self.conv.id}/needs-help/")
         self.assertEqual(resp.status_code, 200, resp.data)
         self.conv.refresh_from_db()
         self.assertTrue(self.conv.needs_help)
@@ -237,9 +227,7 @@ class NeedsHelpActionTests(TestCase):
             branch=self.branch,
         )
         self.client.force_authenticate(rop)
-        resp = self.client.post(
-            f"/api/conversations/{self.conv.id}/needs-help/"
-        )
+        resp = self.client.post(f"/api/conversations/{self.conv.id}/needs-help/")
         self.assertEqual(resp.status_code, 200, resp.data)
         self.conv.refresh_from_db()
         self.assertTrue(self.conv.needs_help)

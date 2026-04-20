@@ -6,6 +6,7 @@ Views для операторской панели мессенджера (Chatw
 - Только менеджеры (role=manager) могут отвечать клиентам и быть назначены ответственными
 - Просмотр не-менеджерами НЕ считается прочтением (assignee_last_read_at не обновляется)
 """
+
 from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
