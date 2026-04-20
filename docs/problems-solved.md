@@ -1,5 +1,51 @@
 # Решённые проблемы
 
+## [2026-04-20] Fernet InvalidToken → 500 на `/mail/campaigns/` (и всём разделе рассылок)
+
+**Симптом**: `/mail/campaigns/` возвращал HTTP 500. В `ErrorLog` трейс: `cryptography.fernet.InvalidToken` → `decrypt_str` → `GlobalMailAccount.smtp_bz_api_key` property. **Весь раздел Рассылки недоступен**, /mail/signature/ тоже падал бы с тем же исключением.
+
+**Корень**: `core/crypto.py:decrypt_str` поднимал `InvalidToken` если токен был зашифрован **другим** `MAILER_FERNET_KEY`, чем активный. Это происходит при:
+- Ротации ключа без `MAILER_FERNET_KEYS_OLD`
+- Восстановлении БД из другой среды (например staging ← prod backup)
+- Повреждении `smtp_bz_api_key_enc` в БД
+
+Я словил это при rehearsal Release 1: staging-БД — свежая копия прода, `smtp_bz_api_key_enc` зашифрован прод-ключом, а `MAILER_FERNET_KEY` на staging — другой. Первый же заход в Рассылки → 500.
+
+**Критично**: то же самое **случится на проде** при любой ошибке в ротации ключа или восстановлении из бэкапа другого окружения. Сейчас это **P0 incident scenario**.
+
+**Фикс**: `decrypt_str` теперь `try/except InvalidToken` → возвращает `""` + логирует ERROR с понятным сообщением:
+```
+decrypt_str: InvalidToken. Вероятно MAILER_FERNET_KEY был ротирован
+без MAILER_FERNET_KEYS_OLD, либо значение повреждено. Возвращаем
+пустую строку вместо падения.
+```
+
+Приложение остаётся работоспособным: UI показывает «ключ не настроен» вместо 500, администратор видит WARN в логах и может сделать `MAILER_FERNET_KEYS_OLD=<prev>` для round-trip.
+
+**Тесты**: 2 теста в `core/tests.py` ожидали exception-контракт (`assertRaises(InvalidToken)`) — перенесены на новый (`assertEqual(result, "")`). Переименован `test_decrypt_невалидного_токена_вызывает_исключение` → `_возвращает_пусто`. 1143/1143 по-прежнему зелёные.
+
+**Урок**: любой путь `decrypt_str(...)` в view-коде должен быть безопасен к невалидным данным. Бизнес-логика не должна падать из-за criptography metadata.
+
+---
+
+## [2026-04-20] v2 list columns: "Компания" сжата до 16px + наложение заголовков
+
+**Симптом**: на `/companies/` и `/tasks/` заголовки колонок читались «КОНИПАКЙВЕННЫЙ» (наложение «КОМПАНИЯ» + «ОТВЕТСТВЕННЫЙ»), имена компаний не видны в первой колонке.
+
+**Корень** — два смежных CSS-бага:
+1. `grid-template-columns` использовал `minmax(0, 1.8fr)` для первой колонки. На узких экранах (< 1600px) при фиксированных 160+140+120+140+90=650px остальных колонок — 1.8fr схлопывалась к 0. Реально остались 16px padding'а. Контент overflow'ил в соседние колонки.
+2. `.v2-tr--head > *` не имел `overflow:hidden; text-overflow:ellipsis`. Текст с sort-стрелкой «Компания ▼» залезал во второй header.
+
+**Фикс**:
+- `minmax(0, 1.8fr)` → `minmax(220px, 1.8fr)` (companies), `minmax(0, 1.6fr)` → `minmax(220px, 1.6fr)` (tasks). Минимум 220px, на больших экранах растягивается пропорционально.
+- `.v2-tr--head > *` и `.v2-sort` получили стандартный overflow-clipping pattern.
+
+**Проверено через Playwright + DOM measurement**: после fix'а первая колонка 220px, заголовки не накладываются, длинные имена truncated с ellipsis.
+
+**Найдено через**: Playwright E2E smoke на staging перед ночным Release 1. Без визуального теста баг бы поехал в прод.
+
+---
+
 ## [2026-04-20] Conversation.status — `waiting_offline` в choices, но не в CheckConstraint
 
 **Симптом**: off-hours widget-запросы на staging падали с `IntegrityError: new row for relation "messenger_conversation" violates check constraint "conversation_valid_status"`. Тесты `messenger.tests.test_widget_offhours` падали 2 штуки.
