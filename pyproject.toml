@@ -3,8 +3,29 @@
 # как скрипт через manage.py), поэтому секции [project] / [build-system]
 # отсутствуют — здесь только настройки линтеров и форматтеров.
 
+[tool.black]
+# Wave 0.2 (2026-04-20): стандартизируем форматирование.
+# line-length=100 — компромисс между «узко для review» и «читаемо в IDE».
+# Запуск: `black backend/` или через pre-commit.
+line-length = 100
+target-version = ["py313"]
+extend-exclude = '''
+/(
+    migrations
+  | staticfiles
+  | \.venv
+  | graphify-out
+  | knowledge-base
+)/
+'''
+# НЕ трогаем:
+# - migrations/ (Django-autogen код, стабильность > красота)
+# - staticfiles/ (скомпилированный output)
+# - graphify-out/ и knowledge-base/ (локальные инструменты, не исходники)
+
 [tool.ruff]
-# Длиннее дефолта — стиль проекта шире 88 символов, исторически.
+# Длиннее дефолта — совместимо с black (line-length=100 в black; ruff чуть
+# шире для не-форматируемых файлов типа миграций).
 line-length = 120
 target-version = "py313"
 extend-exclude = [

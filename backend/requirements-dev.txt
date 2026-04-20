@@ -32,3 +32,35 @@ pygraphviz==1.14
 
 # Known-CVE scanner для Python-deps (Wave 0.2 добавит в CI, пока локально)
 pip-audit==2.9.0
+
+# -----------------------------------------------------------------------------
+# Wave 0.2 (2026-04-20): полный tooling baseline.
+# Используются в pre-commit, Makefile, CI.
+# -----------------------------------------------------------------------------
+
+# Форматтер. Конфиг — [tool.black] в pyproject.toml.
+# Запуск: black backend/ (или через pre-commit).
+black==25.11.0
+
+# Статическая типизация. Baseline — docs/audit/mypy-baseline.json.
+# Ratcheting: CI fail если новых ошибок больше чем в baseline.
+mypy==1.18.2
+django-stubs[compatible-mypy]==5.2.6
+djangorestframework-stubs[compatible-mypy]==3.16.2
+types-redis==4.6.0.20250610
+celery-types==0.24.0
+types-requests==2.32.4.20251008
+types-python-dateutil==2.9.0.20250708
+
+# Security scan. Skip B101 (assert в тестах), B601 (paramiko). Pre-commit + CI.
+bandit[toml]==1.8.6
+
+# Orchestrator для git pre-commit hooks. См. .pre-commit-config.yaml.
+pre-commit==4.3.0
+
+# Secrets scanning baseline (detect-secrets в pre-commit).
+detect-secrets==1.5.0
+
+# Django migration linter (бесплатный). Ловит unsafe миграции на 9.5M-строк
+# таблицах (ADD COLUMN NOT NULL без default, ALTER TYPE, etc.).
+django-migration-linter==5.3.0

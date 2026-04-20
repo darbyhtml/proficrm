@@ -18,6 +18,18 @@
 
 **Следующий шаг**: Wave 0.2 (полный tooling: ruff config + black + mypy + bandit + pre-commit + Makefile + CI jobs).
 
+**[2026-04-20 / late evening]** — **Старт Wave 0.2** (session #43). План:
+- Celery unsafe-patterns deep audit (параллельный subagent)
+- ruff tightening (E, F, I, N, UP, B, S, DJ, RUF rules)
+- black 25.x + initial pass (line-length=100, py313)
+- mypy 1.14 + django-stubs + mypy-baseline.json (ratcheting в CI)
+- bandit 1.8 (skip B101/B601) + CI job
+- pre-commit с django-migration-linter (ActivityEvent 9.5M — любая неосторожная миграция убьёт прод)
+- Makefile: lint/test/coverage/ci + make build-js (esbuild minify)
+- CI: +4 jobs (black-check / mypy / bandit / coverage-gate)
+- Quick-win: minify operator-panel.js (209 KB) + widget.js (101 KB)
+- pyproject.toml: комментарий для W1 (временно fail_under=48, к концу W1 → 53)
+
 ---
 
 **[2026-04-20]** — Вечер: Frontend audit (5 агентов) + Refactor phases 0-3 + 1179 tests pass ✅
