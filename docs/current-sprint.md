@@ -46,6 +46,22 @@
 
 **Следующий шаг**: Wave 0.3 (feature flags — django-waffle + 4 initial flags).
 
+**[2026-04-20 / late evening]** — **Wave 0.3 завершён** (4 атомарных коммита) ✅
+
+- `96286510` — django-waffle 5.0.0 + обёртка `core.feature_flags` с env kill-switch + 4 data-seed флага + template tag + DRF permission + `/api/v1/feature-flags/` + `core` зарегистрирован как app
+- `d30b0ce0` + `6ab4d132` — 28 тестов (coverage **core.feature_flags 93%, total 92%** — DoD ≥ 90% выполнен), переписаны под `waffle.testutils.override_flag` после обнаружения cache-stale из-за `Flag.objects.update()`
+- `docs/runbooks/feature-flags.md` (310 строк) — операционные процедуры: добавление флага, percentage rollout, kill-switch, мониторинг, тестирование
+- `docs/architecture/feature-flags.md` (115 строк) — таблица активных флагов, обоснование выбора, почему НЕ взяли `POLICY_ENGINE_ENFORCE`/`MEDIA_READ_FROM`/`ANDROID_PHONEBRIDGE_V2`
+- `docs/decisions.md` ADR-002 — обоснование выбора django-waffle vs django-flags vs Unleash/LaunchDarkly
+
+**4 начальных флага** (все выключены):
+1. `UI_V3B_DEFAULT` — W9, переключатель рендера карточки компании
+2. `TWO_FACTOR_MANDATORY_FOR_ADMINS` — W2.4, soft→mandatory TOTP
+3. `POLICY_DECISION_LOG_DASHBOARD` — W2, shadow-дашборд denied requests
+4. `EMAIL_BOUNCE_HANDLING` — W6, webhook/IMAP bounce-обработчик
+
+**Следующий шаг**: Wave 0.4 (Observability MVP — GlitchTip self-hosted + structlog + /health /ready endpoints).
+
 ---
 
 **[2026-04-20]** — Вечер: Frontend audit (5 агентов) + Refactor phases 0-3 + 1179 tests pass ✅

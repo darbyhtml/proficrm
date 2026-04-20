@@ -1,5 +1,51 @@
 # Архитектурные решения
 
+## ADR-002 [2026-04-20] Feature flags на django-waffle (Wave 0.3)
+
+**Контекст.** В последующих волнах запланированы минимум 4 поэтапные выкатки, которые нельзя сделать единым деплоем:
+- W9: переключение UI карточки компании classic → v3/b (нужен percentage rollout и быстрый откат).
+- W2.4: мягкая → mandatory миграция TOTP 2FA для админов (2 недели soft период, потом включение).
+- W2: shadow-dashboard «denied requests» за 2 недели до перехода Policy Engine в ENFORCE.
+- W6: включение bounce-обработчика от smtp.bz (возможны false-positives, нужен kill-switch).
+
+Без единого механизма feature flags каждая выкатка = отдельная ночь деплоя с риском отката всего PR.
+
+**Альтернативы.**
+1. **Hardcoded if-блоки + env vars** (`if os.getenv("UI_V3B_ENABLED") == "1"`) — нет percentage rollout, нельзя включить для одного юзера, нет единого управления.
+2. **django-flags** (Cognizant) — похож на waffle по функционалу, но меньше community (5k stars vs 1k), старше не обновлялся 2+ года, хуже поддержка Django 6.
+3. **django-waffle** (Mozilla) — зрелый, 1900+ stars, активный (5.0 в 2024), поддерживает Flag/Switch/Sample, percentage, per-user, per-group, per-everyone.
+4. **Собственное решение на Redis** — не окупается: waffle уже даёт всё нужное, включая Django admin.
+5. **Unleash / LaunchDarkly / Flagsmith** — SaaS, платные, зависимость от внешнего сервиса. Исключено принципом «только self-hosted / free» проекта (Wave 0 §2.1).
+
+**Решение.** **django-waffle 5.0.0** с обёрткой `core.feature_flags`.
+
+Обёртка даёт 4 преимущества поверх чистого waffle:
+1. **Канонические константы** (`UI_V3B_DEFAULT`, …) — защита от опечаток в именах флагов, возможность rename через IDE.
+2. **Env kill-switch** — `FEATURE_FLAG_KILL_<NAME>=1` перекрывает admin/DB. Сценарий: админ-токен потерян, БД недоступна, но флаг ломает прод — правим .env и up -d (< 30 сек).
+3. **Branch-based override (заготовка)** — аргумент `branch` в `is_enabled()` на будущее, когда понадобится «включить только для Екатеринбурга».
+4. **Единообразный API для всех 4 интерфейсов** (Python/templates/DRF/JS) — не нужно помнить какой import.
+
+**Последствия.**
+- ✅ 4 начальных флага созданы через data-миграцию `core.0001_initial_feature_flags` (идемпотентно, `update_or_create`).
+- ✅ 28 тестов, coverage 92% для `core/feature_flags.py` (DoD ≥ 90% выполнен).
+- ✅ `/api/v1/feature-flags/` endpoint для фронта — фронтенду не нужно знать про waffle.
+- ✅ Runbook (`docs/runbooks/feature-flags.md`) + архитектурный контракт (`docs/architecture/feature-flags.md`) — вся операционка в одном месте.
+- ⚠️ В `INSTALLED_APPS` добавлены `waffle` + `core` (core раньше был utility-модулем без регистрации). Side-effect: теперь Django ищет миграции в `core/migrations/` при каждом `migrate`.
+- ⚠️ Waffle кеширует флаги в Redis на 5-10 сек — включение через admin требует подождать. В тестах нужно использовать `waffle.testutils.override_flag`, а не `Flag.objects.update()` (обходит post_save → cache stale).
+- ℹ️ **Не стали делать waffle** для: `POLICY_ENGINE_ENFORCE` (env var, 10-сек reload через systemd), `MEDIA_READ_FROM` (settings-based, один процесс — одно значение), `ANDROID_PHONEBRIDGE_V2` (W7 далеко, спекулятивный флаг). См. `docs/architecture/feature-flags.md` §«Почему НЕ приняты».
+
+**Для включения в будущем.** Через Django admin `/admin/waffle/flag/`, с percentage rollout 10% → 50% → 100% и мониторингом error rate в GlitchTip (Wave 0.4). Флаги живут ≤ 30 дней — после стабилизации код чистится.
+
+**Коммиты.** `96286510` (infra), `d30b0ce0` (tests), `6ab4d132` (override_flag fix).
+
+**Связанные документы.**
+- `docs/runbooks/feature-flags.md`
+- `docs/architecture/feature-flags.md`
+- `backend/core/feature_flags.py`
+- `docs/plan/01_wave_0_audit.md` §0.3
+
+---
+
 ## [2026-04-20] Companies services package — рефакторинг god-view company_detail.py
 
 **Контекст.** `backend/ui/views/company_detail.py` разросся до 2883 LOC с 30+ view-функциями, каждая из которых сама выполняет валидацию, normalization, duplicate-checks, audit logging. Валидация телефонов дублирована 3 раза, валидация email — 2 раза, workflow удаления — 2 раза. Любое изменение правил (например, разрешить новый регион для `normalize_phone`) требует синхронного правления 3 мест, и легко пропустить. God-файл + god-функции.
