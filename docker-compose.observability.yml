@@ -1,0 +1,132 @@
+# Wave 0.4 (2026-04-20) — GlitchTip self-hosted observability stack.
+#
+# Запуск:
+#   docker compose -f docker-compose.observability.yml -p proficrm-observability up -d
+#
+# Секреты — в /etc/proficrm/env.d/glitchtip.conf (НЕ в git), читаются через env_file:
+#   GLITCHTIP_SECRET_KEY         — 50+ символов (python -c 'import secrets; print(secrets.token_urlsafe(50))')
+#   GLITCHTIP_DB_PASSWORD        — сильный пароль для отдельной БД
+#   GLITCHTIP_DEFAULT_FROM_EMAIL — отправитель алертов (e.g. noreply@groupprofi.ru)
+#   EMAIL_URL                    — smtp://user:pass@smtp.bz:587 (из проекта)
+#   GLITCHTIP_DOMAIN             — https://glitchtip.groupprofi.ru
+#
+# Memory budget (Q2 из docs/open-questions.md — VPS впритык, swap уже 1 GB):
+#   web:     256 MB hard limit  (Django + gunicorn + static)
+#   worker:  192 MB hard limit  (Celery + beat объединены)
+#   db:      128 MB hard limit  (postgres с минимальной конфигой shared_buffers)
+#   ───────────────────────────
+#   Total:  ~576 MB
+#   Redis шарим с proficrm-redis-1 через namespace (DB index 10) — +0 MB.
+#
+# Если swap вырастет > 1.5 GB в течение недели — эскалация в Q2 open-questions.md.
+
+services:
+  glitchtip-web:
+    image: glitchtip/glitchtip:v4
+    restart: unless-stopped
+    depends_on:
+      glitchtip-db:
+        condition: service_healthy
+    env_file:
+      - /etc/proficrm/env.d/glitchtip.conf
+    environment:
+      DATABASE_URL: "postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@glitchtip-db:5432/glitchtip"
+      SECRET_KEY: "${GLITCHTIP_SECRET_KEY}"
+      PORT: "8000"
+      # Redis: шарим с основным proficrm-redis-1 через отдельный DB index.
+      # redis://host.docker.internal:6379/10 — через Docker host-gateway.
+      REDIS_URL: "redis://host.docker.internal:6379/10"
+      CELERY_BROKER_URL: "redis://host.docker.internal:6379/11"
+      # Алерты через встроенный SMTP (smtp.bz — тот же, что для рассылок CRM).
+      EMAIL_URL: "${EMAIL_URL}"
+      DEFAULT_FROM_EMAIL: "${GLITCHTIP_DEFAULT_FROM_EMAIL}"
+      # Публичный URL — для ссылок в email-алертах и для SDK.
+      GLITCHTIP_DOMAIN: "${GLITCHTIP_DOMAIN}"
+      # Хранение данных: 30 дней (free-tier-style, достаточно для триажа).
+      GLITCHTIP_MAX_EVENT_LIFE_DAYS: "30"
+      # Отключаем публичную регистрацию — закрытый self-hosted для команды GroupProfi.
+      ENABLE_USER_REGISTRATION: "false"
+      ENABLE_ORGANIZATION_CREATION: "false"
+    ports:
+      # Bind только на localhost — доступ извне через nginx на 443.
+      - "127.0.0.1:8100:8000"
+    extra_hosts:
+      # Нужно для доступа к host-redis (proficrm-redis-1 слушает на 127.0.0.1:6379
+      # через Docker bridge, host.docker.internal даёт route).
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/api/0/health/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  glitchtip-worker:
+    image: glitchtip/glitchtip:v4
+    restart: unless-stopped
+    depends_on:
+      glitchtip-db:
+        condition: service_healthy
+    env_file:
+      - /etc/proficrm/env.d/glitchtip.conf
+    environment:
+      DATABASE_URL: "postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@glitchtip-db:5432/glitchtip"
+      SECRET_KEY: "${GLITCHTIP_SECRET_KEY}"
+      REDIS_URL: "redis://host.docker.internal:6379/10"
+      CELERY_BROKER_URL: "redis://host.docker.internal:6379/11"
+      EMAIL_URL: "${EMAIL_URL}"
+      DEFAULT_FROM_EMAIL: "${GLITCHTIP_DEFAULT_FROM_EMAIL}"
+      GLITCHTIP_DOMAIN: "${GLITCHTIP_DOMAIN}"
+    command: ./bin/run-celery-with-beat.sh
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+        reservations:
+          memory: 96M
+
+  glitchtip-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - /etc/proficrm/env.d/glitchtip.conf
+    environment:
+      POSTGRES_DB: glitchtip
+      POSTGRES_USER: glitchtip
+      POSTGRES_PASSWORD: "${GLITCHTIP_DB_PASSWORD}"
+      # Минимальная конфига для экономии RAM (128 MB limit).
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    # shared_buffers=32MB — минимум для 128MB лимита контейнера.
+    command: >
+      postgres
+      -c shared_buffers=32MB
+      -c effective_cache_size=96MB
+      -c max_connections=25
+      -c work_mem=2MB
+      -c maintenance_work_mem=16MB
+    volumes:
+      - glitchtip-db-data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U glitchtip -d glitchtip"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  glitchtip-db-data:
+    # Данные GlitchTip в обычном Docker volume (pg_dump в cron бэкапит отдельно —
+    # см. scripts/glitchtip-backup.sh).

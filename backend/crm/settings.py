@@ -42,10 +42,15 @@ except Exception:
     # Если не удалось загрузить, пробуем стандартный путь
     load_dotenv(BASE_DIR / ".env")
 
-# ── Sentry (observability) — инициализируем ДО других импортов/настроек ──
-# Подключается через SENTRY_DSN env. Без DSN — no-op (локальная разработка, CI).
-# Free tier: 5000 events/месяц, 1 проект, 1 пользователь.
-# Регистрация: https://sentry.io → создать Django project → взять DSN.
+# ── Observability (GlitchTip self-hosted) — инициализируем ДО других импортов ──
+# Wave 0.4 (2026-04-20): переключились с платного Sentry на self-hosted GlitchTip
+# (https://glitchtip.groupprofi.ru/). GlitchTip использует тот же Sentry-SDK
+# протокол — меняется только URL в SENTRY_DSN.
+# См. docs/runbooks/glitchtip-setup.md + docs/decisions.md ADR-003.
+#
+# Без SENTRY_DSN — no-op (локальная разработка, CI).
+# Tags user_id/role/branch/request_id/feature_flags добавляет
+# core.sentry_context.SentryContextMiddleware на каждый запрос.
 _SENTRY_DSN = os.getenv("SENTRY_DSN", "").strip()
 if _SENTRY_DSN:
     try:
@@ -277,6 +282,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "waffle.middleware.WaffleMiddleware",  # Wave 0.3: для Sample-флагов + per-request caching
+    "core.sentry_context.SentryContextMiddleware",  # Wave 0.4: user/role/branch/request_id/feature_flags tags
     "crm.middleware.ErrorLoggingMiddleware",  # Логирование ошибок в БД
 ]
 

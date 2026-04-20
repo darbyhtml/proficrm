@@ -28,6 +28,9 @@ from accounts.models import User
 from accounts.views import SecureLoginView, magic_link_login
 from companies.api import CompanyNoteViewSet, CompanyViewSet, ContactViewSet
 from core.api import FeatureFlagsView  # Wave 0.3
+from crm.health import health as liveness_view  # Wave 0.4
+from crm.health import ready as readiness_view  # Wave 0.4
+from crm.health import sentry_smoke  # Wave 0.4
 from crm.views import health_check, metrics_endpoint, robots_txt, security_txt, sw_push_js
 from messenger.api import (
     AutomationRuleViewSet,
@@ -120,6 +123,13 @@ urlpatterns = [
     path("robots.txt", robots_txt, name="robots_txt"),
     path(".well-known/security.txt", security_txt, name="security_txt"),
     path("health/", health_check, name="health_check"),
+    # Wave 0.4: разделённые endpoint'ы. /live/ — чистый liveness (всегда 200 если
+    # процесс жив, НЕ трогает БД/Redis). /ready/ — readiness (БД+Redis без Celery,
+    # для K8s-style probe). /health/ оставлен как есть для совместимости.
+    path("live/", liveness_view, name="liveness"),
+    path("ready/", readiness_view, name="readiness"),
+    # Smoke-test GlitchTip SDK — 404 в проде, 500 в DEBUG.
+    path("_debug/sentry-error/", sentry_smoke, name="sentry_smoke"),
     path("metrics", metrics_endpoint, name="metrics"),
     # Service Worker для push-уведомлений — отдаём напрямую (браузеры запрещают SW через redirect)
     path("sw-push.js", sw_push_js, name="sw_push"),
