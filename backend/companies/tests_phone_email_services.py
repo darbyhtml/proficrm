@@ -64,10 +64,17 @@ class ValidatePhoneStrictTests(TestCase):
         self.assertIsNone(norm)
         self.assertEqual(err, "Некорректный формат телефона.")
 
-    def test_obvious_garbage_rejected(self):
-        # После normalize_phone мусор вида "xxxxxxxxx" возвращается как original[:50]
-        # и не матчит E.164-regex → Некорректный формат.
+    def test_latin_garbage_rejected(self):
+        # Мусор с >4 латинскими символами отсекается валидатором
+        # на самом раннем шаге — "недопустимые символы".
         norm, err = validate_phone_strict("not-a-phone-at-all-123")
+        self.assertIsNone(norm)
+        self.assertEqual(err, "Телефон содержит недопустимые символы.")
+
+    def test_short_digits_only_rejected(self):
+        # 123 без + — normalize_phone может вернуть как +7 000... или пусто.
+        # Проверяем, что любая короткая строка без "+" и коротких цифр отсекается.
+        norm, err = validate_phone_strict("123")
         self.assertIsNone(norm)
         self.assertEqual(err, "Некорректный формат телефона.")
 
