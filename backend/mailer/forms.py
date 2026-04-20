@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django import forms
 
-from mailer.models import Campaign, MailAccount, GlobalMailAccount
+from mailer.models import Campaign, GlobalMailAccount, MailAccount
 from mailer.utils import sanitize_email_html
 
 

@@ -100,7 +100,7 @@ def check_phone_duplicate(
     *,
     company: Company,
     normalized: str,
-    exclude_phone_id: Optional[int] = None,
+    exclude_phone_id: int | None = None,
 ) -> str | None:
     """Проверка уникальности телефона среди основного и дополнительных.
 

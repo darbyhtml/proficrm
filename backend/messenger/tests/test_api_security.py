@@ -8,16 +8,16 @@
 - Feature flag: отключение messenger возвращает 404
 """
 
-from django.test import TestCase
-from django.contrib.auth import get_user_model
 from django.conf import settings
-from rest_framework.test import APIClient
+from django.contrib.auth import get_user_model
+from django.test import TestCase
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from accounts.models import Branch
 from companies.models import Region
-from messenger.models import Inbox, Contact, Conversation, Message
 from messenger import selectors
+from messenger.models import Contact, Conversation, Inbox, Message
 
 User = get_user_model()
 

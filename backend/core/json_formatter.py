@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 
 
 class JSONFormatter(logging.Formatter):
@@ -35,7 +35,7 @@ class JSONFormatter(logging.Formatter):
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
-            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         }
 
         # Добавляем все extra поля
@@ -90,7 +90,7 @@ class JSONFormatter(logging.Formatter):
                     "level": record.levelname,
                     "logger": record.name,
                     "message": record.getMessage(),
-                    "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
                     "format_error": str(e),
                 },
                 ensure_ascii=False,

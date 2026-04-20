@@ -12,6 +12,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest, HttpResponse
 
 from accounts.models import User
+
 from .engine import enforce
 from .resources import ResourceType
 

@@ -12,7 +12,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime as dt, timedelta, timezone as stdlib_tz
+from datetime import datetime as dt
+from datetime import timedelta
+from datetime import timezone as stdlib_tz
 from decimal import Decimal
 from unittest.mock import patch
 

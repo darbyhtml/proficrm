@@ -1,6 +1,6 @@
 from django import forms
-from django.utils.html import format_html
 from django.core.cache import cache
+from django.utils.html import format_html
 
 
 class TaskTypeSelectWidget(forms.Select):
@@ -109,6 +109,7 @@ class UserSelectWithBranchWidget(forms.Select):
         # Группируем choices по branch__name
         # Сначала загружаем всех пользователей одним запросом для оптимизации
         from collections import defaultdict
+
         from accounts.models import User
 
         user_ids = [str(opt[0]) for opt in self.choices if opt[0] and opt[0] != ""]

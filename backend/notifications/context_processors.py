@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from django.utils import timezone
 from django.core.cache import cache
+from django.utils import timezone
 
+from companies.models import Company
 from notifications.models import Notification
 from tasksapp.models import Task
-from companies.models import Company
 
 _BELL_CACHE_TTL = 30  # seconds
 
@@ -64,8 +64,9 @@ def _get_bell_data(user, now):
         )
         max_warning_days = 30
         try:
-            from companies.models import ContractType
             from django.db.models import Max
+
+            from companies.models import ContractType
 
             max_warning = ContractType.objects.aggregate(max_warning=Max("warning_days"))
             if max_warning["max_warning"]:

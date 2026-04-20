@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+import logging
+
 from phonebridge.models import MobileAppBuild, MobileAppQrToken
 from ui.views._base import (
     ActivityEvent,
@@ -13,7 +16,6 @@ from ui.views._base import (
     policy_required,
     render,
 )
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -102,8 +104,9 @@ def mobile_app_qr_image(request: HttpRequest) -> HttpResponse:
     Токен передается через query параметр ?token=...
     Android приложение сканирует просто токен (строку), а не URL.
     """
-    import qrcode
     import io
+
+    import qrcode
 
     token = request.GET.get("token", "").strip()
     if not token:

@@ -1,12 +1,14 @@
-from rest_framework import serializers, viewsets
-from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.filters import BaseFilterBackend, OrderingFilter, SearchFilter
-from django_filters.rest_framework import DjangoFilterBackend
-from django.utils import timezone
 from datetime import timedelta
 
+from django.utils import timezone
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import serializers, viewsets
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.filters import BaseFilterBackend, OrderingFilter, SearchFilter
+from rest_framework.permissions import IsAuthenticated
+
 from accounts.models import User
+
 from .permissions import can_edit_company
 
 
@@ -25,10 +27,11 @@ class CompanySearchFilterBackend(BaseFilterBackend):
         return get_company_search_backend().apply(qs=queryset, query=q)
 
 
-from .models import Company, Contact, CompanyNote
-from .normalizers import normalize_phone, normalize_inn, normalize_work_schedule
-from .policy import visible_companies_qs, visible_company_notes_qs, visible_contacts_qs
 from policy.drf import PolicyPermission
+
+from .models import Company, CompanyNote, Contact
+from .normalizers import normalize_inn, normalize_phone, normalize_work_schedule
+from .policy import visible_companies_qs, visible_company_notes_qs, visible_contacts_qs
 
 
 class CompanySerializer(serializers.ModelSerializer):

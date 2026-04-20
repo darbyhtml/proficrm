@@ -4,32 +4,32 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 
-from django.contrib.auth import views as auth_views
-from django.contrib.auth import authenticate, login
-from django.http import HttpRequest, HttpResponse, JsonResponse
-from django.shortcuts import redirect, render, get_object_or_404
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
-from django.views.decorators.http import require_http_methods
-from django.utils import timezone
 from django.conf import settings
+from django.contrib.auth import authenticate, login
+from django.contrib.auth import views as auth_views
+from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.utils.http import url_has_allowed_host_and_scheme
-import hashlib
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
 
 from accounts.models import MagicLinkToken, User
 from accounts.security import (
-    get_client_ip,
-    is_user_locked_out,
-    is_ip_rate_limited,
-    record_failed_login_attempt,
-    clear_login_attempts,
-    get_remaining_lockout_time,
     RATE_LIMIT_LOGIN_PER_MINUTE,
+    clear_login_attempts,
+    get_client_ip,
+    get_remaining_lockout_time,
+    is_ip_rate_limited,
+    is_user_locked_out,
+    record_failed_login_attempt,
 )
-from audit.service import log_event
 from audit.models import ActivityEvent
+from audit.service import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +42,8 @@ class SecureLoginView(auth_views.LoginView):
     def dispatch(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
         """Редиректим на главную, если пользователь уже авторизован."""
         if request.user.is_authenticated:
-            from django.shortcuts import redirect
             from django.conf import settings
+            from django.shortcuts import redirect
 
             return redirect(settings.LOGIN_REDIRECT_URL)
         return super().dispatch(request, *args, **kwargs)

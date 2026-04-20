@@ -9,7 +9,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.db.models import Max
 
-from companies.models import Company, Contact, ContactPhone, CompanyPhone
+from companies.models import Company, CompanyPhone, Contact, ContactPhone
 from companies.normalizers import normalize_phone as _normalize_phone
 
 
@@ -132,7 +132,7 @@ class Command(BaseCommand):
                     try:
                         # Пытаемся вытащить комментарий вокруг номера (доб., инструкции, текст)
                         try:
-                            from amocrm.migrate import parse_phone_value, is_valid_phone
+                            from amocrm.migrate import is_valid_phone, parse_phone_value
 
                             parsed = parse_phone_value(v)
                             if parsed.phones and is_valid_phone(parsed.phones[0]):

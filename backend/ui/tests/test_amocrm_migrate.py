@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Тесты импорта из amoCRM: run_id, блокировка параллельного импорта,
 progress API (active_run: null при отсутствии активного), один менеджер.
@@ -7,9 +6,9 @@ import re
 from contextlib import contextmanager
 from unittest.mock import patch
 
-from django.test import TestCase, Client, override_settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.test import Client, TestCase, override_settings
 
 from amocrm.migrate import AmoMigrateResult
 from ui.models import AmoApiConfig

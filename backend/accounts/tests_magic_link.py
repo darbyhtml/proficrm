@@ -2,11 +2,12 @@
 Тесты для Magic Link Authentication.
 """
 
-from django.test import TestCase
-from django.contrib.auth import get_user_model
-from django.utils import timezone
-from datetime import timedelta
 import hashlib
+from datetime import timedelta
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from django.utils import timezone
 
 from accounts.models import MagicLinkToken
 

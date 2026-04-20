@@ -7,7 +7,7 @@ from __future__ import annotations
 from django.http import HttpResponse, JsonResponse
 from django.utils.deprecation import MiddlewareMixin
 
-from accounts.security import get_client_ip, is_ip_rate_limited, RATE_LIMIT_API_PER_MINUTE
+from accounts.security import RATE_LIMIT_API_PER_MINUTE, get_client_ip, is_ip_rate_limited
 
 
 class RateLimitMiddleware(MiddlewareMixin):

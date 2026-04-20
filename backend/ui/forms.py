@@ -1,11 +1,10 @@
 import mimetypes
-from core.timezone_utils import RUS_TZ_CHOICES, guess_ru_timezone_from_address
-from companies.normalizers import normalize_phone, normalize_inn, normalize_work_schedule
 from uuid import UUID
+
 from django import forms
-from django.forms import inlineformset_factory, BaseInlineFormSet, ValidationError
 from django.contrib.auth.password_validation import validate_password
 from django.db.models import Q
+from django.forms import BaseInlineFormSet, ValidationError, inlineformset_factory
 
 from accounts.models import Branch, User
 from companies.models import (
@@ -16,13 +15,15 @@ from companies.models import (
     Contact,
     ContactEmail,
     ContactPhone,
-    Region,
     ContractType,
+    Region,
 )
+from companies.normalizers import normalize_inn, normalize_phone, normalize_work_schedule
+from core.timezone_utils import RUS_TZ_CHOICES, guess_ru_timezone_from_address
 from tasksapp.models import Task, TaskType
+from ui.cleaners import clean_int_id
 from ui.models import UiGlobalConfig
 from ui.widgets import TaskTypeSelectWidget, UserSelectWithBranchWidget
-from ui.cleaners import clean_int_id
 
 
 class FlexibleUserChoiceField(forms.ModelChoiceField):
@@ -863,8 +864,9 @@ class TaskEditForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
 
         # Форматируем дату для datetime-local input
         if self.instance and self.instance.due_at:

@@ -33,7 +33,7 @@ class UiGlobalConfig(models.Model):
         verbose_name_plural = "Настройки интерфейса"
 
     @classmethod
-    def load(cls) -> "UiGlobalConfig":
+    def load(cls) -> UiGlobalConfig:
         """
         Храним одну запись с pk=1.
         """
@@ -179,7 +179,7 @@ class AmoApiConfig(models.Model):
             self.client_secret = ""
 
     @classmethod
-    def load(cls) -> "AmoApiConfig":
+    def load(cls) -> AmoApiConfig:
         obj, _ = cls.objects.get_or_create(pk=1, defaults={"domain": "kmrprofi.amocrm.ru"})
         return obj
 
@@ -257,7 +257,7 @@ class UiUserPreference(models.Model):
         verbose_name_plural = "Настройки интерфейса (пользователь)"
 
     @classmethod
-    def load_for_user(cls, user) -> "UiUserPreference":
+    def load_for_user(cls, user) -> UiUserPreference:
         obj, _ = cls.objects.get_or_create(user=user, defaults={"font_scale": Decimal("1.00")})
         return obj
 

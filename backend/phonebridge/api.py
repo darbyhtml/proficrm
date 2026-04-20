@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from django.db import transaction
 from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -11,15 +11,16 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from policy.engine import enforce
+
 from .models import (
     CallRequest,
-    PhoneDevice,
-    PhoneTelemetry,
-    PhoneLogBundle,
-    MobileAppQrToken,
     MobileAppBuild,
+    MobileAppQrToken,
+    PhoneDevice,
+    PhoneLogBundle,
+    PhoneTelemetry,
 )
-from policy.engine import enforce
 
 
 def mask_phone(phone: str | None) -> str:
@@ -43,6 +44,7 @@ def _get_fcm_app():
     """
     import logging
     import os
+
     from django.conf import settings
 
     global _fcm_app
@@ -757,9 +759,11 @@ class QrTokenCreateView(APIView):
 
     def post(self, request):
         import logging
-        from accounts.security import get_client_ip, is_ip_rate_limited
-        from rest_framework import status
+
         from django.db import DatabaseError
+        from rest_framework import status
+
+        from accounts.security import get_client_ip, is_ip_rate_limited
 
         logger = logging.getLogger(__name__)
         enforce(
@@ -806,7 +810,7 @@ class QrTokenCreateView(APIView):
         except Exception as e:
             logger.error(f"QrTokenCreate error: {e}", exc_info=True)
             return Response(
-                {"detail": f"Ошибка создания QR-токена: {str(e)}"},
+                {"detail": f"Ошибка создания QR-токена: {e!s}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -826,6 +830,7 @@ class QrTokenExchangeView(APIView):
 
     def post(self, request):
         import logging
+
         from rest_framework import status
         from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -908,7 +913,9 @@ class LogoutView(APIView):
 
     def post(self, request):
         import logging
+
         from rest_framework import status
+
         from accounts.security import get_client_ip
 
         logger = logging.getLogger(__name__)
@@ -945,8 +952,8 @@ class LogoutView(APIView):
 
         # Логируем logout в audit
         try:
-            from audit.service import log_event
             from audit.models import ActivityEvent
+            from audit.service import log_event
 
             log_event(
                 actor=request.user,
@@ -977,6 +984,7 @@ class LogoutAllView(APIView):
 
     def post(self, request):
         import logging
+
         from accounts.security import get_client_ip
 
         logger = logging.getLogger(__name__)
@@ -993,8 +1001,8 @@ class LogoutAllView(APIView):
         blacklisted = 0
         try:
             from rest_framework_simplejwt.token_blacklist.models import (
-                OutstandingToken,
                 BlacklistedToken,
+                OutstandingToken,
             )
 
             tokens = OutstandingToken.objects.filter(user=request.user)
@@ -1007,8 +1015,8 @@ class LogoutAllView(APIView):
 
         # Логируем logout всех устройств
         try:
-            from audit.service import log_event
             from audit.models import ActivityEvent
+            from audit.service import log_event
 
             device_count = PhoneDevice.objects.filter(user=request.user).count()
             log_event(

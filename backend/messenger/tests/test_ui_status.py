@@ -140,8 +140,9 @@ class WaitingMinutesTests(TestCase):
         self.assertEqual(c.waiting_minutes, 0)
 
     def test_positive_when_customer_last(self):
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
 
         c = Conversation.objects.create(inbox=self.inbox, contact=self.contact, assignee=self.op)
         ten_ago = timezone.now() - timedelta(minutes=10)

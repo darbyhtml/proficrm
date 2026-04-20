@@ -14,8 +14,8 @@ class AutoAssignResult:
     """Результат работы оркестратора автоназначения."""
 
     assigned: bool
-    branch: Optional[Branch]
-    user: Optional[User]
+    branch: Branch | None
+    user: User | None
 
     def __getitem__(self, key):
         # Позволяет обращаться как к словарю: result["assigned"].

@@ -11,16 +11,17 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.files.storage import default_storage
 from django.core.paginator import Paginator
-from django.db.models import Count, Q, Exists, OuterRef
+from django.db.models import Count, Exists, OuterRef, Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from accounts.models import User, Branch
-from companies.models import Company, Region, CompanySphere, CompanyStatus, Contact, ContactEmail
+from accounts.models import Branch, User
+from companies.models import Company, CompanySphere, CompanyStatus, Contact, ContactEmail, Region
 from companies.permissions import get_users_for_lists
 from mailer.constants import COOLDOWN_DAYS_DEFAULT, PER_USER_DAILY_LIMIT_DEFAULT
 from mailer.forms import CampaignGenerateRecipientsForm, CampaignRecipientAddForm
+from mailer.mail_content import apply_signature
 from mailer.models import (
     Campaign,
     CampaignQueue,
@@ -30,9 +31,8 @@ from mailer.models import (
     SmtpBzQuota,
 )
 from mailer.utils import html_to_text, msk_day_bounds
-from mailer.mail_content import apply_signature
-from policy.engine import enforce
 from mailer.views._helpers import _can_manage_campaign, _smtp_bz_today_stats_cached
+from policy.engine import enforce
 
 logger = logging.getLogger(__name__)
 
@@ -581,9 +581,11 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
     qs_no_page = params.urlencode()
     recent = page_recipients
 
-    from django.utils import timezone as _tz
-    from mailer.tasks import _is_working_hours
     from zoneinfo import ZoneInfo
+
+    from django.utils import timezone as _tz
+
+    from mailer.tasks import _is_working_hours
 
     is_admin = user.role == User.Role.ADMIN
     quota = SmtpBzQuota.load() if is_admin else None

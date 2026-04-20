@@ -9,12 +9,12 @@ from django.utils import timezone
 
 from mailer.models import (
     Campaign,
+    CampaignQueue,
     CampaignRecipient,
-    MailAccount,
     GlobalMailAccount,
+    MailAccount,
     SendLog,
     Unsubscribe,
-    CampaignQueue,
 )
 from mailer.smtp_sender import build_message, send_via_smtp
 from mailer.utils import html_to_text, msk_day_bounds
@@ -219,8 +219,9 @@ class Command(BaseCommand):
                         detailed_error = error_message
                         if smtp_cfg.smtp_bz_api_key:
                             try:
-                                from mailer.smtp_bz_api import get_message_info, get_message_logs
                                 from django.utils import timezone as _tz
+
+                                from mailer.smtp_bz_api import get_message_info, get_message_logs
 
                                 # Сначала пробуем найти по Message-ID
                                 message_id = (

@@ -3,7 +3,7 @@ from datetime import date, datetime, time, timedelta
 from typing import Dict, List, Optional, Tuple
 
 # 0 = Monday ... 6 = Sunday
-_DAYS: List[Tuple[str, int]] = [
+_DAYS: list[tuple[str, int]] = [
     ("Пн", 0),
     ("Вт", 1),
     ("Ср", 2),
@@ -12,7 +12,7 @@ _DAYS: List[Tuple[str, int]] = [
     ("Сб", 5),
     ("Вс", 6),
 ]
-_DAY_TO_IDX: Dict[str, int] = {k.lower(): v for k, v in _DAYS}
+_DAY_TO_IDX: dict[str, int] = {k.lower(): v for k, v in _DAYS}
 
 
 def _fmt_hhmm(t: time) -> str:
@@ -63,7 +63,7 @@ def _normalize_text_for_parse(text: str) -> str:
     return s.strip()
 
 
-def _parse_time_token(s: str) -> Optional[time]:
+def _parse_time_token(s: str) -> time | None:
     s = (s or "").strip()
     if not s:
         return None
@@ -78,7 +78,7 @@ def _parse_time_token(s: str) -> Optional[time]:
     return time(hour=h, minute=mm)
 
 
-def _expand_day_spec(day_spec: str) -> List[int]:
+def _expand_day_spec(day_spec: str) -> list[int]:
     """
     Принимает строку вроде: "Пн-Пт", "Пн, Ср, Пт", "Ежедневно" и возвращает индексы дней.
     """
@@ -102,7 +102,7 @@ def _expand_day_spec(day_spec: str) -> List[int]:
     s = _DASH_RE.sub("-", s)
     s = re.sub(r"\s+", " ", s)
 
-    out: List[int] = []
+    out: list[int] = []
 
     # Split by comma/space/semicolon but keep ranges like пн-пт
     parts = [p.strip() for p in re.split(r"[,;/]+", s) if p.strip()]
@@ -136,7 +136,7 @@ def _expand_day_spec(day_spec: str) -> List[int]:
 
     # de-dup preserving order
     seen = set()
-    uniq: List[int] = []
+    uniq: list[int] = []
     for d in out:
         if d in seen:
             continue
@@ -145,7 +145,7 @@ def _expand_day_spec(day_spec: str) -> List[int]:
     return uniq
 
 
-def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
+def parse_work_schedule(text: str) -> dict[int, list[tuple[time, time]]]:
     """
     Пытается распарсить свободный текст режима работы в карту:
     day_idx -> [(start, end), ...].
@@ -166,7 +166,7 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
     #   "09:00-17:00"
     #   "сб-вс"
     #   "выходной"
-    raw_lines: List[str] = [part.strip() for part in re.split(r"[\n\r]+", s) if part.strip()]
+    raw_lines: list[str] = [part.strip() for part in re.split(r"[\n\r]+", s) if part.strip()]
     chunks: list[str] = []
 
     def _has_time_fragment(line: str) -> bool:
@@ -187,7 +187,7 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
         chunks.extend([p.strip() for p in re.split(r"[;]+", line) if p.strip()])
         i += 1
 
-    schedule: Dict[int, List[Tuple[time, time]]] = {i: [] for i in range(7)}
+    schedule: dict[int, list[tuple[time, time]]] = {i: [] for i in range(7)}
     any_parsed = False
     any_interval = False
 
@@ -206,8 +206,8 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
     )
 
     # Сначала парсим основные интервалы по дням
-    last_processed_days: List[int] = []
-    lunch_intervals: Dict[int, Tuple[time, time]] = {}  # day_idx -> (start, end)
+    last_processed_days: list[int] = []
+    lunch_intervals: dict[int, tuple[time, time]] = {}  # day_idx -> (start, end)
 
     for ch in chunks:
         if not ch:
@@ -272,7 +272,7 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
             last_processed_days = days.copy()
             continue
 
-        intervals: List[Tuple[time, time]] = []
+        intervals: list[tuple[time, time]] = []
 
         # time ranges like 9:00-18:00, 9-18, 09.00-18.00
         for m in re.finditer(
@@ -318,7 +318,7 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
         if not intervals:
             continue
 
-        new_intervals: List[Tuple[time, time]] = []
+        new_intervals: list[tuple[time, time]] = []
         for start_t, end_t in intervals:
             if start_t < lunch_start < lunch_end < end_t:
                 # Перерыв внутри интервала - разбиваем на два
@@ -345,8 +345,8 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
         else:
             main_start = main_end = None
 
-        lunch_start: Optional[time] = None
-        lunch_end: Optional[time] = None
+        lunch_start: time | None = None
+        lunch_end: time | None = None
         if "обед" in s_lower or "перерыв" in s_lower:
             lunch_pattern = re.compile(
                 r"(обед|перерыв)[^0-9]{0,20}(\d{1,2})[:.\-](\d{2})\s*(?:-|до)\s*(\d{1,2})[:.\-](\d{2})"
@@ -357,7 +357,7 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
                 lunch_end = _parse_time_token(f"{lm.group(4)}:{lm.group(5)}")
 
         if main_start and main_end and main_start < main_end:
-            intervals_all: List[Tuple[time, time]] = []
+            intervals_all: list[tuple[time, time]] = []
             if lunch_start and lunch_end and main_start < lunch_start < lunch_end < main_end:
                 # Основной интервал минус обед
                 intervals_all.append((main_start, lunch_start))
@@ -421,7 +421,7 @@ def normalize_work_schedule(text: str) -> str:
         return "Круглосуточно, без выходных"
 
     # build per-day representation
-    per_day: List[str] = []
+    per_day: list[str] = []
     for i in range(7):
         intervals = schedule.get(i) or []
         if not intervals:
@@ -433,7 +433,7 @@ def normalize_work_schedule(text: str) -> str:
     # Определяем перерыв двумя способами:
     # 1. По разрыву между двумя интервалами в дне
     # 2. Из исходного текста (если был указан явно)
-    lunch_candidates: List[Tuple[time, time]] = []
+    lunch_candidates: list[tuple[time, time]] = []
 
     # Способ 1: По разрыву между интервалами
     for i in range(7):
@@ -460,10 +460,10 @@ def normalize_work_schedule(text: str) -> str:
             if lunch_start and lunch_end:
                 lunch_candidates.append((lunch_start, lunch_end))
 
-    lunch_str: Optional[str] = None
+    lunch_str: str | None = None
     if lunch_candidates:
         # Оставляем уникальные интервалы
-        seen_lunch: List[Tuple[int, int]] = []
+        seen_lunch: list[tuple[int, int]] = []
         for s_t, e_t in lunch_candidates:
             key = (s_t.hour * 60 + s_t.minute, e_t.hour * 60 + e_t.minute)
             if key not in seen_lunch:
@@ -483,7 +483,7 @@ def normalize_work_schedule(text: str) -> str:
         return base
 
     # group consecutive days with same value
-    lines: List[str] = []
+    lines: list[str] = []
     i = 0
     while i < 7:
         v = per_day[i]
@@ -507,7 +507,7 @@ def get_worktime_status_from_schedule(
     schedule_text: str,
     *,
     now_tz: datetime,
-) -> Tuple[str, Optional[int]]:
+) -> tuple[str, int | None]:
     """
     Возвращает (status, minutes_left).
     status: ok | warn_end | off | unknown
@@ -526,7 +526,7 @@ def get_worktime_status_from_schedule(
     prev_dow = (dow - 1) % 7
 
     # Build intervals for today + spillovers from yesterday
-    intervals_dt: List[Tuple[datetime, datetime]] = []
+    intervals_dt: list[tuple[datetime, datetime]] = []
 
     for start_t, end_t in schedule.get(dow, []) or []:
         start_dt = datetime.combine(today, start_t, tzinfo=tz)

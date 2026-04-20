@@ -11,6 +11,7 @@ from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
+from mailer.constants import SMTP_BZ_SYNC_MAX_PAGES
 from mailer.models import (
     CampaignRecipient,
     GlobalMailAccount,
@@ -18,7 +19,6 @@ from mailer.models import (
     SmtpBzQuota,
     Unsubscribe,
 )
-from mailer.constants import SMTP_BZ_SYNC_MAX_PAGES
 from mailer.tasks.helpers import _smtp_bz_extract_tag, _smtp_bz_parse_campaign_recipient_from_tag
 
 logger = logging.getLogger(__name__)

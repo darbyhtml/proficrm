@@ -6,9 +6,10 @@ from typing import Any
 from django.core.exceptions import PermissionDenied
 
 from accounts.models import User
+from companies.policy import can_view_company_id
 from core.input_cleaners import clean_int_id
 from tasksapp.policy import can_view_task_id
-from companies.policy import can_view_company_id
+
 from .models import PolicyConfig, PolicyRule
 from .resources import RESOURCE_INDEX, PolicyResource
 

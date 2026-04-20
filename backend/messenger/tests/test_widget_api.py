@@ -8,16 +8,16 @@
 - feature flag: отключение messenger возвращает 404
 """
 
-from django.test import TestCase
-from django.contrib.auth import get_user_model
 from django.conf import settings
-from rest_framework.test import APIClient
+from django.contrib.auth import get_user_model
+from django.test import TestCase
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from accounts.models import Branch
-from messenger.models import Inbox, Contact, Conversation, Message, RoutingRule
-from messenger.utils import get_widget_session
 from messenger import services
+from messenger.models import Contact, Conversation, Inbox, Message, RoutingRule
+from messenger.utils import get_widget_session
 
 User = get_user_model()
 
@@ -495,6 +495,7 @@ class WidgetAPITests(TestCase):
     def test_bootstrap_throttling(self):
         """Проверка throttling для bootstrap: превышение лимита возвращает 429."""
         from django.core.cache import cache
+
         from messenger.throttles import WidgetBootstrapThrottle
 
         # Очистить кэш перед тестом
@@ -533,6 +534,7 @@ class WidgetAPITests(TestCase):
     def test_send_throttling(self):
         """Проверка throttling для send: превышение лимита возвращает 429."""
         from django.core.cache import cache
+
         from messenger.throttles import WidgetSendThrottle
         from messenger.utils import create_widget_session
 
@@ -580,6 +582,7 @@ class WidgetAPITests(TestCase):
     def test_poll_throttling(self):
         """Проверка throttling для poll: минимальный интервал и лимит запросов."""
         from django.core.cache import cache
+
         from messenger.throttles import WidgetPollThrottle
         from messenger.utils import create_widget_session
 
@@ -687,6 +690,7 @@ class WidgetAPITests(TestCase):
     def test_send_duplicate_messages_blocked(self):
         """Проверка: одинаковые сообщения подряд блокируются."""
         from django.core.cache import cache
+
         from messenger.utils import create_widget_session
 
         cache.clear()

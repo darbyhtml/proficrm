@@ -4,7 +4,7 @@ DRF API для messenger.
 Этап 2: операторский API для диалогов и шаблонов ответов.
 """
 
-from rest_framework import viewsets, status
+from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import BaseRenderer
@@ -19,17 +19,19 @@ class EventStreamRenderer(BaseRenderer):
         return data
 
 
+import json
+import time
+
+from django.db.models import Q
+from django.http import StreamingHttpResponse
+from django.utils import timezone
+from rest_framework import serializers as drf_serializers
+
 from accounts.models import Branch, User
 from policy.drf import PolicyPermission
 
 from . import models, selectors, serializers, services
 from .utils import ensure_messenger_enabled_api, validate_upload_safety
-from django.db.models import Q
-from django.http import StreamingHttpResponse
-from django.utils import timezone
-from rest_framework import serializers as drf_serializers
-import json
-import time
 
 
 class MessengerEnabledApiMixin:
@@ -104,7 +106,8 @@ class ConversationViewSet(
         )
 
         # Аннотации: превью последнего сообщения + unread_count (для текущего пользователя)
-        from django.db.models import OuterRef, Subquery, Q, F, Count
+        from django.db.models import Count, F, OuterRef, Q, Subquery
+
         from .models import Message
 
         last_message = (
@@ -117,7 +120,7 @@ class ConversationViewSet(
         qs = qs.annotate(last_message_body=Subquery(last_message))
 
         # Аннотируем last_activity_at_fallback (fallback на created_at как в Chatwoot)
-        from django.db.models import Case, When, DateTimeField
+        from django.db.models import Case, DateTimeField, When
 
         qs = qs.annotate(
             last_activity_at_fallback=Case(
@@ -772,6 +775,7 @@ class ConversationViewSet(
                     return Response({"detail": safety_error}, status=status.HTTP_400_BAD_REQUEST)
 
             from django.db import transaction
+
             from .services import record_message
 
             # Атомарно: сообщение + вложения
@@ -1254,8 +1258,9 @@ class ReportingViewSet(MessengerEnabledApiMixin, viewsets.ViewSet):
     @action(detail=False, methods=["get"], url_path="overview")
     def overview(self, request):
         """Обзорные метрики за период."""
-        from django.db.models import Avg, Count
         from datetime import timedelta
+
+        from django.db.models import Avg, Count
 
         days = int(request.query_params.get("days", "7"))
         since = timezone.now() - timedelta(days=days)
@@ -1393,8 +1398,8 @@ class TransferRequestSerializer(drf_serializers.Serializer):
 @permission_classes([IsAuthenticated])
 def transfer_conversation(request, conversation_id):
     """Передача диалога другому оператору с обязательной причиной."""
-    from messenger.models import Conversation, ConversationTransfer
     from accounts.models import User as UserModel
+    from messenger.models import Conversation, ConversationTransfer
 
     try:
         conv = Conversation.objects.select_related("assignee", "branch").get(pk=conversation_id)

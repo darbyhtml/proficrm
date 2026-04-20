@@ -50,7 +50,7 @@ def check_email_duplicate(
     *,
     company: Company,
     email: str,
-    exclude_email_id: Optional[int] = None,
+    exclude_email_id: int | None = None,
     check_main: bool = True,
 ) -> str | None:
     """Проверка уникальности email среди основного и дополнительных.

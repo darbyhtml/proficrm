@@ -643,7 +643,7 @@ class Conversation(models.Model):
         super().save(*args, **kwargs)
 
         # Отправка событий через Event Dispatcher (по образцу Chatwoot)
-        from .dispatchers import get_dispatcher, Events
+        from .dispatchers import Events, get_dispatcher
 
         dispatcher = get_dispatcher()
         now = timezone.now()
@@ -892,7 +892,7 @@ class Message(models.Model):
         self._update_first_reply(created_at_used)
 
         # Отправка событий через Event Dispatcher (по образцу Chatwoot)
-        from .dispatchers import get_dispatcher, Events
+        from .dispatchers import Events, get_dispatcher
 
         dispatcher = get_dispatcher()
         now = timezone.now()

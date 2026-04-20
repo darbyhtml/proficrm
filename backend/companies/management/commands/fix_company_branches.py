@@ -9,8 +9,8 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
+from accounts.models import Branch, User
 from companies.models import Company
-from accounts.models import User, Branch
 
 
 class Command(BaseCommand):

@@ -16,8 +16,8 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from messenger.models import Conversation
 from messenger.integrations import notify_conversation_closed
+from messenger.models import Conversation
 
 
 class Command(BaseCommand):

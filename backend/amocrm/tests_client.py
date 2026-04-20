@@ -16,7 +16,6 @@ from django.utils import timezone
 
 from amocrm.client import AmoApiError, AmoClient, AmoResponse, RateLimitError, _json_loads
 
-
 # ---------------------------------------------------------------------------
 # Вспомогательная фабрика — создаёт AmoApiConfig-заглушку без БД
 # ---------------------------------------------------------------------------

@@ -9,18 +9,18 @@ Views для операторской панели мессенджера (Chatw
 
 from __future__ import annotations
 
-from django.contrib.auth.decorators import login_required
 from django.contrib import messages as django_messages
+from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Count, OuterRef, Subquery, Q, F
+from django.db.models import Count, F, OuterRef, Q, Subquery
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 
 from accounts.models import Branch, User
+from accounts.permissions import get_effective_user
 from companies.models import Region
 from companies.permissions import get_users_for_lists
-from accounts.permissions import get_effective_user
 from messenger.models import AgentProfile, Conversation, Message
 from messenger.selectors import visible_conversations_qs
 from messenger.utils import ensure_messenger_enabled_view

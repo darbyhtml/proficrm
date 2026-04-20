@@ -13,12 +13,12 @@
 
 import re
 
-# Импортируем существующие утилиты
-from .inn_utils import normalize_inn_string as _normalize_inn_string
-
 # Импорт из core/ для избежания циклических зависимостей
 # (companies -> ui -> companies может вызвать цикл)
 from core.work_schedule_utils import normalize_work_schedule as _normalize_work_schedule
+
+# Импортируем существующие утилиты
+from .inn_utils import normalize_inn_string as _normalize_inn_string
 
 # Константы для валидации телефонов (из amocrm/migrate.py)
 MIN_PHONE_DIGITS = (

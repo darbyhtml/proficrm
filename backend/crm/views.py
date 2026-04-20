@@ -3,6 +3,8 @@
 """
 
 import os
+from datetime import UTC
+
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
 
@@ -32,13 +34,14 @@ Disallow: /
 def security_txt(request):
     """Security.txt для ответственного раскрытия уязвимостей."""
     from datetime import datetime, timedelta, timezone
+
     from django.conf import settings
 
     # Получаем email из Django settings (надежнее чем напрямую из os.getenv)
     security_email = getattr(settings, "SECURITY_CONTACT_EMAIL", "") or "security@example.com"
 
     # Дата истечения: через год от текущей даты (timezone-aware, не deprecated utcnow)
-    expires_date = (datetime.now(timezone.utc) + timedelta(days=365)).strftime(
+    expires_date = (datetime.now(UTC) + timedelta(days=365)).strftime(
         "%Y-%m-%dT%H:%M:%S.000Z"
     )
 
@@ -65,6 +68,7 @@ def sw_push_js(request):
     Браузеры запрещают регистрацию SW через 302-redirect.
     """
     import pathlib
+
     from django.conf import settings as django_settings
 
     sw_path = (
@@ -167,8 +171,9 @@ def metrics_endpoint(request):
         pass
 
     try:
-        from accounts.models import UserAbsence
         from django.utils import timezone
+
+        from accounts.models import UserAbsence
 
         today = timezone.localdate()
         absent = (
@@ -209,8 +214,9 @@ def health_check(request):
     """
     import shutil
     from datetime import datetime, timezone
-    from django.db import connection
+
     from django.core.cache import cache
+    from django.db import connection
 
     checks = {}
     degraded = False
@@ -268,7 +274,7 @@ def health_check(request):
     return JsonResponse(
         {
             "status": overall,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "checks": checks,
         },
         status=status_code,

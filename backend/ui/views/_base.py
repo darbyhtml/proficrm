@@ -1,63 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, time as datetime_time, timedelta
-from uuid import UUID
-from decimal import Decimal
-
-from django.contrib.auth.decorators import login_required
-from django.contrib import messages
-from django.core.paginator import Paginator
-from django.db.models import Exists, OuterRef, Q, F, Subquery, IntegerField
-from django.db.models import Count, Max, Prefetch, Avg
-from django.db.models.functions import Coalesce
-from django.db import models, transaction, IntegrityError
-from django.http import HttpRequest, HttpResponse
-from django.http import StreamingHttpResponse
-from django.http import JsonResponse
-from django.http import FileResponse, Http404, HttpResponseNotFound
-from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone
-from django.core.exceptions import ValidationError
-from django.core.validators import validate_email
-
-from accounts.models import Branch, User, MagicLinkToken
-from audit.models import ActivityEvent
-from audit.service import log_event
-from companies.models import (
-    ContractType,
-    Company,
-    CompanyDeal,
-    CompanyHistoryEvent,
-    CompanyNote,
-    CompanyNoteAttachment,
-    CompanySphere,
-    CompanyStatus,
-    Region,
-    Contact,
-    ContactEmail,
-    ContactPhone,
-    CompanyDeletionRequest,
-    CompanyEmail,
-    CompanyPhone,
-    CompanySearchIndex,
-)
-from companies.normalizers import normalize_phone as _normalize_phone_canonical
-from companies.services import resolve_target_companies
-from companies.permissions import (
-    can_edit_company as can_edit_company_perm,
-    editable_company_qs as editable_company_qs_perm,
-    can_transfer_company,
-    get_transfer_targets,
-    get_users_for_lists,
-    can_transfer_companies,
-)
-from companies.policy import can_view_company as can_view_company_policy, visible_companies_qs
-from companies.decorators import require_can_view_company, require_can_view_note_company
-from tasksapp.models import Task, TaskComment, TaskEvent, TaskType
-from tasksapp.policy import visible_tasks_qs, can_manage_task_status
-from notifications.models import Notification
-from notifications.service import notify
-
 # phonebridge models — lazy import в функциях, где используются (company_detail, settings_integrations)
 import json
 import logging
@@ -66,44 +8,111 @@ import os
 import re
 import uuid
 from datetime import date as _date
+from datetime import datetime, timedelta
+from datetime import time as datetime_time
+from decimal import Decimal
+from uuid import UUID
 
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
+from django.core.validators import validate_email
+from django.db import IntegrityError, models, transaction
+from django.db.models import Avg, Count, Exists, F, IntegerField, Max, OuterRef, Prefetch, Q, Subquery
+from django.db.models.functions import Coalesce
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpRequest,
+    HttpResponse,
+    HttpResponseNotFound,
+    JsonResponse,
+    StreamingHttpResponse,
+)
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+
+from accounts.models import Branch, MagicLinkToken, User
+from audit.models import ActivityEvent
+from audit.service import log_event
+from companies.decorators import require_can_view_company, require_can_view_note_company
+from companies.models import (
+    Company,
+    CompanyDeal,
+    CompanyDeletionRequest,
+    CompanyEmail,
+    CompanyHistoryEvent,
+    CompanyNote,
+    CompanyNoteAttachment,
+    CompanyPhone,
+    CompanySearchIndex,
+    CompanySphere,
+    CompanyStatus,
+    Contact,
+    ContactEmail,
+    ContactPhone,
+    ContractType,
+    Region,
+)
+from companies.normalizers import normalize_phone as _normalize_phone_canonical
+from companies.permissions import (
+    can_edit_company as can_edit_company_perm,
+)
+from companies.permissions import (
+    can_transfer_companies,
+    can_transfer_company,
+    get_transfer_targets,
+    get_users_for_lists,
+)
+from companies.permissions import (
+    editable_company_qs as editable_company_qs_perm,
+)
+from companies.policy import can_view_company as can_view_company_policy
+from companies.policy import visible_companies_qs
+from companies.services import resolve_target_companies
+from notifications.models import Notification
+from notifications.service import notify
+from tasksapp.models import Task, TaskComment, TaskEvent, TaskType
+from tasksapp.policy import can_manage_task_status, visible_tasks_qs
 
 logger = logging.getLogger(__name__)
 
+from django.core.exceptions import PermissionDenied
+
+from accounts.permissions import get_effective_user, get_view_as_user, require_admin
+from policy.decorators import policy_required
+from policy.engine import decide as policy_decide
+from ui.cleaners import clean_int_id
+from ui.models import AmoApiConfig, UiGlobalConfig, UiUserPreference
+from ui.templatetags.ui_extras import format_phone
+
 from ..forms import (
-    CompanyCreateForm,
-    CompanyQuickEditForm,
+    AmoApiConfigForm,
+    AmoMigrateFilterForm,
+    BranchForm,
     CompanyContractForm,
+    CompanyCreateForm,
     CompanyEditForm,
     CompanyInlineEditForm,
+    CompanyListColumnsForm,
     CompanyNoteForm,
+    CompanyQuickEditForm,
+    CompanySphereForm,
+    CompanyStatusForm,
     ContactEmailFormSet,
     ContactForm,
     ContactPhoneFormSet,
-    TaskForm,
-    TaskEditForm,
-    BranchForm,
-    CompanySphereForm,
-    CompanyStatusForm,
     ContractTypeForm,
+    ImportCompaniesForm,
+    ImportTasksIcsForm,
+    TaskEditForm,
+    TaskForm,
     TaskTypeForm,
     UserCreateForm,
     UserEditForm,
-    ImportCompaniesForm,
-    ImportTasksIcsForm,
-    AmoApiConfigForm,
-    AmoMigrateFilterForm,
-    CompanyListColumnsForm,
 )
-from ui.models import UiGlobalConfig, AmoApiConfig, UiUserPreference
-
-from accounts.permissions import require_admin, get_effective_user, get_view_as_user
-from policy.decorators import policy_required
-from policy.engine import decide as policy_decide
-from django.core.exceptions import PermissionDenied
-from ui.templatetags.ui_extras import format_phone
-from ui.cleaners import clean_int_id
 
 # Константы для фильтров
 RESPONSIBLE_FILTER_NONE = "none"  # Значение для фильтрации компаний без ответственного

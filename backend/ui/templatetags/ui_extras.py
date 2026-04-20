@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 from django import template
 from django.utils import timezone
-from django.utils.html import format_html, conditional_escape
+from django.utils.html import conditional_escape, format_html
 from django.utils.safestring import mark_safe
 
 register = template.Library()

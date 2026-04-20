@@ -15,7 +15,7 @@ from django.conf import settings
 logger = logging.getLogger("messenger.widget")
 
 
-def get_region_from_ip(ip: str) -> Optional["Region"]:
+def get_region_from_ip(ip: str) -> Region | None:
     """
     Определяет регион по IP-адресу.
 

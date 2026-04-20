@@ -1,35 +1,38 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, TypedDict
 import json
 import logging
 import re
 import time
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from datetime import date as dt_date
+from datetime import time as dt_time
+from datetime import timezone as dt_timezone
+from typing import Any, TypedDict
 from uuid import UUID
 
 from django.db import transaction
 from django.utils import timezone
-from django.utils.dateparse import parse_datetime, parse_date
-from datetime import date as dt_date, datetime, time as dt_time, timezone as dt_timezone
+from django.utils.dateparse import parse_date, parse_datetime
 
 from accounts.models import User
 from companies.models import (
     Company,
+    CompanyEmail,
     CompanyHistoryEvent,
     CompanyNote,
+    CompanyPhone,
     CompanySphere,
-    Region,
     Contact,
     ContactEmail,
     ContactPhone,
-    CompanyPhone,
-    CompanyEmail,
+    Region,
 )
 from companies.region_utils import find_region_by_name
 from tasksapp.models import Task
 
-from .client import AmoClient, AmoApiError, RateLimitError
+from .client import AmoApiError, AmoClient, RateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -1810,7 +1813,7 @@ def _parse_amo_due(ts: Any) -> timezone.datetime | None:
     """
     if ts is None:
         return None
-    UTC = getattr(timezone, "UTC", dt_timezone.utc)
+    UTC = getattr(timezone, "UTC", UTC)
     # dict wrapper
     if isinstance(ts, dict):
         for k in ("timestamp", "ts", "value"):
@@ -2291,7 +2294,7 @@ def import_company_histories(
 
             created_at_ts = ev.get("created_at") or 0
             try:
-                occurred_at = datetime.fromtimestamp(int(created_at_ts), tz=dt_timezone.utc)
+                occurred_at = datetime.fromtimestamp(int(created_at_ts), tz=UTC)
             except (ValueError, OSError, OverflowError):
                 continue
 
@@ -3950,7 +3953,7 @@ def _upsert_company_from_amo(
     # Устанавливаем данные о холодном звонке для компании
     if cold_call_timestamp:
         try:
-            UTC = getattr(timezone, "UTC", dt_timezone.utc)
+            UTC = getattr(timezone, "UTC", UTC)
             cold_marked_at_dt = timezone.datetime.fromtimestamp(cold_call_timestamp, tz=UTC)
             company.primary_contact_is_cold_call = True
             company.primary_cold_marked_at = cold_marked_at_dt
@@ -4554,8 +4557,9 @@ def migrate_filtered(
                     # ОПТИМИЗАЦИЯ: bulk операции для CompanyPhone (основные телефоны + Скайнет 309609)
                     skynet_phones = extra.get("skynet_phones") or []
                     if (extra_phones or skynet_phones) and not dry_run:
-                        from companies.normalizers import normalize_phone as _normalize_phone
                         from django.db.models import Max
+
+                        from companies.normalizers import normalize_phone as _normalize_phone
 
                         # Получаем максимальный order для существующих телефонов
                         max_order = (
@@ -6906,7 +6910,7 @@ def migrate_filtered(
                         if cold_call_timestamp:
                             try:
                                 # Используем UTC для конвертации, затем нормализуем на начало дня в нужной таймзоне
-                                UTC = getattr(timezone, "UTC", dt_timezone.utc)
+                                UTC = getattr(timezone, "UTC", UTC)
 
                                 # Конвертируем timestamp в datetime в UTC
                                 dt_utc = timezone.datetime.fromtimestamp(

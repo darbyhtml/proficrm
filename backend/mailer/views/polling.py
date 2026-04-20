@@ -16,8 +16,8 @@ from accounts.models import User
 from mailer.constants import PER_USER_DAILY_LIMIT_DEFAULT
 from mailer.models import Campaign, CampaignQueue, CampaignRecipient, GlobalMailAccount, SendLog
 from mailer.utils import msk_day_bounds
-from policy.engine import enforce
 from mailer.views._helpers import _can_manage_campaign
+from policy.engine import enforce
 
 logger = logging.getLogger(__name__)
 

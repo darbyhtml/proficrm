@@ -1,5 +1,9 @@
 from __future__ import annotations
+
+import logging
+
 from ui.views._base import (
+    UUID,
     ActivityEvent,
     Branch,
     Company,
@@ -21,7 +25,6 @@ from ui.views._base import (
     Q,
     Region,
     StreamingHttpResponse,
-    UUID,
     UiGlobalConfig,
     User,
     _apply_company_filters,
@@ -52,7 +55,6 @@ from ui.views._base import (
     uuid,
     visible_companies_qs,
 )
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -259,7 +261,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
     qs_no_page = urlencode(qs_params, doseq=True) if qs_params else ""
     if per_page != 25:
         # Добавляем per_page в параметры, если он отличается от значения по умолчанию
-        from urllib.parse import urlencode, parse_qs
+        from urllib.parse import parse_qs, urlencode
 
         params = parse_qs(qs_no_page) if qs_no_page else {}
         params["per_page"] = [str(per_page)]
@@ -882,6 +884,7 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
     # пост-коммитом, чтобы не тормозить основную транзакцию.
     try:
         from django.db import transaction as _tx
+
         from companies.search_index import rebuild_company_search_index as _reindex
 
         _ids_snapshot = list(ids)
@@ -1019,7 +1022,7 @@ def company_export(request: HttpRequest) -> HttpResponse:
                     "sphere": (request.GET.get("sphere") or "").strip(),
                     "contract_type": (request.GET.get("contract_type") or "").strip(),
                     "region": (
-                        ",".join((request.GET.getlist("region") or []))
+                        ",".join(request.GET.getlist("region") or [])
                         if hasattr(request.GET, "getlist")
                         else (request.GET.get("region") or "").strip()
                     ),

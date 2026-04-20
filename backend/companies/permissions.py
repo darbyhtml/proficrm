@@ -3,6 +3,7 @@ from __future__ import annotations
 from django.db.models import Q, QuerySet
 
 from accounts.models import User
+
 from .models import Company
 
 

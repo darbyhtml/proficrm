@@ -9,4 +9,4 @@ class AccountsConfig(AppConfig):
     def ready(self) -> None:
         # Подключаем post_save signal для синхронизации is_staff с role.
         # Импорт внутри ready(), чтобы избежать циклических импортов.
-        from . import signals  # noqa: F401
+        from . import signals

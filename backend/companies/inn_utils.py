@@ -1,12 +1,11 @@
 import re
 from typing import Iterable, List
 
-
 # ИНН в РФ: чаще всего 10 (юрлица) или 12 (ИП/физлица) цифр.
 _INN_RE = re.compile(r"\b(\d{10}|\d{12})\b")
 
 
-def parse_inns(value: str | None) -> List[str]:
+def parse_inns(value: str | None) -> list[str]:
     """
     Извлекает ИНН из произвольной строки.
     Поддерживает ввод через пробелы/запятые/переносы и т.п.
@@ -19,7 +18,7 @@ def parse_inns(value: str | None) -> List[str]:
         return []
 
     # Сначала пробуем найти ИНН через regex (для случаев, когда ИНН уже отделены)
-    inns: List[str] = []
+    inns: list[str] = []
     seen = set()
     for m in _INN_RE.finditer(s):
         inn = m.group(1)
@@ -57,7 +56,7 @@ def format_inns(inns: Iterable[str]) -> str:
     Приводит список ИНН к строке хранения.
     Разделитель "/" для единообразия с КПП и удобства чтения.
     """
-    cleaned: List[str] = []
+    cleaned: list[str] = []
     seen = set()
     for x in inns:
         v = str(x or "").strip()

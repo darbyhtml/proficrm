@@ -9,14 +9,16 @@
 - PullCallView: пустая очередь (204), device_id validation, pending→consumed
 """
 
-from django.test import TestCase, override_settings
-from django.contrib.auth import get_user_model
-from rest_framework.test import APIClient
-from rest_framework import status
-from rest_framework_simplejwt.tokens import RefreshToken
-from phonebridge.models import CallRequest, PhoneDevice, MobileAppQrToken
 import uuid
 from datetime import datetime, timezone
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase, override_settings
+from rest_framework import status
+from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import RefreshToken
+
+from phonebridge.models import CallRequest, MobileAppQrToken, PhoneDevice
 
 User = get_user_model()
 
@@ -25,7 +27,7 @@ def _jwt_client(user):
     """Создаёт APIClient с JWT-авторизацией для user."""
     client = APIClient()
     refresh = RefreshToken.for_user(user)
-    client.credentials(HTTP_AUTHORIZATION=f"Bearer {str(refresh.access_token)}")
+    client.credentials(HTTP_AUTHORIZATION=f"Bearer {refresh.access_token!s}")
     return client
 
 

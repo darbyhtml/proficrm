@@ -1,19 +1,20 @@
 from datetime import timedelta
 
 from django.utils import timezone
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import serializers, viewsets
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.filters import SearchFilter, OrderingFilter
-from django_filters.rest_framework import DjangoFilterBackend
 
 from accounts.models import User
 from companies.models import Company
 from companies.permissions import can_edit_company
-from .models import Task, TaskType
-from .policy import visible_tasks_qs, can_manage_task_status
 from companies.services import resolve_target_companies
 from policy.drf import PolicyPermission
+
+from .models import Task, TaskType
+from .policy import can_manage_task_status, visible_tasks_qs
 
 
 class TaskTypeSerializer(serializers.ModelSerializer):

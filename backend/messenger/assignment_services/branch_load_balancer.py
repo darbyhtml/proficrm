@@ -16,7 +16,7 @@ class BranchLoadBalancer:
     диалогов, назначенных на пользователя. При равенстве нагрузки — случайный.
     """
 
-    def pick(self, branch: Branch) -> Optional[User]:
+    def pick(self, branch: Branch) -> User | None:
         candidates = (
             User.objects.filter(
                 branch=branch,

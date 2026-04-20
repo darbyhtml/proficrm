@@ -7,5 +7,4 @@ class CompaniesConfig(AppConfig):
     verbose_name = "Компании и контакты"
 
     def ready(self):
-        # noqa: F401
         from . import signals  # type: ignore

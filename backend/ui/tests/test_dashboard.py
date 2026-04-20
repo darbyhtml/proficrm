@@ -4,13 +4,15 @@
 Включает тесты для оптимизированной версии с кэшированием и объединёнными запросами.
 """
 
-from django.test import TestCase, Client, override_settings
+from datetime import date, timedelta
+
 from django.contrib.auth import get_user_model
-from django.utils import timezone
 from django.core.cache import cache
-from datetime import timedelta, date
-from tasksapp.models import Task, TaskType
+from django.test import Client, TestCase, override_settings
+from django.utils import timezone
+
 from companies.models import Company, ContractType
+from tasksapp.models import Task, TaskType
 
 User = get_user_model()
 

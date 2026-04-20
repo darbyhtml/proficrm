@@ -3,6 +3,7 @@ from django.db.models import Count
 
 from accounts.models import User
 from accounts.scope import apply_company_scope
+
 from .models import (
     Company,
     CompanyDeal,
@@ -10,11 +11,11 @@ from .models import (
     CompanyNote,
     CompanySphere,
     CompanyStatus,
-    ContractType,
-    Region,
     Contact,
     ContactEmail,
     ContactPhone,
+    ContractType,
+    Region,
 )
 
 

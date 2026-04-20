@@ -17,7 +17,7 @@ from __future__ import annotations
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from accounts.models import User, Branch
+from accounts.models import Branch, User
 
 
 def _make_admin(username="admin"):

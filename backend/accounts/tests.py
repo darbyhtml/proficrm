@@ -12,18 +12,18 @@ Smoke tests для auth flow и unit tests для accounts/security.py.
 
 from unittest.mock import patch
 
-from django.test import TestCase, Client, RequestFactory, override_settings
-from django.core.cache import cache
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.test import Client, RequestFactory, TestCase, override_settings
 
 from accounts.models import MagicLinkToken
 from accounts.security import (
+    MAX_LOGIN_ATTEMPTS,
+    clear_login_attempts,
     get_client_ip,
     is_ip_rate_limited,
     is_user_locked_out,
     record_failed_login_attempt,
-    clear_login_attempts,
-    MAX_LOGIN_ATTEMPTS,
 )
 
 User = get_user_model()

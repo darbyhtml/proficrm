@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+import logging
+
 from ui.views._base import (
     ActivityEvent,
     AmoApiConfig,
@@ -34,14 +37,13 @@ from ui.views._base import (
     timezone,
     uuid,
 )
-import logging
 
 logger = logging.getLogger(__name__)
 
 # amocrm is imported here (and only here) so that other view modules don't
 # trigger its import at startup. Keep these lazy if you want zero-cost startup.
-from amocrm.client import AmoApiError, AmoClient  # noqa: F401,E402
-from amocrm.migrate import (  # noqa: F401,E402
+from amocrm.client import AmoApiError, AmoClient
+from amocrm.migrate import (
     fetch_amo_users,
     fetch_company_custom_fields,
     fetch_matched_amo_company_ids,
@@ -340,7 +342,7 @@ def settings_amocrm_callback(request: HttpRequest) -> HttpResponse:
         logger.error(f"Unexpected error during AmoCRM token exchange: {error_details}")
         cfg.last_error = str(e)
         cfg.save(update_fields=["last_error", "updated_at"])
-        messages.error(request, f"Неожиданная ошибка: {str(e)}. Проверьте логи.")
+        messages.error(request, f"Неожиданная ошибка: {e!s}. Проверьте логи.")
 
     return redirect("settings_amocrm")
 
@@ -385,7 +387,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
         error_details = traceback.format_exc()
         logger.error("AMOCRM_MIGRATE_ERROR: Failed to load AmoApiConfig: %s", error_details)
         messages.error(
-            request, f"Ошибка загрузки настроек amoCRM: {str(e)}. Проверьте логи сервера."
+            request, f"Ошибка загрузки настроек amoCRM: {e!s}. Проверьте логи сервера."
         )
         # Создаём пустой объект для рендера
         cfg = AmoApiConfig(domain="kmrprofi.amocrm.ru")
@@ -434,7 +436,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
 
         error_details = traceback.format_exc()
         logger.error("AMOCRM_MIGRATE_INIT_ERROR: %s", error_details)
-        messages.error(request, f"Ошибка инициализации: {str(e)}. Проверьте логи сервера.")
+        messages.error(request, f"Ошибка инициализации: {e!s}. Проверьте логи сервера.")
         if not client:
             # Возвращаем страницу с пустыми данными, но с формой
             form = AmoMigrateFilterForm(
@@ -663,7 +665,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
 
                     error_details = traceback.format_exc()
                     messages.error(
-                        request, f"Ошибка миграции: {str(e)}. Проверьте логи сервера для деталей."
+                        request, f"Ошибка миграции: {e!s}. Проверьте логи сервера для деталей."
                     )
                     # В продакшене можно логировать в файл или sentry
                     logger.error("AMOCRM_MIGRATE_ERROR: %s", error_details)
@@ -726,7 +728,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
         from django.http import HttpResponse
 
         return HttpResponse(
-            f"Ошибка рендеринга страницы миграции: {str(e)}. Проверьте логи сервера для деталей.",
+            f"Ошибка рендеринга страницы миграции: {e!s}. Проверьте логи сервера для деталей.",
             status=500,
         )
 
@@ -780,7 +782,7 @@ def settings_amocrm_contacts_dry_run(request: HttpRequest) -> HttpResponse:
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
-    from amocrm.client import AmoClient, AmoApiError
+    from amocrm.client import AmoApiError, AmoClient
 
     cfg = AmoApiConfig.load()
     if not cfg.domain:
@@ -843,7 +845,7 @@ def settings_amocrm_contacts_dry_run(request: HttpRequest) -> HttpResponse:
     except Exception as e:
         import traceback
 
-        messages.error(request, f"Ошибка: {str(e)}")
+        messages.error(request, f"Ошибка: {e!s}")
         logger.error("AMOCRM_CONTACTS_DRY_RUN_ERROR: %s", traceback.format_exc())
         return redirect("settings_amocrm_migrate")
 
@@ -859,7 +861,8 @@ def settings_amocrm_debug_contacts(request: HttpRequest) -> HttpResponse:
         return redirect("dashboard")
 
     import json
-    from amocrm.client import AmoClient, AmoApiError
+
+    from amocrm.client import AmoApiError, AmoClient
 
     cfg = AmoApiConfig.load()
     if not cfg.domain:
@@ -974,7 +977,7 @@ def settings_amocrm_debug_contacts(request: HttpRequest) -> HttpResponse:
     except Exception as e:
         import traceback
 
-        messages.error(request, f"Ошибка: {str(e)}")
+        messages.error(request, f"Ошибка: {e!s}")
         logger.error("AMOCRM_DEBUG_CONTACTS_ERROR: %s", traceback.format_exc())
         return redirect("settings_amocrm_migrate")
 
@@ -1110,8 +1113,9 @@ def settings_mobile_overview(request: HttpRequest) -> HttpResponse:
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
-    from phonebridge.models import PhoneDevice, PhoneTelemetry, PhoneLogBundle
     from django.db.models import Count, Q
+
+    from phonebridge.models import PhoneDevice, PhoneLogBundle, PhoneTelemetry
 
     now = timezone.now()
     active_threshold = now - timedelta(minutes=15)
@@ -1217,7 +1221,7 @@ def settings_mobile_device_detail(request: HttpRequest, pk) -> HttpResponse:
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
-    from phonebridge.models import PhoneDevice, PhoneTelemetry, PhoneLogBundle
+    from phonebridge.models import PhoneDevice, PhoneLogBundle, PhoneTelemetry
 
     device = get_object_or_404(
         PhoneDevice.objects.select_related("user"),
@@ -1259,8 +1263,9 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
+    from django.db.models import Avg, Count, Q, Sum
+
     from phonebridge.models import CallRequest
-    from django.db.models import Count, Avg, Sum, Q
 
     now = timezone.now()
     local_now = timezone.localtime(now)

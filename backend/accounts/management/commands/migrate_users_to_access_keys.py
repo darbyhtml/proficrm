@@ -4,11 +4,12 @@
 Разлогинивает всех пользователей и генерирует для них ключи доступа.
 """
 
-from django.core.management.base import BaseCommand
-from django.contrib.sessions.models import Session
 from django.contrib.auth import SESSION_KEY
+from django.contrib.sessions.models import Session
+from django.core.management.base import BaseCommand
 from django.utils import timezone
-from accounts.models import User, MagicLinkToken
+
+from accounts.models import MagicLinkToken, User
 
 
 class Command(BaseCommand):

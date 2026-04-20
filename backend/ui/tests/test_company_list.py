@@ -11,9 +11,9 @@
 7. company_export — GET: CSV-экспорт (доступен только admin)
 """
 
-from django.test import TestCase, Client, override_settings
-from django.urls import reverse
 from django.contrib.auth import get_user_model
+from django.test import Client, TestCase, override_settings
+from django.urls import reverse
 
 from companies.models import Company
 
@@ -129,8 +129,9 @@ class CompanyListViewTestCase(TestCase):
 
     def test_company_create_dedup_recent(self):
         """Повторный POST с теми же данными не создаёт дубликат (ограничение 10 сек)."""
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
 
         # Компания уже создана < 10 секунд назад
         existing = Company.objects.create(

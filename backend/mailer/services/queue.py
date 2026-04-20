@@ -5,18 +5,20 @@
 
 from __future__ import annotations
 
-import logging
 import datetime
-from django.utils import timezone
+import logging
+
 from django.core.cache import cache
-from mailer.models import CampaignQueue, Campaign
+from django.utils import timezone
+
 from mailer.constants import (
     DEFER_REASON_DAILY_LIMIT,
-    DEFER_REASON_QUOTA,
     DEFER_REASON_OUTSIDE_HOURS,
+    DEFER_REASON_QUOTA,
     DEFER_REASON_RATE_HOUR,
     DEFER_REASON_TRANSIENT_ERROR,
 )
+from mailer.models import Campaign, CampaignQueue
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +77,8 @@ def defer_queue(
             if not cache.add(throttle_key, "1", timeout=3600):
                 return  # Уже уведомили в этом окне
 
-            from notifications.service import notify as notify_user
             from notifications.models import Notification
+            from notifications.service import notify as notify_user
 
             # Формируем понятное сообщение в зависимости от причины
             reason_texts = {

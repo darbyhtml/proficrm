@@ -28,7 +28,7 @@ def _deliver_push_to_subscription(*, subscription_id: int, payload: dict) -> dic
         return {"skipped": "inactive_or_missing"}
 
     try:
-        from pywebpush import webpush, WebPushException
+        from pywebpush import WebPushException, webpush
     except ImportError:
         logger.warning("pywebpush not installed, skipping push")
         return {"skipped": "pywebpush_missing"}

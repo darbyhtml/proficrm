@@ -44,7 +44,7 @@ def execute_company_deletion(
     actor: User,
     reason: str = "",
     source: str = "direct",
-    extra_meta: Optional[dict[str, Any]] = None,
+    extra_meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Единый workflow удаления компании со всеми побочными эффектами.
 
@@ -67,12 +67,12 @@ def execute_company_deletion(
             Вызывающий должен показать messages.error пользователю.
     """
     # Локальный импорт, чтобы избежать цикла между companies.services и ui.views._base.
+    from tasksapp.models import Task
     from ui.views._base import (
         _detach_client_branches,
         _notify_head_deleted_with_branches,
         log_event,
     )
-    from tasksapp.models import Task
 
     # Сохраняем pk ДО delete() — после каскада ``company.pk`` становится None,
     # а IntegrityError может возникнуть уже на COMMIT.

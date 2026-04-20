@@ -4,10 +4,11 @@
 """
 
 import logging
-import requests
-from typing import Optional, Dict, Any
-from django.utils import timezone
 from datetime import datetime
+from typing import Any, Dict, Optional
+
+import requests
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +25,8 @@ def _smtp_bz_request(
     endpoint: str,
     *,
     timeout: int = SMTP_BZ_TIMEOUT,
-    params: Optional[Dict[str, Any]] = None,
-) -> tuple[int, Optional[dict], Optional[str]]:
+    params: dict[str, Any] | None = None,
+) -> tuple[int, dict | None, str | None]:
     """
     Один GET-запрос к API smtp.bz. Authorization: {api_key} (ключ как значение заголовка, без Bearer).
     Returns: (status_code, json_data or None, error_message or None).
@@ -72,7 +73,7 @@ def _smtp_bz_request(
     return r.status_code, None, "http_error"
 
 
-def get_quota_info(api_key: str) -> Optional[Dict[str, Any]]:
+def get_quota_info(api_key: str) -> dict[str, Any] | None:
     """
     Получает информацию о тарифе и квоте через API smtp.bz.
     Один формат auth: Authorization: {api_key} (ключ как значение заголовка, без Bearer, по доке smtp.bz). Эндпоинты: /user, /user/stats.
@@ -110,7 +111,7 @@ def get_quota_info(api_key: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _parse_quota_response(data: Dict[str, Any]) -> Dict[str, Any]:
+def _parse_quota_response(data: dict[str, Any]) -> dict[str, Any]:
     """
     Парсит ответ API smtp.bz в стандартизированный формат.
 
@@ -290,7 +291,7 @@ def _parse_quota_response(data: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
-def get_message_info(api_key: str, message_id: str) -> Optional[Dict[str, Any]]:
+def get_message_info(api_key: str, message_id: str) -> dict[str, Any] | None:
     """
     Получает информацию о письме по его ID через API smtp.bz.
 
@@ -325,17 +326,17 @@ def get_message_info(api_key: str, message_id: str) -> Optional[Dict[str, Any]]:
 
 def get_message_logs(
     api_key: str,
-    to_email: Optional[str] = None,
-    from_email: Optional[str] = None,
-    tag: Optional[str] = None,
-    status: Optional[str] = None,
-    is_open: Optional[bool] = None,
-    is_unsubscribe: Optional[bool] = None,
+    to_email: str | None = None,
+    from_email: str | None = None,
+    tag: str | None = None,
+    status: str | None = None,
+    is_open: bool | None = None,
+    is_unsubscribe: bool | None = None,
     limit: int = 100,
     offset: int = 0,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> dict[str, Any] | None:
     """
     Получает список писем через API smtp.bz с фильтрацией.
 
@@ -357,7 +358,7 @@ def get_message_logs(
     """
     if not api_key:
         return None
-    prm: Dict[str, Any] = {"limit": limit, "offset": offset}
+    prm: dict[str, Any] = {"limit": limit, "offset": offset}
     if to_email:
         prm["to"] = to_email
     if from_email:
@@ -391,9 +392,9 @@ def get_unsubscribers(
     *,
     limit: int = 200,
     offset: int = 0,
-    address: Optional[str] = None,
-    reason: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
+    address: str | None = None,
+    reason: str | None = None,
+) -> dict[str, Any] | None:
     """
     GET /unsubscribe — получение списка отписчиков (smtp.bz).
 
@@ -404,7 +405,7 @@ def get_unsubscribers(
     """
     if not api_key:
         return None
-    prm: Dict[str, Any] = {"limit": limit, "offset": offset}
+    prm: dict[str, Any] = {"limit": limit, "offset": offset}
     if address:
         prm["address"] = address
     if reason:

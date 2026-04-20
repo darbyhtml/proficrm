@@ -3,27 +3,27 @@ from __future__ import annotations
 import secrets
 from datetime import timedelta
 
-from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Count, Q, F, Min, Avg, ExpressionWrapper, DurationField
+from django.contrib.auth.decorators import login_required
+from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Min, Q
 from django.db.models.functions import TruncDate
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from accounts.permissions import require_admin
-from messenger.models import (
-    Conversation,
-    Message,
-    Inbox,
-    RoutingRule,
-    Channel,
-    CannedResponse,
-    Campaign,
-    AutomationRule,
-    Macro,
-)
 from messenger.logging_utils import ui_logger
+from messenger.models import (
+    AutomationRule,
+    Campaign,
+    CannedResponse,
+    Channel,
+    Conversation,
+    Inbox,
+    Macro,
+    Message,
+    RoutingRule,
+)
 from messenger.utils import ensure_messenger_enabled_view
 
 
@@ -915,7 +915,7 @@ def settings_messenger_routing_edit(request: HttpRequest, rule_id: int = None) -
                 messages.success(request, "Правило маршрутизации сохранено.")
                 return redirect("settings_messenger_routing_list")
             except (Inbox.DoesNotExist, Branch.DoesNotExist, ValueError, TypeError) as e:
-                messages.error(request, f"Ошибка: {str(e)}")
+                messages.error(request, f"Ошибка: {e!s}")
 
     # GET запрос - показать форму
     from accounts.models import Branch
@@ -1033,7 +1033,7 @@ def settings_messenger_canned_edit(request: HttpRequest, response_id: int = None
                 messages.success(request, "Шаблонный ответ сохранён.")
                 return redirect("settings_messenger_canned_list")
             except (Branch.DoesNotExist, ValueError, TypeError) as e:
-                messages.error(request, f"Ошибка: {str(e)}")
+                messages.error(request, f"Ошибка: {e!s}")
 
     from accounts.models import Branch
 

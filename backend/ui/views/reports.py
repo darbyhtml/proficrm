@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+import logging
+
 from phonebridge.models import CallRequest
 from ui.views._base import (
     Company,
@@ -25,7 +28,6 @@ from ui.views._base import (
     timedelta,
     timezone,
 )
-import logging
 
 logger = logging.getLogger(__name__)
 

@@ -6,8 +6,8 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
-from tasksapp.models import Task
 from accounts.models import User
+from tasksapp.models import Task
 
 
 class Command(BaseCommand):

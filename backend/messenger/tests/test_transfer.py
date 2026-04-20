@@ -1,11 +1,11 @@
 """Тесты API передачи диалога между операторами/филиалами."""
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient
-from django.contrib.auth import get_user_model
 
 from accounts.models import Branch
-from messenger.models import Inbox, Conversation, Contact, ConversationTransfer
+from messenger.models import Contact, Conversation, ConversationTransfer, Inbox
 
 User = get_user_model()
 

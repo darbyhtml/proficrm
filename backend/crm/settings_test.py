@@ -11,7 +11,7 @@
 «Staging test env: SECURE_SSL_REDIRECT=True ломает widget-тесты».
 """
 
-from .settings import *  # noqa: F401,F403
+from .settings import *
 
 # ── ALLOWED_HOSTS: Django test Client по умолчанию шлёт HOST=testserver.
 # Прод-settings имеет узкий whitelist без testserver → все view-тесты
@@ -54,6 +54,6 @@ PASSWORD_HASHERS = [
 MESSENGER_WIDGET_STRICT_ORIGIN = False
 
 # ── Логирование: не шумим в тестах ──
-import logging  # noqa: E402
+import logging
 
 logging.disable(logging.CRITICAL)

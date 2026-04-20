@@ -1,7 +1,8 @@
 from django.test import TestCase
+
 from accounts.models import Branch
-from messenger.models import Conversation, Contact, Inbox
 from companies.models import Company
+from messenger.models import Contact, Conversation, Inbox
 
 
 class ConversationCompanyFieldTests(TestCase):

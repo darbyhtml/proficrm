@@ -4,12 +4,13 @@ URL configuration for messenger app.
 
 from django.urls import path
 
-from . import views
 from messenger.api import (
     branches_list_view,
     heartbeat_view,
     transfer_conversation,
 )
+
+from . import views
 
 urlpatterns = [
     path("widget-demo/", views.widget_demo, name="messenger_widget_demo"),

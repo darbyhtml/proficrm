@@ -8,4 +8,4 @@ class MessengerConfig(AppConfig):
 
     def ready(self):
         # Подключаем сигналы (автоназначение диалога и т.п.).
-        from messenger import signals  # noqa: F401
+        from messenger import signals

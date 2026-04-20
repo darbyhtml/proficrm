@@ -1,4 +1,9 @@
 from __future__ import annotations
+
+import logging
+
+from django.conf import settings
+
 from ui.views._base import (
     ActivityEvent,
     Branch,
@@ -33,8 +38,6 @@ from ui.views._base import (
     timedelta,
     timezone,
 )
-from django.conf import settings
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +65,9 @@ def settings_dashboard(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def settings_announcements(request: HttpRequest) -> HttpResponse:
-    from notifications.models import CrmAnnouncement, CrmAnnouncementRead
     from django.contrib.auth import get_user_model
+
+    from notifications.models import CrmAnnouncement, CrmAnnouncementRead
 
     User = get_user_model()
 
@@ -148,8 +152,7 @@ def settings_access(request: HttpRequest) -> HttpResponse:
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
-    from policy.models import PolicyConfig
-    from policy.models import PolicyRule
+    from policy.models import PolicyConfig, PolicyRule
 
     cfg = PolicyConfig.load()
     rules_total = PolicyRule.objects.filter(enabled=True).count()
@@ -630,8 +633,8 @@ def settings_users(request: HttpRequest) -> HttpResponse:
         )
 
     # Получаем информацию об активных сессиях для определения онлайн статуса
-    from django.contrib.sessions.models import Session
     from django.contrib.auth import SESSION_KEY
+    from django.contrib.sessions.models import Session
 
     recently_online_threshold = timezone.now() - timedelta(minutes=15)
 
@@ -916,8 +919,8 @@ def settings_user_edit(request: HttpRequest, user_id: int) -> HttpResponse:
         form = UserEditForm(instance=u)
 
     # Получаем информацию о сессиях пользователя
-    from django.contrib.sessions.models import Session
     from django.contrib.auth import SESSION_KEY
+    from django.contrib.sessions.models import Session
 
     active_sessions = []
     for session in Session.objects.filter(expire_date__gte=timezone.now()):
@@ -963,7 +966,7 @@ def settings_user_magic_link_generate(request: HttpRequest, user_id: int) -> Htt
     admin_user: User = request.user
 
     # Rate limiting: не чаще 1 раза в 10 секунд на пользователя
-    from accounts.security import is_ip_rate_limited, get_client_ip
+    from accounts.security import get_client_ip, is_ip_rate_limited
 
     ip = get_client_ip(request)
     cache_key = f"magic_link_generate_rate:{user_id}"
@@ -975,8 +978,9 @@ def settings_user_magic_link_generate(request: HttpRequest, user_id: int) -> Htt
     cache.set(cache_key, True, 10)
 
     # Генерируем токен
-    from accounts.models import MagicLinkToken
     from django.conf import settings as django_settings
+
+    from accounts.models import MagicLinkToken
 
     magic_link, plain_token = MagicLinkToken.create_for_user(
         user=user,
@@ -1053,8 +1057,8 @@ def settings_user_logout(request: HttpRequest, user_id: int) -> HttpResponse:
 
     if request.method == "POST":
         # Удаляем все сессии пользователя
-        from django.contrib.sessions.models import Session
         from django.contrib.auth import SESSION_KEY
+        from django.contrib.sessions.models import Session
 
         sessions_deleted = 0
         for session in Session.objects.filter(expire_date__gte=timezone.now()):
@@ -1576,8 +1580,9 @@ def settings_error_log(request: HttpRequest) -> HttpResponse:
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
-    from audit.models import ErrorLog
     from django.db.models import Q
+
+    from audit.models import ErrorLog
 
     # Фильтры
     level_filter = request.GET.get("level", "")
@@ -1643,8 +1648,9 @@ def settings_error_log_resolve(request: HttpRequest, error_id) -> HttpResponse:
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
-    from audit.models import ErrorLog
     from django.utils import timezone
+
+    from audit.models import ErrorLog
 
     error = get_object_or_404(ErrorLog, id=error_id)
 

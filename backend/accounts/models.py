@@ -1,9 +1,10 @@
+import hashlib
+import secrets
+from datetime import timedelta
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
-from datetime import timedelta
-import hashlib
-import secrets
 
 
 class Branch(models.Model):
@@ -102,6 +103,7 @@ class User(AbstractUser):
         диалоги отсутствующим сотрудникам, даже если их CRM-вкладка открыта.
         """
         from django.utils import timezone
+
         from accounts.models import UserAbsence
 
         today = on_date or timezone.localdate()
@@ -204,7 +206,7 @@ class MagicLinkToken(models.Model):
 
 
 # Справочник регионов подразделений (в отдельном файле чтобы не раздувать models.py)
-from accounts.models_region import BranchRegion  # noqa: E402, F401
+from accounts.models_region import BranchRegion
 
 
 class UserAbsence(models.Model):

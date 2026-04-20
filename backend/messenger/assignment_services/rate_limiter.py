@@ -4,10 +4,11 @@ Rate Limiter для ограничения количества назначен
 Предотвращает перегрузку одного оператора множественными назначениями.
 """
 
+from datetime import timedelta
 from typing import Optional
+
 from django.core.cache import cache
 from django.utils import timezone
-from datetime import timedelta
 
 
 class AssignmentRateLimiter:

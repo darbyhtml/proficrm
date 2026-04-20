@@ -20,8 +20,8 @@ from companies.models import Company, ContactEmail
 from mailer.constants import COOLDOWN_DAYS_DEFAULT
 from mailer.forms import CampaignGenerateRecipientsForm, CampaignRecipientAddForm
 from mailer.models import Campaign, CampaignQueue, CampaignRecipient, EmailCooldown, Unsubscribe
-from policy.engine import enforce
 from mailer.views._helpers import _can_manage_campaign
+from policy.engine import enforce
 
 logger = logging.getLogger(__name__)
 

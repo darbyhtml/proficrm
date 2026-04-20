@@ -2,9 +2,11 @@
 Unit-тесты для модуля безопасности (accounts.security).
 """
 
-from django.test import TestCase, RequestFactory
 from unittest.mock import patch
-from accounts.security import get_client_ip, _is_valid_ip
+
+from django.test import RequestFactory, TestCase
+
+from accounts.security import _is_valid_ip, get_client_ip
 
 
 class SecurityTests(TestCase):

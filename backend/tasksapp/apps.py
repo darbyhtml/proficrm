@@ -7,4 +7,4 @@ class TasksappConfig(AppConfig):
     verbose_name = "Задачи"
 
     def ready(self):
-        import tasksapp.signals  # noqa
+        import tasksapp.signals

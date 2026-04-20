@@ -29,7 +29,7 @@ class PolicyConfig(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     @classmethod
-    def load(cls) -> "PolicyConfig":
+    def load(cls) -> PolicyConfig:
         obj, _ = cls.objects.get_or_create(id=1, defaults={"mode": cls.Mode.OBSERVE_ONLY})
         return obj
 

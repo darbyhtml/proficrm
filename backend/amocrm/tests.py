@@ -11,18 +11,19 @@ try:
 except ImportError:
     pytest = None
 
-from amocrm.client import AmoClient, AmoApiError, RateLimitError, AmoResponse
+from datetime import UTC
+
+from amocrm.client import AmoApiError, AmoClient, AmoResponse, RateLimitError
 from amocrm.migrate import (
-    normalize_phone,
-    sanitize_name,
-    looks_like_phone_for_position,
     NormalizedPhone,
-    is_valid_phone,
     extract_phone_from_text,
+    is_valid_phone,
+    looks_like_phone_for_position,
+    normalize_phone,
     parse_skynet_phones,
+    sanitize_name,
 )
 from ui.models import AmoApiConfig
-
 
 if pytest is not None:
     # TestAmoClientRateLimit использует @pytest.fixture и pytest.raises — без pytest класс не определяем
@@ -313,7 +314,6 @@ class TestNormalizePhone(unittest.TestCase):
 
     def test_is_valid_phone(self):
         """Тест: функция is_valid_phone для строгой проверки."""
-        from amocrm.migrate import is_valid_phone
 
         # Валидные телефоны
         assert is_valid_phone("+7 495 632-21-97")
@@ -328,7 +328,6 @@ class TestNormalizePhone(unittest.TestCase):
 
     def test_extract_phone_from_text(self):
         """Тест: функция extract_phone_from_text извлекает телефон из текста."""
-        from amocrm.migrate import extract_phone_from_text
 
         # Телефон в тексте
         phone, cleaned = extract_phone_from_text("+7 495 632-21-97")
@@ -491,7 +490,6 @@ class TestContactDataQuality(unittest.TestCase):
         from amocrm.migrate import (
             looks_like_phone_for_position,
             normalize_phone,
-            extract_phone_from_text,
         )
 
         position_value = "+7 495 632-21-97"
@@ -511,7 +509,7 @@ class TestContactDataQuality(unittest.TestCase):
 
     def test_phone_text_never_in_phone(self):
         """Тест: PHONE='только через приемную! мини АТС' -> телефон не добавлен, текст ушёл в note."""
-        from amocrm.migrate import normalize_phone, is_valid_phone
+        from amocrm.migrate import normalize_phone
 
         text = "только через приемную! мини АТС"
 
@@ -554,14 +552,15 @@ class TestContactDataQuality(unittest.TestCase):
 
     def test_cold_call_date_no_shift(self):
         """Тест: epoch seconds -> корректный YYYY-MM-DD, без TZ сдвига."""
-        from django.utils import timezone
         from datetime import timezone as dt_timezone
+
+        from django.utils import timezone
 
         # Тест для timestamp около полуночи (проверка сдвига)
         # 2024-01-15 23:30:00 UTC -> должно стать 2024-01-15 00:00:00 UTC
         timestamp = 1705361400  # 2024-01-15 23:30:00 UTC (исправлено: было 1705368600 = 2024-01-16 01:30 UTC)
 
-        UTC = getattr(timezone, "UTC", dt_timezone.utc)
+        UTC = getattr(timezone, "UTC", UTC)
         dt_utc = timezone.datetime.fromtimestamp(timestamp, tz=UTC)
         normalized = dt_utc.replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -577,11 +576,11 @@ class TestNotesBulkFallback(unittest.TestCase):
     def test_bulk_notes_404_fallback(self):
         """Тест: bulk endpoint возвращает 404 -> код переключается на per-company и не падает."""
         from unittest.mock import Mock, patch
-        from amocrm.client import AmoClient, AmoApiError
-        from amocrm.migrate import fetch_notes_for_companies, _notes_bulk_supported
 
         # Сбрасываем глобальный флаг
         import amocrm.migrate as migrate_module
+        from amocrm.client import AmoApiError, AmoClient
+        from amocrm.migrate import _notes_bulk_supported, fetch_notes_for_companies
 
         migrate_module._notes_bulk_supported = None
 
@@ -617,10 +616,10 @@ class TestNotesBulkFallback(unittest.TestCase):
     def test_bulk_notes_no_retry_after_404(self):
         """Тест: при повторном вызове в рамках запуска bulk больше не вызывается."""
         from unittest.mock import Mock, patch
-        from amocrm.migrate import fetch_notes_for_companies, _notes_bulk_supported
 
         # Сбрасываем глобальный флаг
         import amocrm.migrate as migrate_module
+        from amocrm.migrate import _notes_bulk_supported, fetch_notes_for_companies
 
         migrate_module._notes_bulk_supported = None
 
@@ -643,6 +642,7 @@ class TestPaginationTruncated(unittest.TestCase):
     def test_pagination_truncated_flag(self):
         """Тест: при достижении max_pages выставляется флаг 'truncated' и логируется warning."""
         from unittest.mock import Mock, patch
+
         from amocrm.client import AmoClient
 
         mock_client = Mock(spec=AmoClient)
@@ -676,6 +676,7 @@ class TestFetchCompaniesByResponsible(unittest.TestCase):
     def test_fetch_companies_by_responsible_without_return_meta(self):
         """Тест: вызов без return_meta возвращает только список (обратная совместимость)."""
         from unittest.mock import Mock
+
         from amocrm.migrate import fetch_companies_by_responsible
 
         mock_client = Mock()
@@ -691,6 +692,7 @@ class TestFetchCompaniesByResponsible(unittest.TestCase):
     def test_fetch_companies_by_responsible_with_return_meta(self):
         """Тест: вызов с return_meta=True возвращает tuple (list, meta)."""
         from unittest.mock import Mock
+
         from amocrm.migrate import fetch_companies_by_responsible
 
         mock_client = Mock()
@@ -711,6 +713,7 @@ class TestFetchCompaniesByResponsible(unittest.TestCase):
     def test_fetch_companies_by_responsible_no_unexpected_keyword_error(self):
         """Тест: вызов с return_meta не должен вызывать 'unexpected keyword argument'."""
         from unittest.mock import Mock
+
         from amocrm.migrate import fetch_companies_by_responsible
 
         mock_client = Mock()
@@ -732,11 +735,11 @@ class TestNotesBulk404Fallback(unittest.TestCase):
     def test_bulk_notes_404_graceful_fallback(self):
         """Тест: 404 на bulk notes → graceful fallback на per-company, без падения миграции."""
         from unittest.mock import Mock
-        from amocrm.client import AmoApiError
-        from amocrm.migrate import fetch_notes_for_companies, _notes_bulk_supported
 
         # Сбрасываем глобальный флаг
         import amocrm.migrate as migrate_module
+        from amocrm.client import AmoApiError
+        from amocrm.migrate import _notes_bulk_supported, fetch_notes_for_companies
 
         migrate_module._notes_bulk_supported = None
 
@@ -768,11 +771,11 @@ class TestNotesBulk404Fallback(unittest.TestCase):
     def test_bulk_notes_405_also_triggers_fallback(self):
         """Тест: 405 (Method Not Allowed) также триггерит fallback."""
         from unittest.mock import Mock
-        from amocrm.client import AmoApiError
-        from amocrm.migrate import fetch_notes_for_companies_bulk, _notes_bulk_supported
 
         # Сбрасываем глобальный флаг
         import amocrm.migrate as migrate_module
+        from amocrm.client import AmoApiError
+        from amocrm.migrate import _notes_bulk_supported, fetch_notes_for_companies_bulk
 
         migrate_module._notes_bulk_supported = None
 
@@ -789,7 +792,7 @@ class TestNotesBulk404Fallback(unittest.TestCase):
 
     def test_phone_text_never_in_phone(self):
         """Тест: текст 'только через приемную! мини АТС' НЕ попадает в PHONE, только в NOTE."""
-        from amocrm.migrate import normalize_phone, is_valid_phone
+        from amocrm.migrate import normalize_phone
 
         # Проверяем, что текст не валиден как телефон
         text = "только через приемную! мини АТС"
@@ -821,8 +824,9 @@ class TestMainPhoneCommentMerge(unittest.TestCase):
 
     def setUp(self):
         """Создаём тестовую компанию."""
-        from companies.models import Company, CompanyPhone
         from django.contrib.auth import get_user_model
+
+        from companies.models import Company, CompanyPhone
 
         User = get_user_model()
 
@@ -848,8 +852,8 @@ class TestMainPhoneCommentMerge(unittest.TestCase):
 
     def test_main_phone_comment_from_regular_phone(self):
         """Тест: основной номер + комментарий из обычного телефона -> phone_comment обновляется, CompanyPhone не создаётся."""
+        from amocrm.migrate import merge_comment_segments, parse_phone_value
         from companies.models import CompanyPhone
-        from amocrm.migrate import parse_phone_value, merge_comment_segments
         from companies.normalizers import normalize_phone as _normalize_phone
 
         # Парсим телефон с комментарием
@@ -887,8 +891,8 @@ class TestMainPhoneCommentMerge(unittest.TestCase):
 
     def test_main_phone_comment_from_skynet(self):
         """Тест: основной номер + комментарий из Skynet -> phone_comment обновляется, CompanyPhone не создаётся."""
-        from companies.models import CompanyPhone
         from amocrm.migrate import merge_comment_segments
+        from companies.models import CompanyPhone
         from companies.normalizers import normalize_phone as _normalize_phone
 
         # Симулируем Skynet телефон с комментарием

@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import json
+
 from django.core.cache import cache
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.utils import timezone
 
-from notifications.service import notify
-from notifications.models import Notification
-from .models import Task, TaskType
 from accounts.models import User
+from notifications.models import Notification
+from notifications.service import notify
+
+from .models import Task, TaskType
 
 
 @receiver(post_save, sender=TaskType)

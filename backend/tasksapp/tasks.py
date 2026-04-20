@@ -108,6 +108,7 @@ def generate_recurring_tasks():
 
 def _generate_recurring_tasks_inner():
     from django.db import transaction
+
     from tasksapp.models import Task
 
     now = timezone.now()
@@ -155,6 +156,7 @@ def _process_template(template, now, horizon) -> int:
     """Обработка одного шаблона внутри открытой транзакции. Возвращает
     количество созданных экземпляров."""
     from django.db import IntegrityError, transaction
+
     from tasksapp.models import Task
 
     # dtstart = оригинальная точка отсчёта правила (для корректного COUNT/UNTIL)

@@ -4,13 +4,20 @@ import tempfile
 import uuid
 from unittest.mock import patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.urls import reverse
 from django.utils import timezone
-from django.core.files.uploadedfile import SimpleUploadedFile
 
 from accounts.models import User
+from mailer.constants import (
+    DEFER_REASON_DAILY_LIMIT,
+    DEFER_REASON_OUTSIDE_HOURS,
+    DEFER_REASON_QUOTA,
+    DEFER_REASON_RATE_HOUR,
+    DEFER_REASON_TRANSIENT_ERROR,
+)
 from mailer.forms import CampaignForm, EmailSignatureForm
 from mailer.models import (
     Campaign,
@@ -22,19 +29,12 @@ from mailer.models import (
     Unsubscribe,
     UnsubscribeToken,
 )
-from mailer.utils import sanitize_email_html, get_next_send_window_start, msk_day_bounds
-from mailer.constants import (
-    DEFER_REASON_DAILY_LIMIT,
-    DEFER_REASON_QUOTA,
-    DEFER_REASON_OUTSIDE_HOURS,
-    DEFER_REASON_RATE_HOUR,
-    DEFER_REASON_TRANSIENT_ERROR,
-)
 from mailer.services.queue import defer_queue
 from mailer.services.rate_limiter import (
-    reserve_rate_limit_token,
     get_effective_quota_available,
+    reserve_rate_limit_token,
 )
+from mailer.utils import get_next_send_window_start, msk_day_bounds, sanitize_email_html
 
 
 class MailerBaseTestCase(TestCase):
@@ -316,6 +316,7 @@ class MailerAttachmentRecoveryTests(TestCase):
     def test_attachment_case_mismatch_is_recovered(self):
         """На Linux-чувствительной FS восстанавливает путь при расхождении регистра."""
         import platform
+
         from mailer.tasks import _get_campaign_attachment_bytes
 
         user = User.objects.create_user(
@@ -399,8 +400,8 @@ class MailerDeferDailyLimitTests(TestCase):
         cfg.save()
 
     def test_get_next_send_window_start_tomorrow(self):
-        from zoneinfo import ZoneInfo
         from datetime import datetime
+        from zoneinfo import ZoneInfo
 
         # 20:00 МСК -> завтра 09:00
         msk = ZoneInfo("Europe/Moscow")
@@ -670,6 +671,7 @@ class MailerRaceConditionTests(TestCase):
     def test_two_workers_cannot_send_same_email(self):
         """Два воркера не могут отправить одно и то же письмо (используется skip_locked=True)."""
         from django.db import transaction
+
         from mailer.models import CampaignRecipient
 
         camp = Campaign.objects.create(
@@ -755,8 +757,9 @@ class MailerCampaignCompletionTests(MailerBaseTestCase):
         )
 
         # Имитируем завершение кампании (нет pending)
-        from mailer.tasks import send_pending_emails
         from unittest.mock import patch
+
+        from mailer.tasks import send_pending_emails
 
         with patch("mailer.tasks.send.cache.add", return_value=True):
             with patch("mailer.tasks.send.cache.delete"):
@@ -858,9 +861,10 @@ class MailerOutsideHoursDeferTests(TestCase):
     @patch("mailer.tasks.send.cache.delete")
     def test_outside_hours_uses_defer_queue(self, _del, _add):
         """outside_hours использует defer_queue и фиксирует deferred_until."""
-        from mailer.tasks import send_pending_emails
-        from zoneinfo import ZoneInfo
         from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        from mailer.tasks import send_pending_emails
 
         camp = Campaign.objects.create(
             created_by=self.user,
@@ -1388,8 +1392,9 @@ class MailerSettingsOverrideTests(TestCase):
 
     def test_batch_size_from_settings(self):
         """send_pending_emails без аргумента берёт batch_size из settings."""
-        from mailer.tasks.send import send_pending_emails
         import inspect
+
+        from mailer.tasks.send import send_pending_emails
 
         # При вызове .run() без аргументов должен использоваться settings.MAILER_SEND_BATCH_SIZE
         # Проверяем через patch что реальный код использует нужный размер батча
@@ -1513,9 +1518,10 @@ class MailerReconcileTests(TestCase):
 
     def test_reconcile_resets_stuck_processing(self):
         """Queue PROCESSING зависла (started_at давно) → сбрасывается в PENDING."""
-        from mailer.tasks import reconcile_campaign_queue
-        from mailer.constants import STUCK_CAMPAIGN_TIMEOUT_MINUTES
         from datetime import timedelta
+
+        from mailer.constants import STUCK_CAMPAIGN_TIMEOUT_MINUTES
+        from mailer.tasks import reconcile_campaign_queue
 
         camp = self._make_camp(Campaign.Status.SENDING)
         CampaignRecipient.objects.create(
@@ -1556,8 +1562,8 @@ class MailerNotificationHelpersTests(TestCase):
 
     def test_notify_helpers_importable(self):
         from mailer.tasks.helpers import (
-            _notify_campaign_started,
             _notify_campaign_finished,
+            _notify_campaign_started,
             _notify_circuit_breaker_tripped,
         )
 
@@ -1613,9 +1619,10 @@ class MailerNotificationHelpersTests(TestCase):
 
     def test_process_batch_recipients_marks_unsubscribed(self):
         """Получатель из unsub_set помечается как UNSUBSCRIBED без отправки."""
-        from mailer.tasks.helpers import _process_batch_recipients
-        from mailer.models import MailAccount
         from unittest.mock import MagicMock
+
+        from mailer.models import MailAccount
+        from mailer.tasks.helpers import _process_batch_recipients
 
         camp = Campaign.objects.create(
             created_by=self.user,
@@ -1717,7 +1724,7 @@ class MailerViewsPackageTests(TestCase):
 
     def test_send_step_url_removed(self):
         """URL campaign_send_step удалён из urls.py (был dead code)."""
-        from django.urls import reverse, NoReverseMatch
+        from django.urls import NoReverseMatch, reverse
 
         with self.assertRaises(NoReverseMatch):
             reverse(
@@ -1870,9 +1877,10 @@ class MailerSendAtSchedulingTests(TestCase):
 
     def test_campaign_with_future_send_at_is_excluded(self):
         """Кампания с send_at в будущем НЕ выбирается из очереди."""
+        from datetime import timedelta
+
         from django.db.models import Q
         from django.utils import timezone
-        from datetime import timedelta
 
         future = timezone.now() + timedelta(hours=2)
         camp = self._make_campaign_with_recipients(send_at=future)
@@ -1889,9 +1897,10 @@ class MailerSendAtSchedulingTests(TestCase):
 
     def test_campaign_with_past_send_at_is_picked(self):
         """Кампания с send_at в прошлом выбирается из очереди."""
+        from datetime import timedelta
+
         from django.db.models import Q
         from django.utils import timezone
-        from datetime import timedelta
 
         past = timezone.now() - timedelta(hours=1)
         camp = self._make_campaign_with_recipients(send_at=past)
@@ -2221,8 +2230,8 @@ class MailerCampaignsPackageSplitTests(TestCase):
 
     def test_campaigns_is_package_not_module(self):
         """mailer.views.campaigns — это пакет (директория с __init__.py)."""
-        import sys
         import importlib
+        import sys
 
         # Гарантируем свежую загрузку
         mod = sys.modules.get("mailer.views.campaigns")
@@ -2236,17 +2245,17 @@ class MailerCampaignsPackageSplitTests(TestCase):
         )
 
     def test_list_detail_submodule_importable(self):
-        from mailer.views.campaigns.list_detail import campaigns, campaign_detail
+        from mailer.views.campaigns.list_detail import campaign_detail, campaigns
 
         self.assertTrue(callable(campaigns))
         self.assertTrue(callable(campaign_detail))
 
     def test_crud_submodule_importable(self):
         from mailer.views.campaigns.crud import (
-            campaign_create,
-            campaign_edit,
-            campaign_delete,
             campaign_clone,
+            campaign_create,
+            campaign_delete,
+            campaign_edit,
         )
 
         for fn in (campaign_create, campaign_edit, campaign_delete, campaign_clone):
@@ -2254,10 +2263,10 @@ class MailerCampaignsPackageSplitTests(TestCase):
 
     def test_files_submodule_importable(self):
         from mailer.views.campaigns.files import (
-            campaign_html_preview,
-            campaign_attachment_download,
             campaign_attachment_delete,
+            campaign_attachment_download,
             campaign_export_failed,
+            campaign_html_preview,
             campaign_retry_failed,
         )
 
@@ -2272,8 +2281,8 @@ class MailerCampaignsPackageSplitTests(TestCase):
 
     def test_templates_submodule_importable(self):
         from mailer.views.campaigns.templates_views import (
-            campaign_save_as_template,
             campaign_create_from_template,
+            campaign_save_as_template,
             campaign_template_delete,
             campaign_templates,
         )
@@ -2288,7 +2297,8 @@ class MailerCampaignsPackageSplitTests(TestCase):
 
     def test_package_exports_all_views(self):
         """Пакет campaigns экспортирует все view-функции через __all__."""
-        import sys, importlib
+        import importlib
+        import sys
 
         mod = sys.modules.get("mailer.views.campaigns")
         if mod is None:
@@ -2307,6 +2317,7 @@ class MailerExponentialBackoffTests(TestCase):
     def test_backoff_grows_exponentially(self):
         """Задержка растёт экспоненциально с каждой ошибкой (2^(n-1) * base)."""
         from django.conf import settings
+
         from mailer.constants import TRANSIENT_RETRY_DELAY_MINUTES
 
         base = getattr(
@@ -2322,6 +2333,7 @@ class MailerExponentialBackoffTests(TestCase):
     def test_backoff_capped_at_60_minutes(self):
         """Задержка не превышает 60 минут при большом числе ошибок."""
         from django.conf import settings
+
         from mailer.constants import TRANSIENT_RETRY_DELAY_MINUTES
 
         base = getattr(

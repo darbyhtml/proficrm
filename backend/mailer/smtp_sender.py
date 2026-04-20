@@ -1,15 +1,14 @@
 from __future__ import annotations
 
+import base64
+import re
 import smtplib
 import ssl
-import re
-import base64
 from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
+from typing import Optional, Protocol
 
 from django.conf import settings
-
-from typing import Optional, Protocol
 
 from mailer.models import MailAccount
 
@@ -96,12 +95,12 @@ def build_message(
     subject: str,
     body_text: str,
     body_html: str,
-    from_email: Optional[str] = None,
-    from_name: Optional[str] = None,
-    reply_to: Optional[str] = None,
-    attachment: Optional[any] = None,
-    attachment_content: Optional[bytes] = None,
-    attachment_filename: Optional[str] = None,
+    from_email: str | None = None,
+    from_name: str | None = None,
+    reply_to: str | None = None,
+    attachment: any | None = None,
+    attachment_content: bytes | None = None,
+    attachment_filename: str | None = None,
 ) -> EmailMessage:
     msg = EmailMessage()
     msg["Subject"] = _sanitize_header(subject or "")
@@ -292,7 +291,7 @@ def open_smtp_connection(account: _SmtpAccountLike) -> smtplib.SMTP:
 
 
 def send_via_smtp(
-    account: _SmtpAccountLike, msg: EmailMessage, *, smtp: Optional[smtplib.SMTP] = None
+    account: _SmtpAccountLike, msg: EmailMessage, *, smtp: smtplib.SMTP | None = None
 ) -> None:
     """
     Отправляет письмо через SMTP с улучшенной обработкой ошибок.

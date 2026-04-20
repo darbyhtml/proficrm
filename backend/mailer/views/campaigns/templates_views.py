@@ -12,10 +12,10 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from accounts.models import User
-from mailer.models import Campaign
 from accounts.permissions import require_admin
-from policy.engine import enforce
+from mailer.models import Campaign
 from mailer.views._helpers import _can_manage_campaign
+from policy.engine import enforce
 
 logger = logging.getLogger(__name__)
 

@@ -21,7 +21,7 @@ import json
 import logging
 import threading
 import uuid
-from datetime import datetime, time, timezone
+from datetime import UTC, datetime, time, timezone
 
 from cryptography.fernet import Fernet
 from django.test import RequestFactory, TestCase, override_settings
@@ -34,7 +34,6 @@ from rest_framework.exceptions import (
 )
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
-
 
 # ────────────────────────────────────────────────────────────────────────────
 # Вспомогательная утилита для генерации валидного Fernet-ключа
@@ -811,7 +810,7 @@ class NormalizeWorkScheduleTest(TestCase):
 class GetWorktimeStatusTest(TestCase):
     """Тесты функции get_worktime_status_from_schedule."""
 
-    _TZ = timezone.utc
+    _TZ = UTC
 
     def _status(self, schedule_text: str, now: datetime):
         from core.work_schedule_utils import get_worktime_status_from_schedule

@@ -18,13 +18,15 @@ from django.core.validators import validate_email
 from django.utils import timezone
 
 from accounts.models import User
-from .models import Conversation, Message, Contact
+
+from .models import Contact, Conversation, Message
 
 if TYPE_CHECKING:
     # Type-only импорты для forward references в сигнатурах функций.
     # Не создают circular import при выполнении.
-    from accounts.models import Branch  # noqa: F401
-    from .models import Inbox  # noqa: F401
+    from accounts.models import Branch
+
+    from .models import Inbox
 from .integrations import notify_message
 from .reporting import record_first_response, record_reply_time
 
@@ -33,7 +35,7 @@ logger = logging.getLogger(__name__)
 _PHONE_NORMALIZED_RE = re.compile(r"^\+?\d{7,15}$")
 
 
-def _normalize_contact_email(email: Optional[str]) -> str:
+def _normalize_contact_email(email: str | None) -> str:
     """Normalize email: lower/strip. Возвращает '' если пусто или невалидно."""
     if not email:
         return ""
@@ -46,7 +48,7 @@ def _normalize_contact_email(email: Optional[str]) -> str:
     return value
 
 
-def _normalize_contact_phone(phone: Optional[str]) -> str:
+def _normalize_contact_phone(phone: str | None) -> str:
     """Normalize phone в E.164-ish. Возвращает '' если пусто или невалидно."""
     if not phone:
         return ""
@@ -162,10 +164,10 @@ def record_message(
     conversation: Conversation,
     direction: str,
     body: str,
-    sender_user: Optional[User] = None,
-    sender_contact: Optional[Contact] = None,
-    content_attributes: Optional[dict] = None,
-    source_id: Optional[str] = None,
+    sender_user: User | None = None,
+    sender_contact: Contact | None = None,
+    content_attributes: dict | None = None,
+    source_id: str | None = None,
 ) -> Message:
     """
     Создаёт сообщение в диалоге и обновляет last_activity_at (по образцу Chatwoot).
@@ -286,7 +288,7 @@ def assign_conversation(conversation: Conversation, user: User) -> None:
             pass  # push не критичен
 
 
-def auto_assign_conversation(conversation: Conversation) -> Optional[User]:
+def auto_assign_conversation(conversation: Conversation) -> User | None:
     """
     Автоназначение диалога оператору филиала через Round-Robin список (по образцу Chatwoot).
 
@@ -302,11 +304,13 @@ def auto_assign_conversation(conversation: Conversation) -> Optional[User]:
         для равномерного распределения с учётом Rate Limiter.
         Защищено от race condition через select_for_update.
     """
-    from django.db.models import Q, Count
+    from django.db.models import Count, Q
+
     from accounts.models import Branch
-    from .models import AgentProfile
-    from messenger.assignment_services.round_robin import BranchRoundRobinService
     from messenger.assignment_services.rate_limiter import default_rate_limiter
+    from messenger.assignment_services.round_robin import BranchRoundRobinService
+
+    from .models import AgentProfile
 
     branch_id = conversation.branch_id
     open_statuses = [Conversation.Status.OPEN, Conversation.Status.PENDING]
@@ -423,6 +427,7 @@ def has_online_operators_for_branch(branch_id: int, inbox_id: int) -> bool:
         Используется для проверки возможности автоназначения перед вызовом auto_assign_conversation.
     """
     from django.db.models import Q
+
     from .models import AgentProfile
 
     return (
@@ -441,9 +446,9 @@ def has_online_operators_for_branch(branch_id: int, inbox_id: int) -> bool:
 
 
 def select_routing_rule(
-    inbox: "Inbox",
-    region: "Optional[object]" = None,
-) -> "Optional[object]":
+    inbox: Inbox,
+    region: object | None = None,
+) -> object | None:
     """
     Выбрать правило маршрутизации для inbox и region.
 
@@ -500,6 +505,7 @@ def get_default_branch_for_messenger():
         Результат кэшируется для оптимизации.
     """
     from django.conf import settings
+
     from accounts.models import Branch
 
     # Кэширование для оптимизации (по образцу Chatwoot)
@@ -545,8 +551,9 @@ def get_conversations_eligible_for_escalation(timeout_seconds: int = 240):
         - С момента назначения прошло не менее timeout_seconds
         - Используется assignee_assigned_at, при его отсутствии — created_at
     """
-    from django.utils import timezone
     from datetime import timedelta
+
+    from django.utils import timezone
 
     threshold = timezone.now() - timedelta(seconds=timeout_seconds)
     qs = Conversation.objects.filter(
@@ -564,7 +571,7 @@ def get_conversations_eligible_for_escalation(timeout_seconds: int = 240):
     return qs
 
 
-def escalate_conversation(conversation: Conversation) -> Optional[User]:
+def escalate_conversation(conversation: Conversation) -> User | None:
     """
     Переназначить диалог следующему оператору через Round-Robin (по образцу Chatwoot).
 
@@ -579,11 +586,13 @@ def escalate_conversation(conversation: Conversation) -> Optional[User]:
         что и в auto_assign, но без текущего assignee.
         Защищено от race condition через select_for_update.
     """
-    from django.db.models import Q, Count
+    from django.db.models import Count, Q
+
     from accounts.models import Branch
-    from .models import AgentProfile
-    from messenger.assignment_services.round_robin import BranchRoundRobinService
     from messenger.assignment_services.rate_limiter import default_rate_limiter
+    from messenger.assignment_services.round_robin import BranchRoundRobinService
+
+    from .models import AgentProfile
 
     branch_id = conversation.branch_id
     current_assignee_id = conversation.assignee_id
@@ -759,7 +768,7 @@ def touch_contact_last_seen(conversation: Conversation, contact_id) -> timezone.
     return now
 
 
-def transfer_conversation_to_branch(conversation: Conversation, branch: "Branch") -> Optional[User]:
+def transfer_conversation_to_branch(conversation: Conversation, branch: Branch) -> User | None:
     """
     Перенести диалог в другой филиал с автоназначением (по образцу Chatwoot).
 

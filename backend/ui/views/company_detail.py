@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+import logging
+
 from phonebridge.models import CallRequest, PhoneDevice
 from ui.views._base import (
     ActivityEvent,
@@ -48,9 +51,9 @@ from ui.views._base import (
     _detach_client_branches,
     _invalidate_company_count_cache,
     _is_ajax,
-    _safe_next_v3,
     _notify_branch_leads,
     _notify_head_deleted_with_branches,
+    _safe_next_v3,
     format_phone,
     get_object_or_404,
     get_transfer_targets,
@@ -71,7 +74,6 @@ from ui.views._base import (
     transaction,
     validate_email,
 )
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -355,7 +357,7 @@ def company_tasks_history(request: HttpRequest, company_id) -> HttpResponse:
     История выполненных задач по компании (для модального окна в карточке компании).
     Показываем только задачи со статусом DONE, отсортированные от новых к старым.
     """
-    user: User = request.user  # noqa: F841  # зарезервировано на будущее (фильтрация прав)
+    user: User = request.user  # зарезервировано на будущее (фильтрация прав)
     company = get_object_or_404(Company, id=company_id)
 
     tasks = (
@@ -415,8 +417,8 @@ def company_delete_request_create(request: HttpRequest, company_id) -> HttpRespo
         exclude_user_id=user.id,
     )
     # Дополнительно создаём Notification с payload для UI
-    from notifications.service import notify as notify_service
     from notifications.models import Notification
+    from notifications.service import notify as notify_service
 
     branch_leads = User.objects.filter(
         is_active=True,
@@ -563,7 +565,7 @@ def company_delete_request_approve(request: HttpRequest, company_id, req_id: int
         )
 
     # Phase 3 extract: единый workflow удаления.
-    from companies.services import execute_company_deletion, CompanyDeletionError
+    from companies.services import CompanyDeletionError, execute_company_deletion
 
     try:
         execute_company_deletion(
@@ -600,7 +602,7 @@ def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
     reason = (request.POST.get("reason") or "").strip()
 
     # Phase 3 extract: единый workflow удаления в companies.services.
-    from companies.services import execute_company_deletion, CompanyDeletionError
+    from companies.services import CompanyDeletionError, execute_company_deletion
 
     try:
         execute_company_deletion(
@@ -1343,7 +1345,7 @@ def company_main_phone_update(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company.id)
 
     # Phase 2 extract: валидация и duplicate-check вынесены в companies.services.
-    from companies.services import validate_phone_main, check_phone_duplicate
+    from companies.services import check_phone_duplicate, validate_phone_main
 
     normalized, err = validate_phone_main(request.POST.get("phone") or "")
     if err:
@@ -1410,7 +1412,7 @@ def company_phone_value_update(request: HttpRequest, company_phone_id) -> HttpRe
         return redirect("company_detail", company_id=company.id)
 
     # Phase 2 extract: валидация и duplicate-check в companies.services.
-    from companies.services import validate_phone_strict, check_phone_duplicate
+    from companies.services import check_phone_duplicate, validate_phone_strict
 
     normalized, err = validate_phone_strict(request.POST.get("phone") or "")
     if err:
@@ -1507,9 +1509,9 @@ def company_phone_create(request: HttpRequest, company_id) -> HttpResponse:
 
     # Phase 2 extract: валидация/duplicate/comment-check в companies.services.
     from companies.services import (
-        validate_phone_strict,
         check_phone_duplicate,
         validate_phone_comment,
+        validate_phone_strict,
     )
 
     normalized, err = validate_phone_strict(request.POST.get("phone") or "")
@@ -1598,7 +1600,7 @@ def company_main_email_update(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company.id)
 
     # Phase 2 extract: company_emails сервис.
-    from companies.services import validate_email_value, check_email_duplicate
+    from companies.services import check_email_duplicate, validate_email_value
 
     email, err = validate_email_value(
         request.POST.get("email") or "",
@@ -1651,7 +1653,7 @@ def company_email_value_update(request: HttpRequest, company_email_id) -> HttpRe
         return redirect("company_detail", company_id=company.id)
 
     # Phase 2 extract: company_emails сервис.
-    from companies.services import validate_email_value, check_email_duplicate
+    from companies.services import check_email_duplicate, validate_email_value
 
     email, err = validate_email_value(request.POST.get("email") or "")
     if err:
@@ -2168,8 +2170,9 @@ def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
 
     new_resp = get_object_or_404(User, id=new_resp_id, is_active=True)
 
-    from companies.services import CompanyService
     from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
+
+    from companies.services import CompanyService
 
     try:
         CompanyService.transfer(company=company, user=user, new_responsible=new_resp)
@@ -2290,6 +2293,7 @@ def company_inline_update(request: HttpRequest, company_id) -> HttpResponse:
     if field == "work_timezone":
         try:
             from zoneinfo import ZoneInfo
+
             from core.timezone_utils import RUS_TZ_CHOICES, guess_ru_timezone_from_address
 
             guessed = guess_ru_timezone_from_address(company.address or "")

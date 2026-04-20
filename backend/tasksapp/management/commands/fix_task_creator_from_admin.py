@@ -11,8 +11,8 @@
 from __future__ import annotations
 
 from django.core.management.base import BaseCommand
-from django.db.models import Q, F
 from django.db import transaction
+from django.db.models import F, Q
 
 from accounts.models import User
 from tasksapp.models import Task

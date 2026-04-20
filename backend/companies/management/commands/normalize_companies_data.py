@@ -34,7 +34,6 @@ from companies.models import (
 )
 from companies.normalizers import normalize_phone
 
-
 EmailNormalizer = Callable[[Any], Any]
 PhoneNormalizer = Callable[[Any], Any]
 
@@ -67,7 +66,7 @@ class Command(BaseCommand):
 
         self.stdout.write(f"normalize_companies_data: старт (batch_size={batch_size})")
 
-        total_fixed: Dict[str, int] = {}
+        total_fixed: dict[str, int] = {}
 
         # Телефоны
         fixed, scanned = self._normalize_queryset_field(
@@ -156,7 +155,7 @@ class Command(BaseCommand):
         field_name: str,
         normalizer: Callable[[Any], Any],
         batch_size: int,
-    ) -> Tuple[int, int]:
+    ) -> tuple[int, int]:
         """
         Нормализует одно поле в queryset'е, сохраняя только реально изменившиеся записи.
 

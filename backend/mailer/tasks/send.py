@@ -5,14 +5,36 @@ Celery-задачи отправки писем: основная очередь
 from __future__ import annotations
 
 import logging
+from zoneinfo import ZoneInfo
 
 from celery import shared_task
 from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
-from zoneinfo import ZoneInfo
 
+from mailer.constants import (
+    CIRCUIT_BREAKER_THRESHOLD,
+    DEFER_REASON_DAILY_LIMIT,
+    DEFER_REASON_OUTSIDE_HOURS,
+    DEFER_REASON_QUOTA,
+    DEFER_REASON_TRANSIENT_ERROR,
+    MAX_ERROR_MESSAGE_LENGTH,
+    PER_USER_DAILY_LIMIT_DEFAULT,
+    QUOTA_RECHECK_MINUTES,
+    SEND_BATCH_SIZE_DEFAULT,
+    SEND_TASK_LOCK_TIMEOUT,
+    SMTP_BZ_EMAILS_LIMIT_DEFAULT,
+    SMTP_BZ_MAX_PER_HOUR_DEFAULT,
+    TRANSIENT_RETRY_DELAY_MINUTES,
+    WORKING_HOURS_END,
+    WORKING_HOURS_START,
+)
+from mailer.logging_utils import get_pii_log_fields
+from mailer.mail_content import (
+    apply_signature,
+    ensure_unsubscribe_tokens,
+)
 from mailer.models import (
     Campaign,
     CampaignQueue,
@@ -24,42 +46,20 @@ from mailer.models import (
     Unsubscribe,
     UserDailyLimitStatus,
 )
-from mailer.smtp_sender import build_message, send_via_smtp
-from mailer.utils import html_to_text, msk_day_bounds, get_next_send_window_start
-from mailer.logging_utils import get_pii_log_fields
-from mailer.constants import (
-    PER_USER_DAILY_LIMIT_DEFAULT,
-    WORKING_HOURS_START,
-    WORKING_HOURS_END,
-    DEFER_REASON_DAILY_LIMIT,
-    DEFER_REASON_QUOTA,
-    DEFER_REASON_OUTSIDE_HOURS,
-    DEFER_REASON_TRANSIENT_ERROR,
-    SEND_TASK_LOCK_TIMEOUT,
-    SEND_BATCH_SIZE_DEFAULT,
-    QUOTA_RECHECK_MINUTES,
-    CIRCUIT_BREAKER_THRESHOLD,
-    TRANSIENT_RETRY_DELAY_MINUTES,
-    SMTP_BZ_MAX_PER_HOUR_DEFAULT,
-    SMTP_BZ_EMAILS_LIMIT_DEFAULT,
-    MAX_ERROR_MESSAGE_LENGTH,
-)
-from mailer.mail_content import (
-    apply_signature,
-    ensure_unsubscribe_tokens,
-)
 from mailer.services.queue import defer_queue
+from mailer.smtp_sender import build_message, send_via_smtp
 from mailer.tasks.helpers import (
     _get_campaign_attachment_bytes,
     _is_working_hours,
-    _notify_campaign_started,
-    _notify_campaign_finished,
-    _notify_circuit_breaker_tripped,
     _notify_attachment_error,
+    _notify_campaign_finished,
+    _notify_campaign_started,
+    _notify_circuit_breaker_tripped,
     _process_batch_recipients,
-    reserve_rate_limit_token,
     get_effective_quota_available,
+    reserve_rate_limit_token,
 )
+from mailer.utils import get_next_send_window_start, html_to_text, msk_day_bounds
 
 logger = logging.getLogger(__name__)
 
@@ -304,8 +304,8 @@ def send_pending_emails(self, batch_size: int | None = None):
                     or limit_status.last_notified_date < today_date
                 ):
                     try:
-                        from notifications.service import notify
                         from notifications.models import Notification
+                        from notifications.service import notify
 
                         notify(
                             user=user,
@@ -513,6 +513,7 @@ def send_pending_emails(self, batch_size: int | None = None):
                         )
                     else:
                         from datetime import timedelta
+
                         from django.conf import settings as _rt_settings
 
                         base_delay = getattr(

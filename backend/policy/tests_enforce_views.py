@@ -18,9 +18,9 @@ from __future__ import annotations
 
 import io
 
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
-from django.core.management import call_command
 
 from accounts.models import User
 from policy.models import PolicyConfig

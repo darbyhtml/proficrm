@@ -12,7 +12,7 @@
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from messenger.services import get_conversations_eligible_for_escalation, escalate_conversation
+from messenger.services import escalate_conversation, get_conversations_eligible_for_escalation
 
 
 class Command(BaseCommand):

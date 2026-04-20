@@ -9,11 +9,11 @@
 5. company_note_add — POST: добавление заметки (redirect)
 """
 
-from django.test import TestCase, Client, override_settings
-from django.urls import reverse
 from django.contrib.auth import get_user_model
+from django.test import Client, TestCase, override_settings
+from django.urls import reverse
 
-from companies.models import Company, Contact, CompanyNote
+from companies.models import Company, CompanyNote, Contact
 
 User = get_user_model()
 

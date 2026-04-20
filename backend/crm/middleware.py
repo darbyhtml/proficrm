@@ -5,9 +5,9 @@
 import secrets
 
 from django.conf import settings
-from django.utils.deprecation import MiddlewareMixin
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
+from django.utils.deprecation import MiddlewareMixin
 
 
 class SecurityHeadersMiddleware(MiddlewareMixin):

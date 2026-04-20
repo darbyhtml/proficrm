@@ -1,21 +1,20 @@
 from __future__ import annotations
 
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
-from django.http import HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone
 from datetime import timedelta
 
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
+from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 
-from notifications.models import Notification, CrmAnnouncement, CrmAnnouncementRead
-from notifications.context_processors import notifications_panel
-from tasksapp.models import Task
 from companies.models import Company
+from notifications.context_processors import notifications_panel
+from notifications.models import CrmAnnouncement, CrmAnnouncementRead, Notification
 from policy.engine import enforce
+from tasksapp.models import Task
 
 
 def _safe_redirect_url(request, url, fallback="/"):
@@ -213,8 +212,9 @@ def all_reminders(request: HttpRequest) -> HttpResponse:
     # Все договоры в пределах максимального warning_days
     max_warning_days = 30
     try:
-        from companies.models import ContractType
         from django.db.models import Max
+
+        from companies.models import ContractType
 
         max_warning = ContractType.objects.aggregate(max_warning=Max("warning_days"))
         if max_warning["max_warning"]:

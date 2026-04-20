@@ -4,7 +4,8 @@ from django.db import models
 from django.db.models import F, Q, QuerySet
 
 from accounts.models import User
-from .models import Inbox, Conversation, CannedResponse, Message
+
+from .models import CannedResponse, Conversation, Inbox, Message
 
 
 def visible_inboxes_qs(user: User) -> QuerySet[Inbox]:
@@ -111,8 +112,8 @@ def get_messenger_unread_count(user: User) -> int:
         return 0
 
     # Кэширование для оптимизации (по образцу Chatwoot)
-    from django.core.cache import cache
     from django.conf import settings
+    from django.core.cache import cache
 
     cache_key = f"messenger:unread_count:{user.id}"
     cache_timeout = getattr(settings, "MESSENGER_UNREAD_COUNT_CACHE_TIMEOUT", 30)  # 30 секунд

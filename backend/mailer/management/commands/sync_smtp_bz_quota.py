@@ -4,8 +4,10 @@ Django management command для ручной синхронизации кво�
 """
 
 import logging
+
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+
 from mailer.models import GlobalMailAccount, SmtpBzQuota
 from mailer.smtp_bz_api import get_quota_info
 
@@ -66,5 +68,5 @@ class Command(BaseCommand):
             quota.sync_error = str(e)
             quota.save(update_fields=["sync_error", "updated_at"])
             self.stdout.write(self.style.ERROR("❌ Ошибка синхронизации"))
-            self.stdout.write(self.style.ERROR(f"   Ошибка: {str(e)}"))
+            self.stdout.write(self.style.ERROR(f"   Ошибка: {e!s}"))
             self.stdout.write("   Проверьте логи для подробностей")

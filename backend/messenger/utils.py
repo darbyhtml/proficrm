@@ -1,19 +1,18 @@
 from __future__ import annotations
 
+import random
 import secrets
+import threading
+import time as _time
 from dataclasses import dataclass
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 from django.conf import settings
 from django.core.cache import cache
 from django.http import Http404
 from django.utils import timezone
 from rest_framework import exceptions
-from urllib.parse import urlparse
-import random
-import threading
-import time as _time
-
 
 # ---------------------------------------------------------------------------
 # Fallback cache (на случай падения Redis/cache backend)
@@ -140,7 +139,7 @@ def create_widget_session(
     return WidgetSession(token=token, **data)
 
 
-def get_widget_session(token: str, client_ip: str = "") -> Optional[WidgetSession]:
+def get_widget_session(token: str, client_ip: str = "") -> WidgetSession | None:
     if not token:
         return None
     data = safe_cache_get(_widget_session_cache_key(token))
@@ -172,7 +171,7 @@ def delete_widget_session(token: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def is_within_working_hours(inbox: "Inbox") -> bool:
+def is_within_working_hours(inbox: Inbox) -> bool:
     """
     Проверяет, попадает ли текущее время в рабочие часы inbox.
 

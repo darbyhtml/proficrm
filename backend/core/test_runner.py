@@ -7,6 +7,7 @@ ArrayField defaults).
 """
 
 import logging
+
 from django.test.runner import DiscoverRunner
 
 logger = logging.getLogger(__name__)
@@ -29,9 +30,10 @@ class SQLiteCompatibleTestRunner(DiscoverRunner):
             return super().setup_databases(**kwargs)
 
         import sqlite3 as _sqlite3
+
         import django.db.backends.sqlite3.base as _sqlite_base
         import django.db.backends.sqlite3.schema as _sqlite_schema
-        from django.db.utils import OperationalError, ProgrammingError, DatabaseError
+        from django.db.utils import DatabaseError, OperationalError, ProgrammingError
 
         # --- Патч 1: перехват SQL-ошибок ---
         _orig_execute = _sqlite_base.SQLiteCursorWrapper.execute

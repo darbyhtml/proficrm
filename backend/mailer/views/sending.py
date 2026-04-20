@@ -15,16 +15,16 @@ from django.utils import timezone
 from accounts.models import User
 from audit.models import ActivityEvent
 from audit.service import log_event
-from mailer.constants import PER_USER_DAILY_LIMIT_DEFAULT, DEFER_REASON_DAILY_LIMIT
+from mailer.constants import DEFER_REASON_DAILY_LIMIT, PER_USER_DAILY_LIMIT_DEFAULT
 from mailer.forms import CampaignRecipientAddForm
+from mailer.mail_content import apply_signature
 from mailer.models import Campaign, CampaignQueue, CampaignRecipient, GlobalMailAccount, SendLog
 from mailer.throttle import is_user_throttled
-from mailer.utils import msk_day_bounds, get_next_send_window_start, html_to_text
-from mailer.mail_content import apply_signature
-from notifications.service import notify
-from notifications.models import Notification
-from policy.engine import enforce
+from mailer.utils import get_next_send_window_start, html_to_text, msk_day_bounds
 from mailer.views._helpers import _can_manage_campaign
+from notifications.models import Notification
+from notifications.service import notify
+from policy.engine import enforce
 
 logger = logging.getLogger(__name__)
 
@@ -462,9 +462,9 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
     )
 
     from mailer.mail_content import (
-        ensure_unsubscribe_tokens,
-        build_unsubscribe_url,
         append_unsubscribe_footer,
+        build_unsubscribe_url,
+        ensure_unsubscribe_tokens,
     )
 
     token = ensure_unsubscribe_tokens([to_email]).get(to_email.strip().lower(), "")

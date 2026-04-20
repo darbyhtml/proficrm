@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from accounts.models import User, Branch
+from accounts.models import Branch, User
 from accounts.permissions import get_view_as_user
 
 

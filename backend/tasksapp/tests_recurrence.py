@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from accounts.models import User
 from tasksapp.models import Task, TaskType
-from tasksapp.tasks import _parse_rrule_occurrences, generate_recurring_tasks, HORIZON_DAYS
+from tasksapp.tasks import HORIZON_DAYS, _parse_rrule_occurrences, generate_recurring_tasks
 
 
 def _make_user(username="tpluser"):

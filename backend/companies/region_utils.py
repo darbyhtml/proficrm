@@ -6,7 +6,6 @@ import re
 
 from companies.models import Region
 
-
 # Словарь алиасов для нормализации названий регионов из amoCRM
 REGION_ALIASES = {
     "Республика Башкирия": "Республика Башкортостан",

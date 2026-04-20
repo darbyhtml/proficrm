@@ -1,8 +1,8 @@
 import uuid
 
 from django.conf import settings
-from django.contrib.postgres.indexes import GinIndex, OpClass
 from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.indexes import GinIndex, OpClass
 from django.contrib.postgres.search import SearchVectorField
 from django.db import models
 from django.db.models.functions import Upper

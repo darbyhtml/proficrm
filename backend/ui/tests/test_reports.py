@@ -8,12 +8,12 @@
 import json
 from datetime import timedelta
 
-from django.test import TestCase, Client, override_settings
-from django.utils import timezone
 from django.contrib.auth import get_user_model
+from django.test import Client, TestCase, override_settings
+from django.utils import timezone
 
-from companies.models import Company
 from accounts.models import Branch
+from companies.models import Company
 
 User = get_user_model()
 

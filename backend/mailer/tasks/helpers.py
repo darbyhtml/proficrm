@@ -8,18 +8,18 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
-
-from django.utils import timezone
 from zoneinfo import ZoneInfo
 
+from django.utils import timezone
+
 from mailer.constants import (
-    WORKING_HOURS_START,
-    WORKING_HOURS_END,
-    SEND_BATCH_SIZE_DEFAULT,
-    SEND_TASK_LOCK_TIMEOUT,
-    MAX_ERROR_MESSAGE_LENGTH,
     BULK_UPDATE_BATCH_SIZE,
     DEFER_REASON_RATE_HOUR,
+    MAX_ERROR_MESSAGE_LENGTH,
+    SEND_BATCH_SIZE_DEFAULT,
+    SEND_TASK_LOCK_TIMEOUT,
+    WORKING_HOURS_END,
+    WORKING_HOURS_START,
 )
 from mailer.services import rate_limiter
 from mailer.smtp_sender import build_message, send_via_smtp
@@ -274,8 +274,8 @@ def _is_working_hours(now=None) -> bool:
 def _notify_campaign_started(user, camp) -> None:
     """Отправляет уведомление «Рассылка началась» в интерфейс пользователя."""
     try:
-        from notifications.service import notify
         from notifications.models import Notification
+        from notifications.service import notify
 
         notify(
             user=user,
@@ -296,8 +296,8 @@ def _notify_campaign_finished(
 ) -> None:
     """Отправляет уведомление о завершении рассылки."""
     try:
-        from notifications.service import notify
         from notifications.models import Notification
+        from notifications.service import notify
 
         if failed_count > 0:
             title = "Рассылка завершена с ошибками"
@@ -323,8 +323,8 @@ def _notify_campaign_finished(
 def _notify_circuit_breaker_tripped(user, camp, *, error_count: int) -> None:
     """Уведомление о срабатывании circuit breaker (повторяющиеся ошибки SMTP)."""
     try:
-        from notifications.service import notify
         from notifications.models import Notification
+        from notifications.service import notify
 
         notify(
             user=user,
@@ -348,8 +348,8 @@ def _notify_attachment_error(camp, *, error: str) -> None:
     if not camp.created_by:
         return
     try:
-        from notifications.service import notify
         from notifications.models import Notification
+        from notifications.service import notify
 
         notify(
             user=camp.created_by,

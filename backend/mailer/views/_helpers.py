@@ -151,9 +151,9 @@ def _dispatch_test_email(request: HttpRequest, cfg: GlobalMailAccount, x_tag: st
         return False
 
     from mailer.mail_content import (
-        ensure_unsubscribe_tokens,
-        build_unsubscribe_url,
         append_unsubscribe_footer,
+        build_unsubscribe_url,
+        ensure_unsubscribe_tokens,
     )
     from mailer.tasks import send_test_email
 

@@ -8,8 +8,9 @@ FAIL-CLOSED POLICY: При ошибке Redis возвращаем throttled=Tru
 from __future__ import annotations
 
 import logging
-import time
 import threading
+import time
+
 from django.core.cache import cache
 from django.utils import timezone
 

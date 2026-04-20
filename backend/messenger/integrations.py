@@ -10,7 +10,6 @@ from django.utils import timezone
 
 from .models import Conversation, Inbox, Message
 
-
 logger = logging.getLogger("messenger.integrations")
 
 
@@ -53,7 +52,7 @@ def _is_safe_outbound_url(url: str) -> bool:
     return True
 
 
-def _get_webhook_config(inbox: Inbox) -> Optional[Dict[str, Any]]:
+def _get_webhook_config(inbox: Inbox) -> dict[str, Any] | None:
     """
     Достаёт конфиг webhook'а из inbox.settings.integrations.webhook.
     Ожидаемый формат:
@@ -87,7 +86,7 @@ def _get_webhook_config(inbox: Inbox) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _should_send_for_event(cfg: Dict[str, Any], event_type: str) -> bool:
+def _should_send_for_event(cfg: dict[str, Any], event_type: str) -> bool:
     if not cfg or not cfg.get("enabled"):
         return False
     events: Iterable[str] = cfg.get("events") or []
@@ -97,7 +96,7 @@ def _should_send_for_event(cfg: Dict[str, Any], event_type: str) -> bool:
     return event_type in events
 
 
-def _send_webhook_async(inbox: Inbox, event_type: str, payload: Dict[str, Any]) -> None:
+def _send_webhook_async(inbox: Inbox, event_type: str, payload: dict[str, Any]) -> None:
     cfg = _get_webhook_config(inbox)
     if not cfg or not _should_send_for_event(cfg, event_type):
         return
@@ -161,7 +160,7 @@ def notify_conversation_created(conversation: Conversation) -> None:
     if not conversation.inbox_id:
         return
     inbox = conversation.inbox
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "event": "conversation.created",
         "conversation": {
             "id": conversation.id,
@@ -183,7 +182,7 @@ def notify_conversation_closed(conversation: Conversation) -> None:
     if not conversation.inbox_id:
         return
     inbox = conversation.inbox
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "event": "conversation.closed",
         "conversation": {
             "id": conversation.id,
@@ -214,7 +213,7 @@ def notify_message(message: Message) -> None:
     conversation = message.conversation
     inbox = conversation.inbox
 
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "event": event_type,
         "message": {
             "id": message.id,

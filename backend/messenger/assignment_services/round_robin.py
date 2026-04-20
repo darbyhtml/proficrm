@@ -12,10 +12,12 @@ branch_id (tmn) → пересечение пустое, RR возвращает
 привязана к реальному target-branch диалога и лишена этого бага.
 """
 
-from typing import Optional, List
+from typing import List, Optional
+
 from django.core.cache import cache
+
 from accounts.models import Branch, User
-from messenger.models import Inbox, AgentProfile
+from messenger.models import AgentProfile, Inbox
 
 
 class InboxRoundRobinService:
@@ -59,7 +61,7 @@ class InboxRoundRobinService:
             queue.remove(user_id)
             self._save_queue(queue)
 
-    def reset_queue(self, member_ids: List[int]):
+    def reset_queue(self, member_ids: list[int]):
         """
         Сбросить очередь и заполнить новыми операторами.
 
@@ -69,7 +71,7 @@ class InboxRoundRobinService:
         for user_id in member_ids:
             self.add_agent_to_queue(user_id)
 
-    def available_agent(self, allowed_agent_ids: List[int]) -> Optional[User]:
+    def available_agent(self, allowed_agent_ids: list[int]) -> User | None:
         """
         Получить следующего доступного оператора из очереди (по образцу Chatwoot).
 
@@ -114,7 +116,7 @@ class InboxRoundRobinService:
         except User.DoesNotExist:
             return None
 
-    def _get_queue(self) -> List[int]:
+    def _get_queue(self) -> list[int]:
         """
         Получить очередь из Redis.
 
@@ -123,7 +125,7 @@ class InboxRoundRobinService:
         queue = cache.get(self.round_robin_key, [])
         return [int(x) for x in queue] if queue else []
 
-    def _save_queue(self, queue: List[int]):
+    def _save_queue(self, queue: list[int]):
         """
         Сохранить очередь в Redis.
 
@@ -153,7 +155,7 @@ class InboxRoundRobinService:
         queue_ids = set(self._get_queue())
         return current_member_ids == queue_ids
 
-    def _get_current_member_ids(self) -> List[int]:
+    def _get_current_member_ids(self) -> list[int]:
         """
         Получить список ID текущих членов inbox.
 
@@ -201,11 +203,11 @@ class BranchRoundRobinService:
     def clear_queue(self):
         cache.delete(self.round_robin_key)
 
-    def reset_queue(self, member_ids: List[int]):
+    def reset_queue(self, member_ids: list[int]):
         self.clear_queue()
         cache.set(self.round_robin_key, list(member_ids), timeout=self.TTL)
 
-    def available_agent(self, allowed_agent_ids: List[int]) -> Optional[User]:
+    def available_agent(self, allowed_agent_ids: list[int]) -> User | None:
         """Возвращает следующего доступного оператора из очереди и сдвигает RR."""
         if not self._validate_queue():
             self.reset_queue(self._get_current_member_ids())
@@ -223,11 +225,11 @@ class BranchRoundRobinService:
         except User.DoesNotExist:
             return None
 
-    def _get_queue(self) -> List[int]:
+    def _get_queue(self) -> list[int]:
         queue = cache.get(self.round_robin_key, [])
         return [int(x) for x in queue] if queue else []
 
-    def _save_queue(self, queue: List[int]):
+    def _save_queue(self, queue: list[int]):
         cache.set(self.round_robin_key, queue, timeout=self.TTL)
 
     def _pop_push_to_queue(self, user_id: int):
@@ -242,7 +244,7 @@ class BranchRoundRobinService:
         queue_ids = set(self._get_queue())
         return current_member_ids == queue_ids
 
-    def _get_current_member_ids(self) -> List[int]:
+    def _get_current_member_ids(self) -> list[int]:
         if not self.branch_id:
             return []
         return list(
@@ -252,5 +254,5 @@ class BranchRoundRobinService:
         )
 
     @property
-    def branch_id(self) -> Optional[int]:
+    def branch_id(self) -> int | None:
         return getattr(self.branch, "id", None)

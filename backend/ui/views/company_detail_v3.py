@@ -14,13 +14,11 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
-from django.http import Http404, HttpRequest, HttpResponse
+from django.db import transaction as db_tx
+from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
-
-from django.http import JsonResponse
 from django.views.decorators.http import require_POST
-from django.db import transaction as db_tx
 
 from accounts.models import Branch
 from audit.models import ActivityEvent
@@ -39,7 +37,7 @@ from companies.models import (
     Region,
 )
 from tasksapp.models import Task
-from ui.views._base import policy_required, require_can_view_company, _safe_next_v3
+from ui.views._base import _safe_next_v3, policy_required, require_can_view_company
 
 User = get_user_model()
 
@@ -176,7 +174,7 @@ def company_detail_v3_preview(request: HttpRequest, company_id, variant: str) ->
 
     # Договор: единая точка правды — берём бейдж/уровень из companies.services,
     # чтобы логика совпадала с дашбордом и classic.
-    from companies.services import get_contract_alert, _get_annual_contract_alert
+    from companies.services import _get_annual_contract_alert, get_contract_alert
 
     contract_days_left = None
     contract_level = None  # danger / warn / ok / expired / none
@@ -319,8 +317,8 @@ def contact_quick_create(request: HttpRequest, company_id) -> HttpResponse:
 
     # Валидация email — Django EmailValidator
     if email:
-        from django.core.validators import validate_email
         from django.core.exceptions import ValidationError
+        from django.core.validators import validate_email
 
         try:
             validate_email(email)

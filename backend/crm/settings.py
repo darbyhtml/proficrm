@@ -10,13 +10,13 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
-from pathlib import Path
 import os
 from datetime import timedelta
+from pathlib import Path
 
 from celery.schedules import crontab
-from dotenv import load_dotenv
 from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -50,8 +50,8 @@ _SENTRY_DSN = os.getenv("SENTRY_DSN", "").strip()
 if _SENTRY_DSN:
     try:
         import sentry_sdk
-        from sentry_sdk.integrations.django import DjangoIntegration
         from sentry_sdk.integrations.celery import CeleryIntegration
+        from sentry_sdk.integrations.django import DjangoIntegration
         from sentry_sdk.integrations.redis import RedisIntegration
 
         sentry_sdk.init(
@@ -245,7 +245,7 @@ INSTALLED_APPS = [
 # НЕ попадает в production — зависимость в requirements-dev.txt.
 if DEBUG:
     try:
-        import django_extensions  # noqa: F401
+        import django_extensions
 
         INSTALLED_APPS += ["django_extensions"]
     except ImportError:

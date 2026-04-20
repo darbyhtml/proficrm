@@ -6,12 +6,12 @@ ContactViewSet, CompanyNoteViewSet, базовая аутентификация 
 
 from __future__ import annotations
 
+from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
-from django.test import TestCase
 
 from accounts.models import User
-from companies.models import Company, Contact, CompanyNote
+from companies.models import Company, CompanyNote, Contact
 
 
 class ApiSetupMixin:

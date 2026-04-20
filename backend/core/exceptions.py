@@ -2,9 +2,9 @@
 Кастомный обработчик исключений для DRF с защитой от утечки информации.
 """
 
-from rest_framework.views import exception_handler
-from rest_framework.response import Response
 from django.conf import settings
+from rest_framework.response import Response
+from rest_framework.views import exception_handler
 
 
 def custom_exception_handler(exc, context):

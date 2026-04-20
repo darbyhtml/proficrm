@@ -6,9 +6,11 @@ Django management command для проверки и очистки получа
 from __future__ import annotations
 
 import logging
+
 from django.core.management.base import BaseCommand
-from mailer.models import Campaign, CampaignRecipient
+
 from companies.models import Company
+from mailer.models import Campaign, CampaignRecipient
 
 logger = logging.getLogger(__name__)
 

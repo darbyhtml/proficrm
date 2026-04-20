@@ -8,10 +8,12 @@ Django management command для переноса примечаний из raw_
 и переносит их в комментарии к существующим телефонам.
 """
 
-from django.core.management.base import BaseCommand, CommandError
-from companies.models import Contact, ContactPhone
 import logging
 import re
+
+from django.core.management.base import BaseCommand, CommandError
+
+from companies.models import Contact, ContactPhone
 
 logger = logging.getLogger(__name__)
 

@@ -17,12 +17,12 @@ from django.test import TestCase
 from accounts.models import Branch, User
 from companies.models import Company, CompanyEmail, CompanyPhone
 from companies.services import (
-    validate_phone_strict,
-    validate_phone_main,
-    check_phone_duplicate,
-    validate_phone_comment,
-    validate_email_value,
     check_email_duplicate,
+    check_phone_duplicate,
+    validate_email_value,
+    validate_phone_comment,
+    validate_phone_main,
+    validate_phone_strict,
 )
 
 

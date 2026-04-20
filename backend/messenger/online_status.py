@@ -5,10 +5,12 @@ Online Status Tracker для операторов (по образцу Chatwoot)
 Используется для фильтрации доступных операторов при автоназначении.
 """
 
-from typing import Dict, Set, Optional
+from datetime import timedelta
+from typing import Dict, Optional, Set
+
 from django.core.cache import cache
 from django.utils import timezone
-from datetime import timedelta
+
 from accounts.models import User
 from messenger.models import AgentProfile
 
@@ -26,7 +28,7 @@ class OnlineStatusTracker:
     TTL = 60 * 5  # 5 минут (оператор считается онлайн если был активен за последние 5 минут)
 
     @classmethod
-    def get_available_users(cls, branch_id: Optional[int] = None) -> Dict[int, str]:
+    def get_available_users(cls, branch_id: int | None = None) -> dict[int, str]:
         """
         Получить словарь доступных операторов (по образцу Chatwoot).
 
@@ -56,7 +58,7 @@ class OnlineStatusTracker:
         return available_users
 
     @classmethod
-    def get_status(cls, user_id: int) -> Optional[str]:
+    def get_status(cls, user_id: int) -> str | None:
         """
         Получить статус оператора.
 
@@ -112,7 +114,7 @@ class OnlineStatusTracker:
         cache.set(redis_key, status, timeout=cls.TTL)
 
         # Отправляем событие через Event Dispatcher
-        from .dispatchers import get_dispatcher, Events
+        from .dispatchers import Events, get_dispatcher
 
         dispatcher = get_dispatcher()
         dispatcher.dispatch(
@@ -146,7 +148,7 @@ class OnlineStatusTracker:
         return status == AgentProfile.Status.ONLINE
 
     @classmethod
-    def get_online_user_ids(cls, branch_id: Optional[int] = None) -> Set[int]:
+    def get_online_user_ids(cls, branch_id: int | None = None) -> set[int]:
         """
         Получить множество ID онлайн операторов.
 

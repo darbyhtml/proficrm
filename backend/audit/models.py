@@ -1,6 +1,6 @@
-import uuid
-import traceback
 import sys
+import traceback
+import uuid
 
 from django.conf import settings
 from django.db import models

@@ -5,8 +5,8 @@ Middleware для добавления request_id к каждому запрос
 from __future__ import annotations
 
 import logging
-import uuid
 import threading
+import uuid
 
 from django.utils.deprecation import MiddlewareMixin
 

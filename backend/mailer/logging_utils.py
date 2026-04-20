@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+
 from django.conf import settings
 
 logger = logging.getLogger(__name__)

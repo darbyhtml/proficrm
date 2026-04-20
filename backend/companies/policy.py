@@ -19,7 +19,8 @@ from __future__ import annotations
 from django.db.models import QuerySet
 
 from accounts.models import User
-from .models import Company, Contact, CompanyNote
+
+from .models import Company, CompanyNote, Contact
 
 
 def visible_companies_qs(user: User) -> QuerySet[Company]:

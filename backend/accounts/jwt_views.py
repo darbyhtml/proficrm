@@ -4,25 +4,25 @@
 
 from __future__ import annotations
 
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from rest_framework.response import Response
+import hashlib
+import logging
+
 from rest_framework import status
 from rest_framework import status as drf_status
-import logging
-import hashlib
+from rest_framework.response import Response
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from accounts.security import (
-    get_client_ip,
-    is_user_locked_out,
-    is_ip_rate_limited,
-    record_failed_login_attempt,
-    clear_login_attempts,
-    get_remaining_lockout_time,
     RATE_LIMIT_LOGIN_PER_MINUTE,
+    clear_login_attempts,
+    get_client_ip,
+    get_remaining_lockout_time,
+    is_ip_rate_limited,
+    is_user_locked_out,
+    record_failed_login_attempt,
 )
-from audit.service import log_event
 from audit.models import ActivityEvent
-
+from audit.service import log_event
 
 logger = logging.getLogger(__name__)
 

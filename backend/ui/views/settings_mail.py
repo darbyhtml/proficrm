@@ -169,7 +169,7 @@ def settings_mail_test_send(request: HttpRequest) -> HttpResponse:
 
     # Используем существующий smtp_sender, если он доступен
     try:
-        from mailer.smtp_sender import open_smtp_connection, build_message, send_via_smtp
+        from mailer.smtp_sender import build_message, open_smtp_connection, send_via_smtp
     except Exception:
         messages.error(request, "Модуль отправки недоступен. Свяжитесь с разработчиком.")
         return redirect("settings_mail_setup")

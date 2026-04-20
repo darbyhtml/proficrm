@@ -2,9 +2,10 @@
 Django management command для очистки кэша dashboard.
 """
 
-from django.core.management.base import BaseCommand
 from django.core.cache import cache
+from django.core.management.base import BaseCommand
 from django.utils import timezone
+
 from accounts.models import User
 
 

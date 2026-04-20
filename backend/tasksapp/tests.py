@@ -1,10 +1,11 @@
-from datetime import timedelta, datetime, time as time_cls
+from datetime import datetime, timedelta
+from datetime import time as time_cls
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.utils import timezone
-from django.contrib.auth import get_user_model
-from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from companies.models import Company
 from companies.services import resolve_target_companies
@@ -226,8 +227,8 @@ class CompanyDeletionRequestNotificationTestCase(TestCase):
 
     def test_deletion_request_notifies_director(self):
         """Проверка уведомления директора при создании запроса на удаление."""
-        from notifications.models import Notification
         from companies.models import CompanyDeletionRequest
+        from notifications.models import Notification
 
         req = CompanyDeletionRequest.objects.create(
             company=self.company,
@@ -240,8 +241,8 @@ class CompanyDeletionRequestNotificationTestCase(TestCase):
         )
 
         # Симулируем создание уведомления (в реальности это делается в view)
-        from notifications.service import notify
         from notifications.models import Notification as NotifModel
+        from notifications.service import notify
 
         notify(
             user=self.director,

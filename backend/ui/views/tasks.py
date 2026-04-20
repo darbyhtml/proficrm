@@ -1,5 +1,10 @@
 from __future__ import annotations
+
+import logging
+
 from ui.views._base import (
+    STRONG_CONFIRM_THRESHOLD,
+    UUID,
     ActivityEvent,
     Company,
     CompanyNote,
@@ -12,13 +17,11 @@ from ui.views._base import (
     Paginator,
     PermissionDenied,
     Q,
-    STRONG_CONFIRM_THRESHOLD,
     Task,
     TaskEditForm,
     TaskEvent,
     TaskForm,
     TaskType,
-    UUID,
     User,
     ValidationError,
     _can_delete_task_ui,
@@ -49,7 +52,6 @@ from ui.views._base import (
     transaction,
     visible_tasks_qs,
 )
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -310,7 +312,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
     paginator = Paginator(qs, per_page)
     page = paginator.get_page(request.GET.get("page"))
     # Формируем query string без параметров page, sort, dir (sort и dir добавляются в ссылках заголовков)
-    from urllib.parse import urlencode, parse_qs
+    from urllib.parse import parse_qs, urlencode
 
     params = dict(request.GET)
     params.pop("page", None)
@@ -822,7 +824,7 @@ def task_create(request: HttpRequest) -> HttpResponse:
                 # Берем первые 199 компаний, чтобы добавить выбранную компанию
                 limited_qs = company_qs.exclude(id=company_id)[:199]
                 # Объединяем с выбранной компанией и сортируем
-                from django.db.models import Case, When, IntegerField
+                from django.db.models import Case, IntegerField, When
 
                 company_qs = (
                     Company.objects.filter(Q(id__in=[c.id for c in limited_qs]) | Q(id=company_id))
@@ -859,7 +861,7 @@ def task_create(request: HttpRequest) -> HttpResponse:
 
 
 def _set_assigned_to_queryset(
-    form: "TaskForm", user: User, assigned_to_id: int | None = None
+    form: TaskForm, user: User, assigned_to_id: int | None = None
 ) -> None:
     """
     Устанавливает queryset для поля assigned_to в зависимости от роли пользователя.
@@ -928,7 +930,7 @@ def _set_assigned_to_queryset(
     # Если есть выбранное значение и его нет в queryset, добавляем его
     if current_user_id is not None and not base_queryset.filter(id=current_user_id).exists():
         # Добавляем выбранного пользователя в queryset
-        from django.db.models import Case, When, IntegerField
+        from django.db.models import Case, IntegerField, When
 
         queryset = (
             User.objects.filter(

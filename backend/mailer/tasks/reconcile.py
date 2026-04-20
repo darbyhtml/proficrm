@@ -12,8 +12,8 @@ from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 
-from mailer.models import Campaign, CampaignQueue, CampaignRecipient
 from mailer.constants import STUCK_CAMPAIGN_TIMEOUT_MINUTES
+from mailer.models import Campaign, CampaignQueue, CampaignRecipient
 
 logger = logging.getLogger(__name__)
 

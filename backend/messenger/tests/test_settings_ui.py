@@ -7,8 +7,8 @@
 - Админ видит список Inbox'ов
 """
 
-from django.test import TestCase, override_settings
 from django.contrib.auth import get_user_model
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from accounts.models import Branch

@@ -1,4 +1,10 @@
 from __future__ import annotations
+
+import logging
+
+from django.utils.http import url_has_allowed_host_and_scheme
+
+from audit.service import log_event
 from phonebridge.models import CallRequest
 from ui.views._base import (
     ActivityEvent,
@@ -36,9 +42,6 @@ from ui.views._base import (
     timedelta,
     timezone,
 )
-from django.utils.http import url_has_allowed_host_and_scheme
-from audit.service import log_event
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -970,7 +973,9 @@ def preferences_absence_create(request: HttpRequest) -> HttpResponse:
     - start_date не в прошлом более чем на 7 дней (защита от мусора)
     - type в списке choices
     """
-    from datetime import date, timedelta as _td
+    from datetime import date
+    from datetime import timedelta as _td
+
     from accounts.models import UserAbsence
 
     if request.method != "POST":
@@ -1102,9 +1107,10 @@ def preferences_avatar_upload(request: HttpRequest) -> HttpResponse:
         return redirect("/settings/#profile")
 
     try:
-        from PIL import Image
         import io
+
         from django.core.files.base import ContentFile
+        from PIL import Image
 
         img = Image.open(uploaded)
         img.verify()  # Проверяем, что файл — реальное изображение
@@ -1292,9 +1298,9 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
         except Exception:
             return default
 
-    calls_page_num = _safe_int((request.GET.get("calls_page") or "1"))
-    cold_page_num = _safe_int((request.GET.get("cold_page") or "1"))
-    events_page_num = _safe_int((request.GET.get("events_page") or "1"))
+    calls_page_num = _safe_int(request.GET.get("calls_page") or "1")
+    cold_page_num = _safe_int(request.GET.get("cold_page") or "1")
+    events_page_num = _safe_int(request.GET.get("events_page") or "1")
 
     calls_page = calls_p.get_page(calls_page_num)
     cold_page = cold_p.get_page(cold_page_num)
@@ -1328,7 +1334,7 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
     events_qs_str = _qs_without_page(request, page_key="events_page")
 
     if per_page != 25:
-        from urllib.parse import urlencode, parse_qs
+        from urllib.parse import parse_qs, urlencode
 
         if calls_qs_str:
             params = parse_qs(calls_qs_str)

@@ -17,7 +17,7 @@ from django.test import TestCase
 from accounts.models import Branch, User
 from audit.models import ActivityEvent
 from companies.models import Company, CompanySearchIndex
-from companies.services import execute_company_deletion, CompanyDeletionError
+from companies.services import CompanyDeletionError, execute_company_deletion
 from tasksapp.models import Task
 
 

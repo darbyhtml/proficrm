@@ -26,7 +26,7 @@ logger = logging.getLogger("messenger.automation")
 # ─── Legacy auto-reply (backward compat) ────────────────────────────────
 
 
-def _get_auto_reply_config(inbox) -> Dict[str, Any]:
+def _get_auto_reply_config(inbox) -> dict[str, Any]:
     cfg = (getattr(inbox, "settings", None) or {}).get("automation") or {}
     auto = cfg.get("auto_reply") or {}
     enabled = bool(auto.get("enabled", False))
@@ -101,7 +101,7 @@ def run_automation_for_incoming_message(message: Message) -> None:
 def dispatch_event(
     event_name: str,
     conversation: Conversation,
-    message: Optional[Message] = None,
+    message: Message | None = None,
 ) -> int:
     """
     Основная точка входа. Вызывается при событиях:
@@ -149,9 +149,9 @@ def dispatch_event(
 
 
 def _evaluate_conditions(
-    conditions: List[Dict],
+    conditions: list[dict],
     conversation: Conversation,
-    message: Optional[Message],
+    message: Message | None,
 ) -> bool:
     """
     Все условия — AND. Каждое условие:
@@ -182,7 +182,7 @@ def _evaluate_conditions(
 def _get_attribute_value(
     attr_key: str,
     conversation: Conversation,
-    message: Optional[Message],
+    message: Message | None,
 ) -> Any:
     """Получить значение атрибута для проверки условия."""
     if attr_key == "status":
@@ -228,9 +228,9 @@ def _check_operator(actual: Any, operator: str, values: list) -> bool:
 
 
 def _execute_actions(
-    actions: List[Dict],
+    actions: list[dict],
     conversation: Conversation,
-    message: Optional[Message],
+    message: Message | None,
 ) -> None:
     """
     Выполнить список действий:
@@ -251,7 +251,7 @@ def _run_action(
     action_name: str,
     params: list,
     conversation: Conversation,
-    message: Optional[Message],
+    message: Message | None,
 ) -> None:
     """Выполнить одно действие."""
 
@@ -285,6 +285,7 @@ def _action_assign_agent(conversation: Conversation, params: list) -> None:
     if not params:
         return
     from accounts.models import User
+
     from .services import assign_conversation
 
     try:

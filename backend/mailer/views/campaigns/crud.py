@@ -17,8 +17,8 @@ from audit.models import ActivityEvent
 from audit.service import log_event
 from mailer.forms import CampaignForm
 from mailer.models import Campaign, GlobalMailAccount
-from policy.engine import enforce
 from mailer.views._helpers import _can_manage_campaign, _contains_links
+from policy.engine import enforce
 
 logger = logging.getLogger(__name__)
 

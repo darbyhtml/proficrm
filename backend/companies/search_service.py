@@ -4,11 +4,12 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
+from django.conf import settings as django_settings
+from django.contrib.postgres.search import SearchQuery, SearchRank, TrigramWordSimilarity
 from django.db import connection
 from django.db.models import Case, F, FloatField, IntegerField, Q, Value, When
 from django.db.models.expressions import RawSQL
 from django.db.models.functions import Coalesce
-from django.contrib.postgres.search import SearchQuery, SearchRank, TrigramWordSimilarity
 from django.utils.html import escape
 
 from companies.models import (
@@ -22,19 +23,17 @@ from companies.models import (
 )
 from tasksapp.models import Task
 
-from django.conf import settings as django_settings
-
 from .search_index import (
-    ParsedQuery,
-    parse_query,
-    fold_text,
-    only_digits,
-    filter_stop_tokens,
-    classify_text_query,
-    TEXT_QUERY_WEBSITE,
-    TEXT_QUERY_PERSON,
     TEXT_QUERY_ADDRESS,
     TEXT_QUERY_COMPANY_OR_GENERAL,
+    TEXT_QUERY_PERSON,
+    TEXT_QUERY_WEBSITE,
+    ParsedQuery,
+    classify_text_query,
+    filter_stop_tokens,
+    fold_text,
+    only_digits,
+    parse_query,
 )
 
 

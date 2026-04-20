@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import uuid
 import hashlib
 import secrets
+import uuid
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.files.storage import default_storage
 from django.db import models
 from django.utils import timezone
-from django.core.files.storage import default_storage
-from django.core.exceptions import ValidationError
 
 
 def _validate_apk_extension(value):

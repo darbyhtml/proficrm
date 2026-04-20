@@ -4,15 +4,15 @@
 
 from __future__ import annotations
 
-import time
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Optional
 
-from django.core.cache import cache
-from django.contrib.auth import get_user_model
-from django.utils import timezone
 from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.utils import timezone
 
 from audit.models import ActivityEvent
 from audit.service import log_event
@@ -196,7 +196,7 @@ def clear_login_attempts(username: str) -> None:
     cache.delete(lockout_key)
 
 
-def get_remaining_lockout_time(username: str) -> Optional[int]:
+def get_remaining_lockout_time(username: str) -> int | None:
     """Получить оставшееся время блокировки в секундах."""
     lockout_key = get_user_lockout_key(username.lower())
     ttl = cache.ttl(lockout_key)

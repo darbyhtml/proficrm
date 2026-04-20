@@ -8,15 +8,15 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpRequest, HttpResponse, Http404, FileResponse
+from django.http import FileResponse, Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from accounts.models import User
+from mailer.mail_content import apply_signature
 from mailer.models import Campaign, CampaignQueue, CampaignRecipient
 from mailer.utils import html_to_text
-from mailer.mail_content import apply_signature
-from policy.engine import enforce
 from mailer.views._helpers import _can_manage_campaign
+from policy.engine import enforce
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +138,7 @@ def campaign_export_failed(request: HttpRequest, campaign_id) -> HttpResponse:
         return redirect("campaign_detail", campaign_id=camp.id)
     import csv
     import re
+
     from django.http import StreamingHttpResponse
 
     def rows():

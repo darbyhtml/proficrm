@@ -3,12 +3,12 @@ from __future__ import annotations
 from django.conf import settings
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, Client
+from django.test import Client, TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from accounts.models import Branch
-from messenger.models import Inbox, Contact, Conversation, Message
+from messenger.models import Contact, Conversation, Inbox, Message
 from messenger.utils import create_widget_session
 
 

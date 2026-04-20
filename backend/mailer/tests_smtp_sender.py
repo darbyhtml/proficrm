@@ -8,18 +8,17 @@ from __future__ import annotations
 
 import base64
 import smtplib
-from unittest.mock import MagicMock, patch
 from email.message import EmailMessage
+from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 
 from mailer.smtp_sender import (
-    _sanitize_header,
     _inline_data_images,
+    _sanitize_header,
     build_message,
     format_smtp_error,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

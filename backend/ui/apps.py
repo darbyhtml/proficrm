@@ -8,4 +8,4 @@ class UiConfig(AppConfig):
 
     def ready(self):
         """Подключаем signals при загрузке приложения."""
-        import ui.signals  # noqa
+        import ui.signals

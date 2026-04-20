@@ -3,8 +3,8 @@ from django.contrib import admin
 from .models import (
     Campaign,
     CampaignRecipient,
-    MailAccount,
     GlobalMailAccount,
+    MailAccount,
     SendLog,
     Unsubscribe,
     UnsubscribeToken,

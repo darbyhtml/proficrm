@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 
-from django.conf import settings
 from cryptography.fernet import Fernet, InvalidToken, MultiFernet
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 

@@ -14,13 +14,12 @@ from companies.models import (
     CompanyEmail,
     CompanyNote,
     CompanyPhone,
+    CompanySearchIndex,
     Contact,
     ContactEmail,
     ContactPhone,
-    CompanySearchIndex,
 )
 from tasksapp.models import Task
-
 
 _TOKEN_RE = re.compile(r"[0-9]+|[A-Za-zА-Яа-яЁё]+", re.UNICODE)
 _DIGITS_RE = re.compile(r"\D+")

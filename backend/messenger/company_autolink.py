@@ -77,6 +77,7 @@ def _phone_tail(phone: str | None) -> str:
 
 def _find_candidates_by_domain(domain: str) -> set:
     from django.db.models import Q
+
     from companies.models import Company
 
     if not domain or domain in PUBLIC_EMAIL_DOMAINS:
@@ -93,6 +94,7 @@ def _find_candidates_by_domain(domain: str) -> set:
 
 def _find_candidates_by_phone(phone_tail: str) -> set:
     from django.db.models import Q
+
     from companies.models import Company
 
     if not phone_tail:

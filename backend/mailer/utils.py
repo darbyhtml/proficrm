@@ -7,7 +7,6 @@ from zoneinfo import ZoneInfo
 
 from django.utils import timezone as dj_timezone
 
-
 _RE_SCRIPT = re.compile(r"(?is)<(script|style)[^>]*>.*?</\1\s*>")
 _RE_TAGS = re.compile(r"(?is)<[^>]+>")
 _RE_WS = re.compile(r"[ \t\r\f\v]+")

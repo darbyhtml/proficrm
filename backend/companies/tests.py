@@ -8,24 +8,23 @@
 - DRF фильтры (search, ordering)
 """
 
-from django.test import TestCase
 from django.contrib.auth import get_user_model
-from rest_framework.test import APIClient
-from rest_framework import status
-
 from django.db import connection
+from django.test import TestCase
+from rest_framework import status
+from rest_framework.test import APIClient
 
-from .normalizers import normalize_phone, normalize_inn, normalize_work_schedule
 from .models import (
     Company,
     CompanyDeletionRequest,
-    CompanyStatus,
     CompanyEmail,
     CompanyPhone,
+    CompanyStatus,
     Contact,
     ContactEmail,
     ContactPhone,
 )
+from .normalizers import normalize_inn, normalize_phone, normalize_work_schedule
 from .search_index import rebuild_company_search_index
 
 User = get_user_model()

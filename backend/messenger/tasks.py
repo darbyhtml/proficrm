@@ -68,7 +68,7 @@ def escalate_stalled_conversations(self):
     Переназначить диалоги, где оператор не открыл чат в течение таймаута.
     Обёртка над management command escalate_messenger_conversations.
     """
-    from .services import get_conversations_eligible_for_escalation, escalate_conversation
+    from .services import escalate_conversation, get_conversations_eligible_for_escalation
 
     conversations = get_conversations_eligible_for_escalation()
     escalated = 0
@@ -93,8 +93,8 @@ def dispatch_async_listeners(self, event_name: str, timestamp_iso: str, data: di
     Получает сериализованные данные от EventDispatcher и вызывает
     все зарегистрированные async-слушатели для данного события.
     """
-    from importlib import import_module
     from datetime import datetime
+    from importlib import import_module
 
     from .dispatchers import get_async_listener_registry
 
@@ -138,7 +138,8 @@ def send_offline_email_notification(self, conversation_id: int, message_id: int)
     Throttle: максимум 1 email на диалог каждые 15 минут (через Redis cache).
     """
     from django.core.cache import cache
-    from .models import Conversation, Message, AgentProfile
+
+    from .models import AgentProfile, Conversation, Message
 
     try:
         conversation = Conversation.objects.select_related("assignee", "contact", "inbox").get(

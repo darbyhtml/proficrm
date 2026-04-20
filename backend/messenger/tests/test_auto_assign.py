@@ -9,7 +9,7 @@ from accounts.models_region import BranchRegion
 from messenger.assignment_services.auto_assign import auto_assign_conversation
 from messenger.assignment_services.branch_load_balancer import BranchLoadBalancer
 from messenger.assignment_services.region_router import MultiBranchRouter
-from messenger.models import Inbox, Conversation, Contact
+from messenger.models import Contact, Conversation, Inbox
 from messenger.signals import auto_assign_new_conversation
 
 

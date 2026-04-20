@@ -3,8 +3,8 @@
 Проверка: сохранение/сброс сессии, контекст-процессор, доступ только для админа.
 """
 
-from django.test import TestCase, Client, override_settings
 from django.contrib.auth import get_user_model
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 User = get_user_model()

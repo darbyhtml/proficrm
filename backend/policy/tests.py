@@ -10,13 +10,12 @@
 - baseline_allowed_for_role(): проверка ключевых resource/role комбинаций
 """
 
-from django.test import TestCase
 from django.core.exceptions import PermissionDenied
+from django.test import TestCase
 
 from accounts.models import User
+from policy.engine import baseline_allowed_for_role, decide, enforce
 from policy.models import PolicyConfig, PolicyRule
-from policy.engine import decide, enforce, baseline_allowed_for_role
-
 
 # ---------------------------------------------------------------------------
 # Helpers

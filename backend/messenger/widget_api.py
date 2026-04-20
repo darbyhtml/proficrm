@@ -9,15 +9,15 @@ Endpoints:
 Все endpoints публичные (без аутентификации), защищены через widget_token и widget_session_token.
 """
 
+import json
 import logging
 import os
-import json
 import time
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.utils import timezone as django_timezone
 from django.http import FileResponse, Http404, StreamingHttpResponse
+from django.utils import timezone as django_timezone
 from rest_framework import status
 from rest_framework.decorators import (
     api_view,
@@ -25,35 +25,36 @@ from rest_framework.decorators import (
     permission_classes,
     throttle_classes,
 )
+from rest_framework.exceptions import APIException, Throttled
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.exceptions import APIException, ValidationError as DRFValidationError, Throttled
 
 from . import models, serializers, services
+from .automation import dispatch_event, run_automation_for_incoming_message
+from .integrations import notify_conversation_created, notify_message
+from .logging_utils import safe_log_widget_error, widget_logger
+from .reporting import record_conversation_opened
+from .throttles import WidgetBootstrapThrottle, WidgetPollThrottle, WidgetSendThrottle
 from .utils import (
-    compact_working_hours_display,
-    create_widget_session,
-    get_widget_session,
-    ensure_messenger_enabled_api,
-    is_within_working_hours,
-    get_attachment_settings,
-    is_content_type_allowed,
-    validate_upload_safety,
     build_message_attachments_payload,
+    compact_working_hours_display,
+    create_math_captcha,
+    create_widget_session,
     enforce_widget_origin_allowed,
+    ensure_messenger_enabled_api,
+    get_attachment_settings,
     get_client_ip,
+    get_widget_session,
+    is_captcha_passed,
+    is_content_type_allowed,
+    is_within_working_hours,
+    mark_captcha_passed,
     mark_ip_activity_for_captcha,
     should_require_captcha,
-    create_math_captcha,
+    validate_upload_safety,
     verify_math_captcha,
-    mark_captcha_passed,
-    is_captcha_passed,
 )
-from .logging_utils import widget_logger, safe_log_widget_error
-from .integrations import notify_conversation_created, notify_message
-from .automation import run_automation_for_incoming_message, dispatch_event
-from .reporting import record_conversation_opened
-from .throttles import WidgetBootstrapThrottle, WidgetSendThrottle, WidgetPollThrottle
 
 
 def _add_widget_cors_headers(request, response):

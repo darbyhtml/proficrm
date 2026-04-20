@@ -32,10 +32,10 @@
 import json
 from datetime import timedelta
 
-from django.test import TestCase, Client, override_settings
+from django.contrib.auth import get_user_model
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
-from django.contrib.auth import get_user_model
 
 from companies.models import Company, CompanyNote
 from tasksapp.models import Task, TaskComment, TaskEvent, TaskType

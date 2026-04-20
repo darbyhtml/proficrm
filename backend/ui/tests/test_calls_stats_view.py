@@ -3,10 +3,12 @@
 ЭТАП 6: проверка, что шаблоны не падают на nullable полях.
 """
 
-from django.test import TestCase, RequestFactory, override_settings
-from django.contrib.auth import get_user_model
-from django.utils import timezone
 from datetime import timedelta
+
+from django.contrib.auth import get_user_model
+from django.test import RequestFactory, TestCase, override_settings
+from django.utils import timezone
+
 from phonebridge.models import CallRequest
 
 User = get_user_model()

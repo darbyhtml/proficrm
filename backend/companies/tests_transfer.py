@@ -2,15 +2,15 @@
 Тесты для передачи компаний между пользователями.
 """
 
-from django.test import TestCase
 from django.contrib.auth import get_user_model
+from django.test import TestCase
 
 from accounts.models import Branch, User
 from companies.models import Company
 from companies.permissions import (
+    can_transfer_companies,
     can_transfer_company,
     get_transfer_targets,
-    can_transfer_companies,
 )
 
 User = get_user_model()

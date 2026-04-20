@@ -1,7 +1,6 @@
 import re
 from datetime import datetime, timedelta
 
-
 RUS_TZ_CHOICES: list[tuple[str, str]] = [
     ("Europe/Kaliningrad", "Калининград (UTC+02)"),
     ("Europe/Moscow", "Москва / СПБ (UTC+03)"),

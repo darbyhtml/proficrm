@@ -19,18 +19,17 @@ from accounts.models import Branch, User
 from companies.models import (
     Company,
     CompanyHistoryEvent,
-    ContractType,
+    CompanyPhone,
     Contact,
     ContactPhone,
-    CompanyPhone,
+    ContractType,
 )
 from companies.services import (
-    CompanyService,
     ColdCallService,
+    CompanyService,
     get_contract_alert,
     get_worktime_status,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

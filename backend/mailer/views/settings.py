@@ -16,8 +16,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import User
+from accounts.permissions import require_admin
 from mailer.constants import PER_USER_DAILY_LIMIT_DEFAULT
-from mailer.forms import GlobalMailAccountForm, EmailSignatureForm
+from mailer.forms import EmailSignatureForm, GlobalMailAccountForm
 from mailer.models import (
     Campaign,
     CampaignQueue,
@@ -27,14 +28,13 @@ from mailer.models import (
     SmtpBzQuota,
 )
 from mailer.utils import msk_day_bounds
-from accounts.permissions import require_admin
-from policy.engine import enforce
 from mailer.views._helpers import (
     _can_manage_campaign,
     _contains_links,
     _dispatch_test_email,
     _smtp_bz_today_stats_cached,
 )
+from policy.engine import enforce
 
 logger = logging.getLogger(__name__)
 

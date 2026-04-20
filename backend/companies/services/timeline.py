@@ -55,8 +55,8 @@ def build_company_timeline(
     """
     # Ленивый импорт CallRequest / CampaignRecipient — избегаем циклов при
     # старте приложения (phonebridge и mailer импортируют companies.*)
-    from phonebridge.models import CallRequest
     from mailer.models import CampaignRecipient
+    from phonebridge.models import CallRequest
     from tasksapp.models import Task
 
     timeline_notes = list(

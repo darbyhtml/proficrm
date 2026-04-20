@@ -7,10 +7,11 @@ Event Dispatcher для messenger (по образцу Chatwoot).
 Асинхронные слушатели выполняются через Celery task для надёжности.
 """
 
-from typing import Dict, Any, Callable, List
-from django.utils import timezone
-from datetime import datetime
 import logging
+from datetime import datetime
+from typing import Any, Callable, Dict, List
+
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ class Events:
 
 
 # Реестр именованных async-слушателей (имя → import path)
-_ASYNC_LISTENER_REGISTRY: Dict[str, List[str]] = {}
+_ASYNC_LISTENER_REGISTRY: dict[str, list[str]] = {}
 
 
 class EventDispatcher:
@@ -58,14 +59,14 @@ class EventDispatcher:
     """
 
     def __init__(self):
-        self._sync_listeners: Dict[str, List[Callable]] = {}
-        self._async_listeners: Dict[str, List[Callable]] = {}
+        self._sync_listeners: dict[str, list[Callable]] = {}
+        self._async_listeners: dict[str, list[Callable]] = {}
 
     def dispatch(
         self,
         event_name: str,
         timestamp: datetime,
-        data: Dict[str, Any],
+        data: dict[str, Any],
         run_async: bool = False,
     ) -> None:
         """
@@ -104,7 +105,7 @@ class EventDispatcher:
     def subscribe(
         self,
         event_name: str,
-        listener: Callable[[str, datetime, Dict[str, Any]], None],
+        listener: Callable[[str, datetime, dict[str, Any]], None],
         run_async: bool = False,
     ) -> None:
         """Подписаться на событие."""
@@ -125,7 +126,7 @@ class EventDispatcher:
             target[event_name].remove(listener)
 
 
-def _serialize_for_celery(data: Dict[str, Any]) -> Dict[str, Any]:
+def _serialize_for_celery(data: dict[str, Any]) -> dict[str, Any]:
     """Преобразовать данные для передачи через Celery (JSON-сериализуемые)."""
     result = {}
     for key, value in data.items():
@@ -157,6 +158,6 @@ def get_dispatcher() -> EventDispatcher:
     return _dispatcher
 
 
-def get_async_listener_registry() -> Dict[str, List[str]]:
+def get_async_listener_registry() -> dict[str, list[str]]:
     """Получить реестр async-слушателей (для Celery task)."""
     return _ASYNC_LISTENER_REGISTRY

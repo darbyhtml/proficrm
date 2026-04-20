@@ -3,10 +3,12 @@
 ЭТАП 6: проверка распределений, connect_rate_percent, avg_duration.
 """
 
-from django.test import TestCase
-from django.contrib.auth import get_user_model
-from django.utils import timezone
 from datetime import timedelta
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from django.utils import timezone
+
 from phonebridge.models import CallRequest
 
 User = get_user_model()
@@ -356,8 +358,8 @@ class CallStatsViewTest(TestCase):
 
     def test_unknown_enum_values_ignored(self):
         """Тест: неизвестные значения enum игнорируются (не падают с 400)."""
-        from rest_framework.test import APIClient
         from rest_framework import status
+        from rest_framework.test import APIClient
 
         client = APIClient()
         client.force_authenticate(user=self.user)
@@ -390,8 +392,8 @@ class CallStatsViewTest(TestCase):
 
     def test_legacy_payload_new_fields_null(self):
         """Тест: legacy payload оставляет новые поля NULL."""
-        from rest_framework.test import APIClient
         from rest_framework import status
+        from rest_framework.test import APIClient
 
         client = APIClient()
         client.force_authenticate(user=self.user)

@@ -38,30 +38,71 @@ extend-exclude = [
 ]
 
 [tool.ruff.lint]
-# Консервативный набор: только реальные баги, не стиль.
-# F   — pyflakes: undefined names, unused imports/variables, неправильные impl
+# Wave 0.2 (2026-04-20): расширенный набор правил.
+# Каждая группа — реальные баги/security/стиль, не бессмысленная перестановка.
+#
+# F   — pyflakes: undefined names, unused imports/variables
 # E9  — синтаксические ошибки и IOError
 # W6  — устаревшие конструкции, опечатки
-# B   — flake8-bugbear: реальные антипаттерны (mutable default args и т.п.)
-select = ["F", "E9", "W6", "B"]
+# B   — flake8-bugbear: реальные антипаттерны (mutable default args)
+# I   — isort: сортировка импортов (автофикс безопасен)
+# N   — pep8-naming: конвенции имён (классы PascalCase, функции snake_case)
+# UP  — pyupgrade: современный Python-синтаксис (dict union, match-case)
+# S   — flake8-bandit: security (hardcoded passwords, shell=True, eval)
+# DJ  — flake8-django: Django-специфичные антипаттерны
+# RUF — ruff-native: unused noqa, unnecessary iter
+select = ["F", "E9", "W6", "B", "I", "N", "UP", "S", "DJ", "RUF"]
 
 ignore = [
+    # --- Pre-W0.2 исключения (оставляем) ---
     "F401",   # unused-import — законно в __init__.py для re-export shim'ов
     "F403",   # star-imports — используется в settings.py проекта
     "F405",   # undefined-via-star — следствие F403
     "F841",   # unused-variable — иногда для читаемости (_ = result)
     "B008",   # function-call-in-default-argument — конфликтует с Django (Q(), timezone.now)
     "B904",   # raise-without-from-inside-except — много мест, не критично
+    # --- Wave 0.2 добавления (после реальной проверки на кодовой базе) ---
+    "S101",   # assert-used — в тестах норма, а prod-код и так не использует
+    "S105",   # hardcoded-password-string — ложные срабатывания на password="..." в тестах
+    "S106",   # hardcoded-password-funcargs — то же
+    "S107",   # hardcoded-password-default — то же
+    "S311",   # suspicious-non-cryptographic-random — random.choice() не для токенов (для токенов secrets)
+    "S308",   # suspicious-mark-safe — mark_safe на константах (не user input)
+    "N806",   # non-lowercase-variable — Django ORM: `User = get_user_model()`
+    "N815",   # mixed-case-variable — конфликт с JSON полями (camelCase из API)
+    "N818",   # exception-name-should-end-in-Error — исторические имена
+    "UP007",  # PEP 604 union (X | Y) — в Django полях лучше Optional[X]
+    "UP035",  # import-replacement typing — мы используем и typing, и collections.abc
+    "RUF001", # ambiguous-unicode в строках — русский текст триггерит ложно
+    "RUF002", # то же для docstrings
+    "RUF003", # то же для comments
+    "RUF012", # mutable-class-default — Django `Meta.indexes = [...]` классический паттерн
+]
+
+[tool.ruff.lint.isort]
+# Порядок: stdlib → django → third-party → first-party → local
+known-first-party = [
+    "accounts", "companies", "tasksapp", "ui", "audit", "mailer",
+    "notifications", "phonebridge", "amocrm", "policy", "messenger", "core", "crm",
+]
+known-third-party = ["django", "rest_framework", "celery", "channels"]
+section-order = [
+    "future", "standard-library", "third-party", "first-party", "local-folder",
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Миграции — автогенерируемый код Django, не трогаем.
-"**/migrations/*.py" = ["F", "E", "W", "B"]
+# Миграции — автогенерируемый код Django, не трогаем полностью.
+"**/migrations/*.py" = ["F", "E", "W", "B", "I", "N", "UP", "S", "DJ", "RUF"]
 # Настройки проекта используют `from .base import *` паттерн.
-"backend/crm/settings*.py" = ["F403", "F405"]
-# Тесты — разрешаем assert в голом виде и мутабельные дефолты.
-"**/tests*.py" = ["B"]
-"**/test_*.py" = ["B"]
+"backend/crm/settings*.py" = ["F403", "F405", "N806", "S105"]
+# Тесты — разрешаем assert, мутабельные дефолты, hardcoded-like passwords.
+"**/tests*.py" = ["B", "S101", "S105", "S106", "S107", "N802", "N803", "N806"]
+"**/test_*.py" = ["B", "S101", "S105", "S106", "S107", "N802", "N803", "N806"]
+# conftest — то же что тесты
+"**/conftest.py" = ["B", "S101", "F401"]
+# management commands — часто большие и простые, короткие функции с нетипичными
+# именами разрешаем
+"**/management/commands/*.py" = ["S603", "S607"]  # subprocess call is OK here
 
 # -----------------------------------------------------------------------------
 # Coverage (Wave 0.1 baseline: 51% → fail_under=50 с запасом −2%).

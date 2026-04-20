@@ -1,4 +1,4 @@
 # Backwards-compatibility shim: перенесён в accounts/permissions.py
-from accounts.permissions import require_admin, get_view_as_user, get_effective_user  # noqa: F401
+from accounts.permissions import get_effective_user, get_view_as_user, require_admin
 
-__all__ = ["require_admin", "get_view_as_user", "get_effective_user"]
+__all__ = ["get_effective_user", "get_view_as_user", "require_admin"]

@@ -142,7 +142,7 @@ def get_effective_quota_available() -> int:
     except Exception:
         pass  # fail-open: пересчитаем
 
-    from mailer.models import SmtpBzQuota, SendLog
+    from mailer.models import SendLog, SmtpBzQuota
 
     quota = SmtpBzQuota.load()
 

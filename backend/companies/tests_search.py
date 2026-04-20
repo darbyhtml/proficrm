@@ -5,25 +5,25 @@ import unittest
 from django.db import connection
 from django.test import TestCase
 
-from companies.search_index import (
-    parse_query,
-    filter_stop_tokens,
-    classify_text_query,
-    TEXT_QUERY_WEBSITE,
-    TEXT_QUERY_PERSON,
-    TEXT_QUERY_ADDRESS,
-    TEXT_QUERY_COMPANY_OR_GENERAL,
-)
-from companies.search_service import highlight_html, CompanySearchService
 from companies.models import (
     Company,
+    CompanyPhone,
+    CompanySearchIndex,
     CompanyStatus,
     Contact,
     ContactPhone,
-    CompanyPhone,
-    CompanySearchIndex,
 )
-from companies.search_index import rebuild_company_search_index
+from companies.search_index import (
+    TEXT_QUERY_ADDRESS,
+    TEXT_QUERY_COMPANY_OR_GENERAL,
+    TEXT_QUERY_PERSON,
+    TEXT_QUERY_WEBSITE,
+    classify_text_query,
+    filter_stop_tokens,
+    parse_query,
+    rebuild_company_search_index,
+)
+from companies.search_service import CompanySearchService, highlight_html
 
 
 class QueryParseTests(TestCase):
@@ -360,7 +360,7 @@ class SearchServicePostgresTests(TestCase):
 
     def test_exact_search_via_index_no_join(self):
         """EXACT‑поиск должен использовать денормализованные поля индекса (без JOIN)."""
-        from companies.models import ContactEmail, ContactPhone
+        from companies.models import ContactEmail
 
         c1 = Company.objects.create(
             name="Компания с контактом",
@@ -593,7 +593,7 @@ class SearchBackendFacadeTests(TestCase):
     """Тесты фасада get_company_search_backend при единственном backend (PostgreSQL)."""
 
     def test_get_backend_always_returns_postgres_service(self):
-        from companies.search_service import get_company_search_backend, CompanySearchService
+        from companies.search_service import CompanySearchService, get_company_search_backend
 
         for backend_value in ("postgres", "typesense", "unknown", "", None):
             with self.subTest(backend_value=backend_value):

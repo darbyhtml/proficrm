@@ -6,9 +6,10 @@ Backfill: разбирает поле 309609 «Список телефонов (
 ещё не разнесены в CompanyPhone (например, импорт был до появления логики Скайнет).
 """
 
+import logging
+
 from django.core.management.base import BaseCommand
 from django.db.models import Max
-import logging
 
 from companies.models import Company, CompanyPhone
 from companies.normalizers import normalize_phone as _normalize_phone

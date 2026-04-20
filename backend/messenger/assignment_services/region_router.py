@@ -56,7 +56,7 @@ class MultiBranchRouter:
         ("tym", "tmn"),
     )
 
-    def route(self, conversation: Conversation) -> Optional[Branch]:
+    def route(self, conversation: Conversation) -> Branch | None:
         region = (conversation.client_region or "").strip()
         if region:
             exact = (
@@ -79,7 +79,7 @@ class MultiBranchRouter:
 
         return self._fallback()
 
-    def _pick_common_pool_branch(self, branches, today: Optional[date] = None):
+    def _pick_common_pool_branch(self, branches, today: date | None = None):
         """Понедельная ротация: по ISO-неделе текущей даты.
 
         Порядок филиалов — через COMMON_POOL_ROTATION_SLOTS (коды,

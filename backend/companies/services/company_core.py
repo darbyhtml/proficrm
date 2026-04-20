@@ -16,15 +16,15 @@ from django.db.models import Q
 from django.utils import timezone
 
 from accounts.models import User
-from audit.service import log_event
 from audit.models import ActivityEvent
+from audit.service import log_event
 from companies.models import (
     Company,
-    CompanyPhone,
     CompanyEmail,
+    CompanyHistoryEvent,
     CompanyNote,
     CompanyNoteAttachment,
-    CompanyHistoryEvent,
+    CompanyPhone,
     Contact,
     ContactPhone,
 )
@@ -238,6 +238,7 @@ def get_worktime_status(company: Company) -> dict:
 
     try:
         from zoneinfo import ZoneInfo
+
         from core.timezone_utils import guess_ru_timezone_from_address
         from core.work_schedule_utils import get_worktime_status_from_schedule
 
