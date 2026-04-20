@@ -491,56 +491,37 @@ def company_delete_request_approve(request: HttpRequest, company_id, req_id: int
     req.decided_at = timezone.now()
     req.save(update_fields=["status", "decided_by", "decided_at"])
 
-    try:
-        with transaction.atomic():
-            # На всякий случай удаляем индекс до каскада, как и при прямом удалении.
-            CompanySearchIndex.objects.filter(company_id=company_pk).delete()
-
-            # Если удаляем "головную" компанию клиента — дочерние карточки становятся самостоятельными.
-            detached = _detach_client_branches(head_company=company)
-            branches_notified = _notify_head_deleted_with_branches(actor=user, head_company=company, detached=detached)
-
-            if req.requested_by_id:
-                notify(
-                    user=req.requested_by,
-                    kind=Notification.Kind.COMPANY,
-                    title="Запрос на удаление подтверждён",
-                    body=f"{company.name}: компания удалена",
-                    url="/companies/",
-                    payload={
-                        "company_id": str(company_pk),
-                        "request_id": req.id,
-                        "decided_by_id": user.id,
-                        "decided_by_name": f"{user.last_name} {user.first_name}".strip() or user.get_username(),
-                        "decision": "approved",
-                    },
-                )
-            # Hotfix 2026-04-18: явно удаляем задачи ДО company.delete().
-            # Task.company on_delete=SET_NULL — раньше задачи оставались «—» без привязки.
-            _tasks_del_cnt_approve = Task.objects.filter(company_id=company_pk).delete()[0]
-            log_event(
-                actor=user,
-                verb=ActivityEvent.Verb.DELETE,
-                entity_type="company",
-                entity_id=str(company_pk),
-                company_id=company_pk,
-                message="Компания удалена (по запросу)",
-                meta={
-                    "request_id": req.id,
-                    "detached_branches": [str(c.id) for c in detached[:50]],
-                    "detached_count": len(detached),
-                    "branches_notified": branches_notified,
-                    "tasks_deleted_count": _tasks_del_cnt_approve,
-                },
-            )
-            company.delete()
-    except IntegrityError:
-        logger.exception("Failed to delete company %s via delete request due to CompanySearchIndex integrity error", company_pk)
-        messages.error(
-            request,
-            "Не удалось полностью удалить компанию по запросу из-за проблем с индексом поиска. "
-            "Обратитесь к администратору.",
+    # Уведомляем автора запроса перед удалением — это shipped-up-front: если
+    # execute_company_deletion провалится, автор всё равно видит «approved»
+    # в UI только после успешного удаления; здесь notify добавляет Notification,
+    # которое прочитается на следующем опросе. Порядок сохраняем как был.
+    if req.requested_by_id:
+        notify(
+            user=req.requested_by,
+            kind=Notification.Kind.COMPANY,
+            title="Запрос на удаление подтверждён",
+            body=f"{company.name}: компания удалена",
+            url="/companies/",
+            payload={
+                "company_id": str(company_pk),
+                "request_id": req.id,
+                "decided_by_id": user.id,
+                "decided_by_name": f"{user.last_name} {user.first_name}".strip() or user.get_username(),
+                "decision": "approved",
+            },
         )
+
+    # Phase 3 extract: единый workflow удаления.
+    from companies.services import execute_company_deletion, CompanyDeletionError
+    try:
+        execute_company_deletion(
+            company=company,
+            actor=user,
+            source="approve_request",
+            extra_meta={"request_id": req.id},
+        )
+    except CompanyDeletionError as exc:
+        messages.error(request, str(exc))
         return redirect("company_detail", company_id=company_pk)
 
     messages.success(request, "Компания удалена.")
@@ -564,47 +545,19 @@ def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
 
     reason = (request.POST.get("reason") or "").strip()
 
-    # Удаление компании иногда падало с IntegrityError по CompanySearchIndex
-    # (битые/рассинхронизированные данные индекса поиска).
-    # Чтобы не отдавать 500 пользователю, подчистим индекс и перехватим ошибку.
+    # Phase 3 extract: единый workflow удаления в companies.services.
+    from companies.services import execute_company_deletion, CompanyDeletionError
     try:
-        with transaction.atomic():
-            # На всякий случай удаляем индекс до каскада.
-            CompanySearchIndex.objects.filter(company_id=company_pk).delete()
-
-            detached = _detach_client_branches(head_company=company)
-            branches_notified = _notify_head_deleted_with_branches(
-                actor=user,
-                head_company=company,
-                detached=detached,
-            )
-            # Hotfix 2026-04-18: явно удаляем задачи ДО company.delete().
-            _tasks_del_cnt_direct = Task.objects.filter(company_id=company_pk).delete()[0]
-            log_event(
-                actor=user,
-                verb=ActivityEvent.Verb.DELETE,
-                entity_type="company",
-                entity_id=str(company_pk),
-                company_id=company_pk,
-                message="Компания удалена",
-                meta={
-                    "reason": reason[:500],
-                    "detached_branches": [str(c.id) for c in detached[:50]],
-                    "detached_count": len(detached),
-                    "branches_notified": branches_notified,
-                    "tasks_deleted_count": _tasks_del_cnt_direct,
-                },
-            )
-            company.delete()
-    except IntegrityError:
-        logger.exception("Failed to delete company %s due to CompanySearchIndex integrity error", company_pk)
-        messages.error(
-            request,
-            "Не удалось полностью удалить компанию из-за проблем с индексом поиска. "
-            "Обратитесь к администратору.",
+        execute_company_deletion(
+            company=company,
+            actor=user,
+            reason=reason,
+            source="direct",
         )
-        # Компания формально ещё существует (транзакция откатится), но текущий инстанс уже “битый”.
-        # Ведём пользователя в список компаний, чтобы избежать NoReverseMatch и повторных сбоев.
+    except CompanyDeletionError as exc:
+        messages.error(request, str(exc))
+        # Компания формально ещё существует (транзакция откатилась), но инстанс "битый".
+        # Ведём пользователя в список компаний, чтобы избежать NoReverseMatch.
         return redirect("company_detail", company_id=company_pk)
 
     messages.success(request, "Компания удалена.")

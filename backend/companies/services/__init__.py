@@ -58,6 +58,13 @@ from companies.services.company_emails import (  # noqa: F401
     check_email_duplicate,
 )
 
+# Phase 3 extract (2026-04-20): единый workflow удаления компании.
+# Консолидирует общую логику company_delete_direct и company_delete_request_approve.
+from companies.services.company_delete import (  # noqa: F401
+    execute_company_deletion,
+    CompanyDeletionError,
+)
+
 __all__ = [
     "CompanyService",
     "ColdCallService",
@@ -79,4 +86,7 @@ __all__ = [
     "validate_phone_comment",
     "validate_email_value",
     "check_email_duplicate",
+    # Phase 3
+    "execute_company_deletion",
+    "CompanyDeletionError",
 ]
