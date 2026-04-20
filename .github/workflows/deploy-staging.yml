@@ -1,0 +1,67 @@
+name: Deploy Staging
+
+# Автодеплой на staging после успешного CI на main.
+# Прод не трогаем — prod деплоится вручную через 21-release-1-ready-to-execute.md.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    name: git pull + rebuild + up -d на staging
+    runs-on: ubuntu-latest
+    # Деплоим только если CI прошёл успешно
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Setup SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H 5.181.254.172 >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy to staging via SSH
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no root@5.181.254.172 << 'REMOTE'
+            set -e
+            cd /opt/proficrm-staging
+
+            echo "=== [1/4] git pull origin main ==="
+            git fetch origin main
+            HEAD_BEFORE=$(git rev-parse HEAD)
+            git pull origin main
+            HEAD_AFTER=$(git rev-parse HEAD)
+
+            if [ "$HEAD_BEFORE" = "$HEAD_AFTER" ]; then
+              echo "Staging уже на HEAD ($HEAD_AFTER) — пропускаем rebuild"
+              exit 0
+            fi
+
+            echo "Новый HEAD: $HEAD_AFTER (было: $HEAD_BEFORE)"
+
+            echo "=== [2/4] Build образов ==="
+            docker compose -f docker-compose.staging.yml -p proficrm-staging build web celery celery-beat websocket
+
+            echo "=== [3/4] Migrate ==="
+            docker compose -f docker-compose.staging.yml -p proficrm-staging run --rm web python manage.py migrate --noinput
+
+            echo "=== [4/4] Recreate сервисов ==="
+            docker compose -f docker-compose.staging.yml -p proficrm-staging up -d --force-recreate web celery celery-beat websocket
+
+            echo "=== Пауза 30 сек + smoke ==="
+            sleep 30
+            docker ps --filter "name=crm_staging" --format "table {{.Names}}\t{{.Status}}"
+
+            echo "=== Deploy staging завершён: $HEAD_AFTER ==="
+          REMOTE
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Staging deploy failed. Проверь SSH ключ, докер, место на диске."
