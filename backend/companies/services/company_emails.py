@@ -67,9 +67,11 @@ def check_email_duplicate(
     """
     if not email:
         return None
-    if check_main and (company.email or "").strip().lower() == email:
+    # Защитный lowercase — на случай если вызывающий забыл нормализовать.
+    email_norm = email.strip().lower()
+    if check_main and (company.email or "").strip().lower() == email_norm:
         return "Этот email уже указан как основной."
-    qs = CompanyEmail.objects.filter(company=company, value__iexact=email)
+    qs = CompanyEmail.objects.filter(company=company, value__iexact=email_norm)
     if exclude_email_id is not None:
         qs = qs.exclude(id=exclude_email_id)
     if qs.exists():

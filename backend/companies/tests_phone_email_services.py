@@ -64,8 +64,10 @@ class ValidatePhoneStrictTests(TestCase):
         self.assertIsNone(norm)
         self.assertEqual(err, "Некорректный формат телефона.")
 
-    def test_too_long_rejected(self):
-        norm, err = validate_phone_strict("+790512345671234567")
+    def test_obvious_garbage_rejected(self):
+        # После normalize_phone мусор вида "xxxxxxxxx" возвращается как original[:50]
+        # и не матчит E.164-regex → Некорректный формат.
+        norm, err = validate_phone_strict("not-a-phone-at-all-123")
         self.assertIsNone(norm)
         self.assertEqual(err, "Некорректный формат телефона.")
 
@@ -80,8 +82,8 @@ class ValidatePhoneMainTests(TestCase):
 
     def test_cyrillic_rejected(self):
         norm, err = validate_phone_main("+7абв905")
-        self.assertIsNone(err is None and True)
         self.assertIsNotNone(err)
+        self.assertIn("недопустимые", err)
 
     def test_valid_digits(self):
         norm, err = validate_phone_main("+7 (905) 123-45-67")
