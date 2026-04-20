@@ -488,7 +488,10 @@ class Conversation(models.Model):
         ]
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(status__in=["open", "pending", "resolved", "closed"]),
+                # waiting_offline добавлен (2026-04-20) — соответствует choices.
+                # Без него INSERT с status='waiting_offline' падал IntegrityError
+                # (ломал test_widget_offhours и off-hours functionality в целом).
+                condition=models.Q(status__in=["open", "pending", "waiting_offline", "resolved", "closed"]),
                 name="conversation_valid_status",
             ),
         ]
