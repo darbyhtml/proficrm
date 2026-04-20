@@ -1,0 +1,48 @@
+{
+  "snapshot_date": "2026-04-20",
+  "wave": "0.2",
+  "mypy_version": "1.17.1",
+  "python_version": "3.13",
+  "total_errors": 1252,
+  "files_with_errors": 118,
+  "top_10_error_codes": {
+    "attr-defined": 252,
+    "assignment": 239,
+    "arg-type": 237,
+    "union-attr": 146,
+    "unused-ignore": 75,
+    "index": 74,
+    "misc": 68,
+    "operator": 41,
+    "no-redef": 20,
+    "return-value": 19
+  },
+  "top_20_files": {
+    "backend/amocrm/migrate.py": 159,
+    "backend/ui/views/settings_integrations.py": 102,
+    "backend/ui/views/company_list.py": 78,
+    "backend/ui/views/company_detail.py": 77,
+    "backend/ui/views/tasks.py": 56,
+    "backend/ui/views/settings_core.py": 50,
+    "backend/companies/tests_search.py": 46,
+    "backend/ui/views/settings_messenger.py": 40,
+    "backend/ui/views/dashboard.py": 39,
+    "backend/companies/search_service.py": 33,
+    "backend/ui/forms.py": 33,
+    "backend/mailer/views/recipients.py": 26,
+    "backend/companies/search_index.py": 25,
+    "backend/accounts/tests_tenderist.py": 24,
+    "backend/ui/views/reports.py": 20,
+    "backend/mailer/views/campaigns/list_detail.py": 19,
+    "backend/mailer/views/settings.py": 17,
+    "backend/ui/views/settings_mail.py": 16,
+    "backend/mailer/smtp_bz_api.py": 15,
+    "backend/ui/views/_base.py": 15
+  },
+  "policy": {
+    "gate": "ratchet — CI падает если PR добавляет новые ошибки",
+    "script": "scripts/mypy_ratchet.py",
+    "tolerance_buffer": 5,
+    "next_wave_target": "W1: -100, W2: -200, ..., W14: 0"
+  }
+}
