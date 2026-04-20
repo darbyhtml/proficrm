@@ -12,6 +12,14 @@
 - Задача похожа на ранее решённую проблему → проверить `docs/problems-solved.md`
 - Нужно понять почему выбран конкретный подход → прочитать `docs/decisions.md`
 
+## Аудит и граф знаний
+
+**Два источника правды о состоянии проекта:**
+
+1. **`docs/audit/README.md`** — Wave 0.1 audit snapshot (2026-04-20). **Свежее и детальнее графа.** Содержит: 70 моделей + 236 views + 18 Celery tasks + 112 templates + 150 API endpoints, метрики (LOC/CC/MI/coverage), **top-20 tech-debt**. Смотри сюда **первым** при планировании рефакторинга.
+2. **`docs/audit/hotlist.md`** — top-7 файлов/артефактов «трогать первыми» в W1-W3. Краткий prioritized индекс для следующих сессий.
+3. **`docs/plan/00_MASTER_PLAN.md`** — план 15 волн + `docs/plan/01_wave_0_audit.md` ... `16_wave_15_docs.md`.
+
 ## Граф знаний проекта (graphify)
 
 В папке `graphify-out/` лежит построенный граф знаний всего проекта: 5281 узел, 20558 рёбер, 227 сообществ. Это основной навигационный инструмент для ориентации в коде.
@@ -141,8 +149,13 @@
 | Ветка | `main` (единственная) |
 | Прод | `crm.groupprofi.ru` — деплой ТОЛЬКО вручную пользователем |
 | Staging | `crm-staging.groupprofi.ru` — деплой через Claude Code |
-| Моделей БД | 66 (10 Django-приложений) |
-| API эндпоинтов | 50+ REST (DRF) + Widget API (публичный) |
+| Моделей БД | **70** (10 Django-приложений — актуализировано Wave 0.1) |
+| API эндпоинтов | **~150** REST (DRF) + Widget API (публичный) |
+| HTML шаблонов | **112** (актуализировано Wave 0.1) |
+| Views-функций/классов | **236** (+20 DRF @action-методов) |
+| Тестов | **1179** test-runs / **1 240** test-функций |
+| Coverage | **51 %** (baseline 2026-04-20, gate `fail_under=50`) |
+| Актуальный аудит | **`docs/audit/README.md`** (snapshot 2026-04-20, Wave 0.1) |
 
 ## Архитектура — где что лежит
 
@@ -161,7 +174,7 @@ backend/
 ├── policy/        — PolicyConfig, PolicyRule
 ├── amocrm/        — интеграция AmoCRM
 ├── core/          — утилиты
-├── templates/     — 89 HTML шаблонов
+├── templates/     — 112 HTML шаблонов (см. docs/audit/frontend-inventory.md)
 └── static/        — CSS (Tailwind), JS (widget, operator-panel, purify)
 
 frontend/          — Tailwind source (src/main.css)
@@ -216,7 +229,7 @@ CORS разделён: nginx обрабатывает OPTIONS preflight, Django 
 
 ### CI / CD
 
-- **CI** (`.github/workflows/ci.yml`): на каждый push/PR в main — ruff + gitleaks + Django test suite (1143 теста, 100% pass) + pip-audit.
+- **CI** (`.github/workflows/ci.yml`): на каждый push/PR в main — ruff + gitleaks + Django test suite (**1179 тестов**, 100% pass) + pip-audit. Coverage gate `fail_under=50` в `pyproject.toml` (baseline 51%, траектория +5%/волна).
 - **Auto-deploy staging** (`.github/workflows/deploy-staging.yml`): после успешного CI на main — GitHub Actions через SSH → git pull + build + migrate + up -d. Требует secret `STAGING_SSH_PRIVATE_KEY`.
 - **Production deploy**: **только вручную** по runbook `docs/runbooks/21-release-1-ready-to-execute.md`. Workflow для прода намеренно НЕ создаётся.
 - Тесты запускаются с `DJANGO_SETTINGS_MODULE=crm.settings_test` (ALLOWED_HOSTS=["*"], EAGER celery, in-memory email и т.д.).

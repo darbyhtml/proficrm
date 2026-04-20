@@ -9,6 +9,7 @@ _Снапшот: **2026-04-20**. Коммит baseline: `ec67d771`._
 
 | Файл | Объём | Назначение |
 |------|-------|-----------|
+| [`hotlist.md`](./hotlist.md) | — | **ТОП-7** файлов «трогать первыми» — стартовая точка для следующих сессий W1-W3 |
 | [`metrics-baseline.md`](./metrics-baseline.md) | — | **СВОДКА** всех метрик (LOC, complexity, coverage) |
 | [`models-inventory.md`](./models-inventory.md) | 1 267 LOC | 70 моделей по apps с полями/FK/тестами |
 | [`views-inventory.md`](./views-inventory.md) | 2 237 LOC | 236 views, 83 mutating без @policy_required |

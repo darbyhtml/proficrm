@@ -703,10 +703,19 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=6, minute=30),
     },
     # Retention: еженедельно в воскресенье 03:00 MSK
-    "purge-old-activity-events": {
-        "task": "audit.tasks.purge_old_activity_events",
-        "schedule": crontab(hour=3, minute=0, day_of_week=0),
-    },
+    # -----------------------------------------------------------------------
+    # Wave 0.1 audit (2026-04-20) flagged P0 runtime risk:
+    # ActivityEvent.objects.filter(created_at__lt=cutoff).delete() без chunking.
+    # На 9.5M строк — single-transaction DELETE → OOM + lock contention всей БД.
+    # Disabled в beat до Wave 3 rewrite с itertools chunk'ing (по 100k строк).
+    # Функция остаётся импортируемой (tests_retention.py вызывает её напрямую
+    # с маленькими тестовыми наборами). Не удаляю sched entry полностью, а
+    # комментирую — чтобы diff был очевиден при восстановлении в W3.
+    # -----------------------------------------------------------------------
+    # "purge-old-activity-events": {
+    #     "task": "audit.tasks.purge_old_activity_events",
+    #     "schedule": crontab(hour=3, minute=0, day_of_week=0),
+    # },
     "purge-old-error-logs": {
         "task": "audit.tasks.purge_old_error_logs",
         "schedule": crontab(hour=3, minute=15, day_of_week=0),

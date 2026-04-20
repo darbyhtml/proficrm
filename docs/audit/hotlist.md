@@ -1,0 +1,131 @@
+# Hotlist — Топ-7 «трогать первыми»
+
+_Снапшот: **2026-04-20**. Источник: Wave 0.1 audit, top-20 tech-debt → фильтр по score ≥ 80._
+
+Это **index для следующих сессий**: каждый из 7 файлов появится в одной из волн W1-W3 **точечно**, не целиком. Здесь зафиксирован приоритет, размер, и где именно каждый атакуется.
+
+Если сессия начинается «что рефакторить сегодня?» — смотри сюда до README.
+
+---
+
+## 1. `backend/ui/views/company_detail.py` — 2 698 LOC
+
+- **Score:** 100 (impact 5 × freq 5 × risk 4)
+- **Где лечится:** **Wave 1** (Phase 4-5 по плану refactoring-specialist)
+- **Что сделано ранее:** Phase 0-3 дали −185 LOC (коммиты `2048f4ef`, `126b7930`, `05b34036`, `785d314a`)
+- **Что осталось:**
+  - Phase 4: `companies/services/company_overview.py` — context-builder для `company_detail` view (≈300-500 LOC)
+  - Phase 5: extract `/settings/cold-call/*` views в `companies/services/cold_call.py`
+  - Phase 6 (новое после audit): удалить денормализацию `Company.phone/email/contact_name/position` → CompanyPhone/CompanyEmail/Contact
+- **Ожидаемое уменьшение:** 2698 → ≈ 1 800 LOC после W1
+- **Риск регрессии:** высокий — god-view трогают каждый день
+- **Правило:** каждое удаление сопровождать тестом и запуском `manage.py test companies ui`
+
+## 2. `backend/ui/views/_base.py` — ≈ 1 700 LOC
+
+- **Score:** 100 (impact 5 × freq 5 × risk 4)
+- **Где лечится:** **Wave 1** (после company_detail)
+- **Что внутри:** helpers + decorators + querysets + policy-check wrappers — всё в одном файле
+- **Расщепление:**
+  - `ui/views/_helpers/company_filters.py` (уже частично — `_apply_company_filters`)
+  - `ui/views/_helpers/task_filters.py`
+  - `ui/views/_helpers/access.py` — `_can_edit_company`, `_can_delete_company`, `_detach_client_branches`
+  - `ui/views/_helpers/notify.py` — `_notify_branch_leads`, `_notify_head_deleted_with_branches`
+  - `ui/views/_helpers/logging.py` — `log_event` (переезжает из здесь в audit.services)
+- **Ожидаемое уменьшение:** 1 700 → ≈ 400 LOC (остаётся только import-re-export shim)
+- **Правило:** сохранить полную обратную совместимость — любой `from ui.views._base import X` должен работать
+
+## 3. `backend/templates/ui/company_detail.html` — 8 781 LOC
+
+- **Score:** 100 (impact 5 × freq 5 × risk 4)
+- **Где лечится:** **Wave 9** (UX унификация) + **Wave 11** (CSP strict)
+- **Что внутри:** 33 inline `<script>` блока на ≈ 4 719 LOC JS, 6+ inline `<style>` на ≈ 200 LOC CSS
+- **План расщепления:**
+  - Выделить JS-логику в `backend/static/ui/company_detail/*.js` (по функциональным блокам: timeline, phone-edit, email-edit, delete-workflow, popup-menu, etc.)
+  - Использовать `{% include %}` для повторяющихся partials (popup-menu, input-like edit, phone chip)
+  - CSP nonce per-request для оставшихся inline scripts
+- **Ожидаемое уменьшение:** 8 781 → ≈ 1 500 LOC HTML + ≈ 3 500 LOC external JS (минификация даст −40%)
+- **Риск:** визуальная регрессия → Playwright snapshot tests до/после
+
+## 4. `backend/static/ui/operator-panel.js` — 209 KB (unminified)
+
+- **Score:** 48 (impact 4 × freq 3 × risk 4)
+- **Где лечится:** **Wave 10** (infra tooling) — часть build pipeline
+- **Действие:**
+  - Добавить `esbuild` или `terser` в dev-compose
+  - `make build-js` минифицирует → `operator-panel.min.js` ≈ 80 KB
+  - `base.html` подключает `.min.js` в production (через `{% if not DEBUG %}`)
+- **Quick win:** 30 минут работы, экономит 130 KB на каждом logе оператора чата
+- **Зависимости:** никакие — можно делать в рамках W0.2 как bonus
+
+## 5. `backend/static/widget.js` — 101 KB (unminified, public-facing)
+
+- **Score:** 36 (impact 4 × freq 3 × risk 3)
+- **Где лечится:** **Wave 10** (вместе с operator-panel.js)
+- **Особенность:** **публичный файл** — встраивается через `<script>` на сторонних сайтах клиентов GroupProfi. 101 KB на каждой загрузке → влияет на их PageSpeed. Минификация = прямой выигрыш для заказчиков.
+- **План:** тот же — esbuild + `.min.js`. **Опционально**: source maps (проще debug если у клиента баг). **Обязательно**: SRI (Subresource Integrity) хэш в `<script integrity="sha384-...">`.
+
+## 6. `backend/audit/tasks.py::purge_old_activity_events` — P0 runtime risk
+
+- **Score:** 75 (impact 5 × freq 3 × risk 5)
+- **Где лечится:** **Wave 3** (core CRM hardening)
+- **Статус сейчас:** **Disabled в beat** (2026-04-20, коммит post-W0.1 cleanup). Функция остаётся импортируемой — `tests_retention.py` её вызывает на тестовом наборе.
+- **Что переписать:**
+  ```python
+  # BEFORE: ActivityEvent.objects.filter(created_at__lt=cutoff).delete()
+  # AFTER:
+  CHUNK_SIZE = 100_000
+  while True:
+      ids = list(
+          ActivityEvent.objects.filter(created_at__lt=cutoff)
+          .values_list("id", flat=True)[:CHUNK_SIZE]
+      )
+      if not ids:
+          break
+      deleted, _ = ActivityEvent.objects.filter(id__in=ids).delete()
+      logger.info("purge: batch %d rows", deleted)
+      time.sleep(2)  # даём ATO-репликации вдохнуть
+  ```
+- **После фикса:** восстановить beat entry в `settings.py::CELERY_BEAT_SCHEDULE`
+
+## 7. `ActivityEvent` composite index — `(actor_id, created_at)`
+
+- **Score:** 80 (impact 5 × freq 4 × risk 4)
+- **Где лечится:** **Wave 13** (performance optimization)
+- **Контекст:** 9.5M → 87K строк после Release 0 purge (через RULE + batch DELETE). Но при росте снова упрётся в медленные queries на `/audit/?user=X&days=30`.
+- **Миграция:**
+  ```python
+  # audit/migrations/0012_activityevent_actor_created_index.py
+  migrations.AddIndex(
+      model_name="activityevent",
+      index=models.Index(
+          fields=["actor_id", "-created_at"],
+          name="audit_activity_actor_created_idx",
+      ),
+  )
+  ```
+- **Верификация:** `EXPLAIN ANALYZE` до/после на запросе из `settings_audit_log` view. Ожидаем → Index Scan вместо Seq Scan, 700ms → <50ms.
+
+---
+
+## Как использовать этот файл
+
+1. **Начало сессии рефактора:** прочитать этот hotlist + соответствующий `docs/plan/0N_wave_*.md`.
+2. **Планирование следующего PR:** выбрать ОДИН item из hotlist → открыть его соответствующую волну → взять конкретный Этап.
+3. **После завершения item:** обновить статус здесь (✅ DONE, cross-reference на коммит).
+
+## Что НЕ в hotlist (намеренно)
+
+- **35 моделей без `verbose_name`** — мелочь, пакетный PR в W9
+- **5 singleton-моделей без `pk=1` constraint** — риск реальный, но единичная миграция, в W3
+- **100% API без `@extend_schema`** — большая работа (~3 дня), но не блокер runtime → W11
+- **70 duplicate endpoints `/api/` vs `/api/v1/`** — косметика, W11
+- **10 моделей без тестов** — распределяется по волнам вместе с рефактором кода, не отдельный item
+
+---
+
+## История изменений
+
+| Дата | Изменение |
+|------|-----------|
+| 2026-04-20 | Создан после Wave 0.1 audit. Baseline для W1-W13. |
