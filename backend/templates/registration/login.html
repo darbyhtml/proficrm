@@ -55,9 +55,9 @@
           {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
           <input type="hidden" name="login_type" value="access_key" />
           <div>
-            <label class="block text-sm text-brand-dark/80 mb-1">Ключ доступа</label>
-            <input name="access_key" type="text" required autofocus class="w-full rounded-lg border border-brand-soft px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-teal/30 font-mono text-sm" placeholder="Вставьте ключ доступа, полученный от администратора" />
-            <div class="text-xs text-brand-dark/60 mt-1">Ключ доступа выдается администратором. Действует 24 часа, одноразовый.</div>
+            <label for="login-access-key" class="block text-sm text-brand-dark/80 mb-1">Ключ доступа</label>
+            <input id="login-access-key" name="access_key" type="text" required autofocus autocomplete="one-time-code" aria-describedby="login-access-key-hint" class="w-full rounded-lg border border-brand-soft px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-teal/30 font-mono text-sm" placeholder="Вставьте ключ доступа, полученный от администратора" />
+            <div id="login-access-key-hint" class="text-xs text-brand-dark/60 mt-1">Ключ доступа выдается администратором. Действует 24 часа, одноразовый.</div>
           </div>
           <button class="w-full rounded-lg bg-brand-teal text-white py-2 hover:bg-brand-dark active:scale-[0.99]">
             Войти
@@ -70,13 +70,13 @@
           {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
           <input type="hidden" name="login_type" value="password" />
           <div>
-            <label class="block text-sm text-brand-dark/80 mb-1">Логин</label>
-            <input name="username" type="text" required class="w-full rounded-lg border border-brand-soft px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-teal/30" />
+            <label for="login-username" class="block text-sm text-brand-dark/80 mb-1">Логин</label>
+            <input id="login-username" name="username" type="text" required autocomplete="username" class="w-full rounded-lg border border-brand-soft px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-teal/30" />
           </div>
           <div>
-            <label class="block text-sm text-brand-dark/80 mb-1">Пароль</label>
-            <input name="password" type="password" required class="w-full rounded-lg border border-brand-soft px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-teal/30" />
-            <div class="text-xs text-brand-dark/60 mt-1">Доступно только для администраторов.</div>
+            <label for="login-password" class="block text-sm text-brand-dark/80 mb-1">Пароль</label>
+            <input id="login-password" name="password" type="password" required autocomplete="current-password" aria-describedby="login-password-hint" class="w-full rounded-lg border border-brand-soft px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-teal/30" />
+            <div id="login-password-hint" class="text-xs text-brand-dark/60 mt-1">Доступно только для администраторов.</div>
           </div>
           <button class="w-full rounded-lg bg-brand-teal text-white py-2 hover:bg-brand-dark active:scale-[0.99]">
             Войти

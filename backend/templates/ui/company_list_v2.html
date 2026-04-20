@@ -19,11 +19,13 @@
     /* Подсветка строки компании с просрочкой */
     .v2-tr--overdue{background:linear-gradient(90deg,var(--v2-danger-50) 0%,transparent 180px) !important}
     .v2-tr--overdue:hover{background:linear-gradient(90deg,color-mix(in srgb, var(--v2-danger-50) 80%, var(--v2-danger)) 0%,var(--v2-bg-soft) 220px) !important}
-    /* Чип сферы — заметнее (цветной border + фон) */
+    /* Чип сферы — заметнее (цветной border + фон).
+       2026-04-20 ui-audit: раньше были off-palette индиго (#EEF2FF/#3730A3/#C7D2FE).
+       Теперь info-палитра из `tailwind.config.js` (#E3F2FD/#1565C0/#0D47A1). */
     .v2-sphere-chip{display:inline-flex;align-items:center;gap:3px;
       padding:2px 8px;border-radius:999px;font-size:14px;font-weight:600;
-      background:#EEF2FF;color:#3730A3;border:1px solid #C7D2FE}
-    .v2-sphere-chip--important{background:#FEF3C7;color:#92400E;border-color:#FCD34D}
+      background:#E3F2FD;color:#0D47A1;border:1px solid rgba(21,101,192,.3)}
+    .v2-sphere-chip--important{background:#FFF4E5;color:#BF360C;border-color:rgba(230,81,0,.35)}
   </style>
 {% endblock %}
 
@@ -211,11 +213,11 @@
         <button type="button" class="v2-btn v2-btn--ghost v2-btn--sm" id="v2BulkClear" disabled>Снять</button>
       </form>
 
-      <div id="v2BulkModal" style="display:none;position:fixed;inset:0;background:rgba(17,24,39,.55);z-index:100;align-items:center;justify-content:center;padding:20px">
+      <div id="v2BulkModal" role="dialog" aria-modal="true" aria-labelledby="v2BulkModalTitle" aria-hidden="true" style="display:none;position:fixed;inset:0;background:rgba(17,24,39,.55);z-index:100;align-items:center;justify-content:center;padding:20px">
         <div style="background:#fff;border-radius:16px;max-width:720px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.25)">
           <div style="padding:16px 20px;border-bottom:1px solid var(--v2-border);display:flex;align-items:center;justify-content:space-between">
-            <strong style="font-size:16px">Подтверждение массового переназначения</strong>
-            <button type="button" id="v2BulkModalClose" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--v2-text-muted);line-height:1">&times;</button>
+            <strong id="v2BulkModalTitle" style="font-size:16px">Подтверждение массового переназначения</strong>
+            <button type="button" id="v2BulkModalClose" aria-label="Закрыть" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--v2-text-muted);line-height:1">&times;</button>
           </div>
           <div id="v2BulkModalBody" style="padding:16px 20px;overflow-y:auto;flex:1;font-size:14px">
             <div style="text-align:center;color:var(--v2-text-muted);padding:24px 0">Загрузка превью…</div>

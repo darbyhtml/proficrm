@@ -998,8 +998,18 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
         bool(task_filter),
     ])
 
+    # PERF (2026-04-20 audit): .distinct() применяем ТОЛЬКО когда реально нужен —
+    # при M2M-фильтре по spheres или JOIN-фильтрах (overdue/task_filter через Task subquery).
+    # Без этого COUNT(*) над DISTINCT по всем 45K строкам × 40+ полей = 1+ секунда впустую.
+    # Остальные фильтры (FK по Company) не дают дублей → distinct лишний.
+    needs_distinct = bool(
+        selects_ctx["sphere_ids"]  # M2M: spheres
+        or overdue == "1"          # JOIN c tasksapp_task
+        or bool(task_filter)       # JOIN c tasksapp_task
+    )
+    result_qs = qs.distinct() if needs_distinct else qs
     return {
-        "qs": qs.distinct(),
+        "qs": result_qs,
         "q": q,
         "responsible": responsible,
         "selected_responsibles": selected_responsibles,

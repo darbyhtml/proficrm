@@ -3547,10 +3547,22 @@
           }
         }, true);
 
+        // PERF (2026-04-20 audit): паузируем tickAll при скрытой вкладке.
+        // Иначе polling продолжает работать в фоне → CPU/network впустую.
+        let __tickAllId = null;
+        function __startTickAll(){
+          if (__tickAllId === null) { tickAll(); __tickAllId = setInterval(tickAll, 30000); }
+        }
+        function __stopTickAll(){
+          if (__tickAllId !== null) { clearInterval(__tickAllId); __tickAllId = null; }
+        }
+        document.addEventListener('visibilitychange', function(){
+          if (document.hidden) __stopTickAll(); else __startTickAll();
+        });
         if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', function(){ tickAll(); setInterval(tickAll, 30000); });
+          document.addEventListener('DOMContentLoaded', __startTickAll);
         } else {
-          tickAll(); setInterval(tickAll, 30000);
+          __startTickAll();
         }
       })();
     </script>
@@ -3729,8 +3741,18 @@
             })
             .catch(function(){});
         }
-        setTimeout(pollUnread, 3000);
-        setInterval(pollUnread, 30000);
+        // PERF (2026-04-20 audit): pause при скрытой вкладке (как у tickAll выше).
+        let __pollUnreadId = null;
+        function __startPollUnread(){
+          if (__pollUnreadId === null) { pollUnread(); __pollUnreadId = setInterval(pollUnread, 30000); }
+        }
+        function __stopPollUnread(){
+          if (__pollUnreadId !== null) { clearInterval(__pollUnreadId); __pollUnreadId = null; }
+        }
+        document.addEventListener('visibilitychange', function(){
+          if (document.hidden) __stopPollUnread(); else __startPollUnread();
+        });
+        setTimeout(__startPollUnread, 3000);
       })();
     </script>
     {% endif %}

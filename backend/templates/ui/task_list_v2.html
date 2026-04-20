@@ -367,7 +367,10 @@
                 {% endwith %}
                 {% endwith %}
               </div>
-            {% else %}—{% endif %}
+            {% else %}
+              {# UX fix (2026-04-20): "—" сбивает с толку. "Личная задача" даёт контекст. #}
+              <span class="v2-item__meta" style="font-style:italic">Личная задача</span>
+            {% endif %}
           </div>
           <div class="v2-td" style="font-size:14px;color:{% if t.due_at and t.due_at < now and t.status != 'done' %}var(--v2-danger){% else %}var(--v2-text){% endif %};font-weight:{% if t.due_at and t.due_at < now and t.status != 'done' %}600{% else %}500{% endif %}">
             {% if t.due_at %}{{ t.due_at|date:"d.m.Y H:i" }}{% else %}<span class="v2-item__meta">без срока</span>{% endif %}

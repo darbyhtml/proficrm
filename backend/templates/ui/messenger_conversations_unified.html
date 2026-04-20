@@ -55,10 +55,13 @@
     flex-shrink: 0; width: 20px; margin-right: 4px; cursor: pointer;
   }
   .conversation-bulk-checkbox input[type="checkbox"] {
-    width: 16px; height: 16px; cursor: pointer; accent-color: #3b82f6;
+    /* 2026-04-20 ui-audit: было #3b82f6 (Tailwind blue-500) вне системы.
+       --v2-primary = #01948E (brand teal) — консистентно с brand palette. */
+    width: 16px; height: 16px; cursor: pointer; accent-color: var(--v2-primary);
   }
   .conversation-card.bulk-selected {
-    background: #eff6ff !important; border-left: 3px solid #3b82f6;
+    background: var(--v3-info-50, #E3F2FD) !important;
+    border-left: 3px solid var(--v2-primary);
   }
 
   .messenger-unified-layout {

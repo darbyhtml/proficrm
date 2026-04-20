@@ -147,6 +147,10 @@ def company_list(request: HttpRequest) -> HttpResponse:
     if not (q and not sort_raw):
         qs = qs.order_by(*order)
 
+    # PERF (2026-04-20, audit): раньше здесь был 1-й COUNT(DISTINCT) на 45K компаний,
+    # а потом Paginator внутри делал 2-й на том же queryset. Суммарно ~1.7s на /companies/
+    # (см. performance-optimizer отчёт). Переиспользуем результат одного COUNT в Paginator
+    # через protected атрибут `_count` (стабильное API в Django 4.x+).
     companies_filtered = qs.order_by().count()
     filter_active = bool(q) or f["filter_active"]
 
@@ -166,6 +170,8 @@ def company_list(request: HttpRequest) -> HttpResponse:
             pass
 
     paginator = Paginator(qs, per_page)
+    # Избегаем повторного COUNT внутри Paginator — используем уже посчитанный результат.
+    paginator._count = companies_filtered
     page = paginator.get_page(request.GET.get("page"))
     
     # Оптимизация: пакетная проверка прав на передачу вместо проверки для каждой компании
@@ -420,8 +426,11 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
         per_page = int(_ui_prefs.companies_per_page or 25)
     if per_page not in [25, 50, 100, 200]:
         per_page = 25
-    
+
     paginator = Paginator(qs, per_page)
+    # PERF (2026-04-20): тот же трюк что в company_list() — переиспользуем
+    # companies_filtered чтобы избежать повторного COUNT внутри Paginator.
+    paginator._count = companies_filtered
     page_num = int(request.GET.get("page", 1))
     page = paginator.get_page(page_num)
     

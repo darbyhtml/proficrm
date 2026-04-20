@@ -21,8 +21,11 @@
     --v2-bg-muted: #F4F4F2;
     --v2-text: #1A1A16;
     --v2-text-soft: #3F3F38;
+    /* WCAG 2.1 AA: обычный текст минимум 4.5:1 на white.
+       Раньше --v2-text-faint был #9B9B94 → 2.5:1 (fail).
+       #6F6F68 даёт 5.0:1 (pass). --v2-text-muted #6E6E65 уже 4.6:1 — оставляем. */
     --v2-text-muted: #6E6E65;
-    --v2-text-faint: #9B9B94;
+    --v2-text-faint: #6F6F68;
     --v2-primary: #01948E;
     --v2-primary-dark: #017E79;
     --v2-primary-50: #E6F4F3;
