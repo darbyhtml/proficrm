@@ -91,7 +91,10 @@ def generate_recurring_tasks():
         return
 
     try:
-        _generate_recurring_tasks_inner()
+        # Возвращаем результат inner-функции, чтобы тесты и сборщики метрик
+        # видели {"templates": N, "created": N}. Без этого return метод возвращал
+        # None и все recurrence-тесты падали TypeError: 'NoneType' is not subscriptable.
+        return _generate_recurring_tasks_inner()
     finally:
         try:
             cache.delete(LOCK_KEY)
@@ -120,9 +123,15 @@ def _generate_recurring_tasks_inner():
         with transaction.atomic():
             # SELECT FOR UPDATE: блокируем шаблон, чтобы параллельный воркер
             # (если redis-lock обойдётся) не сгенерировал тот же экземпляр.
+            #
+            # `of=("self",)` важно: select_related по nullable FK
+            # (created_by/assigned_to/company/type → все SET_NULL) даёт LEFT OUTER JOIN,
+            # а PostgreSQL не разрешает FOR UPDATE на nullable-side JOIN:
+            # `NotSupportedError: FOR UPDATE cannot be applied to the nullable side of an outer join`.
+            # С `of=("self",)` блокируется только сам Task row, joined таблицы не лочатся.
             try:
                 template = (
-                    Task.objects.select_for_update()
+                    Task.objects.select_for_update(of=("self",))
                     .select_related("created_by", "assigned_to", "company", "type")
                     .get(pk=template_id)
                 )
