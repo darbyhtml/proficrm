@@ -393,8 +393,21 @@ def decide(*, user: User, resource_type: str, resource: str, context: dict[str, 
 def _log_decision(*, user: User, decision: PolicyDecision, context: dict[str, Any] | None = None) -> None:
     """
     Логируем решение в audit (чтобы видеть расхождения и понимать реальное использование).
+
+    ВАЖНО: по умолчанию ВЫКЛЮЧЕНО через settings.POLICY_DECISION_LOGGING_ENABLED.
+    Без флага эта функция пишет ActivityEvent на каждый HTTP-запрос через @policy_required,
+    что создаёт 150K+ записей в день при 50 пользователях (заполнили audit_activityevent
+    на 4 GB — 95% всей БД — за полгода, см. docs/runbooks/04-god-nodes-n1-analysis.md).
+
+    Включать флаг ТОЛЬКО на короткий период для целенаправленного аудита policy-решений.
     """
     try:
+        from django.conf import settings as django_settings
+
+        # Релиз 0 (2026-04-20): выключаем шумный policy decision logging
+        if not getattr(django_settings, "POLICY_DECISION_LOGGING_ENABLED", False):
+            return
+
         from audit.models import ActivityEvent
         from audit.service import log_event
 

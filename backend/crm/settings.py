@@ -350,6 +350,12 @@ AUTH_USER_MODEL = "accounts.User"
 
 # Messenger feature flag и настройки live-chat / widget
 MESSENGER_ENABLED = os.getenv("MESSENGER_ENABLED", "0") == "1"
+
+# Policy engine: логировать каждое решение policy (enforce / deny / allow) в audit_activityevent.
+# По умолчанию ВЫКЛ — генерирует огромный объём записей (150K/день на 50 пользователей).
+# Включать только на короткий период для аудита. Запись идёт в audit_activityevent.entity_type='policy'.
+# См. docs/runbooks/10-release-0-night-hotfix.md и 04-god-nodes-n1-analysis.md.
+POLICY_DECISION_LOGGING_ENABLED = os.getenv("POLICY_DECISION_LOGGING_ENABLED", "0") == "1"
 # Филиал по умолчанию для глобального inbox, когда ни одно правило маршрутизации не сработало (ID филиала).
 MESSENGER_DEFAULT_BRANCH_ID = os.getenv("MESSENGER_DEFAULT_BRANCH_ID", "")
 if MESSENGER_DEFAULT_BRANCH_ID:
