@@ -1,5 +1,25 @@
 # Текущий спринт
 
+**[2026-04-20]** — Вечер: Wave 0.0+0.1 завершены (audit + tooling bootstrap) ✅
+
+**Wave 0.0 Bootstrap (коммит `ec67d771`)**: установлены radon 6.0.1, coverage 7.13.5, django-extensions 3.2.3, pygraphviz 1.14, pip-audit 2.9.0 в `requirements-dev.txt`; tokei 12.1.2 + graphviz 2.42.4 через apt на staging; conditional `django_extensions` в `INSTALLED_APPS` (только DEBUG).
+
+**Wave 0.1 Audit (артефакты в `docs/audit/`)**:
+- **5 parallel subagents** инвентаризовали: 70 моделей, 236 views, 18 Celery-задач, 112 шаблонов, 150 API endpoints.
+- **Итого 5 323 строк inventory + `metrics-baseline.md` + `README.md` с top-20 tech-debt**.
+- **Coverage baseline = 51 %** → `fail_under=50` в `pyproject.toml` (траектория +5%/волна → 85 к W14).
+- **ERD** сгенерирован через `graph_models --pygraphviz` (3.2 MB, 70 моделей).
+- Прочие метрики: 474 файла / 116k LOC / 65.9k Python / avg CC = A (4.20) / 1240 test-функций.
+
+**Top-3 red-flags для следующих волн**:
+1. **83 mutating endpoints без `@policy_required`** — блокер для W2 ENFORCE
+2. **`company_detail.html` = 8781 LOC, 33 inline `<script>`** — блокер CSP strict (W9)
+3. **`audit.tasks.purge_old_activity_events` DELETE 9.5M без chunking** — P0 OOM-риск (W3)
+
+**Следующий шаг**: Wave 0.2 (полный tooling: ruff config + black + mypy + bandit + pre-commit + Makefile + CI jobs).
+
+---
+
 **[2026-04-20]** — Вечер: Frontend audit (5 агентов) + Refactor phases 0-3 + 1179 tests pass ✅
 
 С 12:37 до 17:30+ MSK — большая сессия глубокого аудита и рефакторинга.

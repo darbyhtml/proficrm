@@ -41,3 +41,43 @@ ignore = [
 # Тесты — разрешаем assert в голом виде и мутабельные дефолты.
 "**/tests*.py" = ["B"]
 "**/test_*.py" = ["B"]
+
+# -----------------------------------------------------------------------------
+# Coverage (Wave 0.1 baseline: 51% → fail_under=50 с запасом −2%).
+# Траектория +5% за волну (план docs/plan/00_MASTER_PLAN.md §«Coverage gating»):
+#   W0: 50 (baseline −2%)
+#   W1: 55   W2: 60   W3: 65   W4: 70
+#   W5: 72   W6: 75   W7: 77   W8: 78   W9: 78 (UX)
+#   W10-W14: +2% за волну   финал: 85
+# -----------------------------------------------------------------------------
+[tool.coverage.run]
+source = ["backend"]
+omit = [
+    "*/migrations/*",
+    "*/tests*.py",
+    "*/test_*.py",
+    "*/conftest*.py",
+    "manage.py",
+    "backend/crm/asgi.py",
+    "backend/crm/wsgi.py",
+    "backend/staticfiles/*",
+    "backend/media/*",
+]
+
+[tool.coverage.report]
+fail_under = 50   # W0 baseline (было 51%, запас -2%)
+skip_empty = true
+show_missing = false
+precision = 1
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+
+[tool.coverage.html]
+directory = "docs/audit/coverage-baseline-html"
+
+[tool.coverage.xml]
+output = "docs/audit/coverage-baseline.xml"
