@@ -108,6 +108,33 @@ Storage — принцип «только бесплатное / self-hosted»).
 
 ## ✅ Закрытые
 
-_(раздел для истории — когда пользователь отвечает, item перемещается сюда с Answer)_
+### Q-policy [2026-04-20] Какой режим работы Claude Code с prod?
 
-— пока пусто —
+**Ответ**: Gated promotion. Blanket hook-block на `/opt/proficrm/` отменён в
+пользу explicit-marker модели. Детали — `CLAUDE.md` §«Деплой — Gated Promotion
+Model» R1-R5, operational runbook — `docs/runbooks/prod-deploy.md`.
+
+Ключевое:
+- Prod deploys only via git tag `release-v1.N-wX.Y-<name>`.
+- Claude Code МОЖЕТ выполнить deploy-команду только при наличии в промпте
+  маркеров `DEPLOY_PROD_TAG=<tag>` + `CONFIRM_PROD=yes`.
+- Prod file edits (.env, systemd, nginx без observability) — только с
+  `CONFIRM_PROD=yes`.
+- `/opt/proficrm-observability/` — free access (GlitchTip — shared infra).
+
+Initial tag: `release-v0.0-prod-current` на commit `be569ad` (prod state
+до смены политики, 333 commits behind main).
+
+### Q1 [2026-04-20] DNS glitchtip.groupprofi.ru
+
+**Ответ**: A-запись добавлена в Netangels 2026-04-20, CAA letsencrypt.org
+покрывает. Certbot TLS выдан, expires 2026-07-19, auto-renew OK.
+
+### Q3 [2026-04-20] proficrm-celery-1 prod unhealthy
+
+**Ответ**: не чинится в W0.4. Добавлен в `docs/audit/hotlist.md` item #9
+как Release 1 verification checklist. Прод HEAD `be569ad` отстаёт от main
+на 333 commits, healthcheck-fix (`242fcf2a`) не дошёл — применится при
+первом prod-deploy по gated promotion.
+
+— остальные вопросы активны —

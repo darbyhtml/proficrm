@@ -147,7 +147,8 @@
 | Фронтенд | Django Templates + Tailwind CSS 3.4.17 + vanilla JS |
 | Контейнеризация | Docker Compose (7 сервисов) |
 | Ветка | `main` (единственная) |
-| Прод | `crm.groupprofi.ru` — деплой ТОЛЬКО вручную пользователем |
+| Прод | `crm.groupprofi.ru` — gated promotion: tag + CONFIRM_PROD=yes маркер (см. раздел «Деплой» ниже) |
+| Deploy policy | gated promotion (R1-R5). Current prod tag: `release-v0.0-prod-current`. Main: **333 commits ahead** |
 | Staging | `crm-staging.groupprofi.ru` — деплой через Claude Code |
 | Моделей БД | **70** (10 Django-приложений — актуализировано Wave 0.1) |
 | API эндпоинтов | **~150** REST (DRF) + Widget API (публичный) |
@@ -187,11 +188,70 @@ docs/              — вся документация
 
 ## Критические правила проекта
 
-### Деплой
+### Деплой — Gated Promotion Model
 
-> **ЗАПРЕЩЕНО** трогать `/opt/proficrm/` (прод) через Claude Code. Всегда.
+С 2026-04-20 (post-W0.3) прод-деплой через **gated promotion** вместо blanket
+hook-block. Тот же запрет "не трогать прод без permission", но с явными
+маркерами-разрешениями в промпте, а не абсолютный. Полная политика —
+`docs/runbooks/prod-deploy.md`.
 
-Workflow: локально → `git push` → staging `git pull` → `docker build` → `up -d` → QA → пользователь деплоит на прод вручную.
+**R1. `main` = state of staging, не prod.**
+Каждая волна (W0–W15) мержится в main → staging auto-deploys от push.
+Prod НЕ auto-deploys, лагает намеренно. Max одна волна лага.
+
+**R2. Prod deploys only via git tag.**
+Формат: `release-v1.N-w<wave-num>-<short-name>`. Команда деплоя:
+```bash
+ssh prod 'cd /opt/proficrm && \
+  git fetch --tags && \
+  git checkout release-v1.N && \
+  docker compose pull && \
+  docker compose up -d --no-deps web celery worker'
+```
+
+Claude Code МОЖЕТ её выполнить **только** когда:
+- В промпте явно `DEPLOY_PROD_TAG=release-v1.N` маркер
+- Сделан pre-deploy snapshot (DB dump + media + env backup)
+- Post-deploy smoke tests зелёные (`tests/smoke/prod_post_deploy.sh`)
+- Пользователь подтвердил через Telegram-alert / UptimeRobot-canary
+
+**R3. Prod-файлы без тега — только с `CONFIRM_PROD=yes`.**
+Edit `/opt/proficrm/.env`, `/etc/proficrm/env.d/*` (кроме observability),
+systemd units — только когда в промпте маркер `CONFIRM_PROD=yes`. Без
+маркера — read-only.
+
+Исключения (free access без маркера):
+- `/opt/proficrm-observability/` — GlitchTip инфраструктура для всех сред.
+- `/opt/proficrm-staging/` — staging, всегда доступен.
+- `/etc/nginx/sites-available/*` — nginx configs (через certbot/manual).
+
+**R4. Tag cadence = 1 тег на волну.**
+После каждой волны (W0.N или WX) когда staging зелёный + smoke passed —
+создать `release-v1.N-w<num>-<name>`. Пользователь решает когда реально
+деплоить (обычно 3-5 дней lag, prod max одну волну позади main).
+
+**R5. Feature flags = safety net для incremental deploys.**
+Каждая behavior-changing фича за django-waffle flag (см. W0.3). В теге код
+есть, но flag off до явного включения на проде через admin. Deploy быстрый,
+rollout медленный.
+
+### Почему так
+
+Блокет hook-block не масштабируется на 15 волн. Без деплоев prod и main
+разойдутся на 3000+ коммитов — catastrophic migration. Gated promotion
+держит дрейф в рамках одной волны.
+
+### Deploy-frozen periods
+
+Между волнами prod намеренно freeze'н — нет hotfixes, нет emergency patches
+кроме CVE. Если staging упал — чиним на staging и тегаем новый релиз.
+Prod не получает патч мимо staging + main.
+
+Исключение — настоящие SEV1 (prod down для всех, breach). Тогда bypass с
+явным greenlight пользователя + post-mortem.
+
+Workflow для обычной волны: локально → `git push` → staging `git pull` →
+`docker build` → `up -d` → QA → tag → [решение пользователя] → prod pull tag.
 
 ### Docker
 
@@ -260,7 +320,7 @@ CORS разделён: nginx обрабатывает OPTIONS preflight, Django 
 | Staging (root) | `ssh -i ~/.ssh/id_proficrm_deploy root@5.181.254.172` | `/opt/proficrm-staging/` |
 | Staging (sdm) | `ssh -i ~/.ssh/id_proficrm_deploy sdm@5.181.254.172` | `/opt/proficrm-staging/` |
 | na4u.ru (тест) | `ssh -i ~/.ssh/id_aethr c21434@80.87.102.67` | `~/vm-f841f9cb.na4u.ru/www/` |
-| Прод | **ЗАПРЕЩЕНО** | `/opt/proficrm/` |
+| Прод | Gated promotion (tag + CONFIRM_PROD=yes) | `/opt/proficrm/` |
 
 ## Документация проекта
 

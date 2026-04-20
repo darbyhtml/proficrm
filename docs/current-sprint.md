@@ -101,6 +101,38 @@ check в Release 1 verification.
 **Следующий шаг**: Wave 0.5 (Test infrastructure upgrade — factory_boy +
 pytest-xdist + pytest-playwright + conftest).
 
+**[2026-04-20 / late evening]** — **Wave 0.4 ⚠ IN PROGRESS** (не COMPLETED):
+
+1. **GlitchTip login 500 bug** обнаружен при первой попытке manual post-
+   deploy. Root cause: Redis unreachable через `host.docker.internal`.
+   Фикс: добавлен отдельный `glitchtip-redis` контейнер в compose
+   (redis:7-alpine, 32 MB). Memory budget обновлён 576 → **608 MB**.
+   Login API HTTP 500 → **HTTP 200** verified. Но manual post-deploy
+   шаги (create org + 2 projects + DSN + env + restart) ещё pending
+   на пользователе.
+
+2. **Deploy policy change — gated promotion**:
+   - CLAUDE.md: R1-R5 rules вместо blanket hook-block
+   - `docs/runbooks/prod-deploy.md` (265 строк): полный runbook с
+     snapshot + announce + deploy + smoke + monitor + rollback
+   - `tests/smoke/prod_post_deploy.sh`: базовый smoke-script (12 checks)
+   - `release-v0.0-prod-current` тег создан на be569ad (prod HEAD = main
+     minus 333 commits)
+
+3. **Process lesson документирован** в `docs/audit/process-lessons.md`:
+   «Deploy complete ≠ end-to-end UX works». Правило для всех следующих
+   волн: E2E UX smoke **обязателен** в DoD, observability probes
+   недостаточны.
+
+**W0.5a — release-0-to-1 sync wave** (не планируется стартовать в этой
+сессии). Задача: закрыть 333-коммит-дрейф через tag+deploy. Возможные
+стратегии:
+- Один big-bang release v1.0-w0-complete — риск
+- Поэтапные tags v1.1..v1.5 с rollout через неделю — предпочтительно
+- Решение принимается после того как GlitchTip manual шаги завершены.
+
+**Следующий шаг** (неизменный): Wave 0.5 (Test infrastructure upgrade).
+
 ---
 
 **[2026-04-20]** — Вечер: Frontend audit (5 агентов) + Refactor phases 0-3 + 1179 tests pass ✅
