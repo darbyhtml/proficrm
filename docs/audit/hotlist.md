@@ -118,6 +118,51 @@ _Снапшот: **2026-04-20**. Источник: Wave 0.1 audit, top-20 tech-d
   ```
 - **Верификация:** `EXPLAIN ANALYZE` до/после на запросе из `settings_audit_log` view. Ожидаем → Index Scan вместо Seq Scan, 700ms → <50ms.
 
+## 8. `backend/messenger/tasks.py::escalate_waiting_conversations` — Notification без dedupe
+
+- **Score:** 80 (impact 4 × freq 5 × risk 4)
+- **Где лечится:** **Wave 3** (core CRM hardening, вместе с escalate_stalled)
+- **Статус сейчас:** работает, но 3 прямых `Notification.objects.create(...)` внутри task, курсор `escalation_level` обновляется **после** create, beat каждые 30 секунд — двойной тик beat = 2× уведомлений одному и тому же ROP.
+- **Обнаружено:** Wave 0.2 deep audit Celery tasks (`docs/audit/celery-unsafe-patterns.md`).
+- **Что переписать:**
+  ```python
+  # BEFORE: прямые create вне transaction.atomic, курсор escalation_level
+  # ставится после, beat каждые 30 секунд → race при overlap beat-тиков.
+  if target_level == 3 and conv.branch_id:
+      for rop in rops:
+          Notification.objects.create(...)    # прямой create без dedupe
+      stats["rop_alert"] += 1
+  ...
+  Conversation.objects.filter(pk=conv.pk).update(escalation_level=target_level, ...)
+
+  # AFTER: весь блок в transaction.atomic + dedupe_seconds + Redis-lock на task
+  with transaction.atomic():
+      if target_level == 3 and conv.branch_id:
+          for rop in rops:
+              notify(
+                  user=rop,
+                  kind=Notification.Kind.INFO,
+                  title=f"Клиент ждёт {int(waiting)} мин — требуется вмешательство",
+                  body=...,
+                  url=f"/messenger/?conv={conv.id}",
+                  payload={"conversation_id": conv.id, "level": "rop_alert"},
+                  dedupe_seconds=60,   # <<< защита от двойного beat-тика
+              )
+          stats["rop_alert"] += 1
+      ...
+      Conversation.objects.filter(pk=conv.pk).update(
+          escalation_level=target_level,
+          last_escalated_at=now,
+      )
+  ```
+  Плюс Redis-lock на уровне task (30с timeout, как в `generate_recurring_tasks`):
+  ```python
+  LOCK_KEY = "messenger:escalate_waiting:lock"
+  if not cache.add(LOCK_KEY, "1", timeout=30):
+      return {"skipped": "locked"}
+  ```
+- **Верификация:** Playwright-сценарий «2 оператора, 5 диалогов в waiting 10 мин» → в колокольчике ровно 5 Notification, не 10.
+
 ---
 
 ## Как использовать этот файл
@@ -141,3 +186,5 @@ _Снапшот: **2026-04-20**. Источник: Wave 0.1 audit, top-20 tech-d
 | Дата | Изменение |
 |------|-----------|
 | 2026-04-20 | Создан после Wave 0.1 audit. Baseline для W1-W13. |
+| 2026-04-20 | Wave 0.2 deep audit celery tasks → добавлен item 8 (`escalate_waiting_conversations`, score 80). |
+| 2026-04-20 | Wave 0.2h: items #4 и #5 отмечены как `.min.js` BUILT (экономия 109 KB); подключение в шаблонах остаётся в Wave 10. |
