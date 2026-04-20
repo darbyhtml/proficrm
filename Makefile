@@ -104,21 +104,18 @@ ci: lint mypy bandit coverage ## Full CI-lite (lint + mypy + bandit + coverage)
 # JS minification (Wave 0.2h — quick win для 210 KB dead weight)
 # -----------------------------------------------------------------------------
 
-build-js: ## Minify operator-panel.js + widget.js via esbuild
-	@command -v esbuild >/dev/null 2>&1 || { \
-		echo "❌ esbuild not found. Install: npm install -g esbuild"; exit 1; \
-	}
+build-js: ## Minify operator-panel.js + widget.js via esbuild (npx — без глобальной установки)
 	@echo "▶ esbuild operator-panel..."
-	@esbuild $(MIN_JS)/operator-panel.js \
+	@npx --yes esbuild@0.25.9 backend/messenger/static/messenger/operator-panel.js \
 		--minify --sourcemap --target=es2020 \
-		--outfile=$(MIN_JS)/operator-panel.min.js
+		--outfile=backend/messenger/static/messenger/operator-panel.min.js
 	@echo "▶ esbuild widget..."
-	@esbuild backend/static/widget.js \
+	@npx --yes esbuild@0.25.9 backend/messenger/static/messenger/widget.js \
 		--minify --sourcemap --target=es2020 \
-		--outfile=backend/static/widget.min.js
+		--outfile=backend/messenger/static/messenger/widget.min.js
 	@echo "✅ JS minified. Sizes:"
-	@du -h $(MIN_JS)/operator-panel.js $(MIN_JS)/operator-panel.min.js \
-		backend/static/widget.js backend/static/widget.min.js 2>/dev/null || true
+	@ls -lh backend/messenger/static/messenger/operator-panel*.js \
+		backend/messenger/static/messenger/widget*.js 2>/dev/null || true
 
 # -----------------------------------------------------------------------------
 # Pre-commit

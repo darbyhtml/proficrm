@@ -47,23 +47,35 @@ _Снапшот: **2026-04-20**. Источник: Wave 0.1 audit, top-20 tech-d
 - **Ожидаемое уменьшение:** 8 781 → ≈ 1 500 LOC HTML + ≈ 3 500 LOC external JS (минификация даст −40%)
 - **Риск:** визуальная регрессия → Playwright snapshot tests до/после
 
-## 4. `backend/static/ui/operator-panel.js` — 209 KB (unminified)
+## 4. `backend/messenger/static/messenger/operator-panel.js` — 204 KB → **134 KB (−35%)** ✅ MIN BUILT
 
 - **Score:** 48 (impact 4 × freq 3 × risk 4)
-- **Где лечится:** **Wave 10** (infra tooling) — часть build pipeline
-- **Действие:**
-  - Добавить `esbuild` или `terser` в dev-compose
-  - `make build-js` минифицирует → `operator-panel.min.js` ≈ 80 KB
-  - `base.html` подключает `.min.js` в production (через `{% if not DEBUG %}`)
-- **Quick win:** 30 минут работы, экономит 130 KB на каждом logе оператора чата
-- **Зависимости:** никакие — можно делать в рамках W0.2 как bonus
+- **Статус (2026-04-20, W0.2h):** `.min.js` **сгенерирован** через `npx esbuild`,
+  закоммичен в `backend/messenger/static/messenger/operator-panel.min.js` +
+  `.min.js.map` (source map для debug). **Экономия: 70 KB на запрос.**
+- **Осталось для Wave 10:**
+  - Подключить `.min.js` в шаблонах только при `DEBUG=False`:
+    ```django
+    {% if debug %}
+      <script src="{% static 'messenger/operator-panel.js' %}"></script>
+    {% else %}
+      <script src="{% static 'messenger/operator-panel.min.js' %}"></script>
+    {% endif %}
+    ```
+  - Добавить minify в CI/deploy pipeline (`make build-js`)
+  - Playwright визуальная проверка: `.min.js` ведёт себя идентично
+- **Путь:** `backend/messenger/static/messenger/` (не `backend/static/ui/` как было в первом audit)
 
-## 5. `backend/static/widget.js` — 101 KB (unminified, public-facing)
+## 5. `backend/messenger/static/messenger/widget.js` — 99 KB → **60 KB (−39%)** ✅ MIN BUILT
 
 - **Score:** 36 (impact 4 × freq 3 × risk 3)
-- **Где лечится:** **Wave 10** (вместе с operator-panel.js)
-- **Особенность:** **публичный файл** — встраивается через `<script>` на сторонних сайтах клиентов GroupProfi. 101 KB на каждой загрузке → влияет на их PageSpeed. Минификация = прямой выигрыш для заказчиков.
-- **План:** тот же — esbuild + `.min.js`. **Опционально**: source maps (проще debug если у клиента баг). **Обязательно**: SRI (Subresource Integrity) хэш в `<script integrity="sha384-...">`.
+- **Статус:** `.min.js` **сгенерирован** + `.min.js.map`. **Экономия: 39 KB.**
+- **Особенность:** **публичный файл** — встраивается через `<script>` на
+  сторонних сайтах клиентов GroupProfi. −39% bundle = прямой выигрыш для их PageSpeed.
+- **Осталось для Wave 10:**
+  - Подключить `.min.js` в embed-коде виджета
+  - **Обязательно**: SRI (Subresource Integrity) `integrity="sha384-..."` в tag
+  - Опционально: CDN-hosting для кеширования (MinIO + nginx proxy из W10.1+10.3)
 
 ## 6. `backend/audit/tasks.py::purge_old_activity_events` — P0 runtime risk
 
