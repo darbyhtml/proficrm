@@ -41,6 +41,10 @@ from companies.services.company_core import (  # noqa: F401
     DASHBOARD_CONTRACTS_LIMIT,
 )
 
+# Phase 1 extract (2026-04-20): единая сборка timeline для карточки компании.
+# Устраняет дублирование между company_detail и company_timeline_items views.
+from companies.services.timeline import build_company_timeline  # noqa: F401
+
 __all__ = [
     "CompanyService",
     "ColdCallService",
@@ -54,4 +58,5 @@ __all__ = [
     "ANNUAL_CONTRACT_DANGER_AMOUNT",
     "ANNUAL_CONTRACT_WARN_AMOUNT",
     "DASHBOARD_CONTRACTS_LIMIT",
+    "build_company_timeline",
 ]
