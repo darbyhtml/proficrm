@@ -30,6 +30,22 @@
 - Quick-win: minify operator-panel.js (209 KB) + widget.js (101 KB)
 - pyproject.toml: комментарий для W1 (временно fail_under=48, к концу W1 → 53)
 
+**[2026-04-20 / late evening]** — **Wave 0.2 завершён** (9 атомарных коммитов) ✅
+
+Все 8 шагов завершены:
+- **W0.2a-b** `ccb0ef64` + `ea72704d` — black 25.11.0 config + initial pass (277 файлов reformatted, 1179/1179 тестов зелёные)
+- **W0.2c** `c3e78098` + `e0155083` — ruff tighten (E/F/I/N/UP/B/S/DJ/RUF, 558 автофиксов, 253 остатков — baseline; исправлен UnboundLocalError от UP017)
+- **W0.2d** `0b9a3e0c` — mypy 1.17.1 + django-stubs + `scripts/mypy_ratchet.py` + `docs/audit/mypy-baseline.json` (1252 ошибок в 118 файлах — baseline для ratcheting)
+- **W0.2e** — bandit 1.8.6 (0 High, 6 Medium, 119 Low)
+- **W0.2f** `791cddfb` — pre-commit-config.yaml + detect-secrets + django-migration-linter 6.0 (190 миграций аудит: 86 OK, 67 исторических ERR, 25 WARN)
+- **W0.2g** `e248321c` — Makefile (lint/format/mypy/bandit/test/coverage/ci/build-js/precommit) + CI (+4 jobs: format-check, mypy ratchet, bandit, migration-linter)
+- **W0.2h** — esbuild minify: operator-panel 204→134 KB (−35%), widget 99→60 KB (−39%), **всего −109 KB**
+- **W0.2i** `cc022607` — celery deep audit (subagent): 4 P1 + 4 P2; hotlist #8 `escalate_waiting_conversations` (score 80, W3)
+
+**W1 buffer в pyproject.toml**: комментарий про временное снижение `fail_under=48` на время refactor'а (phase 4-6 company_detail + amocrm removal), к концу W1 поднятие до 53.
+
+**Следующий шаг**: Wave 0.3 (feature flags — django-waffle + 4 initial flags).
+
 ---
 
 **[2026-04-20]** — Вечер: Frontend audit (5 агентов) + Refactor phases 0-3 + 1179 tests pass ✅
