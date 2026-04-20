@@ -1,5 +1,96 @@
 # Решённые проблемы
 
+## [2026-04-20] Conversation.status — `waiting_offline` в choices, но не в CheckConstraint
+
+**Симптом**: off-hours widget-запросы на staging падали с `IntegrityError: new row for relation "messenger_conversation" violates check constraint "conversation_valid_status"`. Тесты `messenger.tests.test_widget_offhours` падали 2 штуки.
+
+**Корень**: модель `Conversation` имела:
+- `choices = ["open", "pending", "waiting_offline", "resolved", "closed"]`
+- `CheckConstraint(Q(status__in=["open", "pending", "resolved", "closed"]))` — **без `waiting_offline`**.
+
+Кто-то добавил новое значение в Enum, но забыл обновить constraint. Типичная миграционная ошибка.
+
+**Фикс**:
+- `backend/messenger/models.py`: добавлено `waiting_offline` в список.
+- Миграция `messenger/0027_remove_conversation_conversation_valid_status_and_more.py` — DROP constraint + CREATE с 5 статусами.
+
+**Важно для Релиза 1**: эта миграция **обязательна к деплою** перед включением `MESSENGER_ENABLED=1` на проде, иначе off-hours чаты будут падать с 500.
+
+---
+
+## [2026-04-20] PostgreSQL: FOR UPDATE cannot be applied to the nullable side of an outer join
+
+**Симптом**: `tasksapp.tasks.generate_recurring_tasks` (Celery beat задача, ежедневно 06:00) падала с `django.db.utils.NotSupportedError: FOR UPDATE cannot be applied to the nullable side of an outer join`. 7 тестов красные. На проде — рекуррентные задачи **не генерировались молча** (функция в cron возвращает None → worker не жалуется).
+
+**Корень**:
+```python
+Task.objects.select_for_update()
+    .select_related("created_by", "assigned_to", "company", "type")
+    .get(pk=template_id)
+```
+Все 4 FK в `select_related` — `on_delete=SET_NULL`, значит nullable. Django эмитит `LEFT OUTER JOIN`. PostgreSQL не разрешает `FOR UPDATE` на nullable-side join.
+
+**Фикс**: `.select_for_update(of=("self",))` — `of` говорит «лочим только Task row, не joined таблицы». Известная Django-фича с 2.0+. `select_related` продолжает работать, просто без row-level lock на FK-таблицах (они и не нужны — блокируем только сам шаблон задачи).
+
+**Как это проглядели**: `scripts/test.sh` использует `DJANGO_SETTINGS_MODULE=crm.settings_test` где `CELERY_TASK_ALWAYS_EAGER=True`, и тесты `GenerateRecurringTasksTest` показывали эту ошибку. Но: (1) тесты были в общем списке падающих «20 без разбора», (2) сама функция в проде — background beat, никто не видит её NoneReturn.
+
+---
+
+## [2026-04-20] `generate_recurring_tasks` возвращает None вместо dict
+
+**Симптом**: `result = generate_recurring_tasks(); result["created"]` → `TypeError: 'NoneType' object is not subscriptable`.
+
+**Корень**: функция обёрнута в redis-lock try/finally, но **нет `return` для результата inner-функции**:
+```python
+try:
+    _generate_recurring_tasks_inner()   # возвращает {"templates":N,"created":N}, но результат теряется
+finally:
+    cache.delete(LOCK_KEY)
+# неявный return None
+```
+
+**Фикс**: `return _generate_recurring_tasks_inner()`.
+
+**Почему на проде «всё работает»**: Celery-beat запускает task, получает None или dict — ему всё равно. Задача «прошла успешно». Реальное отсутствие генерации экземпляров никто не замечал пока ручные тесты не запустили.
+
+---
+
+## [2026-04-20] settings_test.py не переопределял ALLOWED_HOSTS
+
+**Симптом**: все view-тесты (использующие `django.test.Client`) возвращали status 400 с пустым body → `json.loads(resp.content)` падал `JSONDecodeError: Expecting value: line 1 column 1`. Без изменений кода 18 тестов были «сломаны годами».
+
+**Корень**: Django `Client` по умолчанию шлёт `HOST=testserver`. Prod-settings имеет узкий whitelist `ALLOWED_HOSTS = [h for h in os.getenv('DJANGO_ALLOWED_HOSTS', ...).split(',')]` — там нет `testserver`. SecurityMiddleware возвращал 400 (Bad Request) до того, как view даже начинал работать.
+
+В `settings_test.py` было `from .settings import *` — **унаследовал** узкий whitelist, не переопределил.
+
+**Фикс**: добавить `ALLOWED_HOSTS = ["*"]` в `settings_test.py` после импорта. Безопасно — это тестовая среда, никаких внешних подключений.
+
+**Важно для CI**: CI-джоба `test:` в `.github/workflows/ci.yml` явно задаёт `DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1` — там может быть свой пропуск. Нужно проверить что CI идёт через settings_test (это уже так, судя по `DJANGO_SETTINGS_MODULE: crm.settings_test`).
+
+---
+
+## [2026-04-20] Тесты ColdCallsReport ожидали JSON без `X-Requested-With`
+
+**Симптом**: после фикса ALLOWED_HOSTS тесты `ColdCallsReportDayTest` и `ColdCallsReportMonthTest` всё равно падали. Get возвращал 200 + HTML, `json.loads` не мог распарсить.
+
+**Корень**: view `cold_calls_report_day`:
+```python
+if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+    return JsonResponse({...})
+return render(request, "ui/reports/cold_calls_day.html", {...})
+```
+AJAX-запросы → JSON, обычные → HTML. Тесты использовали обычный `client.get(url)` без AJAX-заголовка.
+
+**Фикс**: в `setUp` обоих классов:
+```python
+self.client.defaults["HTTP_X_REQUESTED_WITH"] = "XMLHttpRequest"
+```
+Теперь все запросы client получают AJAX-заголовок автоматически.
+
+**Урок**: content-negotiation на основе headers (JSON vs HTML) — хорошо для production, но ломает тесты, если тестов автор не учёл. Либо use `Accept: application/json`, либо тесты дают AJAX header.
+
+---
+
 ## [2026-04-20] Docker `["CMD", ...]` healthcheck не интерполирует `$HOSTNAME`
 
 **Симптом**: `proficrm-celery-1` показывал `unhealthy` **40 209 consecutive failures** подряд (~4 недели). При этом Celery работал — задачи принимались, выполнялись, `docker logs` чистый.

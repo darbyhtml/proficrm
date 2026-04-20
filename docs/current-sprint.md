@@ -1,5 +1,27 @@
 # Текущий спринт
 
+**[2026-04-20]** — После Релиза 0: подготовка Релиза 1 + 100% pass tests ✅
+
+После применения Релиза 0 (10:00 MSK) до конца рабочего дня:
+
+**Code fixes в main**:
+- `Harden(Policy)`: POLICY_DECISION_LOGGING_ENABLED env-flag (default off)
+- `Fix(Docker)`: Celery healthcheck — убрано `-d $HOSTNAME` (не интерполируется в CMD-формате). Теперь `celery inspect ping --timeout 10` — контейнер становится healthy впервые за 4 недели
+- `Fix(TasksApp)`: 2 реальных бага в `generate_recurring_tasks` — `select_for_update(of=("self",))` (SQL FOR UPDATE на LEFT JOIN) + `return _generate_recurring_tasks_inner()` (возвращал None)
+- `Fix(Messenger)`: `Conversation.status` constraint не включал `waiting_offline` — любой off-hours чат падал IntegrityError. Фикс + новая миграция 0027
+- `Fix(Tests)`: `settings_test.py` теперь переопределяет `ALLOWED_HOSTS=["*"]`, test-env перестал давать DisallowedHost 400
+- `Chore(Migrations)`: 2 pending migration файла (accounts.0016 + messenger.0026) сгенерены и закоммичены
+
+**Результат тестов**: **1143/1143 проходят (100% pass)**. Было 98.25% → вначале ухудшилось до 97.9% после ALLOWED_HOSTS (проявились скрытые ошибки) → каждый fix поднимал проценты → финал 100%.
+
+**Dress rehearsal Релиза 1**: на staging с прод-копией БД — `git pull`, `build`, `up -d`, `migrate`. Celery healthy, policy events не пишутся, v3/b рендерится, messenger-таблицы доступны пустые.
+
+**Runbook Релиз 1**: `docs/runbooks/21-release-1-ready-to-execute.md` — step-by-step команды для ночного окна 21:00-22:00 MSK.
+
+**Коммиты сегодня**: 9 в origin (3fea75b4 → 99975965). Code: 5 файлов. Docs: 11 файлов (runbooks + ADR + problems-solved + sprint + wiki).
+
+---
+
 **[2026-04-20]** — Релиз 0 (ночной hotfix безопасности + памяти) ✅
 
 Выполнен в 10:04-10:13 MSK (07:04-07:13 UTC). **Фактический downtime ~25 сек CRM, 0 downtime Chatwoot.**
