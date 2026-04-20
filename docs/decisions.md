@@ -1,5 +1,38 @@
 # Архитектурные решения
 
+## [2026-04-20] Companies services package — рефакторинг god-view company_detail.py
+
+**Контекст.** `backend/ui/views/company_detail.py` разросся до 2883 LOC с 30+ view-функциями, каждая из которых сама выполняет валидацию, normalization, duplicate-checks, audit logging. Валидация телефонов дублирована 3 раза, валидация email — 2 раза, workflow удаления — 2 раза. Любое изменение правил (например, разрешить новый регион для `normalize_phone`) требует синхронного правления 3 мест, и легко пропустить. God-файл + god-функции.
+
+В `backend/companies/services.py` уже была "business services" логика (`CompanyService`, `ColdCallService`), но плоский файл не давал места для новых сервисов без риска коллизий имён.
+
+**Альтернативы.**
+1. Переписать всё в DRF сериализаторы — **отвергнуто**: слишком большой blast radius, текущие view завязаны на `messages.success`/`redirect` (не JSON).
+2. Вынести в миксины на CBV — **отвергнуто**: большинство view — FBV, конвертация бьёт slash-review diff'ы.
+3. **Чистый extract в `companies/services/` пакет** — принято, т.к. позволяет извлекать *pure* функции (без HttpRequest), покрывать их юнит-тестами без Client, и постепенно утоньшать view-слой без переписывания HTTP-контракта.
+
+**Решение.**
+- `backend/companies/services.py` → `backend/companies/services/company_core.py` + `__init__.py` c re-exports для обратной совместимости (18+ внешних импортов продолжают работать).
+- **Phase 1**: `companies/services/timeline.py` — `build_company_timeline(*, company)` консолидирует 7-источниковую ленту (notes/events/tasks/deals/calls/mailings/delreqs), раньше дублированную между `company_detail` view и `company_timeline_items` view.
+- **Phase 2**: `companies/services/company_phones.py` — `validate_phone_strict`, `validate_phone_main`, `check_phone_duplicate`, `validate_phone_comment`. `companies/services/company_emails.py` — `validate_email_value(allow_empty=)`, `check_email_duplicate(exclude_email_id=, check_main=)`. Защитный lowercase внутри `check_email_duplicate`.
+- **Phase 3**: `companies/services/company_delete.py` — `execute_company_deletion(*, company, actor, reason, source, extra_meta) -> dict`. Делает всё: cleanup CompanySearchIndex → detach children → notify → delete Task → log_event → `company.delete()` в `transaction.atomic`. Ошибка индекса → `CompanyDeletionError` (кастомный exc).
+
+**Последствия.**
+- `company_detail.py`: 2883 → 2698 LOC (−185, ≈−6.4%).
+- Тестовое покрытие: +36 юнит-тестов для новых сервисов (phone/email/delete), **1179/1179 тестов passed**.
+- Трёхкратное дублирование валидации телефона устранено — правки теперь в одном месте.
+- Риск регрессий **низкий**: все функции purely-extracted, HTTP-контракт view не менялся, E2E smoke-тесты (POST невалидного телефона/email) показали те же 400/200 ответы.
+- Phase 4-5 (company_phones CRUD целиком в service + overview context-builder) отложены — значительно меньший ROI, требуют изменения HTTP-контракта.
+
+**Коммиты.** `2048f4ef` (phase 0), `126b7930` (phase 1), `05b34036` + `3a6779c8` + `07e8000b` (phase 2), `785d314a` (phase 3).
+
+**Связанные документы.**
+- `docs/runbooks/50-frontend-audit-2026-04-20.md` — сводка всех находок 5 агентов.
+- `backend/companies/services/__init__.py` — docstring с описанием роадмапа фаз.
+- `backend/companies/tests_phone_email_services.py`, `backend/companies/tests_delete_service.py` — юнит-тесты.
+
+---
+
 ## [2026-04-20] Выключение policy decision logging по умолчанию + PG RULE как хотфикс
 
 **Контекст.** За полгода работы policy engine (`backend/policy/engine.py:_log_decision()`) накопил **9 514 890 записей** в `audit_activityevent` с `entity_type='policy'` — это **95% всей таблицы** (4 GB из 5.5 GB БД). Причина: функция пишет ActivityEvent на **каждый HTTP-запрос** через `@policy_required`, а polling endpoints (`/mail/progress/poll/`, `/notifications/poll/`) дают ~1.5 млн запросов/сутки. Логика `audit_activityevent` задумана как **бизнес-журнал** (кто что сделал с компаниями), а policy-логи — **technical telemetry**, они размывают реальную историю и раздувают БД.

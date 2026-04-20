@@ -1,5 +1,46 @@
 # Текущий спринт
 
+**[2026-04-20]** — Вечер: Frontend audit (5 агентов) + Refactor phases 0-3 + 1179 tests pass ✅
+
+С 12:37 до 17:30+ MSK — большая сессия глубокого аудита и рефакторинга.
+
+**Frontend audit (5 параллельных агентов)**: ui-designer, ux-researcher,
+accessibility-tester, frontend-developer, performance-optimizer проработали
+весь `backend/templates/` и `backend/static/`. Найдено ~40 находок, из них
+12 P0 закрыто тем же вечером. См. `docs/runbooks/50-frontend-audit-2026-04-20.md`.
+
+**Основные P0 закрыты**:
+- Контраст `--v2-text-faint 2.5:1 → 5.0:1` (WCAG AA)
+- Font tokens `--v3-fs-xs/sm 11/13 → 12/14` (policy ≥14px для текста)
+- `login.html` — label for/id + autocomplete
+- `v2BulkModal` — role/aria-modal/aria-labelledby
+- Indigo-палитра → brand colors (company_list_v2, messenger_conversations_unified)
+- `task_list_v2.html` — "—" → "Личная задача"
+- `bellBadge/messengerUnreadBadge/showToast` — aria-live + aria-atomic (WCAG 4.1.3)
+- `setInterval(tickAll/pollUnread)` — pause на visibilitychange (−30% idle XHR)
+- `/companies/` 2× COUNT(DISTINCT) → conditional distinct (TTFB 1726→691ms, −60%)
+- `custom-datetime-picker.js` 12KB dead file удалён
+- XSS в `email_signature_html` — patched + dompurify 3.3.3→3.4.0
+
+**Refactor god-view company_detail.py** (phases 0-3 план refactoring-specialist):
+- Phase 0: `companies/services.py` (плоский файл) → `companies/services/` (пакет). Коммит `2048f4ef`.
+- Phase 1: `build_company_timeline()` — единая сборка 7-источниковой ленты. Коммит `126b7930`. −50 LOC.
+- Phase 2: `validate_phone_strict/main` + `check_phone_duplicate` + `validate_email_value` + `check_email_duplicate`. Коммит `05b34036`. −43 LOC, +11 тестов.
+- Phase 3: `execute_company_deletion()` + `CompanyDeletionError` — единый workflow. Коммит `785d314a`. −47 LOC, +6 тестов.
+
+**Итого рефактор**: `company_detail.py` 2883 → 2698 LOC (−185, ≈−6.4%). Все трёхкратные дубли валидации / двукратные дубли удаления устранены.
+
+**Tests**: **1179/1179 проходят** (было 1143 до сессии, +36 новых: 30 phone/email + 6 delete service + тесты фикса valid E2E кейсов).
+
+**Коммиты сегодня (вечер)**: 38 (126b7930 → 785d314a). В push включены: frontend fixes, security bumps, perf fix, 3 фазы рефактора, runbooks.
+
+**Что впереди**:
+- Phase 4-5 refactor (company_delete полностью в services + overview context-builder)
+- Click-menu `<span>` → tabindex+role+keydown (a11y P1)
+- `ManifestStaticFilesStorage` (cache-busting, P2 Release 2)
+
+---
+
 **[2026-04-20]** — После Релиза 0: подготовка Релиза 1 + 100% pass tests ✅
 
 После применения Релиза 0 (10:00 MSK) до конца рабочего дня:

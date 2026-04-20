@@ -1,5 +1,47 @@
 # Решённые проблемы
 
+## [2026-04-20] God-view company_detail.py — 3× дублирование валидации телефона
+
+**Симптом**: `backend/ui/views/company_detail.py` на 2883 LOC имел три почти идентичные копии 30-строчного блока валидации телефона (регекс кириллицы + счёт латинских символов + NUL-byte + `normalize_phone` + E.164 regex) в `company_main_phone_update`, `company_phone_value_update`, `company_phone_create`. Email-валидация продублирована дважды. Удаление компании — две идентичные копии блока из 7 операций в `transaction.atomic`.
+
+**Риск до фикса**: любое изменение правил валидации (например, добавить белый список стран для `normalize_phone`) требовало синхронной правки 3 мест. При review диффов — прочёрк одной из копий (забыл синхронизировать) долго не ловился бы тестами.
+
+**Фикс**: в 4 коммита вынес всё в `backend/companies/services/` пакет:
+- `company_phones.py` — 4 pure-функции валидации + duplicate-check.
+- `company_emails.py` — 2 pure-функции (с защитным lowercase внутри duplicate-check).
+- `company_delete.py` — `execute_company_deletion()` единый workflow + `CompanyDeletionError`.
+- `timeline.py` — `build_company_timeline()` (phase 1, до этого).
+
+**Результат**:
+- `company_detail.py`: 2883 → 2698 LOC (−185).
+- +36 юнит-тестов в `tests_phone_email_services.py` + `tests_delete_service.py`.
+- **1179/1179 тестов passed** (1143 было до + 36 новых).
+- HTTP-контракт view не менялся: E2E smoke (невалидный телефон → 400, валидный email → 200) работает идентично.
+
+**Урок**: god-файл с дубликатами — не «стилистическая проблема», а реальный риск регрессии при изменении общего правила. Рефактор безопасен, если извлекать *pure* функции и оставлять HTTP-обёртки.
+
+Коммиты: `2048f4ef`, `126b7930`, `05b34036`, `3a6779c8`, `07e8000b`, `785d314a`.
+
+---
+
+## [2026-04-20] `/companies/` TTFB 1726ms — 2× COUNT(DISTINCT) над 45K строк
+
+**Симптом**: Средний TTFB `/companies/` на staging — **1726 ms** (худший P95 в приложении). Postgres slow log: `SELECT COUNT(*) FROM (SELECT DISTINCT ...)` выполнялся **дважды за один запрос** (≈700ms × 2).
+
+**Корень**: `ui/views/_base.py:_apply_company_filters` всегда возвращал `qs.distinct()`, даже когда в фильтрах не было M2M-JOIN'ов. `Paginator(qs).count` запускал один `COUNT(DISTINCT)`, а затем `paginator.num_pages` → ещё один. Django 6 оптимизатор не умеет кэшировать COUNT между двумя этими вызовами, если qs — это Django queryset (не list).
+
+**Фикс**: условный `distinct()` — выполняется только когда реально есть M2M-фильтр:
+```python
+needs_distinct = bool(selects_ctx["sphere_ids"] or overdue == "1" or bool(task_filter))
+result_qs = qs.distinct() if needs_distinct else qs
+```
+
+**Результат**: TTFB на `/companies/?page=1` **1726 ms → 691 ms (−60%)**. Подтверждено через `CaptureQueriesContext`: было 2× COUNT(DISTINCT), стало 0× COUNT(DISTINCT) + 7 плоских COUNT'ов (фасеты). Полный test suite 1179/1179 passed.
+
+Коммит: `05cec09e`.
+
+---
+
 ## [2026-04-20] Fernet InvalidToken → 500 на `/mail/campaigns/` (и всём разделе рассылок)
 
 **Симптом**: `/mail/campaigns/` возвращал HTTP 500. В `ErrorLog` трейс: `cryptography.fernet.InvalidToken` → `decrypt_str` → `GlobalMailAccount.smtp_bz_api_key` property. **Весь раздел Рассылки недоступен**, /mail/signature/ тоже падал бы с тем же исключением.
