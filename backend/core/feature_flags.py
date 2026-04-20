@@ -172,6 +172,56 @@ def is_enabled(
     return bool(flag_is_active(request, flag))
 
 
+def set_flag(
+    name: str,
+    *,
+    everyone: bool | None = None,
+    percent: float | None = None,
+    note: str | None = None,
+) -> None:
+    """Программное изменение флага — с гарантированной инвалидацией waffle-кеша.
+
+    Проблема, которую решаем: ``Flag.objects.filter(name=...).update(everyone=True)``
+    обходит ``post_save`` signal, waffle-кеш остаётся stale, следующий
+    ``is_enabled()`` вернёт старое значение до 5-10 секунд. В тестах — флаки,
+    в prod — путаница при экстренном включении/выключении.
+
+    Правильный способ — получить инстанс и вызвать ``save()``, что триггерит
+    сигнал и сбрасывает кеш немедленно.
+
+    Args:
+        name: Имя флага. Обычно константа из этого модуля.
+        everyone: ``True`` — включить для всех, ``False`` — выключить для всех,
+            ``None`` — не менять (удобно когда меняем только percent/note).
+        percent: 0-100 процент rollout. ``None`` — не менять.
+        note: Текстовое описание. ``None`` — не менять.
+
+    Raises:
+        Flag.DoesNotExist: если флаг не зарегистрирован в БД (должен быть
+            создан seed migration или через admin UI).
+
+    Example:
+        >>> from core.feature_flags import set_flag, UI_V3B_DEFAULT
+        >>> set_flag(UI_V3B_DEFAULT, everyone=True, note="2026-05-01 full rollout")
+    """
+    from waffle import get_waffle_flag_model
+
+    Flag = get_waffle_flag_model()
+    flag = Flag.objects.get(name=name)
+    changed = False
+    if everyone is not None and flag.everyone != everyone:
+        flag.everyone = everyone
+        changed = True
+    if percent is not None and flag.percent != percent:
+        flag.percent = percent
+        changed = True
+    if note is not None and flag.note != note:
+        flag.note = note
+        changed = True
+    if changed:
+        flag.save()  # save() → post_save signal → waffle cache invalidation
+
+
 def active_flags_for_user(user: User | None) -> dict[str, bool]:
     """Вернуть словарь ``{flag_name: is_enabled}`` для всех известных флагов.
 

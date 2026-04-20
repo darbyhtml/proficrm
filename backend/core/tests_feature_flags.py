@@ -34,6 +34,7 @@ from core.feature_flags import (
     UI_V3B_DEFAULT,
     active_flags_for_user,
     is_enabled,
+    set_flag,
 )
 from core.permissions import FeatureFlagPermission
 
@@ -275,6 +276,46 @@ class FeatureFlagsApiTests(TestCase):
         client = APIClient()
         response = client.get("/api/v1/feature-flags/")
         self.assertIn(response.status_code, (401, 403))
+
+
+class SetFlagHelperTests(TestCase):
+    """set_flag() — программное изменение флагов с invalidation кеша."""
+
+    def setUp(self) -> None:
+        self.user = _mk_user("setflag_user")
+
+    def test_sets_everyone_true(self) -> None:
+        """После set_flag(..., everyone=True) is_enabled() сразу видит изменение."""
+        # Проверяем начальное состояние — флаг off (seed migration).
+        self.assertFalse(is_enabled(UI_V3B_DEFAULT, user=self.user))
+        set_flag(UI_V3B_DEFAULT, everyone=True)
+        self.assertTrue(is_enabled(UI_V3B_DEFAULT, user=self.user))
+
+    def test_sets_everyone_false(self) -> None:
+        """Обратный кейс: включаем потом выключаем — stale-cache не срабатывает."""
+        set_flag(UI_V3B_DEFAULT, everyone=True)
+        self.assertTrue(is_enabled(UI_V3B_DEFAULT, user=self.user))
+        set_flag(UI_V3B_DEFAULT, everyone=False)
+        self.assertFalse(is_enabled(UI_V3B_DEFAULT, user=self.user))
+
+    def test_updates_note_without_changing_everyone(self) -> None:
+        """note можно менять без сброса состояния флага."""
+        set_flag(UI_V3B_DEFAULT, everyone=True)
+        set_flag(UI_V3B_DEFAULT, note="W9 rollout day 1")
+        self.assertTrue(is_enabled(UI_V3B_DEFAULT, user=self.user))
+        flag = Flag.objects.get(name=UI_V3B_DEFAULT)
+        self.assertEqual(flag.note, "W9 rollout day 1")
+        self.assertTrue(flag.everyone)
+
+    def test_raises_for_unknown_flag(self) -> None:
+        """Флаг не в БД → Flag.DoesNotExist."""
+        with self.assertRaises(Flag.DoesNotExist):
+            set_flag("DOES_NOT_EXIST", everyone=True)
+
+    def test_noop_when_all_none(self) -> None:
+        """set_flag(name) без параметров не ломает ничего."""
+        set_flag(UI_V3B_DEFAULT)  # everyone/percent/note все None
+        # Not raise — ok.
 
 
 class MigrationSeedTests(TestCase):

@@ -131,6 +131,87 @@ if (flags.UI_V3B_DEFAULT) {
 }
 ```
 
+## Использование вне HTTP request (Celery, management commands, startup)
+
+Waffle спроектирован вокруг HTTP-request: `waffle.flag_is_active(request, name)`.
+Но у нас есть кейсы без `request`:
+
+- Celery task (`@shared_task`): проверяет флаг внутри фоновой задачи
+- Django management command (`python manage.py …`): точечные скрипты
+- Startup-сигналы (`@receiver(post_migrate)`): не рекомендуется, но бывает
+
+### Решение в `core.feature_flags.is_enabled()`
+
+Обёртка поддерживает вызовы без `request`:
+
+```python
+# Из Celery task
+from core.feature_flags import is_enabled, EMAIL_BOUNCE_HANDLING
+
+@shared_task
+def process_email_webhook(payload):
+    if not is_enabled(EMAIL_BOUNCE_HANDLING):  # request=None
+        logger.info("bounce handler off via feature flag, skipping")
+        return
+    # ... обработка
+```
+
+### Что происходит внутри при `request=None`
+
+1. Если передан `user`, но нет `request` — конструируется **shim-request**:
+   ```python
+   req = HttpRequest()
+   req.user = user
+   req.COOKIES = {}
+   req.META = {}
+   return req
+   ```
+   Минимальный объект, достаточный для `waffle.flag_is_active`. Работают
+   критерии `users`, `groups`, `authenticated`, `staff`, `superusers`,
+   `percent` (через hash session_id — но session пуст, поэтому percent
+   всегда даёт один и тот же hash для одного юзера).
+
+2. Если нет ни `user`, ни `request` — **булев fallback**:
+   - `Flag.everyone == True` → `True`
+   - `Flag.everyone == False` → `False`
+   - `Flag.everyone == None` (unknown) → `False` (WAFFLE_FLAG_DEFAULT)
+
+### Ограничения shim-request
+
+Что **НЕ работает** в Celery/management-режиме:
+- **Cookie-based overrides** (`?dwft_<flag>=1`) — cookies пустые
+- **Sample-флаги** с random per-request — будут давать one-fixed hash
+- **Sticky session rollout** — sticky id берётся из session, которой нет
+
+Эти ограничения **не проблема**, если флаги в Celery используются только
+как kill-switch (on/off для всех) — это наш типичный сценарий. Percent
+rollout в Celery имеет смысл только если таска разделяет работу по юзеру
+(e.g. email-рассылка), тогда hash per-user даёт стабильный вариант.
+
+### Альтернатива: булев helper для чистого on/off
+
+Если нужен только on/off без учёта user:
+
+```python
+from core.feature_flags import is_enabled
+
+# Безопасно для Celery, startup, management — передаём просто имя:
+if is_enabled(EMAIL_BOUNCE_HANDLING):
+    ...
+```
+
+Это вызывает путь «без user/request» → булев fallback по `Flag.everyone`.
+Никакого shim-request не создаётся (lightweight, 0 overhead).
+
+### Когда **не использовать** feature flag вне HTTP
+
+- В `settings.py` — используйте env var (`os.getenv(...)`).
+- В `post_migrate` signal — Django ещё не готов, lookup может упасть.
+- В hot-path (>1000 req/sec) — даже кешированный waffle делает Redis-get;
+  проще env var.
+
+---
+
 ## Связи с другими документами
 
 - `docs/runbooks/feature-flags.md` — операционные процедуры (как добавить/

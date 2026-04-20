@@ -156,6 +156,7 @@
 | Тестов | **1179** test-runs / **1 240** test-функций |
 | Coverage | **51 %** (baseline 2026-04-20, gate `fail_under=50`) |
 | Актуальный аудит | **`docs/audit/README.md`** (snapshot 2026-04-20, Wave 0.1) |
+| Feature flags | **django-waffle 5.0** + обёртка `core.feature_flags` + 4 seed-флага (см. `docs/architecture/feature-flags.md`) |
 
 ## Архитектура — где что лежит
 

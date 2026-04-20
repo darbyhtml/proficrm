@@ -133,6 +133,75 @@ git push origin main
 
 ---
 
+## Программное изменение флагов (management commands, data migrations, deploy-скрипты)
+
+Когда нужно включить/выключить флаг из Python-кода (не через admin UI).
+
+### ❌ НЕ делать — классическая ошибка
+
+```python
+from waffle.models import Flag
+
+# ❌ stale cache — waffle продолжит видеть старое значение до TTL (5-10 сек)
+Flag.objects.filter(name="UI_V3B_DEFAULT").update(everyone=True)
+```
+
+Почему ломается: `QuerySet.update()` выполняет SQL напрямую, в обход ORM-пути,
+**не вызывает `post_save` signal**. Waffle подписан на этот signal для
+инвалидации кеша. Результат — кеш stale, `is_enabled()` возвращает старое
+значение до следующего хита cache-expiry (до 5-10 сек). В тестах это
+проявляется как флаки, в prod — «я включил флаг в admin, а пользователи всё
+ещё видят старое».
+
+### ✅ Правильно через ORM
+
+```python
+from waffle.models import Flag
+
+flag = Flag.objects.get(name="UI_V3B_DEFAULT")
+flag.everyone = True
+flag.save()  # save() → post_save signal → waffle cache invalidation
+```
+
+### ✅ Ещё чище — helper `core.feature_flags.set_flag()`
+
+```python
+from core.feature_flags import set_flag, UI_V3B_DEFAULT
+
+# Базовый случай:
+set_flag(UI_V3B_DEFAULT, everyone=True)
+
+# С note (для аудит-лога в admin):
+set_flag(UI_V3B_DEFAULT, everyone=True, note="W9 full rollout 2026-05-01")
+
+# Только процент rollout, note не трогаем:
+set_flag(UI_V3B_DEFAULT, percent=50)
+
+# None-аргументы игнорируются — нельзя случайно «сбросить» note.
+```
+
+Аргументы:
+- `everyone: bool | None` — `True/False/None (не менять)`
+- `percent: float | None` — 0-100 или `None (не менять)`
+- `note: str | None` — текст или `None (не менять)`
+
+Поведение:
+- Возвращает `None`
+- Выполняет `save()` только если что-то реально поменялось (minimise `post_save`)
+- `Flag.DoesNotExist` — если флаг не зарегистрирован (должен быть в seed migration)
+
+### Когда использовать какой вариант
+
+| Ситуация | Рекомендация |
+|----------|--------------|
+| Data migration (seed, toggle, cleanup) | `set_flag()` |
+| Management command (ops, deploy-script) | `set_flag()` |
+| Тест | `waffle.testutils.override_flag` (context manager, авто-revert) |
+| Ручной включатель админом | Django admin UI |
+| Ручной shell | `flag = Flag.objects.get(...); flag.save()` |
+
+---
+
 ## Как включать флаг (percentage rollout)
 
 ### Через Django admin
