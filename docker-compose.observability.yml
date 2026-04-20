@@ -10,13 +10,20 @@
 #   EMAIL_URL                    — smtp://user:pass@smtp.bz:587 (из проекта)
 #   GLITCHTIP_DOMAIN             — https://glitchtip.groupprofi.ru
 #
-# Memory budget (Q2 из docs/open-questions.md — VPS впритык, swap уже 1 GB):
+# Memory budget (Q2 open-questions.md — VPS впритык, swap уже 1 GB, revised после
+#                login-OOM debug сессии 2026-04-20):
 #   web:     256 MB hard limit  (Django + gunicorn + static)
 #   worker:  192 MB hard limit  (Celery + beat объединены)
 #   db:      128 MB hard limit  (postgres с минимальной конфигой shared_buffers)
+#   redis:    32 MB hard limit  (alpine, без persistence — все данные эфемерны)
 #   ───────────────────────────
-#   Total:  ~576 MB
-#   Redis шарим с proficrm-redis-1 через namespace (DB index 10) — +0 MB.
+#   Total:  ~608 MB
+#
+# ИСТОРИЯ: изначально (до login-debug) хотели шарить Redis с proficrm-redis-1
+# через host.docker.internal, НО ни один CRM-Redis не слушает на хост-network
+# (все в Docker-bridge). Timeout при подключении ломал django_vcache.RustValkeyDriver
+# и вызывал HTTP 500 на /_allauth/browser/v1/auth/login. См.
+# docs/runbooks/glitchtip-troubleshooting.md §«Login returns HTTP 500».
 #
 # Если swap вырастет > 1.5 GB в течение недели — эскалация в Q2 open-questions.md.
 
@@ -27,16 +34,17 @@ services:
     depends_on:
       glitchtip-db:
         condition: service_healthy
+      glitchtip-redis:
+        condition: service_healthy
     env_file:
       - /etc/proficrm/env.d/glitchtip.conf
     environment:
       DATABASE_URL: "postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@glitchtip-db:5432/glitchtip"
       SECRET_KEY: "${GLITCHTIP_SECRET_KEY}"
       PORT: "8000"
-      # Redis: шарим с основным proficrm-redis-1 через отдельный DB index.
-      # redis://host.docker.internal:6379/10 — через Docker host-gateway.
-      REDIS_URL: "redis://host.docker.internal:6379/10"
-      CELERY_BROKER_URL: "redis://host.docker.internal:6379/11"
+      # Отдельный redis-контейнер внутри observability-network (см. ниже).
+      REDIS_URL: "redis://glitchtip-redis:6379/0"
+      CELERY_BROKER_URL: "redis://glitchtip-redis:6379/1"
       # Алерты через встроенный SMTP (smtp.bz — тот же, что для рассылок CRM).
       EMAIL_URL: "${EMAIL_URL}"
       DEFAULT_FROM_EMAIL: "${GLITCHTIP_DEFAULT_FROM_EMAIL}"
@@ -50,10 +58,6 @@ services:
     ports:
       # Bind только на localhost — доступ извне через nginx на 443.
       - "127.0.0.1:8100:8000"
-    extra_hosts:
-      # Нужно для доступа к host-redis (proficrm-redis-1 слушает на 127.0.0.1:6379
-      # через Docker bridge, host.docker.internal даёт route).
-      - "host.docker.internal:host-gateway"
     deploy:
       resources:
         limits:
@@ -73,19 +77,19 @@ services:
     depends_on:
       glitchtip-db:
         condition: service_healthy
+      glitchtip-redis:
+        condition: service_healthy
     env_file:
       - /etc/proficrm/env.d/glitchtip.conf
     environment:
       DATABASE_URL: "postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@glitchtip-db:5432/glitchtip"
       SECRET_KEY: "${GLITCHTIP_SECRET_KEY}"
-      REDIS_URL: "redis://host.docker.internal:6379/10"
-      CELERY_BROKER_URL: "redis://host.docker.internal:6379/11"
+      REDIS_URL: "redis://glitchtip-redis:6379/0"
+      CELERY_BROKER_URL: "redis://glitchtip-redis:6379/1"
       EMAIL_URL: "${EMAIL_URL}"
       DEFAULT_FROM_EMAIL: "${GLITCHTIP_DEFAULT_FROM_EMAIL}"
       GLITCHTIP_DOMAIN: "${GLITCHTIP_DOMAIN}"
     command: ./bin/run-celery-with-beat.sh
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     deploy:
       resources:
         limits:
@@ -102,7 +106,6 @@ services:
       POSTGRES_DB: glitchtip
       POSTGRES_USER: glitchtip
       POSTGRES_PASSWORD: "${GLITCHTIP_DB_PASSWORD}"
-      # Минимальная конфига для экономии RAM (128 MB limit).
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
     # shared_buffers=32MB — минимум для 128MB лимита контейнера.
     command: >
@@ -124,6 +127,32 @@ services:
       test: ["CMD-SHELL", "pg_isready -U glitchtip -d glitchtip"]
       interval: 10s
       timeout: 5s
+      retries: 5
+
+  glitchtip-redis:
+    # Wave 0.4 login-fix (2026-04-20): добавлен как отдельный Redis после
+    # обнаружения что host.docker.internal:6379 timeout'ит (ни один CRM-Redis
+    # не слушает на хост-network, все в Docker-bridge).
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Без persistence — эфемерные данные (session cache, celery queue,
+    # rate-limit counters). Потеря при restart не критична.
+    command: >
+      redis-server
+      --save ""
+      --appendonly no
+      --maxmemory 24mb
+      --maxmemory-policy allkeys-lru
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+        reservations:
+          memory: 16M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
       retries: 5
 
 volumes:

@@ -250,6 +250,43 @@ sudo systemctl reload cron
 
 ---
 
+## Login smoke tests (ОБЯЗАТЕЛЬНЫ после любого restart/recreate)
+
+Без зелёного прогона обоих тестов ниже — W0.4 deploy считается **НЕ завершённым**.
+Это closes the gap, который проявился 2026-04-20 (HTTP 500 на login из-за
+Redis timeout при shared `host.docker.internal` подключении).
+
+### Test 1 — API login (быстрый, 2 секунды)
+
+```bash
+ssh root@5.181.254.172 '
+PWD=$(grep GLITCHTIP_ADMIN_PASSWORD /etc/proficrm/env.d/glitchtip.conf | cut -d= -f2)
+curl -sk https://glitchtip.groupprofi.ru/_allauth/browser/v1/config -c /tmp/c.txt -o /dev/null
+CSRF=$(grep csrftoken /tmp/c.txt | awk "{print \$7}")
+curl -sk -X POST https://glitchtip.groupprofi.ru/_allauth/browser/v1/auth/login \
+    -H "Content-Type: application/json" \
+    -H "Referer: https://glitchtip.groupprofi.ru/" \
+    -H "X-CSRFToken: $CSRF" -b /tmp/c.txt -c /tmp/c.txt \
+    -d "{\"email\":\"admin@groupprofi.ru\",\"password\":\"$PWD\"}" \
+    -w "\nHTTP %{http_code}\n"
+'
+```
+
+**Ожидается**: HTTP 200 + `{"meta": {"is_authenticated": true}}`.
+
+### Test 2 — UI login через Playwright
+
+См. `docs/runbooks/glitchtip-troubleshooting.md` §«Smoke tests» Test 2.
+
+### Если хотя бы один тест красный
+
+1. Смотреть логи — `docker compose logs glitchtip-web --since=2m | tail -50`.
+2. Искать `ConnectionError`, `TimeoutError`, `OperationalError`.
+3. Диагностика — `docs/runbooks/glitchtip-troubleshooting.md`.
+4. **НЕ считать deploy завершённым** пока оба теста не зелёные.
+
+---
+
 ## Проверка что всё работает
 
 ```bash
