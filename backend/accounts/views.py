@@ -3,6 +3,8 @@
 """
 from __future__ import annotations
 
+import logging
+
 from django.contrib.auth import views as auth_views
 from django.contrib.auth import authenticate, login
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -27,6 +29,8 @@ from accounts.security import (
 )
 from audit.service import log_event
 from audit.models import ActivityEvent
+
+logger = logging.getLogger(__name__)
 
 
 class SecureLoginView(auth_views.LoginView):
@@ -82,7 +86,8 @@ class SecureLoginView(auth_views.LoginView):
             import hashlib
             try:
                 token_hash = hashlib.sha256(access_key.encode()).hexdigest()
-            except Exception:
+            except (UnicodeError, AttributeError, TypeError) as exc:
+                logger.warning("SecureLoginView token hash failed: %r", exc)
                 record_failed_login_attempt("", ip, "invalid_token_format")
                 return self.render_to_response(
                     self.get_context_data(
@@ -137,7 +142,7 @@ class SecureLoginView(auth_views.LoginView):
                     meta={"ip": ip, "user_agent": user_agent[:100]},
                 )
             except Exception:
-                pass
+                logger.exception("SecureLoginView: не удалось записать ActivityEvent для access_key login user_id=%s", user.id)
             
             # Редирект
             redirect_to = request.POST.get("next") or ""
@@ -211,7 +216,7 @@ class SecureLoginView(auth_views.LoginView):
                     meta={"ip": ip},
                 )
             except Exception:
-                pass
+                logger.exception("SecureLoginView: не удалось записать ActivityEvent для password login user_id=%s", user.id)
             
             # Редирект
             redirect_to = request.POST.get("next") or ""
@@ -250,7 +255,8 @@ def magic_link_login(request: HttpRequest, token: str) -> HttpResponse:
     # Вычисляем хэш токена
     try:
         token_hash = hashlib.sha256(token.encode()).hexdigest()
-    except Exception:
+    except (UnicodeError, AttributeError, TypeError) as exc:
+        logger.warning("magic_link_login: не удалось захэшировать токен: %r", exc)
         token_hash = None
     
     if not token_hash:
@@ -278,7 +284,7 @@ def magic_link_login(request: HttpRequest, token: str) -> HttpResponse:
                 meta={"ip": ip, "user_agent": user_agent[:100]},
             )
         except Exception:
-            pass
+            logger.exception("magic_link_login: не удалось записать ActivityEvent для token_not_found")
         return render(
             request,
             "registration/magic_link_error.html",
@@ -301,7 +307,7 @@ def magic_link_login(request: HttpRequest, token: str) -> HttpResponse:
                 meta={"ip": ip, "user_agent": user_agent[:100], "user_id": magic_link.user_id},
             )
         except Exception:
-            pass
+            logger.exception("magic_link_login: не удалось записать ActivityEvent для token_%s", reason)
         return render(
             request,
             "registration/magic_link_error.html",
@@ -329,7 +335,7 @@ def magic_link_login(request: HttpRequest, token: str) -> HttpResponse:
             meta={"ip": ip, "user_agent": user_agent[:100], "created_by": str(magic_link.created_by) if magic_link.created_by else None},
         )
     except Exception:
-        pass
-    
+        logger.exception("magic_link_login: не удалось записать ActivityEvent для successful login user_id=%s", magic_link.user_id)
+
     # Редирект в кабинет
     return redirect("dashboard")
