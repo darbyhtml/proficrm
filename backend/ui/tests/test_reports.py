@@ -25,6 +25,9 @@ User = get_user_model()
 class ColdCallsReportDayTest(TestCase):
     def setUp(self):
         self.client = Client()
+        # View `cold_calls_report_day` возвращает JSON только для AJAX (X-Requested-With=XMLHttpRequest),
+        # обычный GET отдаёт HTML (render шаблона). Тесты проверяют JSON-контракт.
+        self.client.defaults["HTTP_X_REQUESTED_WITH"] = "XMLHttpRequest"
         self.manager = User.objects.create_user(
             username="mgr", password="pass", role=User.Role.MANAGER
         )
@@ -52,7 +55,9 @@ class ColdCallsReportDayTest(TestCase):
         resp = self.client.get("/reports/cold-calls/day/")
         data = json.loads(resp.content)
         stats = data["stats"]
-        for key in ("cold_calls", "incoming_calls", "new_companies", "new_contacts"):
+        # В текущей версии view stats содержит cold_calls, incoming_calls,
+        # tasks_done, new_companies. `new_contacts` была убрана.
+        for key in ("cold_calls", "incoming_calls", "tasks_done", "new_companies"):
             self.assertIn(key, stats, f"Missing stats key: {key}")
 
     def test_date_param_accepted(self):
@@ -89,6 +94,7 @@ class ColdCallsReportDayTest(TestCase):
 class ColdCallsReportMonthTest(TestCase):
     def setUp(self):
         self.client = Client()
+        self.client.defaults["HTTP_X_REQUESTED_WITH"] = "XMLHttpRequest"
         self.manager = User.objects.create_user(
             username="mgr2", password="pass", role=User.Role.MANAGER
         )
@@ -334,12 +340,14 @@ class DashboardPollTest(TestCase):
         data = json.loads(resp.content)
         self.assertIn("updated", data)
 
-    def test_without_since_returns_full_data(self):
+    def test_without_since_returns_updated_true(self):
+        """Без `since` view возвращает минимальный {updated: True, timestamp},
+        клиент делает reload. Полная пачка данных (tasks_today, overdue, ...)
+        берётся из /dashboard/ HTML, не из poll-эндпоинта."""
         resp = self.client.get("/api/dashboard/poll/")
         data = json.loads(resp.content)
         self.assertTrue(data.get("updated"))
-        for key in ("tasks_today", "overdue", "tasks_week", "tasks_new", "contracts_soon"):
-            self.assertIn(key, data, f"Missing key: {key}")
+        self.assertIn("timestamp", data)
 
     def test_with_future_since_returns_no_changes(self):
         # since = far future → no new tasks
@@ -350,11 +358,13 @@ class DashboardPollTest(TestCase):
         # Either updated=False (no changes) or updated=True with data
         self.assertIn("updated", data)
 
-    def test_with_invalid_since_returns_full_data(self):
+    def test_with_invalid_since_returns_400(self):
+        """Битый `since` даёт 400 вместо updated=true — защита от бесконечного
+        reload-цикла. Клиент видит error и сбрасывает lastPollTs."""
         resp = self.client.get("/api/dashboard/poll/", {"since": "not-a-number"})
-        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.status_code, 400)
         data = json.loads(resp.content)
-        self.assertTrue(data.get("updated"))
+        self.assertEqual(data.get("error"), "invalid_since")
 
     def test_response_has_timestamp(self):
         resp = self.client.get("/api/dashboard/poll/")

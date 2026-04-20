@@ -12,6 +12,11 @@
 """
 from .settings import *  # noqa: F401,F403
 
+# ── ALLOWED_HOSTS: Django test Client по умолчанию шлёт HOST=testserver.
+# Прод-settings имеет узкий whitelist без testserver → все view-тесты
+# получали DisallowedHost 400 с пустым body (json.loads ломался). ──
+ALLOWED_HOSTS = ["*"]
+
 # ── SSL / security headers: отключены для test client ──
 SECURE_SSL_REDIRECT = False
 SECURE_HSTS_SECONDS = 0
