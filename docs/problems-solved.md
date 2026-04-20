@@ -1,5 +1,58 @@
 # Решённые проблемы
 
+## [2026-04-20] Docker `["CMD", ...]` healthcheck не интерполирует `$HOSTNAME`
+
+**Симптом**: `proficrm-celery-1` показывал `unhealthy` **40 209 consecutive failures** подряд (~4 недели). При этом Celery работал — задачи принимались, выполнялись, `docker logs` чистый.
+
+**Диагностика**:
+- `docker inspect` показал healthcheck: `["CMD", "celery", "-A", "crm", "inspect", "ping", "-d", "celery@$HOSTNAME", "--timeout", "5"]`
+- Ручной запуск через `docker exec ... sh -c "celery -A crm inspect ping -d celery@\$HOSTNAME --timeout 5"` → OK, `pong`, `1 node online`
+- Но без `sh -c` — команде целевой аргумент передаётся **буквально** `celery@$HOSTNAME` (с долларом), без интерполяции.
+
+**Корень**: формат `["CMD", args...]` в docker-compose — это **exec напрямую без shell**. `$HOSTNAME` интерполируется только shell'ом (sh/bash), поэтому при exec-формате переменная не раскрывается. Раньше (до 4 недель назад) команда, возможно, была без `-d`, или healthcheck переписали при каком-то обновлении и не проверили.
+
+**Фикс**: убрать `-d destination` вовсе. Один Celery-воркер в prod-инсталляции — `inspect ping` без `-d` опрашивает все ноды (N=1 даёт тот же результат):
+```yaml
+test: ["CMD", "celery", "-A", "crm", "inspect", "ping", "--timeout", "10"]
+# timeout 10s (было 5) — при нагрузке broker ответ иногда >5s
+```
+
+**Альтернатива** (отвергнута): `["CMD-SHELL", "celery ... -d celery@$HOSTNAME ..."]` — работает, но тянет sh в healthcheck. Для current-inst. (1 worker) не нужна.
+
+**Урок**: `docker-compose.yml healthcheck test` — **exec, не shell**. Любая `$VAR` без `CMD-SHELL` уйдёт буквально. Проверять через `docker inspect <container> --format '{{json .State.Health.Log}}'` после изменений.
+
+---
+
+## [2026-04-20] Policy engine писал 150K ActivityEvent/сутки — 9.5M записей, 95% БД
+
+**Симптом**: таблица `audit_activityevent` раздулась до **4 GB** (73% от 5.5 GB БД). Из 9.5M строк — **9.5M с `entity_type='policy'`** (95%). Миграции на audit-таблицах ожидались "тяжёлыми", `pg_dump` медленный, retention worker неэффективен.
+
+**Диагностика**:
+- `SELECT verb, entity_type, COUNT(*) FROM audit_activityevent WHERE created_at > NOW() - INTERVAL '30 days' GROUP BY verb, entity_type ORDER BY COUNT(*) DESC`
+- Результат: `update | policy | 4 543 450` (1000× больше любого другого события).
+- Пример записи: `{"mode":"enforce","allowed":true,"context":{"path":"/mail/progress/poll/","method":"GET"},"matched_effect":"allow","matched_rule_id":109}`
+
+**Корень**: функция `backend/policy/engine.py:_log_decision()` пишет ActivityEvent **на каждый HTTP-запрос** через `@policy_required`. Polling endpoints (`/mail/progress/poll/`, `/notifications/poll/`) = ~1.5 млн запросов/сутки при 50 пользователях.
+
+В `ui/views/settings_core.py:1432` уже есть `exclude(entity_type='policy')` — разработчик **знал** и починил только UI-отображение, корень не тронул.
+
+**Фикс** (Релиз 0, 2026-04-20):
+1. **PG RULE (мгновенный хотфикс на проде)**:
+   ```sql
+   CREATE RULE block_policy_activity_events AS ON INSERT TO audit_activityevent
+     WHERE NEW.entity_type='policy' DO INSTEAD NOTHING;
+   ```
+2. **Batch DELETE 10.3M** старых записей (103 итерации × 100K, пауза 2 сек, ~12 минут в фоне без блокировки).
+3. **Код в main-ветке** (поедет в Релиз 1):
+   - `settings.py`: `POLICY_DECISION_LOGGING_ENABLED = os.getenv(..., "0") == "1"` (выкл по умолчанию)
+   - `engine.py:_log_decision()`: `if not settings.POLICY_DECISION_LOGGING_ENABLED: return`
+
+**Осталось**: VACUUM FULL `audit_activityevent` ночью (освободит ~3 GB на диске, дед-спейс после DELETE).
+
+**Урок**: аудит-логи технических решений (policy, middleware trace) — **отдельный слой** (рабочие журналы / Sentry / структурный log), не `audit_activityevent` (который пользователь видит в истории). Фиксировать только отказы (deny) и состояние изменения правил, не каждое `allow`.
+
+---
+
 ## [2026-04-18] Django multi-line `{# #}` комментарии не работают
 
 **Симптом**: в `templates/ui/company_detail_v3/b.html` в sidebar «Договор» пользователю показывался сырой текст комментария (`{# Годовой договор: показ суммы... #}`).

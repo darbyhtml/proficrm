@@ -1,5 +1,70 @@
 # Архитектурные решения
 
+## [2026-04-20] Выключение policy decision logging по умолчанию + PG RULE как хотфикс
+
+**Контекст.** За полгода работы policy engine (`backend/policy/engine.py:_log_decision()`) накопил **9 514 890 записей** в `audit_activityevent` с `entity_type='policy'` — это **95% всей таблицы** (4 GB из 5.5 GB БД). Причина: функция пишет ActivityEvent на **каждый HTTP-запрос** через `@policy_required`, а polling endpoints (`/mail/progress/poll/`, `/notifications/poll/`) дают ~1.5 млн запросов/сутки. Логика `audit_activityevent` задумана как **бизнес-журнал** (кто что сделал с компаниями), а policy-логи — **technical telemetry**, они размывают реальную историю и раздувают БД.
+
+Свидетельство: в `ui/views/settings_core.py:1432` уже есть `exclude(entity_type='policy')` — разработчик знал о проблеме, но починил только отображение, не корень.
+
+**Альтернативы.**
+1. Оставить как есть, очистить разово — **отвергнуто**: через полгода снова 4 GB.
+2. Отдельная модель `PolicyDecisionLog` с TTL 24h — **отвергнуто для Релиза 0**: требует миграции, отложено в Релиз 2.
+3. **Env-flag `POLICY_DECISION_LOGGING_ENABLED` + PG RULE как мгновенный хотфикс** (принято).
+
+**Решение.**
+- В `backend/crm/settings.py` добавлен `POLICY_DECISION_LOGGING_ENABLED = os.getenv("POLICY_DECISION_LOGGING_ENABLED", "0") == "1"` (по умолчанию ВЫКЛ).
+- В `backend/policy/engine.py:_log_decision()` первой строкой проверка `if not settings.POLICY_DECISION_LOGGING_ENABLED: return`.
+- **Хотфикс Релиза 0 (2026-04-20)** до прихода кода на прод: PostgreSQL RULE
+  ```sql
+  CREATE RULE block_policy_activity_events AS ON INSERT TO audit_activityevent
+    WHERE NEW.entity_type='policy' DO INSTEAD NOTHING;
+  ```
+  Молча отбрасывает INSERT'ы с `entity_type='policy'` без изменения кода, без рестарта. Обратимо: `DROP RULE`.
+
+**Последствия.**
+- Прирост новых policy events: **0** сразу после `CREATE RULE` (проверено live).
+- 10.3M старых записей удалено batch DELETE (103 итерации по 100K, ~12 минут).
+- `audit_activityevent` физический размер не уменьшился (dead space), нужен `VACUUM FULL` ночью.
+- После Релиза 1 (код с env-flag доедет на прод) — `DROP RULE` можно удалить, функция сама не будет писать благодаря флагу.
+
+**Для включения в будущем** (целенаправленный аудит policy-решений на короткий период):
+```bash
+# .env.prod
+POLICY_DECISION_LOGGING_ENABLED=1
+# + DROP RULE block_policy_activity_events ON audit_activityevent;
+# + docker compose up -d web
+```
+
+**Связанное.** `docs/runbooks/04-god-nodes-n1-analysis.md` (анализ проблемы), `docs/runbooks/11-release-0-actual-2026-04-20.md` (фактический отчёт).
+
+---
+
+## [2026-04-20] Celery healthcheck: убрать `-d destination`
+
+**Контекст.** `proficrm-celery-1` показывал `unhealthy` **40 209 consecutive failures** (~4 недели). Ручной запуск `celery -A crm inspect ping -d celery@$HOSTNAME --timeout 5` через `sh -c` работает (возвращает `pong`), но Docker healthcheck фейлит.
+
+**Анализ.** Конфиг формата `["CMD", "celery", "-A", "crm", "inspect", "ping", "-d", "celery@$HOSTNAME", "--timeout", "5"]` — это **прямой exec без shell**. Docker передаёт команде буквальный аргумент `celery@$HOSTNAME` (с долларом), а не `celery@b0d92e4160a5` — `$HOSTNAME` интерполируется только shell'ом. Ping уходит к несуществующему воркеру, always FAIL.
+
+**Альтернативы.**
+1. `["CMD-SHELL", "celery -A crm inspect ping -d celery@$HOSTNAME --timeout 5"]` — работает, но тянет `sh` в healthcheck.
+2. **Убрать `-d destination` вовсе** (принято) — один воркер в prod-setup, `inspect ping` без `-d` опрашивает все ноды (N=1).
+
+**Решение.** В `docker-compose.prod.yml` (main-ветка):
+```yaml
+healthcheck:
+  test: ["CMD", "celery", "-A", "crm", "inspect", "ping", "--timeout", "10"]
+  # timeout 10s вместо 5 — broker ответ иногда >5s при нагрузке
+```
+
+**Последствия.**
+- Фикс приедет в Релизе 1 (main → prod deploy).
+- До Релиза 1 `unhealthy` остаётся (не критично — Celery работает, задачи идут, просто мониторинг врёт 4 недели).
+- Если добавим второй celery-worker — надо возвращать `-d` с `CMD-SHELL`, либо использовать broker probe.
+
+**Связанное.** `docs/runbooks/11-release-0-actual-2026-04-20.md`.
+
+---
+
 ## [2026-04-19] Hotfix: Company delete = CASCADE related tasks
 
 **Контекст.** На проде за 60 дней 148 удалений компаний. У модели `Task.company` — `on_delete=SET_NULL`. При удалении компании задачи НЕ удалялись — оставались с `company_id=NULL`, в списке `/tasks/` в колонке «Компания» показывался «—», в карточку зайти нельзя. Пользователи путались («откуда задачи без компании»).

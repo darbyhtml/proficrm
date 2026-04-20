@@ -1,5 +1,29 @@
 # Текущий спринт
 
+**[2026-04-20]** — Релиз 0 (ночной hotfix безопасности + памяти) ✅
+
+Выполнен в 10:04-10:13 MSK (07:04-07:13 UTC). **Фактический downtime ~25 сек CRM, 0 downtime Chatwoot.**
+
+Применённые изменения на prod:
+- **Memory limits**: web 768M→1536M, celery 384M→512M, beat 128M→256M
+- **DB `shm_size`** 64M→512M (исчезли ошибки `could not resize shared memory segment`, было 14/неделя)
+- **nginx**: TLS только 1.2/1.3, HTTP/2 включён, `server_tokens off` (SSL Labs ожидается A+)
+- **Postfix**: порт 25 из 0.0.0.0 в loopback-only
+- **PostgreSQL RULE** `block_policy_activity_events` — блокирует INSERT policy events (хотфикс)
+- **Batch DELETE 10.3M** старых policy events (audit_activityevent: 9.5M → 87K строк, но физ. размер остался 4 GB до VACUUM FULL)
+
+Пользовательская коммуникация: 3 `CrmAnnouncement` (urgent→urgent→info) через модалку. 22 онлайн-менеджера все увидели, прогресс не потерян.
+
+**Что отложено:**
+- Chatwoot ports 5432/3000 — уйдёт в Релизе 2 (переход на внутренний messenger)
+- VACUUM FULL `audit_activityevent` — ночное окно 5-15 мин (освободит ~3 GB)
+- Celery healthcheck fix + env-flag `POLICY_DECISION_LOGGING_ENABLED` — в main-ветке, приедут в Релизе 1
+- После Релиза 1: `DROP RULE block_policy_activity_events`
+
+Документы: `docs/runbooks/11-release-0-actual-2026-04-20.md` (post-mortem), `docs/decisions.md` (2 новых ADR), commits в main (policy engine + compose healthcheck).
+
+---
+
 **[2026-04-19]** — Аудит актуальности всего проекта + sync prod hotfix'ов ✅
 
 Запущены параллельно 5 агентов-аудиторов (A1 Memory, A2 Docs, A3 Prod-vs-Staging,
