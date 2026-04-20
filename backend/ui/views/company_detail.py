@@ -1250,31 +1250,20 @@ def company_main_phone_update(request: HttpRequest, company_id) -> HttpResponse:
         messages.error(request, "Нет прав на редактирование этой компании.")
         return redirect("company_detail", company_id=company.id)
 
-    raw = (request.POST.get("phone") or "").strip()
-    # Валидация: блок кириллицы/большого объёма латиницы (защита от инжекта
-    # «+ телавпвапефон» и подобного мусора через inline-edit).
-    import re as _re_mp
-    if raw and (_re_mp.search(r"[А-Яа-яЁё]", raw) or len(_re_mp.findall(r"[A-Za-z]", raw)) > 4):
+    # Phase 2 extract: валидация и duplicate-check вынесены в companies.services.
+    from companies.services import validate_phone_main, check_phone_duplicate
+    normalized, err = validate_phone_main(request.POST.get("phone") or "")
+    if err:
+        return JsonResponse({"success": False, "error": err}, status=400)
+    # Для основного телефона проверяем только дубли с доп. номерами
+    # (check_main=True игнорируется т.к. company.phone и есть "основной"
+    # — но check_phone_duplicate сравнивает normalized с company.phone,
+    # так что для основного — check только среди CompanyPhone).
+    if normalized and CompanyPhone.objects.filter(company=company, value=normalized).exists():
         return JsonResponse(
-            {"success": False, "error": "Телефон содержит недопустимые символы."},
+            {"success": False, "error": "Такой телефон уже есть в дополнительных номерах."},
             status=400,
         )
-    from companies.normalizers import normalize_phone as _normalize_phone
-    normalized = _normalize_phone(raw) if raw else ""
-    # Если есть ввод, но после нормализации < 10 цифр — отказ
-    if raw and normalized:
-        _d = _re_mp.sub(r"\D", "", normalized)
-        if len(_d) < 10:
-            return JsonResponse(
-                {"success": False, "error": "Некорректный телефон: должно быть минимум 10 цифр."},
-                status=400,
-            )
-
-    # Проверка дублей с доп. телефонами
-    if normalized:
-        exists = CompanyPhone.objects.filter(company=company, value=normalized).exists()
-        if exists:
-            return JsonResponse({"success": False, "error": "Такой телефон уже есть в дополнительных номерах."}, status=400)
 
     company.phone = normalized
     company.save(update_fields=["phone", "updated_at"])
@@ -1315,37 +1304,18 @@ def company_phone_value_update(request: HttpRequest, company_phone_id) -> HttpRe
         messages.error(request, "Нет прав на редактирование этой компании.")
         return redirect("company_detail", company_id=company.id)
 
-    raw = (request.POST.get("phone") or "").strip()
-    # Строгая валидация: блокируем кириллицу и большие скопления латиницы.
-    import re as _re_phone
-    if _re_phone.search(r"[А-Яа-яЁё]", raw) or len(_re_phone.findall(r"[A-Za-z]", raw)) > 4:
-        return JsonResponse(
-            {"success": False, "error": "Телефон содержит недопустимые символы."},
-            status=400,
-        )
-    # Null-byte защита (PostgreSQL отклоняет NUL → 500)
-    if "\x00" in raw:
-        return JsonResponse(
-            {"success": False, "error": "Телефон содержит недопустимые символы."},
-            status=400,
-        )
-    from companies.normalizers import normalize_phone as _normalize_phone
-    normalized = _normalize_phone(raw) if raw else ""
-    if not normalized:
-        return JsonResponse({"success": False, "error": "Телефон не может быть пустым."}, status=400)
-    # Строгий формат: +<цифры>, длина 11-15 (E.164). normalize_phone для мусора
-    # возвращает original[:50] — этот кейс отсекаем здесь.
-    if not _re_phone.fullmatch(r"\+\d{10,15}", normalized):
-        return JsonResponse(
-            {"success": False, "error": "Некорректный формат телефона."},
-            status=400,
-        )
-
-    # Дубли: основной телефон и другие доп. телефоны
-    if (company.phone or "").strip() == normalized:
-        return JsonResponse({"success": False, "error": "Этот телефон уже указан как основной."}, status=400)
-    if CompanyPhone.objects.filter(company=company, value=normalized).exclude(id=company_phone.id).exists():
-        return JsonResponse({"success": False, "error": "Такой телефон уже есть в дополнительных номерах."}, status=400)
+    # Phase 2 extract: валидация и duplicate-check в companies.services.
+    from companies.services import validate_phone_strict, check_phone_duplicate
+    normalized, err = validate_phone_strict(request.POST.get("phone") or "")
+    if err:
+        return JsonResponse({"success": False, "error": err}, status=400)
+    dup_err = check_phone_duplicate(
+        company=company,
+        normalized=normalized,
+        exclude_phone_id=company_phone.id,
+    )
+    if dup_err:
+        return JsonResponse({"success": False, "error": dup_err}, status=400)
 
     company_phone.value = normalized
     company_phone.save(update_fields=["value"])
@@ -1413,48 +1383,33 @@ def company_phone_create(request: HttpRequest, company_id) -> HttpResponse:
     if not _can_edit_company(user, company):
         return JsonResponse({"success": False, "error": "Нет прав на редактирование этой компании."}, status=403)
 
-    raw = (request.POST.get("phone") or "").strip()
-    # Строгая валидация: блокируем кириллицу и большие скопления латиницы.
-    import re as _re_phone
-    if _re_phone.search(r"[А-Яа-яЁё]", raw) or len(_re_phone.findall(r"[A-Za-z]", raw)) > 4:
-        return JsonResponse(
-            {"success": False, "error": "Телефон содержит недопустимые символы."},
-            status=400,
-        )
-    # Null-byte защита (PostgreSQL отклоняет NUL → 500)
-    if "\x00" in raw:
-        return JsonResponse(
-            {"success": False, "error": "Телефон содержит недопустимые символы."},
-            status=400,
-        )
-    from companies.normalizers import normalize_phone as _normalize_phone
-    normalized = _normalize_phone(raw) if raw else ""
-    if not normalized:
-        return JsonResponse({"success": False, "error": "Телефон не может быть пустым."}, status=400)
-    # Строгий формат: +<цифры>, длина 11-15 (E.164). normalize_phone для мусора
-    # возвращает original[:50] — этот кейс отсекаем здесь.
-    if not _re_phone.fullmatch(r"\+\d{10,15}", normalized):
-        return JsonResponse(
-            {"success": False, "error": "Некорректный формат телефона."},
-            status=400,
-        )
-
-    # Дубли: основной телефон и другие доп. телефоны
+    # Phase 2 extract: валидация/duplicate/comment-check в companies.services.
+    from companies.services import (
+        validate_phone_strict,
+        check_phone_duplicate,
+        validate_phone_comment,
+    )
+    normalized, err = validate_phone_strict(request.POST.get("phone") or "")
+    if err:
+        return JsonResponse({"success": False, "error": err}, status=400)
+    # Для create только проверка main-дубля вне транзакции — внутри же
+    # пересчитаем с select_for_update для гонок на доп. номерах.
     if (company.phone or "").strip() == normalized:
-        return JsonResponse({"success": False, "error": "Этот телефон уже указан как основной."}, status=400)
+        return JsonResponse(
+            {"success": False, "error": "Этот телефон уже указан как основной."},
+            status=400,
+        )
+    comment_raw, c_err = validate_phone_comment(request.POST.get("comment") or "")
+    if c_err:
+        return JsonResponse({"success": False, "error": c_err}, status=400)
 
     from django.db import transaction
     from django.db.models import Max
 
-    comment_raw = (request.POST.get("comment") or "").strip()[:255]
-    if "\x00" in comment_raw:
-        return JsonResponse(
-            {"success": False, "error": "Комментарий содержит недопустимые символы."},
-            status=400,
-        )
     with transaction.atomic():
-        if CompanyPhone.objects.filter(company=company, value=normalized).exists():
-            return JsonResponse({"success": False, "error": "Такой телефон уже есть в дополнительных номерах."}, status=400)
+        dup_err = check_phone_duplicate(company=company, normalized=normalized)
+        if dup_err:
+            return JsonResponse({"success": False, "error": dup_err}, status=400)
 
         max_order = CompanyPhone.objects.select_for_update().filter(company=company).aggregate(m=Max("order")).get("m")
         next_order = int(max_order) + 1 if max_order is not None else 0
@@ -1499,17 +1454,21 @@ def company_main_email_update(request: HttpRequest, company_id) -> HttpResponse:
         messages.error(request, "Нет прав на редактирование этой компании.")
         return redirect("company_detail", company_id=company.id)
 
-    raw = (request.POST.get("email") or "").strip()
-    email = raw.lower()
-    if email:
-        try:
-            validate_email(email)
-        except ValidationError:
-            return JsonResponse({"success": False, "error": "Некорректный email."}, status=400)
-
-        # Дубли с доп. email
-        if CompanyEmail.objects.filter(company=company, value__iexact=email).exists():
-            return JsonResponse({"success": False, "error": "Такой email уже есть в дополнительных адресах."}, status=400)
+    # Phase 2 extract: company_emails сервис.
+    from companies.services import validate_email_value, check_email_duplicate
+    email, err = validate_email_value(
+        request.POST.get("email") or "",
+        allow_empty=True,  # Основной email можно очистить
+    )
+    if err:
+        return JsonResponse({"success": False, "error": err}, status=400)
+    dup_err = check_email_duplicate(
+        company=company,
+        email=email,
+        check_main=False,  # Для основного проверяем только доп.
+    )
+    if dup_err:
+        return JsonResponse({"success": False, "error": dup_err}, status=400)
 
     company.email = email
     company.save(update_fields=["email", "updated_at"])
@@ -1543,20 +1502,18 @@ def company_email_value_update(request: HttpRequest, company_email_id) -> HttpRe
         messages.error(request, "Нет прав на редактирование этой компании.")
         return redirect("company_detail", company_id=company.id)
 
-    raw = (request.POST.get("email") or "").strip()
-    email = raw.lower()
-    if not email:
-        return JsonResponse({"success": False, "error": "Email не может быть пустым."}, status=400)
-    try:
-        validate_email(email)
-    except ValidationError:
-        return JsonResponse({"success": False, "error": "Некорректный email."}, status=400)
-
-    # Дубли: основной email и другие доп. email
-    if (company.email or "").strip().lower() == email:
-        return JsonResponse({"success": False, "error": "Этот email уже указан как основной."}, status=400)
-    if CompanyEmail.objects.filter(company=company, value__iexact=email).exclude(id=company_email.id).exists():
-        return JsonResponse({"success": False, "error": "Такой email уже есть в дополнительных адресах."}, status=400)
+    # Phase 2 extract: company_emails сервис.
+    from companies.services import validate_email_value, check_email_duplicate
+    email, err = validate_email_value(request.POST.get("email") or "")
+    if err:
+        return JsonResponse({"success": False, "error": err}, status=400)
+    dup_err = check_email_duplicate(
+        company=company,
+        email=email,
+        exclude_email_id=company_email.id,
+    )
+    if dup_err:
+        return JsonResponse({"success": False, "error": dup_err}, status=400)
 
     company_email.value = email
     company_email.save(update_fields=["value"])

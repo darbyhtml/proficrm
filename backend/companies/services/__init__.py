@@ -45,6 +45,19 @@ from companies.services.company_core import (  # noqa: F401
 # Устраняет дублирование между company_detail и company_timeline_items views.
 from companies.services.timeline import build_company_timeline  # noqa: F401
 
+# Phase 2 extract (2026-04-20): валидация и уникальность phone/email.
+# Устраняет тройное дублирование валидации телефона и двойное — email.
+from companies.services.company_phones import (  # noqa: F401
+    validate_phone_strict,
+    validate_phone_main,
+    check_phone_duplicate,
+    validate_phone_comment,
+)
+from companies.services.company_emails import (  # noqa: F401
+    validate_email_value,
+    check_email_duplicate,
+)
+
 __all__ = [
     "CompanyService",
     "ColdCallService",
@@ -59,4 +72,11 @@ __all__ = [
     "ANNUAL_CONTRACT_WARN_AMOUNT",
     "DASHBOARD_CONTRACTS_LIMIT",
     "build_company_timeline",
+    # Phase 2
+    "validate_phone_strict",
+    "validate_phone_main",
+    "check_phone_duplicate",
+    "validate_phone_comment",
+    "validate_email_value",
+    "check_email_duplicate",
 ]
