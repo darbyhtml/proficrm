@@ -143,3 +143,27 @@ directory = "docs/audit/coverage-baseline-html"
 
 [tool.coverage.xml]
 output = "docs/audit/coverage-baseline.xml"
+
+# -----------------------------------------------------------------------------
+# Bandit security scanner (Wave 0.2d — baseline: 0 High, 6 Medium, 572 Low).
+# CI запускает с -ll (medium + high). Low — только локально (шум).
+# -----------------------------------------------------------------------------
+[tool.bandit]
+# Исключаем миграции (autogen) и тесты (assert/hardcoded passwords legit).
+exclude_dirs = [
+    "**/migrations",
+    "**/tests",
+    "**/test_*.py",
+    "**/tests_*.py",
+    "**/tests.py",
+    "**/conftest.py",
+    ".venv",
+    "staticfiles",
+    "media",
+    "graphify-out",
+    "knowledge-base",
+]
+# Пропускаем ложные срабатывания:
+# B101: assert_used — assert в тестах legit (всё равно исключаем через exclude_dirs)
+# B601: paramiko — не используется в коде
+skips = ["B101", "B601"]

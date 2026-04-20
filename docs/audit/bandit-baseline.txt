@@ -1,0 +1,89 @@
+Working... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:09
+Run started:2026-04-20 16:18:13.299210
+
+Test results:
+>> Issue: [B310:blacklist] Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected.
+   Severity: Medium   Confidence: High
+   CWE: CWE-22 (https://cwe.mitre.org/data/definitions/22.html)
+   More Info: https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_calls.html#b310-urllib-urlopen
+   Location: backend/messenger/geoip.py:49:13
+48	        req = urllib.request.Request(url, headers={"User-Agent": "ProfiCRM-Messenger/1.0"})
+49	        with urllib.request.urlopen(req, timeout=3) as resp:
+50	            data = json.loads(resp.read().decode())
+
+--------------------------------------------------
+>> Issue: [B703:django_mark_safe] Potential XSS on mark_safe function.
+   Severity: Medium   Confidence: High
+   CWE: CWE-80 (https://cwe.mitre.org/data/definitions/80.html)
+   More Info: https://bandit.readthedocs.io/en/1.8.6/plugins/b703_django_mark_safe.html
+   Location: backend/messenger/templatetags/messenger_extras.py:43:11
+42	
+43	    return mark_safe(text)
+
+--------------------------------------------------
+>> Issue: [B308:blacklist] Use of mark_safe() may expose cross-site scripting vulnerabilities and should be reviewed.
+   Severity: Medium   Confidence: High
+   CWE: CWE-79 (https://cwe.mitre.org/data/definitions/79.html)
+   More Info: https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_calls.html#b308-mark-safe
+   Location: backend/messenger/templatetags/messenger_extras.py:43:11
+42	
+43	    return mark_safe(text)
+
+--------------------------------------------------
+>> Issue: [B308:blacklist] Use of mark_safe() may expose cross-site scripting vulnerabilities and should be reviewed.
+   Severity: Medium   Confidence: High
+   CWE: CWE-79 (https://cwe.mitre.org/data/definitions/79.html)
+   More Info: https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_calls.html#b308-mark-safe
+   Location: backend/ui/templatetags/ui_extras.py:60:15
+59	    if task_type is None:
+60	        return mark_safe(
+61	            '<span class="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full '
+62	            'bg-gray-100 text-gray-700">Без статуса</span>'
+63	        )
+64	
+
+--------------------------------------------------
+>> Issue: [B703:django_mark_safe] Potential XSS on mark_safe function.
+   Severity: Medium   Confidence: High
+   CWE: CWE-80 (https://cwe.mitre.org/data/definitions/80.html)
+   More Info: https://bandit.readthedocs.io/en/1.8.6/plugins/b703_django_mark_safe.html
+   Location: backend/ui/templatetags/ui_extras.py:83:11
+82	
+83	    return mark_safe(
+84	        f'<span class="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full {color_cls}">'
+85	        f"{icon_html}<span>{name}</span></span>"
+86	    )
+87	
+
+--------------------------------------------------
+>> Issue: [B308:blacklist] Use of mark_safe() may expose cross-site scripting vulnerabilities and should be reviewed.
+   Severity: Medium   Confidence: High
+   CWE: CWE-79 (https://cwe.mitre.org/data/definitions/79.html)
+   More Info: https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_calls.html#b308-mark-safe
+   Location: backend/ui/templatetags/ui_extras.py:83:11
+82	
+83	    return mark_safe(
+84	        f'<span class="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full {color_cls}">'
+85	        f"{icon_html}<span>{name}</span></span>"
+86	    )
+87	
+
+--------------------------------------------------
+
+Code scanned:
+	Total lines of code: 61750
+	Total lines skipped (#nosec): 0
+	Total potential issues skipped due to specifically being disabled (e.g., #nosec BXXX): 0
+
+Run metrics:
+	Total issues (by severity):
+		Undefined: 0
+		Low: 119
+		Medium: 6
+		High: 0
+	Total issues (by confidence):
+		Undefined: 0
+		Low: 0
+		Medium: 12
+		High: 113
+Files skipped (0):
