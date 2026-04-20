@@ -1,5 +1,50 @@
 # Архитектурные решения
 
+## ADR-004 [2026-04-20] Uptime Kuma self-hosted вместо UptimeRobot (Wave 0.4 Track D)
+
+**Контекст.** W0.4 DoD требует uptime-мониторинг 3 сервисов (CRM prod, CRM staging, GlitchTip) с alerts в Telegram при падении. План v1.2 (00_MASTER_PLAN.md §6) упоминает UptimeRobot free-tier. При попытке настроить проверилось:
+
+1. **UptimeRobot недоступен в РФ** без VPN — IP-block на уровне провайдеров. Проверено из staging-VPS (5.181.254.172).
+2. **Telegram integration у UptimeRobot стал платным** (Pro plan $54/mo с 2024). Free-tier шлёт только email.
+
+Оба факта противоречат принципу Wave 0 §2.1 «только бесплатные self-hosted инструменты».
+
+**Альтернативы.**
+1. **UptimeRobot free (email only)** — не даёт Telegram уведомлений, email теряется в общем inbox, задержка alerts до часов.
+2. **Platform.sh / Better Stack** — платные.
+3. **Healthchecks.io self-hosted** — push-based (сервисы сами пингуют), не подходит для внешнего uptime.
+4. **Uptime Kuma** (self-hosted) — open-source, ~80 MB RAM, UI-driven setup, native Telegram/Email/Slack/Webhook integrations. Зрелый (10k+ stars).
+5. **Простой bash-скрипт в cron** — 30 строк, без UI. Для одного мониторинга ок, но масштабирование на 10+ сервисов неудобно.
+6. **Prometheus Blackbox Exporter + Alertmanager** — мощный, но требует Prometheus-стек (W10.5).
+
+**Решение.** **Uptime Kuma** через отдельный compose-проект `proficrm-uptime`, hard-limit 128 MB RAM.
+
+Причины:
+- Open source, MIT, active (релизы каждые 2-4 недели).
+- Telegram native (через bot token + chat_id).
+- UI позволяет быстро добавлять/менять monitors без YAML-redeploy.
+- Volume-based persistence — конфиги и история переживают restart.
+- Healthcheck-probes стандартные HTTP(s)/TCP/PING/Docker-health.
+
+**Последствия.**
+- ✅ Kuma развёрнут в `/opt/proficrm-observability/` (docker-compose.uptime.yml).
+  Memory overhead: +91 MB (at runtime). Итого observability-стека: **736 MB**.
+- ✅ Runbook `docs/runbooks/uptime-monitoring.md` описывает setup, 3 обязательных monitor'а, troubleshooting.
+- ⚠️ Telegram bot token **не найден в проекте** (see Q7 open-questions.md + docs/audit/telegram-bot-inventory.md). Alerts пока только в email (если подключим SMTP) или UI. Нужен ответ пользователя.
+- ⚠️ DNS `uptime.groupprofi.ru` **не заведён** (Q8 open-questions.md). Доступ через SSH tunnel на порту 3001.
+- ℹ️ Бэкап конфигов Kuma — раз в месяц вручную через UI Export до W10 (MinIO automation).
+- ℹ️ Если swap вырастет > 1.5 GB после Kuma + GlitchTip — эскалация в Q2 (либо погасить Chatwoot, либо отдельный VPS).
+
+**Откат.** Полный откат — `docker compose -f docker-compose.uptime.yml down --volumes`. Освобождает 128 MB RAM. История мониторинга теряется (при повторной установке — с нуля).
+
+**Связанные документы.**
+- `docker-compose.uptime.yml`
+- `docs/runbooks/uptime-monitoring.md`
+- `docs/audit/telegram-bot-inventory.md`
+- `docs/open-questions.md` Q7, Q8
+
+---
+
 ## ADR-003 [2026-04-20] GlitchTip self-hosted вместо Sentry paid (Wave 0.4)
 
 **Контекст.** Для observability в рамках плана доводки проекта до прод-готовности нужен error tracker с:

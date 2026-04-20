@@ -78,10 +78,12 @@ class SentryContextMiddleware:
 
             active = active_flags_for_user(user if getattr(user, "is_authenticated", False) else None)
             enabled_names = sorted(name for name, on in active.items() if on)
-            # Даже если ни один флаг не включён — шлём пустую строку,
-            # чтобы по факту «tag присутствует всегда» можно было писать
-            # alert-rules в GlitchTip.
-            scope.set_tag("feature_flags", ",".join(enabled_names))
+            # Пустая строка Sentry SDK проглатывается (tag не шлётся),
+            # поэтому при отсутствии включённых флагов пишем маркер "none".
+            # Это гарантирует что tag "feature_flags" присутствует на каждом
+            # event — можно писать alert-rules типа "feature_flags: !none".
+            tag_value = ",".join(enabled_names) if enabled_names else "none"
+            scope.set_tag("feature_flags", tag_value)
         except Exception:
             # Не даём middleware упасть из-за проблем с waffle-кешем/БД.
             logger.warning("sentry_context: failed to compute active feature flags", exc_info=True)

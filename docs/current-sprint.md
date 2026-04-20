@@ -133,6 +133,49 @@ pytest-xdist + pytest-playwright + conftest).
 
 **Следующий шаг** (неизменный): Wave 0.5 (Test infrastructure upgrade).
 
+**[2026-04-20 / night]** — **Wave 0.4 finalize** (DSN wiring + Kuma monitoring) ✅
+
+**Step 0 — DSN verification**: два DSN подтверждены project-level через GlitchTip
+API (`crm-staging/1`, `crm-prod/2`). Аномалии нет — `/1` и `/2` просто DB IDs
+(staging создан раньше на 2 минуты). Таблица в `docs/audit/glitchtip-dsn-mapping.md`.
+
+**Track C — DSN wired**:
+- **Staging**: `SENTRY_DSN` добавлен в `.env`, `.env.bak-20260420-2013` снапшот
+  сохранён, web image rebuild (требовался — `waffle` была не установлена в
+  образе), `up -d web celery`. Container healthy.
+- **C.2 Smoke тест**: через `manage.py shell` + `capture_exception` с ручным
+  `SentryContextMiddleware._enrich_scope()` → issue #4 `RuntimeError:
+  smoke-with-ff` прилетела в GlitchTip UI с **всеми 5 custom тегами**:
+  `branch=ekb`, `role=admin`, `user_id=1`, `request_id=smk2`, `feature_flags=none`.
+  DoD W0.4 smoke test ✅ ACHIEVED.
+- **Bug fix в процессе**: изначально `feature_flags` tag был пустая строка
+  при всех флагах off → Sentry SDK фильтрует empty. Исправлено: если нет
+  включённых флагов — пишем `"none"` маркер (см. commit).
+
+**Track C.3 — prod DSN**: `SENTRY_DSN` добавлен в prod `.env` (snapshot
+`.env.bak-20260420-2029` сохранён). **Restart НЕ сделан** — prod-код на
+`be569ad` (2026-03-17) не содержит `sentry_sdk.init()` (интеграция в коммите
+`397eb85e` позже). DSN лежит в env безвредно, события в GlitchTip начнут
+приходить только после W0.5a sync. Track C.4 verify: `/_debug/sentry-error/`
+на prod → 404 (endpoint физически отсутствует) ✅.
+
+**Track D — Uptime Kuma**:
+- UptimeRobot отклонён (ADR-004): IP-block в РФ + Telegram стал платным.
+- Uptime Kuma развёрнут в `/opt/proficrm-observability/` (compose
+  `proficrm-uptime`). 91/128 MB RAM, доступ на `127.0.0.1:3001` через SSH tunnel.
+- Telegram bot **не найден** в проекте (docs/audit/telegram-bot-inventory.md).
+  → Q7 в open-questions.md: создать новый через @BotFather.
+- DNS `uptime.groupprofi.ru` не заведён → Q8 в open-questions.md.
+- Test alert на staging **пропущен** (без Telegram некуда слать).
+- Runbook `docs/runbooks/uptime-monitoring.md` описывает 3 monitors +
+  Telegram setup после Q7 + test alert процедуру.
+
+**W0.4 статус**: **DoD smoke ACHIEVED на staging**, **на prod — pending W0.5a**
+(код без middleware). Formally W0.4 считается завершённым: wiring сделан там
+где код поддерживает, инфраструктура развёрнута, runbooks готовы.
+
+**Observability total memory**: GlitchTip 608 MB + Kuma 128 MB = **736 MB** (лимиты). Реально: 270 MB GlitchTip + 91 MB Kuma = 361 MB. Swap 1.0 GB стабилен.
+
 ---
 
 **[2026-04-20]** — Вечер: Frontend audit (5 агентов) + Refactor phases 0-3 + 1179 tests pass ✅

@@ -1,0 +1,44 @@
+# Wave 0.4 Track D (2026-04-20) — Uptime Kuma self-hosted monitoring.
+#
+# Замена UptimeRobot free tier:
+# - UptimeRobot блокирован в РФ без VPN (IP-block).
+# - Telegram integration у UR стал платным ($54/mo Pro).
+# - Противоречит «только self-hosted/free» принципу Wave 0.
+#
+# Kuma: open source, Docker image ~80 MB, UI-driven, native Telegram support.
+#
+# Запуск (в /opt/proficrm-observability/):
+#   docker compose -f docker-compose.uptime.yml -p proficrm-uptime up -d
+#
+# Первый заход — через SSH tunnel пока нет DNS uptime.groupprofi.ru (Q8):
+#   ssh -L 3001:localhost:3001 root@5.181.254.172
+#   → http://localhost:3001
+#
+# Memory budget: +128 MB hard limit (~80 MB реально у Kuma).
+
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    restart: always
+    ports:
+      # Bind на localhost — доступ через nginx (после настройки) или SSH tunnel.
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - uptime-kuma-data:/app/data
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3001 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  uptime-kuma-data:
+    # Хранит: monitors config, notification channels, uptime history,
+    # status-pages. Бэкап — scripts/uptime-kuma-backup.sh (Wave 10).
