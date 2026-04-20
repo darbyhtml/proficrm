@@ -62,6 +62,45 @@
 
 **Следующий шаг**: Wave 0.4 (Observability MVP — GlitchTip self-hosted + structlog + /health /ready endpoints).
 
+**[2026-04-20 / late evening]** — **Wave 0.4 Observability завершён** ✅
+
+Pre-flight: проверены 3 prerequisites (DNS / RAM / nginx-template). DNS разошёлся
+за 15 минут (оба 8.8.8.8 и 1.1.1.1 резолвят `glitchtip.groupprofi.ru` → `5.181.254.172`).
+RAM впритык (413 MB free, swap 1 GB используется) — ставим с hard-limits.
+
+Coded + deployed:
+- `docker-compose.observability.yml` — стек web/worker/db с hard-limits web=256/worker=192/db=128 MB
+- `/etc/proficrm/env.d/glitchtip.conf` — секреты (mode 600): SECRET_KEY + DB_PASSWORD + admin credentials
+- `configs/nginx/glitchtip.groupprofi.ru.conf` + certbot TLS (expires 2026-07-19)
+- `core.sentry_context.SentryContextMiddleware` — 5 тегов (user_id, role, branch, request_id, feature_flags) в Sentry scope
+- `core.celery_signals.register_signals` — request_id + tags для Celery task'ов
+- `crm.health` — `/live/` (чистый liveness), `/ready/` (БД+Redis), `/_debug/sentry-error/` (smoke, DEBUG-only)
+- `scripts/glitchtip-bootstrap.sh` — migrate + createsuperuser
+- `scripts/glitchtip-backup.sh` + `/etc/cron.d/glitchtip-backup` — ежедневный pg_dump (retention 30d, тест прошёл 52 KB)
+- `docs/runbooks/glitchtip-setup.md` + `glitchtip-restore.md` (drill сценарий)
+- `docs/decisions.md` ADR-003 — обоснование GlitchTip vs Sentry paid
+
+Тесты: **13 новых** в `core/tests_sentry_context.py` (RequestIdMiddleware × 4,
+SentryContextMiddleware × 5, Health endpoints × 4). Полный прогон на staging:
+1226/1226 passed (было 1213).
+
+Memory после деплоя: web 187/256 MB (73%), worker 101/192 MB (52%), db 44/128 MB (34%).
+Swap 1074→1106 MB (+32 MB). В зелёной зоне, но мониторим.
+
+**Что НЕ автоматизировано** (ручные шаги через UI — инструкции в runbook):
+1. Login → Create organization «GroupProfi»
+2. Create 2 projects: `crm-backend`, `crm-staging` → получить DSN
+3. Вставить `SENTRY_DSN=...` в `/opt/proficrm-staging/.env` + `up -d web`
+4. Для прода — `/opt/proficrm/.env` правит пользователь (CLAUDE.md запрет)
+5. UptimeRobot: 3 HTTP-монитора + Telegram alert (free-tier 50 мониторов)
+
+**Hotlist обновлён**: добавлен item #9 `proficrm-celery-1` unhealthy на проде 11+ ч
+(prod HEAD `be569ad` ≠ main, 333 коммита drift). Не блокер W0.4, но обязательный
+check в Release 1 verification.
+
+**Следующий шаг**: Wave 0.5 (Test infrastructure upgrade — factory_boy +
+pytest-xdist + pytest-playwright + conftest).
+
 ---
 
 **[2026-04-20]** — Вечер: Frontend audit (5 агентов) + Refactor phases 0-3 + 1179 tests pass ✅

@@ -1,5 +1,65 @@
 # Архитектурные решения
 
+## ADR-003 [2026-04-20] GlitchTip self-hosted вместо Sentry paid (Wave 0.4)
+
+**Контекст.** Для observability в рамках плана доводки проекта до прод-готовности нужен error tracker с:
+- user-контекстом (id/role/branch), чтобы понимать кого касается баг
+- cross-reference с application logs через `request_id`
+- feature flags context для триажа A/B («ошибка только при `UI_V3B_DEFAULT=True`?»)
+- email/telegram alerts на new unhandled issue
+- retention минимум 14 дней
+- защитой от утечки PII
+
+Текущий Sentry free-tier (5k events/мес) — недостаточен для production CRM на 50 юзеров: средний поток error-events в таком проекте 200-500/сутки, лимит выбирается за 10-25 дней. После превышения — events молча дропаются.
+
+**Альтернативы.**
+1. **Sentry Team plan** — $26/мес × 12 = **$312/год**. Отвергнуто принципом «только бесплатные инструменты» Wave 0 (00_MASTER_PLAN.md §2.1).
+2. **Sentry self-hosted** — требует 8+ GB RAM, Kafka+ClickHouse+PostgreSQL+Redis+web+workers. Перебор для наших задач, дорого по инфраструктуре.
+3. **GlitchTip self-hosted** — fork Sentry, сохраняющий SDK-совместимость, но без Kafka/ClickHouse. Стек: web+worker+postgres+redis. Минимум ~500 MB RAM. Open source, AGPL. Актуальная версия 6.1 (апрель 2026).
+4. **Rollbar / Bugsnag / Raygun** — все платные, у всех free-tier ещё меньше Sentry.
+5. **Собственное решение на Django logging + email** — нет агрегации/dedup/фильтрации, alerts будут спамом.
+
+**Решение.** **GlitchTip 6.1 self-hosted** + Sentry-SDK в Django (тот же протокол, меняется только DSN URL).
+
+Развёрнутые причины выбора:
+- **SDK-совместимость**: `pip install sentry-sdk` → `sentry_sdk.init(dsn=GLITCHTIP_DSN, ...)`. Ноль изменений в коде при будущем переходе обратно на Sentry если появится необходимость.
+- **Тот же VPS что и CRM**: 576 MB hard-limits, redis шарится (DB 10/11), суммарная overhead приемлемая. Альтернатива — отдельный $3-5/мес VPS, отложена в Q2 open-questions.md до подтверждения нагрузки.
+- **Retention 30 дней** по умолчанию — больше чем free-tier Sentry (30 дней в платном).
+- **Self-managed → полный контроль данных** (152-ФЗ-friendly — error events с PII остаются на российском VPS).
+- **TLS через Let's Encrypt** — стандартный auto-renew.
+
+**Последствия.**
+- ✅ Observability работает на `https://glitchtip.groupprofi.ru/` с TLS.
+- ✅ Backup: pg_dump ежедневно (03:00 UTC), retention 30 дней в `/var/backups/glitchtip/` (в W10 перенесём в MinIO bucket).
+- ✅ 5 тегов на каждый issue через `core.sentry_context.SentryContextMiddleware`: `user_id`, `role`, `branch`, `request_id`, `feature_flags`.
+- ✅ Celery tasks тоже получают request_id + Sentry scope через signals в `core.celery_signals`.
+- ✅ `/live/` + `/ready/` endpoints для K8s-style probes и UptimeRobot.
+- ✅ Runbooks: `docs/runbooks/glitchtip-setup.md` + `glitchtip-restore.md`.
+- ⚠️ **RAM впритык**: VPS уже с 1 GB swap, мониторим. Эскалация в Q2 open-questions.md если swap > 1.5 GB.
+- ⚠️ **Три ручных шага после деплоя**: login, create organization, create project — не автоматизируется через Django management command (ограничения GlitchTip). Документировано в setup-runbook.
+- ⚠️ **Первичный superuser** создан через non-interactive `createsuperuser`, пароль сохранён в `/etc/proficrm/env.d/glitchtip.conf` (mode 600).
+- ℹ️ **UptimeRobot** не автоматизирован — настраивается вручную через UI (3 монитора), документировано в setup-runbook.
+- ℹ️ **GlitchTip ≠ Sentry 1:1**: performance monitoring (APM traces) менее детализирован; SDK send-rate разные. Для error-tracking — эквивалент.
+
+**Откат.** Если GlitchTip не справится (memory peak > limit, data loss из-за OOM):
+1. Удалить `SENTRY_DSN` из `.env` CRM → errors пишутся в ErrorLog Django-модель как раньше.
+2. `docker compose ... down --volumes` → освобождение 576 MB RAM.
+3. Рассмотреть вариант: отдельный мини-VPS 1-2 GB под observability (цена ~200₽/мес Netangels).
+
+**Коммиты.** `09e1f94e` (code part), деплой-коммит (этот).
+
+**Связанные документы.**
+- `docs/runbooks/glitchtip-setup.md`
+- `docs/runbooks/glitchtip-restore.md`
+- `docs/open-questions.md` Q2 (RAM бюджет)
+- `backend/core/sentry_context.py`
+- `backend/core/celery_signals.py`
+- `backend/crm/health.py`
+- `docker-compose.observability.yml`
+- `docs/plan/01_wave_0_audit.md` §0.4
+
+---
+
 ## ADR-002 [2026-04-20] Feature flags на django-waffle (Wave 0.3)
 
 **Контекст.** В последующих волнах запланированы минимум 4 поэтапные выкатки, которые нельзя сделать единым деплоем:

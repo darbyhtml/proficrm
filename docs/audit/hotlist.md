@@ -118,6 +118,36 @@ _Снапшот: **2026-04-20**. Источник: Wave 0.1 audit, top-20 tech-d
   ```
 - **Верификация:** `EXPLAIN ANALYZE` до/после на запросе из `settings_audit_log` view. Ожидаем → Index Scan вместо Seq Scan, 700ms → <50ms.
 
+## 9. `proficrm-celery-1` unhealthy на prod 11+ часов — Release 1 drift
+
+- **Score:** 75 (impact 5 × freq 3 × risk 5)
+- **Где лечится:** **Release 1 verification checklist** (не отдельный рефактор)
+- **Обнаружено:** Wave 0.4 pre-flight (`docs/open-questions.md` Q3), `docker ps` показал
+  prod-контейнер `proficrm-celery-1` в статусе `Up 11 hours (unhealthy)`
+- **Контекст:** healthcheck-fix применён в коммите `242fcf2a` (Release 0, 2026-04-20),
+  но prod HEAD остался на `be569ad` (2026-03-17). Between: **333 коммита** прогресса
+  не развёрнуто
+- **Проверка (Release 1 smoke-test):**
+  ```bash
+  # Перед Release 1 — confirmed что healthcheck-fix применится:
+  ssh root@prod
+  docker inspect proficrm-celery-1 --format '{{json .State.Health}}' | jq
+  # Ожидаем status=unhealthy, последний check с ошибкой `celery inspect ping` или similar
+  ```
+- **Действие при Release 1:** в checklist `docs/runbooks/21-release-1-ready-to-execute.md`
+  добавить шаг post-deploy:
+  ```bash
+  # После git pull + docker compose build + docker compose up -d
+  sleep 90
+  docker ps --filter name=proficrm-celery-1 --format '{{.Status}}'
+  # Ожидаем Up N seconds (healthy) — подтверждает применение 242fcf2a
+  ```
+- **Риск, если не проверить:** Celery-task генерации напоминаний / FTS rebuild / расписание
+  могут быть остановлены, а healthcheck будет показывать ложно-healthy (никто не узнает)
+- **НЕ чинить сейчас** (вне W0.4 scope — prod policy запрещает touching из Claude Code)
+
+---
+
 ## 8. `backend/messenger/tasks.py::escalate_waiting_conversations` — Notification без dedupe
 
 - **Score:** 80 (impact 4 × freq 5 × risk 4)
@@ -188,3 +218,4 @@ _Снапшот: **2026-04-20**. Источник: Wave 0.1 audit, top-20 tech-d
 | 2026-04-20 | Создан после Wave 0.1 audit. Baseline для W1-W13. |
 | 2026-04-20 | Wave 0.2 deep audit celery tasks → добавлен item 8 (`escalate_waiting_conversations`, score 80). |
 | 2026-04-20 | Wave 0.2h: items #4 и #5 отмечены как `.min.js` BUILT (экономия 109 KB); подключение в шаблонах остаётся в Wave 10. |
+| 2026-04-20 | Wave 0.4 pre-flight → добавлен item 9 (`proficrm-celery-1 unhealthy`, score 75, Release 1 checklist). |

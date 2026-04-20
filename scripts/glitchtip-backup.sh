@@ -14,7 +14,8 @@ set -euo pipefail
 
 BACKUP_DIR="/var/backups/glitchtip"
 RETENTION_DAYS=30
-COMPOSE_FILE="/opt/proficrm/docker-compose.observability.yml"
+COMPOSE_FILE="/opt/proficrm-observability/docker-compose.observability.yml"
+ENV_FILE="/etc/proficrm/env.d/glitchtip.conf"
 COMPOSE_PROJECT="proficrm-observability"
 
 mkdir -p "$BACKUP_DIR"
@@ -23,7 +24,7 @@ DATE_TAG="$(date +%Y%m%d_%H%M%S)"
 DUMP_FILE="$BACKUP_DIR/glitchtip_${DATE_TAG}.sql.gz"
 
 echo "[$(date --iso-8601=s)] ▶ pg_dump glitchtip..."
-docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT" \
+docker compose -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT" --env-file "$ENV_FILE" \
     exec -T glitchtip-db pg_dump -U glitchtip -d glitchtip --format=plain --no-owner \
     | gzip -9 > "$DUMP_FILE"
 

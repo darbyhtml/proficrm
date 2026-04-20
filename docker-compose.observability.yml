@@ -22,7 +22,7 @@
 
 services:
   glitchtip-web:
-    image: glitchtip/glitchtip:v4
+    image: glitchtip/glitchtip:6.1
     restart: unless-stopped
     depends_on:
       glitchtip-db:
@@ -61,14 +61,14 @@ services:
         reservations:
           memory: 128M
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8000/api/0/health/ || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/_health/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
 
   glitchtip-worker:
-    image: glitchtip/glitchtip:v4
+    image: glitchtip/glitchtip:6.1
     restart: unless-stopped
     depends_on:
       glitchtip-db:
