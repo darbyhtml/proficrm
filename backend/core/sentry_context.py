@@ -72,7 +72,10 @@ class SentryContextMiddleware:
                     scope.set_tag("branch", str(branch_code))
 
         # feature_flags — CSV активных флагов для этого юзера.
-        # Импорт локальный — избегаем циклов и тяжёлого setup-time.
+        # Тег ставим ВСЕГДА, даже при сбоях waffle (как "unknown"), чтобы
+        # можно было писать alert-rules типа "feature_flags: unknown" и
+        # отлавливать саму проблему с определением флагов.
+        tag_value = "unknown"
         try:
             from core.feature_flags import active_flags_for_user
 
@@ -80,10 +83,9 @@ class SentryContextMiddleware:
             enabled_names = sorted(name for name, on in active.items() if on)
             # Пустая строка Sentry SDK проглатывается (tag не шлётся),
             # поэтому при отсутствии включённых флагов пишем маркер "none".
-            # Это гарантирует что tag "feature_flags" присутствует на каждом
-            # event — можно писать alert-rules типа "feature_flags: !none".
             tag_value = ",".join(enabled_names) if enabled_names else "none"
-            scope.set_tag("feature_flags", tag_value)
         except Exception:
-            # Не даём middleware упасть из-за проблем с waffle-кешем/БД.
-            logger.warning("sentry_context: failed to compute active feature flags", exc_info=True)
+            logger.warning(
+                "sentry_context: failed to compute active feature flags", exc_info=True
+            )
+        scope.set_tag("feature_flags", tag_value)
