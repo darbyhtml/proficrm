@@ -25,3 +25,8 @@ python-dateutil==2.9.0
 pywebpush==2.3.0
 sentry-sdk[django]==2.58.0
 
+# Wave 0.3 (2026-04-20): feature flags для поэтапных выкаток
+# (W2 TOTP migration, W6 bounce handling, W9 UI v3/b default, etc.).
+# See docs/runbooks/feature-flags.md + docs/architecture/feature-flags.md.
+django-waffle==5.0.0
+

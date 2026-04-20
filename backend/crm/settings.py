@@ -226,7 +226,9 @@ INSTALLED_APPS = [
     "corsheaders",
     "drf_spectacular",  # OpenAPI 3.0 schema generation
     "channels",  # Django Channels for WebSocket support
+    "waffle",  # Wave 0.3: feature flags (см. docs/architecture/feature-flags.md)
     # Local apps
+    "core",  # Wave 0.3: зарегистрирован для core.migrations (feature flags seed)
     "accounts",
     "companies",
     "tasksapp",
@@ -274,8 +276,27 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "waffle.middleware.WaffleMiddleware",  # Wave 0.3: для Sample-флагов + per-request caching
     "crm.middleware.ErrorLoggingMiddleware",  # Логирование ошибок в БД
 ]
+
+# -----------------------------------------------------------------------------
+# django-waffle (Wave 0.3 feature flags — см. docs/architecture/feature-flags.md)
+# -----------------------------------------------------------------------------
+# Политика безопасности: по умолчанию ВСЕ флаги off. Новый флаг → добавляется
+# через миграцию core.0002_* или management command `create_feature_flag`.
+# В prod флаги управляются через Django admin (/admin/waffle/flag/).
+# См. docs/runbooks/feature-flags.md для операционных процедур.
+WAFFLE_FLAG_DEFAULT = False
+WAFFLE_SWITCH_DEFAULT = False
+WAFFLE_SAMPLE_DEFAULT = False
+# Во всех записях admin писать Actor-юзера (для audit trail).
+WAFFLE_LOG_MISSING_FLAGS = "INFO"  # лог если spot-check на несуществующий флаг
+WAFFLE_LOG_MISSING_SWITCHES = "INFO"
+WAFFLE_LOG_MISSING_SAMPLES = "INFO"
+# Override на env-уровне только для emergency kill-switch (W0.3 wrapper
+# core.feature_flags.is_enabled читает env первым — см. docstring).
+WAFFLE_OVERRIDE = False  # явный URL-override ?dwft_<flag>=1 отключён в prod
 
 ROOT_URLCONF = "crm.urls"
 

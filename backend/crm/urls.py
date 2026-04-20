@@ -27,6 +27,7 @@ from accounts.jwt_views import LoggedTokenRefreshView, SecureTokenObtainPairView
 from accounts.models import User
 from accounts.views import SecureLoginView, magic_link_login
 from companies.api import CompanyNoteViewSet, CompanyViewSet, ContactViewSet
+from core.api import FeatureFlagsView  # Wave 0.3
 from crm.views import health_check, metrics_endpoint, robots_txt, security_txt, sw_push_js
 from messenger.api import (
     AutomationRuleViewSet,
@@ -138,6 +139,8 @@ urlpatterns = [
     path("api/token/refresh/", LoggedTokenRefreshView.as_view(), name="token_refresh"),
     path("api/v1/token/", SecureTokenObtainPairView.as_view()),
     path("api/v1/token/refresh/", LoggedTokenRefreshView.as_view()),
+    # Wave 0.3: feature flags API — фронт узнаёт какие флаги активны.
+    path("api/v1/feature-flags/", FeatureFlagsView.as_view(), name="feature_flags_list"),
     # Phonebridge: canonical at /api/phone/ (backward compat)
     path("api/phone/devices/register/", RegisterDeviceView.as_view(), name="phone_register_device"),
     path(
