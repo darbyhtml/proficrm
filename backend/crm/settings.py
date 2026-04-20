@@ -42,6 +42,43 @@ except Exception:
     # Если не удалось загрузить, пробуем стандартный путь
     load_dotenv(BASE_DIR / ".env")
 
+# ── Sentry (observability) — инициализируем ДО других импортов/настроек ──
+# Подключается через SENTRY_DSN env. Без DSN — no-op (локальная разработка, CI).
+# Free tier: 5000 events/месяц, 1 проект, 1 пользователь.
+# Регистрация: https://sentry.io → создать Django project → взять DSN.
+_SENTRY_DSN = os.getenv("SENTRY_DSN", "").strip()
+if _SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.django import DjangoIntegration
+        from sentry_sdk.integrations.celery import CeleryIntegration
+        from sentry_sdk.integrations.redis import RedisIntegration
+
+        sentry_sdk.init(
+            dsn=_SENTRY_DSN,
+            integrations=[
+                DjangoIntegration(),
+                CeleryIntegration(),
+                RedisIntegration(),
+            ],
+            # traces_sample_rate=0.0 — отключаем performance-tracing (экономим free-tier квоту,
+            # 5K events/мес. Ошибки важнее). Включать 0.05-0.1 после миграции на paid plan.
+            traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.0")),
+            environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
+            release=os.getenv("SENTRY_RELEASE", ""),
+            # Не отправляем PII (ФИО/email менеджеров) — только стек + request metadata.
+            send_default_pii=False,
+            # Игнорируем ожидаемые исключения (404, шумные middleware).
+            ignore_errors=[
+                "django.http.Http404",
+                "rest_framework.exceptions.NotFound",
+                "rest_framework.exceptions.PermissionDenied",
+            ],
+        )
+    except ImportError:
+        # sentry-sdk не установлен (локальная dev без pip install) — ok, пропускаем.
+        pass
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
