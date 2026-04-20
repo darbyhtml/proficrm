@@ -18,7 +18,7 @@ from .models import (
     ContactEmail,
     ContactPhone,
 )
-from tasksapp.models import Task
+# Task больше не импортируем — _task_changed signal удалён 2026-04-20.
 
 
 @receiver(pre_delete, sender=CompanyNote)
@@ -53,12 +53,44 @@ def _schedule_rebuild_index_for_company(company_id):
     """
     Безопасно поставить перестроение индекса после текущей транзакции.
     Если транзакции нет, on_commit выполнит колбэк сразу.
+
+    DEDUPLICATION (2026-04-20): сохраняем запланированные company_id в
+    request-level set'е на connection'е. Если в одной транзакции пришло
+    N сигналов от связанных объектов (AmoCRM import: 1 Company + 10 Phone
+    + 5 Email + 20 Contact × 2 phones = ~31 сигнал), on_commit будет
+    зарегистрирован **один раз на company_id**, а не 31.
+    Это снижает нагрузку FTS rebuild в ~20-30× при bulk-операциях.
+
+    Technically: храним set на атрибуте `_rebuild_pending_company_ids`
+    у текущего connection. Django не даёт атомарной dedup для on_commit
+    (`transaction.on_commit` просто append'ает callback в список), поэтому
+    проверяем наличие ID в set'е и регистрируем on_commit только в первый раз.
+    После commit'а колбэк сам очищает себя из set'а.
     """
     if not company_id:
         return
 
     try:
-        transaction.on_commit(lambda cid=company_id: _rebuild_index_for_company(cid))
+        conn = transaction.get_connection()
+        pending = getattr(conn, "_rebuild_pending_company_ids", None)
+        if pending is None:
+            pending = set()
+            conn._rebuild_pending_company_ids = pending
+
+        if company_id in pending:
+            # Уже запланирован в этой транзакции — пропускаем.
+            return
+        pending.add(company_id)
+
+        def _commit_callback(cid=company_id, _conn=conn):
+            try:
+                _rebuild_index_for_company(cid)
+            finally:
+                _pending = getattr(_conn, "_rebuild_pending_company_ids", None)
+                if _pending is not None:
+                    _pending.discard(cid)
+
+        transaction.on_commit(_commit_callback)
     except Exception:
         # На всякий случай fallback, если нет менеджера транзакций.
         logger.exception("transaction.on_commit недоступен, выполняем rebuild сразу (company_id=%s)", company_id)
@@ -131,8 +163,8 @@ def _company_note_changed(sender, instance: CompanyNote, **kwargs):
     _schedule_rebuild_index_for_company(instance.company_id)
 
 
-@receiver(post_save, sender=Task)
-@receiver(post_delete, sender=Task)
-def _task_changed(sender, instance: Task, **kwargs):
-    if instance.company_id:
-        _schedule_rebuild_index_for_company(instance.company_id)
+# Task signal УДАЛЁН 2026-04-20: данные Task (title, status, due_at) НЕ входят
+# в FTS-индекс CompanySearchIndex (см. rebuild_company_search_index в
+# companies/search_index.py — индексирует только поля Company + Contact + Note).
+# Каждый save/delete Task создавал бесполезный rebuild → сотни в день.
+# См. docs/runbooks/04-god-nodes-n1-analysis.md.
