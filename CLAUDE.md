@@ -207,11 +207,26 @@ CORS разделён: nginx обрабатывает OPTIONS preflight, Django 
 ### Конвенции кода
 
 - Ветка: только `main`
-- Коммиты: `Fix(Module):`, `Feat(Module):`, `Harden(Module):`, `UI(Module):`
-- Django 6.0.1, Python 3.13 — используем современные фичи
+- Коммиты: `Fix(Module):`, `Feat(Module):`, `Harden(Module):`, `UI(Module):`, `Chore(Module):`, `Docs(Module):`
+- Django 6.0.4, Python 3.13 — используем современные фичи
 - DRF для API, django-filter для фильтрации
-- Celery для всех фоновых задач
-- Redis для кэша, брокера, channel layer, typing-индикаторов
+- Celery 5.5.2 для всех фоновых задач
+- Redis 7 для кэша, брокера, channel layer, typing-индикаторов
+- channels 4.2.0 + daphne — WebSocket / SSE для messenger
+
+### CI / CD
+
+- **CI** (`.github/workflows/ci.yml`): на каждый push/PR в main — ruff + gitleaks + Django test suite (1143 теста, 100% pass) + pip-audit.
+- **Auto-deploy staging** (`.github/workflows/deploy-staging.yml`): после успешного CI на main — GitHub Actions через SSH → git pull + build + migrate + up -d. Требует secret `STAGING_SSH_PRIVATE_KEY`.
+- **Production deploy**: **только вручную** по runbook `docs/runbooks/21-release-1-ready-to-execute.md`. Workflow для прода намеренно НЕ создаётся.
+- Тесты запускаются с `DJANGO_SETTINGS_MODULE=crm.settings_test` (ALLOWED_HOSTS=["*"], EAGER celery, in-memory email и т.д.).
+
+### Observability
+
+- **Sentry free tier** (через `SENTRY_DSN` env var) — error tracking для web + celery + redis (`backend/crm/settings.py` условно инициализирует). Без DSN — no-op.
+- **UptimeRobot free** — опционально, 50 HTTP-мониторов.
+- **pg_stat_statements** — пока не установлен (план Релиз 2).
+- Runbook активации: `docs/runbooks/40-observability-and-cicd-setup.md`.
 
 ### MCP серверы
 
