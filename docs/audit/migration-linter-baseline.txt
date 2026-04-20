@@ -1,0 +1,374 @@
+(accounts, 0001_initial)... OK (cached)
+(accounts, 0002_alter_branch_code_alter_branch_name_and_more)... OK (cached)
+(accounts, 0002_magic_link_token)... OK (cached)
+(accounts, 0003_alter_user_role)... OK (cached)
+(accounts, 0004_user_email_signature_html)... ERR (cached)
+	NOT NULL constraint on columns
+(accounts, 0005_magic_link_token)... OK (cached)
+(accounts, 0006_merge_0002_0005)... OK (cached)
+(accounts, 0007_rename_accounts_m_token_h_abc123_idx_accounts_ma_token_h_1115dc_idx_and_more)... OK (cached)
+(accounts, 0008_user_avatar)... OK (cached)
+(accounts, 0009_branch_is_active)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(accounts, 0010_user_messenger_online)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(accounts, 0011_branch_region)... OK (cached)
+(accounts, 0012_branch_regions_data)... OK (cached)
+(accounts, 0013_add_tenderist_role)... OK (cached)
+(accounts, 0014_remove_duplicate_magiclink_index)... WARNING (cached)
+	DROP INDEX locks table
+(accounts, 0015_user_absence)... OK (cached)
+(accounts, 0016_alter_userabsence_id)... ERR (cached)
+	ALTERING columns (Could be backward compatible. You may ignore this migration.) (table: accounts_userabsence, column: id)
+(audit, 0001_initial)... OK (cached)
+(audit, 0002_errorlog)... OK (cached)
+(audit, 0003_rename_audit_error_created_idx_audit_error_created_dc9bc2_idx_and_more)... OK (cached)
+(companies, 0001_initial)... OK (cached)
+(companies, 0002_alter_company_address_and_more)... OK (cached)
+(companies, 0003_seed_statuses_and_spheres)... OK (cached)
+(companies, 0004_company_created_by)... WARNING (cached)
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(companies, 0005_company_primary_contacts)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(companies, 0006_company_documents)... OK (cached)
+(companies, 0007_note_attachments_and_remove_company_docs)... ERR (cached)
+	DROPPING table (table: companies_companydocument)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(companies, 0008_companynote_pins)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(companies, 0009_company_head_company)... WARNING (cached)
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(companies, 0010_company_contract_fields)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(companies, 0011_company_activity_kind)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(companies, 0012_company_cold_call)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(companies, 0013_company_deletion_requests)... OK (cached)
+(companies, 0014_companynote_edited_at)... WARNING (cached)
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(companies, 0015_company_primary_contact_is_cold_call_and_more)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(companies, 0016_company_primary_cold_marked_at_and_more)... WARNING (cached)
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(companies, 0017_company_lead_state_companyleadstaterequest)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(companies, 0018_alter_company_lead_state)... OK (cached)
+(companies, 0019_backfill_company_lead_state)... OK (cached)
+(companies, 0020_clear_cold_flags_for_warm_companies)... OK (cached)
+(companies, 0021_companynote_external_source_and_uid)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(companies, 0022_fix_long_string_values)... OK (cached)
+(companies, 0023_normalize_existing_phone_numbers)... OK (cached)
+(companies, 0024_alter_company_lead_state_and_more)... OK (cached)
+(companies, 0025_contactphone_cold_call_fields)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(companies, 0026_merge_0024_0025)... OK (cached)
+(companies, 0027_companyemail)... OK (cached)
+(companies, 0028_companyphone)... OK (cached)
+(companies, 0029_companyphone_cold_call_fields)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(companies, 0030_add_phone_comments)... ERR (cached)
+	NOT NULL constraint on columns
+(companies, 0031_company_worktime_and_employees)... ERR (cached)
+	NOT NULL constraint on columns
+(companies, 0032_company_work_schedule)... ERR (cached)
+	NOT NULL constraint on columns
+(companies, 0033_add_search_indexes)... WARNING (cached)
+	CREATE INDEX locks table
+(companies, 0034_remove_company_lead_state_request)... ERR (cached)
+	DROPPING columns
+	DROPPING table
+(companies, 0035_rename_companies_c_value_idx_companies_c_value_a17e5d_idx_and_more)... OK (cached)
+(companies, 0036_rename_search_indexes_short_names)... OK (cached)
+(companies, 0037_company_inn_multi)... ERR (cached)
+	ALTERING columns (Could be backward compatible. You may ignore this migration.) (table: companies_company, column: inn)
+(companies, 0038_company_region)... OK (cached)
+(companies, 0039_contract_type_to_foreign_key)... ERR (cached)
+	RENAMING columns (table: companies_company, column: contract_type)
+	DROPPING columns (table: companies_company, column: contract_type_old)
+(companies, 0040_company_search_index)... WARNING (cached)
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(companies, 0041_add_annual_contract_fields)... ERR (cached)
+	NOT NULL constraint on columns
+(companies, 0042_company_kpp_trgm_index)... WARNING (cached)
+	CREATE INDEX locks table
+(companies, 0043_add_exact_search_fields)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(companies, 0044_update_normalized_inns_help_text)... OK (cached)
+(companies, 0045_companysphere_is_important)... ERR (cached)
+	NOT NULL constraint on columns
+(companies, 0046_companydeal)... OK (cached)
+(companies, 0047_rename_cmp_deal_co_created_idx_companies_c_company_81e1fd_idx)... OK (cached)
+(companies, 0048_note_attachments)... OK (cached)
+(companies, 0049_companyhistoryevent)... OK (cached)
+(companies, 0050_companynote_note_type_meta)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(companies, 0051_companynote_sms_type)... OK (cached)
+(companies, 0052_task_indexes_and_constraints)... OK (cached)
+(companies, 0053_company_dashboard_indexes)... WARNING (cached)
+	CREATE INDEX locks table
+(companies, 0054_contract_type_amount_thresholds)... OK (cached)
+(mailer, 0001_initial)... OK (cached)
+(mailer, 0002_unsubscribetoken_mailaccount_rate_per_day_and_more)... ERR (cached)
+	NOT NULL constraint on columns
+(mailer, 0003_global_mail_account)... OK (cached)
+(mailer, 0004_global_mail_account_smtpbz_defaults)... OK (cached)
+(mailer, 0005_alter_globalmailaccount_rate_per_day_and_more)... OK (cached)
+(mailer, 0006_global_mail_account_from_email)... ERR (cached)
+	NOT NULL constraint on columns
+(mailer, 0007_global_mail_account_from_email_seed)... OK (cached)
+(mailer, 0008_campaign_sender_name)... ERR (cached)
+	NOT NULL constraint on columns
+(mailer, 0009_campaign_attachment)... OK (cached)
+(mailer, 0010_email_cooldown)... OK (cached)
+(mailer, 0011_globalmailaccount_per_user_daily_limit)... ERR (cached)
+	NOT NULL constraint on columns
+(mailer, 0012_merge_20260119_1200)... OK (cached)
+(mailer, 0013_campaign_paused_status)... OK (cached)
+(mailer, 0014_smtp_bz_quota_and_queue)... ERR (cached)
+	NOT NULL constraint on columns
+(mailer, 0015_user_daily_limit_status)... OK (cached)
+(mailer, 0016_unsubscribe_meta)... ERR (cached)
+	NOT NULL constraint on columns
+(mailer, 0017_rename_mailer_camp_status_priority_idx_mailer_camp_status_5db2fb_idx_and_more)... OK (cached)
+(mailer, 0018_campaign_attachment_original_name)... ERR (cached)
+	NOT NULL constraint on columns
+(mailer, 0019_campaign_queue_deferred_until)... ERR (cached)
+	NOT NULL constraint on columns
+(mailer, 0020_campaignqueue_consecutive_transient_errors)... ERR (cached)
+	NOT NULL constraint on columns
+(mailer, 0021_alter_campaignqueue_defer_reason)... OK (cached)
+(mailer, 0022_campaign_is_template)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(mailer, 0023_sendlog_indexes)... WARNING (cached)
+	CREATE INDEX locks table
+(mailer, 0024_campaignrecipient_last_error_500)... ERR (cached)
+	ALTERING columns (Could be backward compatible. You may ignore this migration.) (table: mailer_campaignrecipient, column: last_error)
+(mailer, 0025_campaignqueue_deferred_index)... WARNING (cached)
+	CREATE INDEX locks table
+(mailer, 0026_globalmailaccount_smtp_bz_api_key_enc)... ERR (cached)
+	NOT NULL constraint on columns
+(mailer, 0027_remove_globalmailaccount_smtp_bz_api_key)... ERR (cached)
+	DROPPING columns (table: mailer_globalmailaccount, column: smtp_bz_api_key)
+(mailer, 0028_sendlog_status_choices)... OK (cached)
+(mailer, 0029_campaign_send_at)... OK (cached)
+(mailer, 0030_alter_campaignrecipient_last_error_and_more)... ERR (cached)
+	ALTERING columns (Could be backward compatible. You may ignore this migration.) (table: mailer_campaignrecipient, column: last_error)
+	ADDING unique constraint
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(mailer, 0031_seed_global_mail_account)... OK (cached)
+(mailer, 0032_campaignrecipient_contact_company_fk)... ERR (cached)
+	DROPPING columns (table: mailer_campaignrecipient, column: company_id)
+	DROPPING columns (table: mailer_campaignrecipient, column: contact_id)
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(messenger, 0001_initial)... OK (cached)
+(messenger, 0002_alter_inbox_widget_token)... OK (cached)
+(messenger, 0003_inbox_branch_nullable)... OK (cached)
+(messenger, 0004_conversation_assignee_timestamps)... WARNING (cached)
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(messenger, 0005_conversation_assignee_last_read_message_read_at)... WARNING (cached)
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(messenger, 0006_conversation_rating)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(messenger, 0007_alter_agentprofile_status)... OK (cached)
+(messenger, 0009_add_critical_fields_phase1)... ERR (cached)
+	RENAMING columns (table: messenger_conversation, column: last_message_at)
+	NOT NULL constraint on columns
+	DROP INDEX locks table
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(messenger, 0010_migrate_data_phase1)... OK (cached)
+(messenger, 0011_add_composite_indexes_phase2)... WARNING (cached)
+	CREATE INDEX locks table
+(messenger, 0012_add_conversation_labels)... OK (cached)
+(messenger, 0013_add_push_subscription)... OK (cached)
+(messenger, 0014_add_campaigns_automations_reporting)... OK (cached)
+(messenger, 0015_add_macro)... OK (cached)
+(messenger, 0016_conversation_client_region)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(messenger, 0017_conversation_transfer)... OK (cached)
+(messenger, 0018_message_is_private)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(messenger, 0019_conversation_needs_help)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(messenger, 0020_conversation_msg_timestamps)... WARNING (cached)
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(messenger, 0021_cannedresponse_quick_button)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(messenger, 0022_conversation_escalation_fields)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(messenger, 0023_conversation_company)... WARNING (cached)
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(messenger, 0024_conversation_branch_protect_status_check)... OK (cached)
+(messenger, 0025_conversation_off_hours)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(messenger, 0026_remove_conversation_conversation_valid_status_and_more)... OK (cached)
+(messenger, 0027_remove_conversation_conversation_valid_status_and_more)... OK (cached)
+(notifications, 0001_initial)... OK (cached)
+(notifications, 0002_company_contract_reminders)... OK (cached)
+(notifications, 0003_notification_payload)... OK (cached)
+(notifications, 0004_crmannouncement)... OK (cached)
+(phonebridge, 0001_initial)... OK (cached)
+(phonebridge, 0002_callrequest_is_cold_call)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(phonebridge, 0003_callrequest_call_duration_seconds_and_more)... WARNING (cached)
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(phonebridge, 0004_phonedevice_telemetry_logs)... WARNING (cached)
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(phonebridge, 0005_phonedevice_encryption_enabled)... ERR (cached)
+	NOT NULL constraint on columns
+(phonebridge, 0006_mobileappbuild_mobileappqrtoken)... OK (cached)
+(phonebridge, 0007_add_call_analytics_fields)... WARNING (cached)
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(phonebridge, 0008_rename_phonebridge_env_is_ac_upload_idx_phonebridge_env_ac3dc6_idx_and_more)... OK (cached)
+(phonebridge, 0009_alter_mobileappbuild_file)... OK (cached)
+(phonebridge, 0010_qr_token_hash)... ERR (cached)
+	NOT NULL constraint on columns
+	ADDING unique constraint
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(phonebridge, 0011_remove_duplicate_qr_indexes)... WARNING (cached)
+	DROP INDEX locks table
+(policy, 0001_initial)... OK (cached)
+(policy, 0002_rename_policy_indexes)... OK (cached)
+(policy, 0003_policyconfig_livechat_escalation)... ERR (cached)
+	NOT NULL constraint on columns
+(tasksapp, 0001_initial)... OK (cached)
+(tasksapp, 0002_task_updated_at_alter_task_assigned_to_and_more)... ERR (cached)
+	NOT NULL constraint on columns
+(tasksapp, 0003_task_external_source_and_uid)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(tasksapp, 0004_default_task_types)... OK (cached)
+(tasksapp, 0005_tasktype_icon_color)... ERR (cached)
+	NOT NULL constraint on columns
+(tasksapp, 0006_default_status_tasktypes)... OK (cached)
+(tasksapp, 0007_task_company_due_status_index)... WARNING (cached)
+	CREATE INDEX locks table
+(tasksapp, 0008_remove_task_tasksapp_task_company_due_status_idx_and_more)... WARNING (cached)
+	DROP INDEX locks table
+(tasksapp, 0009_task_is_urgent)... ERR (cached)
+	NOT NULL constraint on columns
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(tasksapp, 0010_taskcomment_taskevent)... OK (cached)
+(tasksapp, 0011_alter_taskcomment_id_alter_taskevent_id)... ERR (cached)
+	ALTERING columns (Could be backward compatible. You may ignore this migration.) (table: tasksapp_taskcomment, column: id)
+	ALTERING columns (Could be backward compatible. You may ignore this migration.) (table: tasksapp_taskevent, column: id)
+(tasksapp, 0012_add_recurrence_fields)... WARNING (cached)
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(tasksapp, 0013_task_uniq_recurrence_occurrence)... ERR (cached)
+	ADDING unique constraint
+	CREATE INDEX locks table
+(tasksapp, 0014_task_indexes_and_constraints)... WARNING (cached)
+	CREATE INDEX locks table
+	CREATE INDEX prolongs transaction, delaying lock release
+(tasksapp, 0015_task_assignee_updated_idx)... WARNING (cached)
+	CREATE INDEX locks table
+(token_blacklist, 0001_initial)... IGNORE
+(token_blacklist, 0002_outstandingtoken_jti_hex)... IGNORE
+(token_blacklist, 0003_auto_20171017_2007)... IGNORE
+(token_blacklist, 0004_auto_20171017_2013)... IGNORE
+(token_blacklist, 0005_remove_outstandingtoken_jti)... IGNORE
+(token_blacklist, 0006_auto_20171017_2113)... IGNORE
+(token_blacklist, 0007_auto_20171017_2214)... IGNORE
+(token_blacklist, 0008_migrate_to_bigautofield)... IGNORE
+(token_blacklist, 0010_fix_migrate_to_bigautofield)... IGNORE
+(token_blacklist, 0011_linearizes_history)... IGNORE
+(token_blacklist, 0012_alter_outstandingtoken_user)... IGNORE
+(token_blacklist, 0013_alter_blacklistedtoken_options_and_more)... IGNORE
+(ui, 0001_initial)... OK (cached)
+(ui, 0002_amoapiconfig)... OK (cached)
+(ui, 0003_amoapiconfig_long_lived_token)... ERR (cached)
+	NOT NULL constraint on columns
+(ui, 0004_uiuserpreference)... OK (cached)
+(ui, 0005_amoconfig_region_field)... OK (cached)
+(ui, 0006_uiuserpreference_company_list_view_mode)... ERR (cached)
+	NOT NULL constraint on columns
+(ui, 0007_remove_uiuserpreference_company_list_view_mode)... ERR (cached)
+	DROPPING columns (table: ui_uiuserpreference, column: company_list_view_mode)
+(ui, 0008_uiuserpreference_company_detail_view_mode)... ERR (cached)
+	NOT NULL constraint on columns
+(ui, 0009_uiuserpreference_task_prefs)... ERR (cached)
+	NOT NULL constraint on columns
+(ui, 0010_amoapiconfig_encrypt_tokens)... ERR (cached)
+	DROPPING columns (table: ui_amoapiconfig, column: access_token)
+	DROPPING columns (table: ui_amoapiconfig, column: refresh_token)
+	DROPPING columns (table: ui_amoapiconfig, column: long_lived_token)
+	NOT NULL constraint on columns
+(ui, 0011_uiuserpreference_font_scale_widen)... ERR (cached)
+	ALTERING columns (Could be backward compatible. You may ignore this migration.) (table: ui_uiuserpreference, column: font_scale)
+(ui, 0012_uiuserpreference_per_page)... ERR (cached)
+	NOT NULL constraint on columns
+(ui, 0013_amoapi_client_secret_enc)... ERR (cached)
+	NOT NULL constraint on columns
+*** Summary ***
+Valid migrations: 86/190
+Erroneous migrations: 67/190
+Migrations with warnings: 25/190
+Ignored migrations: 12/190

@@ -240,16 +240,23 @@ INSTALLED_APPS = [
     "messenger",
 ]
 
-# Wave 0.0 (2026-04-20): django-extensions подключается только в DEBUG,
-# даёт команды graph_models, show_urls, shell_plus.
-# НЕ попадает в production — зависимость в requirements-dev.txt.
+# Wave 0.0+0.2 (2026-04-20): dev-only приложения (только DEBUG + опциональны).
+# НЕ попадают в production — зависимости в requirements-dev.txt.
 if DEBUG:
+    # django-extensions: graph_models, show_urls, shell_plus.
     try:
         import django_extensions
 
         INSTALLED_APPS += ["django_extensions"]
     except ImportError:
-        # Dev-зависимость не установлена — это норма для prod.
+        pass
+    # Wave 0.2: django-migration-linter — команда `lintmigrations`
+    # (ловит unsafe миграции; ActivityEvent 9.5M — любая ошибка = downtime).
+    try:
+        import django_migration_linter
+
+        INSTALLED_APPS += ["django_migration_linter"]
+    except ImportError:
         pass
 
 MIDDLEWARE = [

@@ -1,0 +1,139 @@
+# Pre-commit hooks для CRM ПРОФИ — Wave 0.2f (2026-04-20).
+#
+# Установка:
+#   pip install pre-commit
+#   pre-commit install
+#   pre-commit install --hook-type commit-msg
+#
+# Ручной прогон:
+#   pre-commit run --all-files
+#
+# Пропуск (только в исключительных случаях):
+#   SKIP=mypy git commit -m "..."
+#
+# Политика:
+# - Быстрые хуки (ruff, black, whitespace) — на каждый commit.
+# - Тяжёлые (mypy, bandit) — через pre-push или CI (в locally избыточно).
+# - django-migration-linter — критично для ActivityEvent 9.5M (W0.1 audit),
+#   любая unsafe миграция убьёт прод.
+
+default_language_version:
+  python: python3.13
+
+repos:
+  # ---------------------------------------------------------------------------
+  # 1. Whitespace, EOF, YAML/JSON/TOML
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '\.min\.js$|\.min\.css$'
+      - id: end-of-file-fixer
+        exclude: '\.min\.js$|\.min\.css$'
+      - id: check-yaml
+        args: [--unsafe]  # для Django YAMLs с custom tags
+      - id: check-toml
+      - id: check-json
+        exclude: '^\.vscode/|staticfiles/|media/'
+      - id: check-added-large-files
+        args: [--maxkb=2048]  # блокировать добавление файлов > 2 MB
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: debug-statements
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # ---------------------------------------------------------------------------
+  # 2. Ruff — линтинг + автофикс (быстро)
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.5
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format  # альтернативный форматтер (используем black, но имеем в резерве)
+        stages: [manual]  # не включаем автоматически — конфликт с black
+
+  # ---------------------------------------------------------------------------
+  # 3. Black — форматтер
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/psf/black
+    rev: 25.11.0
+    hooks:
+      - id: black
+        language_version: python3.13
+
+  # ---------------------------------------------------------------------------
+  # 4. Detect secrets (baseline в .secrets.baseline)
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: [--baseline, .secrets.baseline]
+        exclude: |
+          (?x)^(
+            \.secrets\.baseline |
+            .*/migrations/.* |
+            graphify-out/.* |
+            knowledge-base/.* |
+            .*\.lock |
+            .*/static/.* |
+            .*/staticfiles/.* |
+            .*\.min\.(js|css) |
+            backend/audit/tests.*\.py |
+            docs/audit/.*
+          )$
+
+  # ---------------------------------------------------------------------------
+  # 5. Django migration linter (W0.1 blocker — ActivityEvent 9.5M строк)
+  # ---------------------------------------------------------------------------
+  # Ловит unsafe миграции:
+  # - ADD COLUMN NOT NULL без default на большой таблице → table lock
+  # - DROP COLUMN → неожиданное поведение при rolling deploy
+  # - ALTER COLUMN TYPE → copy+swap всей таблицы
+  # - RENAME TABLE на prod без двухфазового deploy
+  # На ActivityEvent (9.5M строк до purge / 87K после) любая из этих —
+  # downtime от минут до часов. Этот хук блокирует коммит.
+  - repo: local
+    hooks:
+      - id: django-migration-linter
+        name: Django migration linter
+        entry: python -m django_migration_linter backend --include-apps accounts companies tasksapp ui audit mailer notifications phonebridge policy messenger
+        language: system
+        files: '^backend/.*/migrations/.*\.py$'
+        pass_filenames: false
+        stages: [pre-commit]
+
+  # ---------------------------------------------------------------------------
+  # 6. Mypy — через system (нужна настройка venv с stubs).
+  #    Отключено по умолчанию — запускается через `make mypy` или CI.
+  #    Reason: pre-commit env изолирован, django-stubs в нём не найдёт проект.
+  # ---------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: mypy-ratchet
+        name: Mypy ratchet (no new errors)
+        entry: python scripts/mypy_ratchet.py
+        language: system
+        types: [python]
+        pass_filenames: false
+        stages: [manual]  # включить в pre-push после W0.3 (после полного test suite)
+
+  # ---------------------------------------------------------------------------
+  # 7. Bandit — security scan (только при push, не commit).
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.6
+    hooks:
+      - id: bandit
+        args: [-c, pyproject.toml, -r, backend/, -ll]
+        pass_filenames: false
+        stages: [pre-push]
+
+# -----------------------------------------------------------------------------
+# CI интеграция:
+# - ruff-check, black-check, mypy-ratchet, bandit, tests, coverage — в .github/workflows/ci.yml
+# - Pre-commit запускается локально; CI повторяет критичные проверки.
+# -----------------------------------------------------------------------------

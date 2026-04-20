@@ -44,13 +44,14 @@ black==25.11.0
 
 # Статическая типизация. Baseline — docs/audit/mypy-baseline.json.
 # Ratcheting: CI fail если новых ошибок больше чем в baseline.
-mypy==1.18.2
+# mypy 1.17.1 — max совместимая с djangorestframework-stubs 3.16.2 (требует <1.18).
+mypy==1.17.1
 django-stubs[compatible-mypy]==5.2.6
 djangorestframework-stubs[compatible-mypy]==3.16.2
-types-redis==4.6.0.20250610
 celery-types==0.24.0
-types-requests==2.32.4.20251008
-types-python-dateutil==2.9.0.20250708
+types-requests>=2.32.4
+types-python-dateutil>=2.9.0
+# Примечание: types-redis удалён — пакет redis 5.0+ имеет встроенные py.typed
 
 # Security scan. Skip B101 (assert в тестах), B601 (paramiko). Pre-commit + CI.
 bandit[toml]==1.8.6
@@ -63,4 +64,4 @@ detect-secrets==1.5.0
 
 # Django migration linter (бесплатный). Ловит unsafe миграции на 9.5M-строк
 # таблицах (ADD COLUMN NOT NULL без default, ALTER TYPE, etc.).
-django-migration-linter==5.3.0
+django-migration-linter==6.0.0
