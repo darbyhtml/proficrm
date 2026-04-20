@@ -560,7 +560,9 @@ class TestContactDataQuality(unittest.TestCase):
         # 2024-01-15 23:30:00 UTC -> должно стать 2024-01-15 00:00:00 UTC
         timestamp = 1705361400  # 2024-01-15 23:30:00 UTC (исправлено: было 1705368600 = 2024-01-16 01:30 UTC)
 
-        UTC = getattr(timezone, "UTC", UTC)
+        # Django 4.2+ имеет timezone.UTC; fallback на stdlib datetime.UTC.
+        # (ruff UP017 добавил `from datetime import UTC` наверху — используем его здесь).
+        UTC = getattr(timezone, "UTC", __import__("datetime").UTC)
         dt_utc = timezone.datetime.fromtimestamp(timestamp, tz=UTC)
         normalized = dt_utc.replace(hour=0, minute=0, second=0, microsecond=0)
 
