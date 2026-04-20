@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 
 from django.conf import settings
-from cryptography.fernet import Fernet, MultiFernet
+from cryptography.fernet import Fernet, InvalidToken, MultiFernet
+
+logger = logging.getLogger(__name__)
 
 
 def _collect_keys() -> list[str]:
@@ -52,8 +55,25 @@ def encrypt_str(value: str) -> str:
 
 
 def decrypt_str(token: str) -> str:
-    """Расшифровать строку (пароль SMTP, API-ключ и т.п.)."""
+    """Расшифровать строку (пароль SMTP, API-ключ и т.п.).
+
+    При `InvalidToken` (повреждённое значение, либо зашифровано другим
+    `MAILER_FERNET_KEY` — например после потери/ротации ключа) возвращаем
+    пустую строку и пишем WARN. Это предотвращает полный отказ раздела
+    (раньше `/mail/campaigns/` падал 500, если любой SMTP-объект в БД имел
+    enc-поле от старого ключа).
+
+    Если нужен fail-fast для диагностики — передавайте `strict=True`.
+    """
     if not token:
         return ""
-    value = _fernet().decrypt(token.encode("utf-8"))
-    return value.decode("utf-8")
+    try:
+        value = _fernet().decrypt(token.encode("utf-8"))
+        return value.decode("utf-8")
+    except InvalidToken:
+        logger.error(
+            "decrypt_str: InvalidToken. "
+            "Вероятно MAILER_FERNET_KEY был ротирован без MAILER_FERNET_KEYS_OLD, "
+            "либо значение повреждено. Возвращаем пустую строку вместо падения."
+        )
+        return ""

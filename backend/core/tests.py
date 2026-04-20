@@ -111,15 +111,19 @@ class CryptoEncryptDecryptTest(TestCase):
             from core.crypto import decrypt_str
             self.assertEqual(decrypt_str(""), "")
 
-    def test_decrypt_невалидного_токена_вызывает_исключение(self):
-        """Расшифровка мусорного токена поднимает cryptography.fernet.InvalidToken."""
-        from cryptography.fernet import InvalidToken
+    def test_decrypt_невалидного_токена_возвращает_пусто(self):
+        """Расшифровка мусорного токена возвращает пустую строку (graceful fallback).
+
+        Контракт изменён 2026-04-20: вместо InvalidToken возвращаем "" и пишем
+        WARN в лог. Иначе раздел рассылок падал 500, если поле было зашифровано
+        другим MAILER_FERNET_KEY (например после потери/ротации без KEYS_OLD).
+        См. docs/problems-solved.md (2026-04-20) и core/crypto.py:decrypt_str.
+        """
         key = _new_fernet_key()
         with override_settings(MAILER_FERNET_KEY=key, MAILER_FERNET_KEYS_OLD=""):
             self._clear_cache()
             from core.crypto import decrypt_str
-            with self.assertRaises((InvalidToken, Exception)):
-                decrypt_str("это-не-fernet-токен")
+            self.assertEqual(decrypt_str("это-не-fernet-токен"), "")
 
     def test_отсутствие_ключа_поднимает_RuntimeError(self):
         """Если MAILER_FERNET_KEY не задан — RuntimeError при первом вызове."""
@@ -153,9 +157,12 @@ class CryptoEncryptDecryptTest(TestCase):
     def test_multifernet_новый_ключ_шифрует_только_primary(self):
         """
         После ротации encrypt использует новый (primary) ключ.
-        Расшифровка без нового ключа должна завершиться ошибкой.
+        Расшифровка без нового ключа возвращает пустую строку и пишет WARN.
+
+        Контракт изменён 2026-04-20: вместо InvalidToken возвращаем "" —
+        это защищает UI от 500 при рассинхроне ключей. Предыдущий контракт
+        (raise) ломал /mail/campaigns/ целиком.
         """
-        from cryptography.fernet import InvalidToken
         old_key = _new_fernet_key()
         new_key = _new_fernet_key()
 
@@ -164,12 +171,11 @@ class CryptoEncryptDecryptTest(TestCase):
             from core.crypto import encrypt_str
             new_token = encrypt_str("новый секрет")
 
-        # Попытка расшифровать только старым ключом — должна упасть
+        # Попытка расшифровать только старым ключом — возвращает пусто (не raise)
         with override_settings(MAILER_FERNET_KEY=old_key, MAILER_FERNET_KEYS_OLD=""):
             self._clear_cache()
             from core.crypto import decrypt_str
-            with self.assertRaises((InvalidToken, Exception)):
-                decrypt_str(new_token)
+            self.assertEqual(decrypt_str(new_token), "")
 
 
 class CollectKeysTest(TestCase):
