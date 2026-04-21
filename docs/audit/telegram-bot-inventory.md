@@ -3,7 +3,25 @@
 _Проверка в рамках W0.4 Track D — замена UptimeRobot на self-hosted
 monitoring с Telegram alerts._
 
-## Результат поиска: **Telegram bot НЕ найден**
+## Update 2026-04-21: bot найден в prod CRM
+
+**Bot**: `@proficrmdarbyoff_bot` (существующий бот CRM для оповещений менеджеров)
+**Переменные в prod .env**: `TG_BOT_TOKEN=<redacted>`, `TG_CHAT_ID=<redacted>`
+**Chat_id назначения alerts**: `1363929250` (личный Telegram владельца)
+
+Для uptime alerts переиспользован тот же токен через **отдельный** env-файл
+`/etc/proficrm/env.d/telegram-alerts.conf` (mode 600, root). Это делает uptime
+monitoring независимым от prod CRM .env lifecycle.
+
+```
+TELEGRAM_ALERT_TOKEN=<same-as-TG_BOT_TOKEN>
+TELEGRAM_ALERT_CHAT_ID=<same-as-TG_CHAT_ID>
+```
+
+**Rotation policy**: при смене токена в CRM (через @BotFather `/revoke`) нужно
+синхронно обновить `telegram-alerts.conf` + reload Kuma notification channel.
+
+## Результат первоначального поиска (историческая запись 2026-04-20): **не найден**
 
 Проверены источники:
 
