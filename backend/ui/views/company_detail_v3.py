@@ -289,7 +289,7 @@ def contact_quick_create(request: HttpRequest, company_id) -> HttpResponse:
     Возвращает: 302 redirect на карточку v3/b/ (чтобы после submit форма
     обновилась с новым контактом).
     """
-    from ui.views.company_detail import _can_edit_company  # reuse permission check
+    from ui.views._base import _can_edit_company  # reuse permission check (W1.2: из helpers/companies через _base)
 
     user = request.user
     company = get_object_or_404(

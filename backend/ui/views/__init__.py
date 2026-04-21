@@ -5,11 +5,6 @@ from ui.views._base import RESPONSIBLE_FILTER_NONE, STRONG_CONFIRM_THRESHOLD
 
 # F7 R1: ролевые KPI-дашборды v2
 from ui.views.analytics_v2 import analytics_v2_home
-from ui.views.company_detail import (
-    company_detail,
-    company_tasks_history,
-    company_timeline_items,
-)
 
 # F4 R3: preview 3 вариантов редизайна карточки компании + quick-endpoints
 from ui.views.company_detail_v3 import (
@@ -86,6 +81,11 @@ from ui.views.pages.company.deletion import (
     company_delete_request_approve,
     company_delete_request_cancel,
     company_delete_request_create,
+)
+from ui.views.pages.company.detail import (
+    company_detail,
+    company_tasks_history,
+    company_timeline_items,
 )
 from ui.views.pages.company.edit import (
     company_contract_update,

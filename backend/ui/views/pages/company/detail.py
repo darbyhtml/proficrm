@@ -1,78 +1,52 @@
+"""Company detail main card + tasks history + timeline AJAX (W1.2 refactor).
+
+Extracted из `backend/ui/views/company_detail.py` в W1.2 — финальный extraction.
+После этого файл `company_detail.py` удалён полностью.
+
+Endpoints:
+- `company_detail` — GET /companies/<uuid>/
+- `company_tasks_history` — GET /companies/<uuid>/tasks-history/
+- `company_timeline_items` — GET /companies/<uuid>/timeline/items/?offset=&limit=
+"""
+
 from __future__ import annotations
 
 import logging
 
-from phonebridge.models import CallRequest, PhoneDevice
 from ui.views._base import (
     ActivityEvent,
     Company,
     CompanyContractForm,
     CompanyDeal,
     CompanyDeletionRequest,
-    CompanyEditForm,
-    CompanyEmail,
-    CompanyInlineEditForm,
     CompanyNote,
-    CompanyNoteAttachment,
     CompanyNoteForm,
     CompanyPhone,
     CompanyQuickEditForm,
-    CompanySearchIndex,
     CompanyStatus,
     Contact,
-    ContactEmailFormSet,
-    ContactForm,
     ContactPhone,
-    ContactPhoneFormSet,
-    ContractType,
-    Decimal,
-    FileResponse,
-    Http404,
     HttpRequest,
     HttpResponse,
-    HttpResponseNotFound,
-    IntegrityError,
-    JsonResponse,
-    Max,
-    Notification,
     Prefetch,
-    Q,
     Task,
     UiUserPreference,
     User,
-    ValidationError,
     _can_delete_company,
     _can_delete_task_ui,
     _can_edit_company,
     _can_edit_task_ui,
     _can_manage_task_status_ui,
-    _cold_call_json,
-    _company_branch_id,
-    _detach_client_branches,
-    _invalidate_company_count_cache,
-    _is_ajax,
-    _notify_branch_leads,
-    _notify_head_deleted_with_branches,
-    _safe_next_v3,
-    format_phone,
     get_object_or_404,
     get_transfer_targets,
-    log_event,
     login_required,
-    messages,
-    mimetypes,
     models,
-    notify,
     policy_required,
     redirect,
     render,
     require_admin,
     require_can_view_company,
-    require_can_view_note_company,
-    timedelta,
     timezone,
-    transaction,
-    validate_email,
 )
 
 logger = logging.getLogger(__name__)
@@ -82,7 +56,6 @@ logger = logging.getLogger(__name__)
 @policy_required(resource_type="page", resource="ui:companies:detail")
 @require_can_view_company
 def company_detail(request: HttpRequest, company_id) -> HttpResponse:
-    logger = logging.getLogger(__name__)
     user: User = request.user
     # Загружаем компанию с связанными объектами, включая поля для истории холодных звонков
     company = get_object_or_404(
@@ -377,37 +350,6 @@ def company_tasks_history(request: HttpRequest, company_id) -> HttpResponse:
             "local_now": local_now,
         },
     )
-
-
-# company_delete_request_create, _cancel, _approve, company_delete_direct moved в ui.views.pages.company.deletion (W1.2)
-
-
-# company_contract_update moved в ui.views.pages.company.edit (W1.2)
-
-
-# 8 cold-call toggle/reset fns (4 entities) moved в ui.views.pages.company.cold_call (W1.2)
-
-
-# 4 phone CRUD + 3 phone/email comment fns moved в ui.views.pages.company.phones (W1.2)
-# (was between emails-stub and notes_pin_toggle)
-
-
-# company_note_pin_toggle + 4 attachments fns moved в ui.views.pages.company.notes (W1.2)
-
-
-# company_edit, company_transfer, company_update, company_inline_update moved в ui.views.pages.company.edit (W1.2)
-
-
-# contact_create, contact_edit, contact_delete moved в ui.views.pages.company.contacts (W1.2)
-
-
-# company_note_add, company_note_edit, company_note_delete moved в ui.views.pages.company.notes (W1.2)
-
-
-# company_deal_add, company_deal_delete moved в ui.views.pages.company.deals (W1.2)
-
-
-# phone_call_create moved в ui.views.pages.company.calls (W1.2)
 
 
 @login_required
