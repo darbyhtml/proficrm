@@ -471,11 +471,7 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
     )
 
     # PERF: .distinct() применяем ТОЛЬКО когда реально нужен (M2M / JOIN-фильтры).
-    needs_distinct = bool(
-        selects_ctx["sphere_ids"]
-        or overdue == "1"
-        or bool(task_filter)
-    )
+    needs_distinct = bool(selects_ctx["sphere_ids"] or overdue == "1" or bool(task_filter))
     result_qs = qs.distinct() if needs_distinct else qs
     return {
         "qs": result_qs,

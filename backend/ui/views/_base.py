@@ -301,7 +301,6 @@ __all__ = [
 # Re-exports at end of file для backward compat.
 
 
-
 # ---------------------------------------------------------------------------
 # Cross-module helpers: defined here so all sub-modules can access them via
 # "from ui.views._base import *"
@@ -370,4 +369,3 @@ from ui.views.helpers.tasks import (
     _can_edit_task_ui,
     _can_manage_task_status_ui,
 )
-
