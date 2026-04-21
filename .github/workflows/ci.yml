@@ -65,7 +65,7 @@ jobs:
         env:
           DJANGO_SETTINGS_MODULE: crm.settings_test
           DJANGO_SECRET_KEY: ci-secret
-          MAILER_FERNET_KEY: ""
+          MAILER_FERNET_KEY: "Cn0aJP0_TFTpEsyjPKd9StC0pU7We_oLkBq0wvCRhUg="
         run: python scripts/mypy_ratchet.py
 
   # ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ jobs:
           DJANGO_DEBUG: "1"
           DJANGO_SECRET_KEY: ci-secret-key-not-for-production
           DJANGO_ALLOWED_HOSTS: "*"
-          MAILER_FERNET_KEY: ""
+          MAILER_FERNET_KEY: "Cn0aJP0_TFTpEsyjPKd9StC0pU7We_oLkBq0wvCRhUg="
           PUBLIC_BASE_URL: "http://localhost"
           SECURITY_CONTACT_EMAIL: "ci@example.com"
         run: |
@@ -177,7 +177,7 @@ jobs:
       DJANGO_DEBUG: "1"
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
       REDIS_URL: "redis://localhost:6379/0"
-      MAILER_FERNET_KEY: ""
+      MAILER_FERNET_KEY: "Cn0aJP0_TFTpEsyjPKd9StC0pU7We_oLkBq0wvCRhUg="
       PUBLIC_BASE_URL: "http://localhost"
       SECURITY_CONTACT_EMAIL: "ci@example.com"
       # F11: гарантированно используем crm.settings_test для всех test-runs.
