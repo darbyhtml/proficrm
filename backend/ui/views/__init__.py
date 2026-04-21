@@ -15,9 +15,7 @@ from ui.views.company_detail import (
     company_delete_request_create,
     company_detail,
     company_edit,
-    company_email_value_update,
     company_inline_update,
-    company_main_email_update,
     company_main_phone_comment_update,
     company_main_phone_update,
     company_note_add,
@@ -100,6 +98,10 @@ from ui.views.mobile import (
 from ui.views.pages.company.deals import (
     company_deal_add,
     company_deal_delete,
+)
+from ui.views.pages.company.emails import (
+    company_email_value_update,
+    company_main_email_update,
 )
 from ui.views.reports import (
     cold_calls_report_day,
