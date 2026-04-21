@@ -12,14 +12,6 @@ from ui.views.company_detail import (
     company_detail,
     company_edit,
     company_inline_update,
-    company_note_add,
-    company_note_attachment_by_id_download,
-    company_note_attachment_by_id_open,
-    company_note_attachment_download,
-    company_note_attachment_open,
-    company_note_delete,
-    company_note_edit,
-    company_note_pin_toggle,
     company_phone_cold_call_reset,
     company_phone_cold_call_toggle,
     company_tasks_history,
@@ -101,6 +93,16 @@ from ui.views.pages.company.deletion import (
 from ui.views.pages.company.emails import (
     company_email_value_update,
     company_main_email_update,
+)
+from ui.views.pages.company.notes import (
+    company_note_add,
+    company_note_attachment_by_id_download,
+    company_note_attachment_by_id_open,
+    company_note_attachment_download,
+    company_note_attachment_open,
+    company_note_delete,
+    company_note_edit,
+    company_note_pin_toggle,
 )
 from ui.views.pages.company.phones import (
     company_main_phone_comment_update,
