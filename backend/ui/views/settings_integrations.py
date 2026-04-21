@@ -158,6 +158,7 @@ def settings_import_tasks(request: HttpRequest) -> HttpResponse:
 
     return render(request, "ui/settings/import_tasks.html", {"form": form, "result": result})
 
+
 # amoCRM views removed 2026-04-21 (dead code — subscription expired).
 # Removed: settings_amocrm, settings_amocrm_callback, settings_amocrm_disconnect,
 # settings_amocrm_migrate, settings_amocrm_migrate_progress,

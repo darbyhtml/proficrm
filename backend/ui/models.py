@@ -81,7 +81,6 @@ class UiGlobalConfig(models.Model):
 # See docs/decisions/2026-04-21-remove-amocrm.md.
 
 
-
 class UiUserPreference(models.Model):
     """
     Персональные настройки интерфейса (одна запись на пользователя).
