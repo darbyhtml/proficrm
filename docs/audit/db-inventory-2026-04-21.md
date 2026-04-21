@@ -136,6 +136,73 @@ WHERE contype='f'
 
 ---
 
-## Operation 3 executed — see `operation-3-result.md` section below.
+## Operation 3 Executed 2026-04-21
 
-(Populated после Op 3 execute.)
+### Approach
+
+Applied via Django migration `backend/ui/migrations/0014_delete_amoapiconfig.py`
+(created в Op 1 commit `94a526bb`). Migration ran automatically via CI
+auto-deploy pipeline после commit `ba71e053` deployed to staging.
+
+### Backup saved (pre-migration dump)
+
+`/var/backups/postgres/amocrm-cleanup/ui_amoapiconfig-dump-20260421-134950.sql`:
+- 6 KB file, 94 lines, 1 COPY row (1 config record).
+- Full schema + data для restore в любой момент.
+
+### Result
+
+```sql
+-- Before
+SELECT tablename FROM pg_tables WHERE tablename LIKE '%amo%';
+-- → ui_amoapiconfig (48 KB, 1 row)
+
+-- After (post-0014 migration applied)
+SELECT tablename FROM pg_tables WHERE tablename LIKE '%amo%';
+-- → (0 rows)
+
+SELECT name FROM django_migrations WHERE app = 'ui' ORDER BY name DESC LIMIT 1;
+-- → 0014_delete_amoapiconfig
+```
+
+- **Tables dropped**: 1 (`ui_amoapiconfig`).
+- **Size freed**: 48 KB (negligible — config table was tiny).
+- **Historical fields preserved**: `Company.amocrm_company_id` (99% non-null, 45242 rows), `Contact.amocrm_contact_id` (98% non-null, 97557 rows) — untouched.
+
+### Rollback procedure
+
+If needed, restore via:
+
+```bash
+ssh root@<staging-ip> '
+  cd /opt/proficrm-staging
+  # 1. Restore table + data
+  cat /var/backups/postgres/amocrm-cleanup/ui_amoapiconfig-dump-20260421-134950.sql | \
+    docker compose -f docker-compose.staging.yml -p proficrm-staging exec -T db \
+    psql -U crm_staging -d crm_staging
+
+  # 2. Mark migration as unapplied (if model class restored in code)
+  docker compose -f docker-compose.staging.yml -p proficrm-staging exec -T db \
+    psql -U crm_staging -d crm_staging -c \
+    "DELETE FROM django_migrations WHERE app=\"ui\" AND name=\"0014_delete_amoapiconfig\";"
+'
+```
+
+### PROD note
+
+**Prod DB не затронут** (Path E). `ui_amoapiconfig` на prod still exists.
+Same migration `0014_delete_amoapiconfig` will apply на prod при W9.10 deploy.
+
+Pre-W9 prod backup должен preserve этот table on всякий случай для будущих
+audit/support tickets (hardly likely but near-zero cost).
+
+### Total W0.5b cleanup summary
+
+| Item | Before | After |
+|------|--------|-------|
+| Code LOC | ~5000 amocrm LOC в coverage base | 0 amocrm LOC (all deleted) |
+| Database tables | 1 amocrm table (`ui_amoapiconfig`) | 0 amocrm tables |
+| DB size | 5222 MB | 5222 MB (negligible 48 KB loss) |
+| Staging HEAD | `91a9a356` | `ba71e053` |
+| CI status | green | green ✅ |
+
