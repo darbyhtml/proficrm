@@ -418,6 +418,64 @@ Advanced Security free tier включит secret scanning на push automatical
 
 ---
 
+## 2026-04-21 / Post-public cleanup — Token scope audit after visibility change
+
+### Что случилось
+
+После toggle'а репозитория PRIVATE → PUBLIC (Phase F public-readiness cleanup)
+проведён audit токенов, которые живут **вне git** но могли leak через другие 
+каналы (screenshots в bug reports, chat logs, старые backup archives):
+
+- **TG bot token** (`@proficrmdarbyoff_bot`) — проверен grep'ом всего public git 
+  tree + docs. **0 matches** pattern `[0-9]{10}:[A-Za-z0-9_-]{35}`. Token 
+  только в `/etc/proficrm/env.d/telegram-alerts.conf` (mode 600, root owner).
+- **STAGING_SSH_PRIVATE_KEY** — GitHub secret, never в git.
+- **GlitchTip admin password** — только `/etc/proficrm/env.d/glitchtip.conf` (mode 600).
+- **GH_TOKEN (viewer scope)** — только `/etc/proficrm/env.d/github-actions-viewer.conf` 
+  (mode 600, создан 2026-04-21 для Claude Code sessions).
+
+### Что это в процессе
+
+При переключении visibility нет automated guarantee что все tokens outside git 
+**НЕ** have leaked. Scan tools (gitleaks, trufflehog) видят только git. 
+Out-of-git paths requires manual audit.
+
+### Урок
+
+**После любой policy change (PRIVATE→PUBLIC, new collaborator, external fork 
+request) → audit все tokens stored outside git**. Не assume что они safe just 
+because git clean.
+
+### Правило на будущее
+
+Checklist post-visibility-change:
+
+1. ✅ gitleaks + trufflehog scan (git history) — blocked visibility change 
+   до clean.
+2. ✅ `grep -rE '[0-9]{10}:[A-Za-z0-9_-]{35}'` (TG token pattern) в всём 
+   repo — должно быть 0.
+3. ✅ Проверить permissions всех config files в `/etc/proficrm/env.d/` — 
+   mode 600, root owner.
+4. ✅ Check CI secrets (GitHub Settings → Secrets and variables) — должны 
+   быть в GitHub vault, не в git.
+5. ⚠️ Optional paranoia: rotate tokens even если scan clean, if stakes high.
+
+### Применение
+
+- **`docs/audit/public-readiness/REPORT.md`** — документирует предварительный 
+  scan + rotation of live secrets (GlitchTip DSN + SECRET_KEY).
+- **This lesson** — fixation rule for future visibility changes.
+- **No TG bot rotation performed** — scan clean, rotation not needed per rule 5.
+
+### Обобщение
+
+Каждый visibility change:
+1. Pre-scan git history (already enforced via Phase A-E cleanup procedure).
+2. Audit out-of-git tokens (this rule).
+3. Document decision (rotation / leave-as-is / fresh key) с rationale.
+
+---
+
 ## Template для новых уроков
 
 ```markdown

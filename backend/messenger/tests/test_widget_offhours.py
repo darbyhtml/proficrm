@@ -141,6 +141,7 @@ class WidgetOffHoursRequestTests(TestCase):
     SECURE_SSL_REDIRECT=False,
     SECURE_HSTS_SECONDS=0,
     SESSION_COOKIE_SECURE=False,
+    MESSENGER_ENABLED=True,
 )
 class ContactedBackActionTests(TestCase):
     def setUp(self):
