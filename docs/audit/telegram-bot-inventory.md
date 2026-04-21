@@ -7,7 +7,7 @@ monitoring с Telegram alerts._
 
 **Bot**: `@proficrmdarbyoff_bot` (существующий бот CRM для оповещений менеджеров)
 **Переменные в prod .env**: `TG_BOT_TOKEN=<redacted>`, `TG_CHAT_ID=<redacted>`
-**Chat_id назначения alerts**: `1363929250` (личный Telegram владельца)
+**Chat_id назначения alerts**: `<USER_CHAT_ID>` (личный Telegram владельца)
 
 Для uptime alerts переиспользован тот же токен через **отдельный** env-файл
 `/etc/proficrm/env.d/telegram-alerts.conf` (mode 600, root). Это делает uptime

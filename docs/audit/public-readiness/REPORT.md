@@ -96,7 +96,7 @@
 ### 4. Telegram chat_id + bot username exposed в 7+ files
 
 Identifiers:
-- `1363929250` (owner's personal Telegram chat ID)
+- `<USER_CHAT_ID>` (owner's personal Telegram chat ID)
 - `@proficrmdarbyoff_bot` (bot username)
 
 Files containing these references:

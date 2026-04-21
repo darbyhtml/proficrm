@@ -197,7 +197,7 @@ API (`crm-staging/1`, `crm-prod/2`). Аномалии нет — `/1` и `/2` п
 custom `user_id`. DoD W0.4 **ACHIEVED**.
 
 **Track E — Telegram + Kuma + uptime.groupprofi.ru**:
-- **E.1**: найден `@proficrmdarbyoff_bot` в prod .env (`TG_BOT_TOKEN`, `TG_CHAT_ID=1363929250`).
+- **E.1**: найден `@proficrmdarbyoff_bot` в prod .env (`TG_BOT_TOKEN`, `TG_CHAT_ID=<USER_CHAT_ID>`).
 - **E.2**: скопирован в `/etc/proficrm/env.d/telegram-alerts.conf` (mode 600,
   отдельный файл — uptime monitoring не зависит от prod .env lifecycle).
 - **E.3**: автоматизирован setup Kuma через `uptime-kuma-api` Python client
@@ -249,7 +249,7 @@ Kuma heartbeats после фикса: 06:46 403 → 06:47 200 → recovery aler
 
 **Track I — existing monitoring found**:
 `/opt/proficrm/scripts/health_alert.sh` (cron `*/5` от sdm) — локальный probe
-на `127.0.0.1:8001/health/`, шлёт в тот же `@proficrmdarbyoff_bot / 1363929250`
+на `127.0.0.1:8001/health/`, шлёт в тот же `@proficrmdarbyoff_bot / <USER_CHAT_ID>`
 формата `🔴 CRM ПРОФИ — УПАЛ`. Работает с марта 2026. Overlap с Kuma
 только на prod CRM (Kuma ходит external, health_alert local).
 

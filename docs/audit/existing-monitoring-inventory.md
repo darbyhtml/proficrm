@@ -5,7 +5,7 @@ _Обнаружено при W0.4 regression investigation Track I._
 ## Overlap: старый скрипт + Kuma шлют в один Telegram канал
 
 Пользователь заметил: Telegram канал «ПРОФИ CRM - Уведомления» (chat_id
-`1363929250`) получает сообщения **из двух источников**:
+`<USER_CHAT_ID>`) получает сообщения **из двух источников**:
 
 1. Старый bash-скрипт (с марта 2026) — формат `🔴 CRM ПРОФИ — УПАЛ` / `🟢 ВОССТАНОВЛЕН`
 2. Kuma (с 2026-04-21) — формат `[CRM Staging] [🔴 Down] ...`
@@ -33,7 +33,7 @@ Crontab пользователя `sdm`:
 
 ### Куда шлёт
 - Bot: `@proficrmdarbyoff_bot` (TG_BOT_TOKEN из `/opt/proficrm/.env`)
-- Chat: `TG_CHAT_ID` из prod .env = `1363929250` (личный Telegram владельца)
+- Chat: `TG_CHAT_ID` из prod .env = `<USER_CHAT_ID>` (личный Telegram владельца)
 
 ### Логика алертов
 **State-based**: алерт только при смене статуса (up→down или down→up).

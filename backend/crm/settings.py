@@ -531,7 +531,7 @@ MESSENGER_PRIVACY_TEXT = os.getenv(
 # Web Push (VAPID) — для browser push-уведомлений операторам
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
-VAPID_CLAIMS_EMAIL = os.getenv("VAPID_CLAIMS_EMAIL", "mailto:admin@profi-cpr.ru")
+VAPID_CLAIMS_EMAIL = os.getenv("VAPID_CLAIMS_EMAIL", "mailto:admin@example.com")
 
 # DRF / JWT
 REST_FRAMEWORK = {

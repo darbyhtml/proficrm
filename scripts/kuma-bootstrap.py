@@ -37,7 +37,7 @@ Uptime Kuma automated bootstrap — Wave 0.4 closeout (2026-04-21).
 После успешного запуска:
 - Admin user: "admin", пароль в /etc/proficrm/env.d/kuma-admin.conf
 - 3 monitor'а видны в UI https://uptime.groupprofi.ru/
-- При падении staging/prod/glitchtip — alert в Telegram chat_id 1363929250
+- При падении staging/prod/glitchtip — alert в Telegram chat_id <USER_CHAT_ID>
 """
 
 from __future__ import annotations
