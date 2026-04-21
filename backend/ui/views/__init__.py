@@ -9,10 +9,6 @@ from ui.views.company_detail import (
     company_cold_call_reset,
     company_cold_call_toggle,
     company_contract_update,
-    company_delete_direct,
-    company_delete_request_approve,
-    company_delete_request_cancel,
-    company_delete_request_create,
     company_detail,
     company_edit,
     company_inline_update,
@@ -102,6 +98,12 @@ from ui.views.pages.company.contacts import (
 from ui.views.pages.company.deals import (
     company_deal_add,
     company_deal_delete,
+)
+from ui.views.pages.company.deletion import (
+    company_delete_direct,
+    company_delete_request_approve,
+    company_delete_request_cancel,
+    company_delete_request_create,
 )
 from ui.views.pages.company.emails import (
     company_email_value_update,
