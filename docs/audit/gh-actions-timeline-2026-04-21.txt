@@ -1,0 +1,54 @@
+# GitHub Actions timeline — 2026-04-21 investigation for Q12
+
+Token scopes: gist, read:org, repo, workflow (read-only).
+Source: gh api via ephemeral env token.
+
+## CI workflow runs (last 20)
+2026-04-21T08:17:50  failure      e96dbad4 [main                ] docs(release): w0-5a-safe plan + staging auto-deploy investigation (Q1
+2026-04-21T07:39:26  failure      90663bd1 [main                ] docs(readme): document smoke + restart Makefile targets (dummy push t�
+2026-04-21T07:38:32  failure      cecf4717 [main                ] fix(ci/ops): celery rebuild in deploy + Makefile restart wrappers + p�
+2026-04-21T07:38:22  failure      cecf4717 [feature/ci-deploy-im] fix(ci/ops): celery rebuild in deploy + Makefile restart wrappers + p�
+2026-04-21T07:24:10  failure      ec8b85bb [main                ] fix(w0.4): SEV2 staging 502 recovery + mandatory post-deploy smoke
+2026-04-21T07:11:07  failure      7e834829 [main                ] test(w0.4): real-traffic verification — /_staff/trigger-test-error/ 
+2026-04-21T06:52:22  failure      badfe220 [main                ] fix(w0.4): /live/ nginx 403 — sites-enabled/crm-staging NOT symlink 
+2026-04-21T05:07:29  failure      18e2ed9a [main                ] feat(w0.4): uptime.groupprofi.ru nginx + TLS + basic auth, W0.4 closeo
+2026-04-20T20:48:21  failure      0185ffcc [main                ] Fix(tests): relax test_feature_flags_tag_reflects_enabled — factory-
+2026-04-20T20:45:33  failure      3cb648ea [main                ] Fix(w0.4): feature_flags tag always set (unknown on waffle error) — 
+2026-04-20T20:39:19  failure      a30689fc [main                ] feat(w0.4): wire GlitchTip DSN staging + prod, deploy Uptime Kuma mon�
+2026-04-20T20:05:26  failure      c2aacbe0 [main                ] docs(policy): adopt gated promotion model for prod deployments
+2026-04-20T18:54:23  failure      6d7c41ef [main                ] Docs(Wave0.4): runbooks + ADR-003 + hotlist + image tag fix
+2026-04-20T18:31:11  failure      09e1f94e [main                ] Feat(Observability): W0.4 GlitchTip self-hosted + structured logging �
+2026-04-20T18:02:52  failure      9d4ec0c2 [main                ] Docs: open-questions.md — W0.4 prerequisites check (DNS/RAM/celery-u
+2026-04-20T17:41:32  failure      7209b68f [main                ] Fix(Tests): set_flag assertions via DB not is_enabled (Redis cache pe�
+2026-04-20T17:38:22  failure      26989d7e [main                ] Chore: post-W0.3 cleanup — set_flag helper, runbook+arch sections, C
+2026-04-20T17:26:29  failure      cf8cce9a [main                ] Docs(Wave0.3): runbook + architecture + ADR-002 + sprint recap
+2026-04-20T17:19:07  failure      6ab4d132 [main                ] Fix(Tests): use waffle.testutils.override_flag instead of Flag.update�
+2026-04-20T17:14:43  failure      d30b0ce0 [main                ] Test(Core): W0.3 feature flags — 25 тестов покрывают 
+
+## Deploy Staging runs (last 15)
+2026-04-21T08:17:57  skipped      e96dbad4 event=workflow_run Deploy Staging
+2026-04-21T07:39:35  skipped      90663bd1 event=workflow_run Deploy Staging
+2026-04-21T07:38:39  skipped      cecf4717 event=workflow_run Deploy Staging
+2026-04-21T07:24:17  skipped      ec8b85bb event=workflow_run Deploy Staging
+2026-04-21T07:11:15  skipped      7e834829 event=workflow_run Deploy Staging
+2026-04-21T06:52:29  skipped      badfe220 event=workflow_run Deploy Staging
+2026-04-21T05:07:35  skipped      18e2ed9a event=workflow_run Deploy Staging
+2026-04-20T20:48:27  skipped      0185ffcc event=workflow_run Deploy Staging
+2026-04-20T20:45:39  skipped      3cb648ea event=workflow_run Deploy Staging
+2026-04-20T20:39:26  skipped      a30689fc event=workflow_run Deploy Staging
+2026-04-20T20:05:33  skipped      c2aacbe0 event=workflow_run Deploy Staging
+2026-04-20T18:54:31  skipped      6d7c41ef event=workflow_run Deploy Staging
+2026-04-20T18:31:29  skipped      09e1f94e event=workflow_run Deploy Staging
+2026-04-20T18:03:02  skipped      9d4ec0c2 event=workflow_run Deploy Staging
+2026-04-20T17:41:40  skipped      7209b68f event=workflow_run Deploy Staging
+
+## Root cause — annotation on failed check-run
+\`\`\`
+[failure] .github:1  The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings
+\`\`\`
+
+## Run stats
+- First failed run: 2026-04-20 17:14:43 UTC (commit d30b0ce0)
+- Last failed run: 2026-04-21 08:17:50 UTC (commit e96dbad4 — this session's push)
+- Duration of every run: 2-5 seconds (no actual work, jobs rejected)
+- Total failed runs in window: 20+

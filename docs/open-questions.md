@@ -49,6 +49,50 @@ SEV2 manual rebuild. External /live/ = 200, но git tree drift от main.
 - Новая версия `deploy-staging.yml` с auto-rollback будет протестирована при
   восстановлении pipeline.
 
+**Q12 RESOLVED 2026-04-21** (после получения GH_TOKEN и анализа API):
+
+**Root cause**: **GitHub Actions billing / spending limit exceeded**.
+
+Точный annotation текст с первого failed check-run (bandit, commit e96dbad4):
+> The job was not started because recent account payments have failed or your
+> spending limit needs to be increased. Please check the 'Billing & plans'
+> section in your settings
+
+**Характеристики failure**:
+- Первый failed CI run: 2026-04-20 17:14:43 UTC (commit `d30b0ce0`).
+- Последний failed CI run: 2026-04-21 08:17:50 UTC (commit `e96dbad4`).
+- Run duration: **2-5 секунд** (jobs отвергаются до начала выполнения).
+- Все jobs в each run — failure (lint/bandit/format-check/secret-scan/mypy/
+  migration-linter/deps-audit). Test job всегда `skipped` из-за deps.
+- deploy-staging workflow **корректно skip**s — condition
+  `github.event.workflow_run.conclusion == 'success'` срабатывает (conclusion
+  = failure → false → skip). Workflow config correct.
+
+**НЕ root cause** (исключено):
+- ❌ Secrets / SSH key — не дошло до выполнения SSH step.
+- ❌ Workflow syntax / config — парсится, jobs создаются.
+- ❌ Failing tests / flaky — jobs не успевают run'нуть тесты.
+- ❌ Code bug в W0.4 commits — все runs с 2026-04-20 17:14 одинаково fail'ятся.
+
+**User action required** (не могу сам):
+1. Зайти https://github.com/settings/billing/spending_limit (или organization
+   billing если repo в org).
+2. Проверить:
+   - Есть ли unpaid invoice (recent payment failures)?
+   - Spending limit установлен на низкое значение?
+   - Free tier minutes исчерпан для private repo?
+3. Решение: payment method обновить ИЛИ spending limit увеличить ИЛИ 
+   сделать repo public (free unlimited Actions).
+4. После fix — trigger dummy commit → CI должен пройти → deploy-staging
+   автоматически вытянет staging на новейший main.
+
+**Full timeline**: `docs/audit/gh-actions-timeline-2026-04-21.txt`.
+
+**НЕ блокирует W0.5a-safe**: release branch создаётся и deploy'ится вручную
+(см. Track V). CI нужен только для автоматизации. После billing fix + первого
+successful CI run — auto-deploy pipeline заработает с новой версией
+`deploy-staging.yml` (которая имеет nginx restart + smoke + auto-rollback).
+
 ---
 
 ### Q11 [2026-04-21] W0.5a — pre-flight status
