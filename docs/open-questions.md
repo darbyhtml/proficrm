@@ -153,6 +153,36 @@ successful CI run — auto-deploy pipeline заработает с новой в
 - deploy-staging.yml will pick up next successful CI run via `workflow_run` trigger.
 - Full cleanup trace: `docs/audit/process-lessons.md` lesson 2026-04-21 #4.
 
+**2026-04-21 POST-BILLING FIX Q12 remaining blocker**: After public toggle + all CI fixes,
+CI workflow SUCCESS ✅. But deploy-staging workflow FAILS в Setup SSH / Deploy step:
+```
+Load key "/home/runner/.ssh/deploy_key": error in libcrypto
+Permission denied (publickey,password).
+Process completed with exit code 255.
+```
+
+**Cause**: `STAGING_SSH_PRIVATE_KEY` GitHub secret **corrupted or expired**.
+Либо value не в proper OpenSSH private key format, либо public counterpart
+на staging `/root/.ssh/authorized_keys` не match'ит.
+
+**User action required** (я не могу rotate GitHub secret — нет admin scope):
+
+1. Generate new SSH keypair:
+   ```bash
+   ssh-keygen -t ed25519 -f ~/.ssh/proficrm-staging-deploy -C "github-actions-deploy-staging" -N ""
+   ```
+2. GitHub Settings → Secrets and variables → Actions → `STAGING_SSH_PRIVATE_KEY`
+   → paste contents of `~/.ssh/proficrm-staging-deploy` (private key).
+3. На staging добавить public counterpart:
+   ```bash
+   ssh root@<staging-ip> "echo '<paste contents of .pub>' >> /root/.ssh/authorized_keys"
+   ```
+4. Trigger dummy commit → deploy-staging теперь работает end-to-end.
+
+**ASSUMPTION pending**: staging остаётся drift (`18e2ed9a`) до user fix SSH key.
+Docker containers на staging running (SEV2 manual rebuild images), smoke green.
+Нет urgency, но gated promotion pipeline не complete без working auto-deploy.
+
 
 ---
 
