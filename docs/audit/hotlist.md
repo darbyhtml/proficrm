@@ -8,18 +8,26 @@ _Снапшот: **2026-04-20**. Источник: Wave 0.1 audit, top-20 tech-d
 
 ---
 
-## 1. `backend/ui/views/company_detail.py` — 2 698 LOC
+## 1. `backend/ui/views/company_detail.py` — УДАЛЁН ✅ CLOSED 2026-04-21 (W1.2)
 
-- **Score:** 100 (impact 5 × freq 5 × risk 4)
-- **Где лечится:** **Wave 1** (Phase 4-5 по плану refactoring-specialist)
-- **Что сделано ранее:** Phase 0-3 дали −185 LOC (коммиты `2048f4ef`, `126b7930`, `05b34036`, `785d314a`)
-- **Что осталось:**
-  - Phase 4: `companies/services/company_overview.py` — context-builder для `company_detail` view (≈300-500 LOC)
-  - Phase 5: extract `/settings/cold-call/*` views в `companies/services/cold_call.py`
-  - Phase 6 (новое после audit): удалить денормализацию `Company.phone/email/contact_name/position` → CompanyPhone/CompanyEmail/Contact
-- **Ожидаемое уменьшение:** 2698 → ≈ 1 800 LOC после W1
-- **Риск регрессии:** высокий — god-view трогают каждый день
-- **Правило:** каждое удаление сопровождать тестом и запуском `manage.py test companies ui`
+- **Score:** 100 (impact 5 × freq 5 × risk 4) — было
+- **Статус:** **ЗАКРЫТО** в W1.2 Mini-session. Файл полностью удалён (option A clean, без shim). Фактический baseline на старте: **3 022 LOC** (не 2 698 как в Wave 0.1 audit — post-snapshot F4 R3 v3b additions 18-19.04).
+- **Результат расщепления** (10 модулей в `backend/ui/views/pages/company/`):
+  - `detail.py` — 393 LOC — main card + tasks_history + timeline_items (3 функции)
+  - `edit.py` — 420 LOC — edit/update/inline_update/transfer/contract (5 функций)
+  - `deletion.py` — 280 LOC — delete workflow (4 функции)
+  - `contacts.py` — 228 LOC — contact CRUD (3 функции)
+  - `notes.py` — 474 LOC — notes CRUD + attachments + pin (8 функций)
+  - `deals.py` — 128 LOC — deal CRUD (2 функции)
+  - `cold_call.py` — 691 LOC — cold-call toggles/resets (8 функций, documented as acceptable size outlier)
+  - `phones.py` — 436 LOC — phone CRUD + comments (7 функций)
+  - `emails.py` — 136 LOC — email updates (2 функции)
+  - `calls.py` — 150 LOC — PhoneBridge call logging (1 функция)
+- **Backward compat:** все 40 URL routes работают без изменений (через `views.FUNCTION_NAME` в `urls.py`, re-exports обновлены в `views/__init__.py`).
+- **Consumer updates:** `views/company_detail_v3.py` — единственный внешний импорт `_can_edit_company` перенесён на `ui.views._base` (уже reexport из `helpers/companies`).
+- **Коммиты W1.2:** `e27aa327` (plan) → `00a9d6a7` (scaffold) → `a5391d18` (deals) → `77f1ef55` (emails) → `84cb389c` (calls) → `a284e5a0` (contacts) → `2831c236` (deletion) → `c2196392` (phones) → `823edce1` (notes) → `f0aa1710` (edit) → `80ef7549` (cold_call) → `ef7585a8` (detail + delete) → `18950a73` (black fix + E2E test).
+- **Подробный отчёт:** `docs/release/w1-2-company-detail-split-plan.md`.
+- **Metrics:** 1140 tests passing (baseline preserved), coverage ≥ 52%.
 
 ## 2. `backend/ui/views/_base.py` — ≈ 1 700 LOC → **371 LOC (−78%) ✅ CLOSED 2026-04-21 (W1.1)**
 

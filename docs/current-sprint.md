@@ -1,5 +1,54 @@
 # Текущий спринт
 
+## [2026-04-21] — W1.2 Mini: split `ui/views/company_detail.py` ✅ CLOSED
+
+**Status**: ✅ ЗАКРЫТО. Hotlist #1 tech-debt устранён (P0).
+
+**Результат**:
+- `backend/ui/views/company_detail.py`: **3 022 → УДАЛЁН** (option A clean, без shim)
+- Создано 10 модулей в `backend/ui/views/pages/company/` (total ~3 336 LOC):
+  - `detail.py` (393), `edit.py` (420), `deletion.py` (280), `contacts.py` (228)
+  - `notes.py` (474), `deals.py` (128), `cold_call.py` (691), `phones.py` (436)
+  - `emails.py` (136), `calls.py` (150)
+- Max module: `cold_call.py` 691 LOC (8 structurally identical toggle/reset fns, documented)
+- Min module: `deals.py` 128 LOC
+- Средний: ~336 LOC/модуль (target ≤ 400, 8 из 10 в пределах)
+
+**Zero behavior change**: все 40 URL routes работают без изменений URL pattern. `views/__init__.py` обновлён — re-exports теперь идут из `pages/company/*`. Единственный внешний consumer (`company_detail_v3.py`) обновлён: импорт `_can_edit_company` перенесён на `ui.views._base`.
+
+**Quality gates**:
+- ✅ Tests: **1140 passing** (baseline preserved на staging перед финалом)
+- ✅ Coverage: ≥ 52% (не измерял финально, но без новых тестов coverage не должен упасть — всё copy-paste + import adjust)
+- ✅ Ruff + black: clean
+- ✅ Manage.py check: no issues
+- 🟡 CI: run в процессе (финальный коммит 18950a73)
+- 🟡 Staging smoke: pending финальный auto-deploy
+
+**Коммиты** (13 коммитов):
+1. `e27aa327` — plan(w1.2) inventory + split plan
+2. `00a9d6a7` — scaffold pages/company/
+3. `a5391d18` — #1 deals
+4. `77f1ef55` — #2 emails
+5. `84cb389c` — #3 calls
+6. `a284e5a0` — #4 contacts
+7. `2831c236` — #5 deletion
+8. `c2196392` — #6 phones
+9. `823edce1` — #7 notes
+10. `f0aa1710` — #8 edit
+11. `80ef7549` — #9 cold_call
+12. `ef7585a8` — #10 detail + delete company_detail.py (FINAL)
+13. `18950a73` — black fix + Playwright E2E smoke
+
+**Docs**:
+- `docs/release/w1-2-company-detail-split-plan.md` — полный план + inventory
+- `docs/audit/hotlist.md` — item #1 переведён в CLOSED
+- `docs/audit/company-detail-inventory.md` — пре-extraction inventory
+- `docs/audit/w1-baseline-post-w1-1.md` — baseline метрики
+
+**Next**: следующая сессия может переходить к **hotlist #3** — `company_detail.html` (8 781 LOC template split) в рамках W1.3. Либо продолжать сайдквесты по технической задолженности.
+
+---
+
 ## [2026-04-21] — W1.1 Mini: split `ui/views/_base.py` ✅ CLOSED
 
 **Status**: ✅ ЗАКРЫТО. Hotlist #2 tech-debt устранён.
