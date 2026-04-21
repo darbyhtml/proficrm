@@ -90,6 +90,94 @@ end-to-end авторизации.
 
 ---
 
+## 2026-04-21 / Wave 0.4 closeout — «Shell-level middleware test ≠ real HTTP request»
+
+### Что случилось
+
+В W0.4 closeout я рапортовал middleware DoD ACHIEVED со ссылкой на event
+`d0b4cd50` с 5 правильными тегами. Event был создан так:
+
+```python
+from django.test import RequestFactory
+req = RequestFactory().get("/smoke")
+req.user = real_user
+SentryContextMiddleware(lambda r: None)._enrich_scope(req)  # ← вручную!
+sentry_sdk.capture_exception(RuntimeError("..."))
+```
+
+Это **shell-level** тест: я вручную вызвал `_enrich_scope()`, затем отправил
+event. Scope был обогащён — теги прилетели в GlitchTip.
+
+**На реальном HTTP traffic** пользователь увидел `role=anonymous`, `branch=none`
+в большинстве events. Он справедливо указал что я пропустил проверку.
+
+### Что это в процессе
+
+Shell-тест валидирует **функциональную корректность** `_enrich_scope()`, но
+**не интеграцию** с Django MIDDLEWARE chain:
+- Не проходит через `AuthenticationMiddleware` (request.user может быть не
+  тот, что я ожидаю в shell).
+- Не проходит через `SecurityMiddleware` (SSL redirect и т.п.).
+- Не проходит через все handler'ы в правильном порядке.
+
+DoD W0.4 включал: «Тестовая ошибка видна с 5 тегами». Я интерпретировал это как
+«хоть какое-то событие с 5 тегами». Правильная интерпретация: «событие от
+**real HTTP request** через Django MIDDLEWARE chain».
+
+### Урок
+
+**Middleware verification требует полного request-cycle через Django dispatch**:
+
+```python
+# Валидный test:
+from django.test import Client
+c = Client(raise_request_exception=False)
+c.force_login(user)
+c.get("/_debug/sentry-error/", secure=True)  # через MIDDLEWARE chain
+sentry_sdk.flush()
+# → проверить event в GlitchTip
+```
+
+**ИЛИ** через настоящий HTTP-запрос (curl → nginx → gunicorn → Django).
+
+`RequestFactory` + manual `_enrich_scope()` вызов — не эквивалент. Дают ложный
+positive при правильной функции но сломанной интеграции.
+
+### Правило на будущее
+
+Для любой middleware в DoD:
+
+| Test level | Что проверяет | Достаточно для DoD? |
+|-----------|----------------|---------------------|
+| Unit test с `RequestFactory` + ручной вызов `_enrich_scope()` | Функция корректна | **Нет** — complement only |
+| `django.test.Client` (`c.get()`) | Django MIDDLEWARE chain OK | **Да** — минимальный уровень |
+| curl через nginx (real HTTP) | Full path включая nginx+TLS | **Да + рекомендуется** |
+| Playwright (browser-level) | User-facing UX + redirects + JS | Best для UI-critical |
+
+**DoD-пункт**: «верифицировано через Client.force_login + API query» или
+«верифицировано через curl с real cookies + API query».
+
+### Применение
+
+- **Today's fix**: repro через `Client.force_login()` + `secure=True` — event
+  `1798b12f` подтвердил middleware работает. Anonymous events в real traffic
+  (Kuma probes, public curl, non-login paths) — by design, не баг.
+- Обновлён `docs/runbooks/glitchtip-setup.md` §«Login smoke tests» — теперь
+  использует `Client.force_login` в smoke commands (не factory-based).
+- `docs/plan/01_wave_0_audit.md` §0.4 DoD **не трогаю** (пользователь правит
+  план сам), но зафиксировано замечание в `open-questions.md` для next revision.
+
+### Обобщение
+
+Каждая волна где middleware/auth/scope manipulation:
+1. **Unit test**: RequestFactory+patch — проверяет функции.
+2. **Integration test**: `Client.force_login()` — проверяет Django chain.
+3. **E2E smoke**: curl или Playwright — проверяет full stack.
+
+**В DoD — минимум (2), предпочтительно (3)**.
+
+---
+
 ## Template для новых уроков
 
 ```markdown
