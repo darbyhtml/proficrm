@@ -146,6 +146,14 @@ SEV2 manual rebuild. External /live/ = 200, но git tree drift от main.
 successful CI run — auto-deploy pipeline заработает с новой версией
 `deploy-staging.yml` (которая имеет nginx restart + smoke + auto-rollback).
 
+**Q12 RESOLVED 2026-04-21 via public repo toggle** (Phase F of public-readiness cleanup):
+- GitHub Actions billing / spending limit issue → not applicable to public repos.
+- Repo changed visibility PRIVATE → PUBLIC after Phase A-E cleanup + secrets rotation.
+- First post-toggle CI run: triggered at 2026-04-21 10:15 UTC (commit `3272b482`).
+- deploy-staging.yml will pick up next successful CI run via `workflow_run` trigger.
+- Full cleanup trace: `docs/audit/process-lessons.md` lesson 2026-04-21 #4.
+
+
 ---
 
 ### Q11 [2026-04-21] W0.5a — pre-flight status

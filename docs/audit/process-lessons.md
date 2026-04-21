@@ -330,6 +330,94 @@ probe.
 
 ---
 
+## 2026-04-21 / Public-readiness cleanup — Never commit live credentials in docs (hard)
+
+### Что случилось
+
+Во время W0.4 debug sessions live GlitchTip DSN (staging + prod) и SECRET_KEY 
+были записаны **как есть** в:
+- `docs/audit/glitchtip-dsn-mapping.md` (commit `a30689fc` от W0.4 Track C) — 
+  полные DSN strings `https://<token>@glitchtip.groupprofi.ru/<id>` для staging + prod.
+- `docs/audit/glitchtip-500-diag.md` (commit `6eeb585d`) — первые 40 символов 
+  67-символьного `GLITCHTIP_SECRET_KEY`.
+
+Plus commit messages в `a30689fc` и recreated-version commit тоже содержали 
+DSN prefixes.
+
+Обнаружено: public-readiness scan session 2026-04-21 (gitleaks + trufflehog + 
+custom patterns). Стало критическим блокером для public-repo transition.
+
+### Что это в процессе
+
+Debug sessions часто требуют **reference конкретных env values** («вот какой 
+DSN прописан в prod»). Natural instinct — скопировать raw value в docs для 
+наглядности. Proper reference — **masked prefix** или **external lookup command**.
+
+При работе с private repo это выглядит безвредным («никто кроме меня не 
+увидит»). Но репо **может стать public** в будущем (как произошло для решения 
+Q12 billing). История коммитов хранит эти values permanently.
+
+### Урок
+
+**Live credentials не принадлежат git — только env files mode 600**. Никогда, 
+ни в каких условиях, ни в каких типах файлов (`.md`, `.py`, `.yml`, даже 
+debug-`.txt`) не commit'ить:
+- API keys, DSN tokens, SECRET_KEY fragments.
+- Access tokens, refresh tokens.
+- Passwords, passphrases.
+- DB connection strings с embedded credentials.
+
+Это relevant для **private repos too** — потому что:
+- Repo может стать public через policy change / billing fix / acquisition.
+- Insider threats: contractor / former employee clones the private repo.
+- Backup leaks: сторонние системы (issue trackers, chat logs, fork analytics) 
+  могут иметь cached history fragments.
+
+### Правило на будущее (hard rule)
+
+| Документация-задача | Правильный способ |
+|---------------------|-------------------|
+| «Где лежат credentials» | `/etc/proficrm/env.d/<file>.conf` (mode 600, never in git) |
+| «DSN mapping для projects» | `https://<8chars>...@host/id` (masked prefix only) |
+| «Debug: какой SECRET_KEY работает» | `grep ^SECRET_KEY= /path/conf \| head -c 20` (dynamic command) |
+| Incident runbook | `<ENV_VAR_NAME> value in /path/to/conf` (name + path, not value) |
+| Rotation procedure | Django shell / CLI command to read + mask (dynamic lookup) |
+
+**Запрещённые форматы в git-tracked файлах**:
+- `SENTRY_DSN=https://abc...xyz@host/id` (полный literal)
+- `SECRET_KEY=base64url-40-chars-then-...` (truncated prefix — raises entropy attack)
+- `API_KEY: abc123...` (even partial prefix — identifies ownership)
+
+### Применение
+
+- **`docs/audit/glitchtip-dsn-mapping.md`** recreated с masked format только.
+- **`docs/audit/glitchtip-500-diag.md`** purged from history via `git filter-repo`.
+- **Old DSN + SECRET_KEY** rotated + deactivated в GlitchTip DB.
+- **Commit messages** с prefix fragments тоже rewritten через `--replace-text`.
+- **Repo now public** — дополнительный stake против повторения.
+- **scripts/release/gen_scan_summaries.py** — reusable tool для masked scan summaries.
+
+### Обобщение
+
+Каждая session где нужно **reference a credential**:
+
+1. **Ask first**: это действительно нужно показать целиком? Или достаточно 
+   prefix + path to env file?
+2. **Default to masked**: `<first-8-chars>...<last-4-chars>` или `<REDACTED>`.
+3. **Command-based lookup**: instead of copying value, document command to 
+   retrieve — `ssh root@host 'grep ^VAR= /path/to/conf'`.
+4. **Pre-commit hook**: `detect-secrets` + `gitleaks` в `.pre-commit-config.yaml` 
+   (detect-secrets already configured). Если tool flag'ит — разобраться, не 
+   suppressed blindly.
+5. **Scan pre-visibility-change**: при любой policy change (private→public, 
+   fork creation, new collaborator) — deep scan (gitleaks, trufflehog, custom 
+   patterns) **before** change, не после.
+
+**Recommendation**: добавить `gitleaks` в pre-commit + CI (public repo → GitHub 
+Advanced Security free tier включит secret scanning на push automatically).
+
+---
+
 ## Template для новых уроков
 
 ```markdown
