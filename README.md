@@ -23,5 +23,10 @@
 
 ## Развёртывание
 
-- **Staging**: `crm-staging.groupprofi.ru` — авто-деплой при push в `main` через GitHub Actions.
+- **Staging**: `crm-staging.groupprofi.ru` — авто-деплой при push в `main` через GitHub Actions (включает post-deploy smoke + auto-rollback).
 - **Production**: `crm.groupprofi.ru` — только ручной деплой по `docs/runbooks/21-release-1-ready-to-execute.md`.
+
+## Операции
+
+- `make smoke-staging` — обязательная проверка staging после любого deploy ([CLAUDE.md](CLAUDE.md) §MANDATORY).
+- `make restart-staging-web` / `make restart-staging-all` — безопасные рестарты с nginx flush + smoke ([docs/runbooks/staging-operations.md](docs/runbooks/staging-operations.md)).
