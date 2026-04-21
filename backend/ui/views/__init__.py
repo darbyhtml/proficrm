@@ -12,8 +12,6 @@ from ui.views.company_detail import (
     company_detail,
     company_edit,
     company_inline_update,
-    company_main_phone_comment_update,
-    company_main_phone_update,
     company_note_add,
     company_note_attachment_by_id_download,
     company_note_attachment_by_id_open,
@@ -24,10 +22,6 @@ from ui.views.company_detail import (
     company_note_pin_toggle,
     company_phone_cold_call_reset,
     company_phone_cold_call_toggle,
-    company_phone_comment_update,
-    company_phone_create,
-    company_phone_delete,
-    company_phone_value_update,
     company_tasks_history,
     company_timeline_items,
     company_transfer,
@@ -36,7 +30,6 @@ from ui.views.company_detail import (
     contact_cold_call_toggle,
     contact_phone_cold_call_reset,
     contact_phone_cold_call_toggle,
-    contact_phone_comment_update,
 )
 
 # F4 R3: preview 3 вариантов редизайна карточки компании + quick-endpoints
@@ -108,6 +101,15 @@ from ui.views.pages.company.deletion import (
 from ui.views.pages.company.emails import (
     company_email_value_update,
     company_main_email_update,
+)
+from ui.views.pages.company.phones import (
+    company_main_phone_comment_update,
+    company_main_phone_update,
+    company_phone_comment_update,
+    company_phone_create,
+    company_phone_delete,
+    company_phone_value_update,
+    contact_phone_comment_update,
 )
 from ui.views.reports import (
     cold_calls_report_day,
