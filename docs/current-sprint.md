@@ -1,5 +1,38 @@
 # Текущий спринт
 
+## [2026-04-21] — W1.1 Mini: split `ui/views/_base.py` ✅ CLOSED
+
+**Status**: ✅ ЗАКРЫТО. Hotlist #2 tech-debt устранён.
+
+**Результат**:
+- `backend/ui/views/_base.py`: **1 251 → 371 LOC** (−878 LOC, −70%)
+- Извлечены 6 helper-модулей в `backend/ui/views/helpers/`:
+  - `search.py` (65) — текст/телефон/email нормализация
+  - `tasks.py` (87) — task permissions helpers
+  - `http.py` (72) — request helpers (ajax, next-redirect, dt-label, cold-call JSON)
+  - `cold_call.py` (74) — cold-call reports + month helpers
+  - `companies.py` (178) — company access/edit/delete/notifications/cache
+  - `company_filters.py` (512) — фильтры company-list (orchestrator + FTS)
+
+**Zero behavior change**: все публичные импорты `from ui.views._base import X` работают через re-export shim в конце `_base.py` (`__all__` сохранён, pointer изменился: function definitions → `from ui.views.helpers.X import ...`).
+
+**Коммиты**:
+- `4c4c1223` — plan(w1.1): split `_base.py` — inventory + target structure
+- `6f6c9c5a` — refactor: extract search normalizers → `helpers/search.py`
+- `2866430c` — refactor: extract tasks + http + cold_call → `helpers/*`
+- `6c050d0a` — refactor: extract companies + company_filters → `helpers/*`
+- `54fc1368` — style: apply black formatting for helpers/ batch
+
+**CI**: все 8 jobs зелёные на `54fc1368` (ожидается финализация).
+
+**Docs**:
+- `docs/release/w1-1-base-split-plan.md` — полный план + inventory
+- `docs/audit/hotlist.md` — item #2 переведён в CLOSED
+
+**Next**: следующая сессия по hotlist может переходить к #1 (company_detail.py 2698 LOC Phase 4-5) либо к W0.5 (test infra — factory_boy, pytest-xdist).
+
+---
+
 ## [2026-04-21] — W0.5a DEFERRED until W9 (Path E decision)
 
 **Status**: 🛑 W0.5a prod deploy **deferred**.

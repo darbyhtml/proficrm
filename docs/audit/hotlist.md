@@ -21,19 +21,20 @@ _Снапшот: **2026-04-20**. Источник: Wave 0.1 audit, top-20 tech-d
 - **Риск регрессии:** высокий — god-view трогают каждый день
 - **Правило:** каждое удаление сопровождать тестом и запуском `manage.py test companies ui`
 
-## 2. `backend/ui/views/_base.py` — ≈ 1 700 LOC
+## 2. `backend/ui/views/_base.py` — ≈ 1 700 LOC → **371 LOC (−78%) ✅ CLOSED 2026-04-21 (W1.1)**
 
 - **Score:** 100 (impact 5 × freq 5 × risk 4)
-- **Где лечится:** **Wave 1** (после company_detail)
-- **Что внутри:** helpers + decorators + querysets + policy-check wrappers — всё в одном файле
-- **Расщепление:**
-  - `ui/views/_helpers/company_filters.py` (уже частично — `_apply_company_filters`)
-  - `ui/views/_helpers/task_filters.py`
-  - `ui/views/_helpers/access.py` — `_can_edit_company`, `_can_delete_company`, `_detach_client_branches`
-  - `ui/views/_helpers/notify.py` — `_notify_branch_leads`, `_notify_head_deleted_with_branches`
-  - `ui/views/_helpers/logging.py` — `log_event` (переезжает из здесь в audit.services)
-- **Ожидаемое уменьшение:** 1 700 → ≈ 400 LOC (остаётся только import-re-export shim)
-- **Правило:** сохранить полную обратную совместимость — любой `from ui.views._base import X` должен работать
+- **Статус:** **ЗАКРЫТО** в W1.1 Mini-session. Фактический baseline на момент старта: **1 251 LOC** (не 1 700 — аудит завышал из-за amoCRM-блоков, удалённых в W0.1 cleanup).
+- **Результат расщепления** (6 helper-модулей в `ui/views/helpers/`):
+  - `search.py` — 65 LOC — 4 функции нормализации (`_normalize_phone_for_search`, `_normalize_for_search`, `_tokenize_search_query`, `_normalize_email_for_search`)
+  - `tasks.py` — 87 LOC — 3 permissions-функции (`_can_manage_task_status_ui`, `_can_edit_task_ui`, `_can_delete_task_ui`)
+  - `http.py` — 72 LOC — 4 request helpers (`_is_ajax`, `_safe_next_v3`, `_dt_label`, `_cold_call_json`)
+  - `cold_call.py` — 74 LOC — 5 функций cold-call reports (`_can_view_cold_call_reports`, `_cold_call_confirm_q`, `_month_start`, `_add_months`, `_month_label`)
+  - `companies.py` — 178 LOC — 10 функций company access/edit/delete/notifications/cache
+  - `company_filters.py` — 512 LOC — 10 функций для company-list фильтров (включая `_apply_company_filters` orchestrator)
+- **Backward compat:** `_base.py` → shim с re-exports (`from ui.views.helpers.X import ...`), все существующие импорты `from ui.views._base import X` работают.
+- **Коммиты W1.1:** `4c4c1223` (plan) → `6f6c9c5a` (search) → `2866430c` (tasks+http+cold_call) → `6c050d0a` (companies+company_filters) → `54fc1368` (black fix).
+- **Подробный отчёт:** `docs/release/w1-1-base-split-plan.md`.
 
 ## 3. `backend/templates/ui/company_detail.html` — 8 781 LOC
 
