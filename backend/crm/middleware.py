@@ -27,8 +27,10 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
         # Добавляем CSP только в production
         # NB: nonce генерируется (request.csp_nonce), но пока не встраивается
         # в CSP-заголовок, т.к. при наличии nonce браузер игнорирует
-        # unsafe-inline, а шаблоны содержат inline onclick=/style=.
-        # Рефакторинг шаблонов → Фаза 6 improvement-plan.
+        # unsafe-inline, а часть шаблонов всё ещё содержит inline onclick/style.
+        # W1.3 (2026-04-21): извлечены top 5 styles (2676 LOC) + 10 handlers в
+        # company_detail.html + 9 bare scripts получили nonce. Оставшиеся
+        # 66 handlers + 27 стилей + ~81 nonce-scripts — cleanup в W2/W9.
         if not settings.DEBUG and getattr(settings, "CSP_HEADER", None):
             response["Content-Security-Policy"] = settings.CSP_HEADER
 

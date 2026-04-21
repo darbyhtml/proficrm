@@ -78,3 +78,45 @@ def test_company_detail_loads(page: Page) -> None:
     # Не 500 error
     response_text = page.content()
     assert "500" not in response_text[:500] or "Company" in response_text or "компан" in response_text.lower()
+
+
+@pytest.mark.e2e
+@pytest.mark.skipif(not TEST_PASS, reason="STAGING_TEST_PASS env var не задан")
+def test_no_console_errors_on_company_card(page: Page) -> None:
+    """W1.3: after inline JS/CSS extraction, page must load without JS errors.
+
+    Проверяет что:
+    - Event handlers в company_detail.html (W1.3 #6) корректно сработают через
+      addEventListener вместо inline onclick/onsubmit.
+    - Extracted CSS/JS файлы (W1.3 #2-5) загружаются через static paths.
+    - Нет новых `Uncaught ReferenceError` или CSP violations.
+    """
+    errors: list[str] = []
+    page.on("pageerror", lambda err: errors.append(f"pageerror: {err}"))
+    page.on(
+        "console",
+        lambda msg: errors.append(f"console.{msg.type}: {msg.text}")
+        if msg.type == "error"
+        else None,
+    )
+
+    _login(page)
+    page.goto(f"{BASE_URL}/companies/")
+    page.wait_for_load_state("networkidle", timeout=15_000)
+
+    first_company_link = page.locator('a[href^="/companies/"][href*="-"]').first
+    if first_company_link.count() == 0:
+        pytest.skip("No companies in staging")
+    first_company_link.click()
+    page.wait_for_load_state("networkidle", timeout=15_000)
+
+    # Игнорируем ожидаемые CSP warnings (unsafe-inline remaining) и 3rd-party
+    filtered_errors = [
+        e
+        for e in errors
+        if "unsafe-inline" not in e.lower()
+        and "third-party" not in e.lower()
+        and "cookie" not in e.lower()
+        and "favicon" not in e.lower()
+    ]
+    assert not filtered_errors, f"JS errors after W1.3 extraction: {filtered_errors}"

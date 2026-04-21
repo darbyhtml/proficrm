@@ -587,12 +587,14 @@ class DashboardViewTestCase(TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
 
-        # Проверяем наличие бейджей статусов
-        self.assertContains(response, "badge-new")
-        self.assertContains(response, "badge-progress")
+        # W1.3 (2026-04-21): inline CSS с `.badge-new{...}` extracted в static файл
+        # `backend/static/ui/css/pages/base_global.css`, поэтому assertContains на
+        # строку `badge-new` больше не pass (класс есть в CSS файле, не в HTML
+        # response body). Исторически assertContains фактически проверял наличие
+        # CSS определения в inline <style>, а не реальный рендер бейджей. Проверка
+        # реального поведения — через response.context.tasks_* ниже.
         # Выполненные задачи не должны отображаться на dashboard (исключаются в запросе)
         self.assertNotContains(response, "Выполненная задача")
-        # badge-done может быть в CSS, но не должен быть в контексте задач
         # Проверяем, что выполненные задачи не отображаются
         context = response.context
         all_task_titles = []
