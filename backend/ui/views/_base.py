@@ -449,58 +449,8 @@ def _companies_with_overdue_flag(*, now):
     )
 
 
-def _normalize_phone_for_search(phone: str) -> str:
-    """Нормализует номер телефона для поиска через единый нормализатор."""
-    return _normalize_phone_canonical(phone)
-
-
-def _normalize_for_search(text: str) -> str:
-    """
-    Нормализует текст для поиска: убирает тире, пробелы и другие разделители.
-    Используется для поиска по названию, ИНН, адресу - чтобы находить совпадения
-    даже если пользователь не помнит точное написание (например, с тире или без).
-    """
-    if not text:
-        return ""
-    # Убираем тире, дефисы, пробелы и другие разделители
-    normalized = (
-        text.replace("-", "").replace("—", "").replace("–", "").replace(" ", "").replace("_", "")
-    )
-    # Приводим к нижнему регистру для регистронезависимого поиска
-    return normalized.lower().strip()
-
-
-_SEARCH_TOKEN_RE = re.compile(r"[0-9A-Za-zА-Яа-яЁё]+", re.UNICODE)
-
-
-def _tokenize_search_query(q: str) -> list[str]:
-    """
-    Токенизация пользовательского поиска:
-    - режем по любым разделителям/пунктуации
-    - приводим к lower
-    - отбрасываем слишком короткие токены (1 символ), чтобы не раздувать выдачу по "г", "и" и т.п.
-    """
-    if not q:
-        return []
-    tokens = [m.group(0).lower() for m in _SEARCH_TOKEN_RE.finditer(q)]
-    out: list[str] = []
-    for t in tokens:
-        tt = (t or "").strip()
-        if not tt:
-            continue
-        if len(tt) == 1 and not tt.isdigit():
-            continue
-        out.append(tt)
-    return out
-
-
-def _normalize_email_for_search(email: str) -> str:
-    """
-    Нормализует email для поиска: убирает пробелы, приводит к нижнему регистру.
-    """
-    if not email:
-        return ""
-    return email.strip().lower()
+# Search normalizers extracted to helpers/search.py (W1.1).
+# Re-exports at end of file для backward compat.
 
 
 def _is_ajax(request: HttpRequest) -> bool:
@@ -1249,3 +1199,18 @@ def _can_delete_task_ui(user, task):
             branch_id = getattr(task.assigned_to, "branch_id", None)
         return bool(branch_id and branch_id == user.branch_id)
     return False
+
+
+# -----------------------------------------------------------------------------
+# W1.1 (2026-04-21): Helper functions extracted to ui/views/helpers/*.
+# Re-exports preserved для backward compatibility (existing imports работают).
+# In new code, prefer direct imports из ui.views.helpers.<submodule>.
+# -----------------------------------------------------------------------------
+
+from ui.views.helpers.search import (
+    _normalize_email_for_search,
+    _normalize_for_search,
+    _normalize_phone_for_search,
+    _tokenize_search_query,
+)
+
