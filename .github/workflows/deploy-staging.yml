@@ -2,6 +2,9 @@ name: Deploy Staging
 
 # Автодеплой на staging после успешного CI на main.
 # Прод не трогаем — prod деплоится вручную через 21-release-1-ready-to-execute.md.
+#
+# 2026-04-21 (post-SEV2): добавлен nginx restart (Layer 2 incident fix)
+# + post-deploy smoke в CI + auto-rollback при red smoke.
 
 on:
   workflow_run:
@@ -11,7 +14,7 @@ on:
 
 jobs:
   deploy:
-    name: git pull + rebuild + up -d на staging
+    name: git pull + rebuild + up -d + smoke на staging
     runs-on: ubuntu-latest
     # Деплоим только если CI прошёл успешно
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
@@ -26,13 +29,16 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H 5.181.254.172 >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: Deploy to staging via SSH
+      - name: Deploy + smoke + auto-rollback
         run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no root@5.181.254.172 << 'REMOTE'
-            set -e
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no root@5.181.254.172 bash -s << 'REMOTE'
+            set -eo pipefail
             cd /opt/proficrm-staging
 
-            echo "=== [1/4] git pull origin main ==="
+            # ------------------------------------------------------------
+            # [1/6] git pull
+            # ------------------------------------------------------------
+            echo "=== [1/6] git fetch + pull origin main ==="
             git fetch origin main
             HEAD_BEFORE=$(git rev-parse HEAD)
             git pull origin main
@@ -44,24 +50,82 @@ jobs:
             fi
 
             echo "Новый HEAD: $HEAD_AFTER (было: $HEAD_BEFORE)"
+            # Сохраняем HEAD_BEFORE для rollback (outside set -e block)
+            echo "$HEAD_BEFORE" > /tmp/proficrm-staging-last-head
 
-            echo "=== [2/4] Build образов ==="
-            docker compose -f docker-compose.staging.yml -p proficrm-staging build web celery celery-beat websocket
+            # ------------------------------------------------------------
+            # Функция для auto-rollback при red smoke
+            # ------------------------------------------------------------
+            rollback() {
+              local reason="$1"
+              echo ""
+              echo "!!! ROLLBACK triggered: $reason"
+              echo "!!! Reverting staging to $HEAD_BEFORE"
+              git reset --hard "$HEAD_BEFORE"
+              docker compose -f docker-compose.staging.yml -p proficrm-staging \
+                build web celery celery-beat websocket
+              docker compose -f docker-compose.staging.yml -p proficrm-staging \
+                up -d --force-recreate web celery celery-beat websocket
+              docker restart crm_staging_nginx
+              sleep 30
+              echo "!!! Rollback smoke verification:"
+              if bash tests/smoke/staging_post_deploy.sh; then
+                echo "!!! Rollback succeeded, staging back on $HEAD_BEFORE"
+                exit 1  # deploy failed, but staging safe
+              else
+                echo "!!! CRITICAL: rollback ALSO failed smoke — manual intervention required"
+                exit 2
+              fi
+            }
 
-            echo "=== [3/4] Migrate ==="
-            docker compose -f docker-compose.staging.yml -p proficrm-staging run --rm web python manage.py migrate --noinput
+            # ------------------------------------------------------------
+            # [2/6] Build (web + все django-based sidecars)
+            # ------------------------------------------------------------
+            echo "=== [2/6] Build образов (web + celery + celery-beat + websocket) ==="
+            docker compose -f docker-compose.staging.yml -p proficrm-staging \
+              build web celery celery-beat websocket || rollback "build failed"
 
-            echo "=== [4/4] Recreate сервисов ==="
-            docker compose -f docker-compose.staging.yml -p proficrm-staging up -d --force-recreate web celery celery-beat websocket
+            # ------------------------------------------------------------
+            # [3/6] Migrate
+            # ------------------------------------------------------------
+            echo "=== [3/6] Migrate ==="
+            docker compose -f docker-compose.staging.yml -p proficrm-staging \
+              run --rm web python manage.py migrate --noinput \
+              || rollback "migrate failed"
 
-            echo "=== Пауза 30 сек + smoke ==="
+            # ------------------------------------------------------------
+            # [4/6] Force-recreate сервисов
+            # ------------------------------------------------------------
+            echo "=== [4/6] Recreate сервисов ==="
+            docker compose -f docker-compose.staging.yml -p proficrm-staging \
+              up -d --force-recreate web celery celery-beat websocket \
+              || rollback "up --force-recreate failed"
+
+            # ------------------------------------------------------------
+            # [5/6] nginx DNS cache flush (SEV2 2026-04-21 Layer 2 fix)
+            # После force-recreate web контейнер получает новый Docker IP,
+            # host-level staging-nginx должен пере-резолвить upstream.
+            # ------------------------------------------------------------
+            echo "=== [5/6] nginx DNS cache flush ==="
+            docker restart crm_staging_nginx || rollback "nginx restart failed"
+
+            # ------------------------------------------------------------
+            # [6/6] Post-deploy smoke (30s grace для стартапа)
+            # ------------------------------------------------------------
+            echo "=== [6/6] Post-deploy smoke (30s grace) ==="
             sleep 30
             docker ps --filter "name=crm_staging" --format "table {{.Names}}\t{{.Status}}"
+            echo ""
+            bash tests/smoke/staging_post_deploy.sh || rollback "post-deploy smoke failed"
 
-            echo "=== Deploy staging завершён: $HEAD_AFTER ==="
+            echo ""
+            echo "=== Deploy staging УСПЕШНО завершён: $HEAD_AFTER ==="
           REMOTE
 
       - name: Notify on failure
         if: failure()
         run: |
-          echo "::error::Staging deploy failed. Проверь SSH ключ, докер, место на диске."
+          echo "::error::Staging deploy failed."
+          echo "Check workflow logs above. Staging auto-rollbacks on smoke red;"
+          echo "if manual intervention needed, SSH to staging and run:"
+          echo "  cd /opt/proficrm-staging && git log -1 && make smoke-staging"

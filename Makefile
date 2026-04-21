@@ -110,6 +110,35 @@ smoke-staging: ## MANDATORY end-of-session check — staging external reachabili
 smoke-prod: ## Prod post-deploy smoke (для gated deploys по release tag)
 	bash tests/smoke/prod_post_deploy.sh
 
+# -----------------------------------------------------------------------------
+# Staging operations (safe wrappers — включают nginx restart и smoke)
+# Post-SEV2 2026-04-21: incapsulate Layer 2 fix (nginx DNS cache flush).
+# -----------------------------------------------------------------------------
+
+STAGING_HOST := root@5.181.254.172
+STAGING_PATH := /opt/proficrm-staging
+STAGING_COMPOSE := docker compose -f docker-compose.staging.yml -p proficrm-staging
+
+restart-staging-web: ## Force-recreate web+celery на staging + nginx restart + smoke
+	@echo "▶ [1/3] Force-recreate web + celery-сервисов на staging..."
+	@ssh $(STAGING_HOST) 'cd $(STAGING_PATH) && $(STAGING_COMPOSE) up -d --force-recreate web celery celery-beat websocket'
+	@echo "▶ [2/3] Flush nginx DNS cache (host-level staging-nginx)..."
+	@ssh $(STAGING_HOST) 'docker restart crm_staging_nginx'
+	@echo "▶ [3/3] Wait 30s + external smoke..."
+	@sleep 30
+	@bash tests/smoke/staging_post_deploy.sh
+
+restart-staging-all: ## Full staging stack down + up + nginx restart + smoke
+	@echo "▶ [1/4] Full stack down на staging..."
+	@ssh $(STAGING_HOST) 'cd $(STAGING_PATH) && $(STAGING_COMPOSE) down'
+	@echo "▶ [2/4] Full stack up на staging..."
+	@ssh $(STAGING_HOST) 'cd $(STAGING_PATH) && $(STAGING_COMPOSE) up -d'
+	@echo "▶ [3/4] Flush nginx DNS cache..."
+	@ssh $(STAGING_HOST) 'docker restart crm_staging_nginx'
+	@echo "▶ [4/4] Wait 45s + external smoke..."
+	@sleep 45
+	@bash tests/smoke/staging_post_deploy.sh
+
 build-js: ## Minify operator-panel.js + widget.js via esbuild (npx — без глобальной установки)
 	@echo "▶ esbuild operator-panel..."
 	@npx --yes esbuild@0.25.9 backend/messenger/static/messenger/operator-panel.js \
