@@ -1,5 +1,25 @@
 # Инструкция для Claude Code
 
+## 🛑 Prod freeze until W9 (decided 2026-04-21)
+
+Все волны **W0.5–W8 работают staging-only**. **НИКАКИХ prod deploys** до W9 UX volna — тогда полный accumulated deploy (W0-W8 вместе) через W9.10 stage.
+
+- `main` branch reflects staging state.
+- Prod remains на `release-v0.0-prod-current` tag (`be569ad4`, Mar 2026) until W9.
+- `release-v1.0-w0-infra` tag **не создавался** (W0.5a cancelled).
+- `CONFIRM_PROD=yes` всё ещё allowed для **point fixes**: security CVEs, critical prod bugs, infrastructure patches (postgres/redis security). **НЕ** для routine main sync.
+- W9 будет handle accumulated prod deploy с dedicated manager training + 72h monitoring + gradual rollout per филиал.
+
+Full ADR: `docs/decisions/2026-04-21-defer-prod-deploy-to-w9.md`.
+W9 stage: `docs/plan/10_wave_9_ux_ui.md` §W9.10 Accumulated Prod Deploy.
+
+Дополнительно: existing prod monitoring остаётся активным:
+- Uptime Kuma (3 monitors) — external HTTPS checks.
+- `scripts/health_alert.sh` cron `*/5 * * * *` на prod VPS — Telegram alerts.
+- Django `ErrorLog` + `ErrorLoggingMiddleware` — server-side exception capture (без Sentry до W9).
+
+---
+
 ## 🔴 MANDATORY: End-of-session staging health check
 
 **Перед закрытием любой сессии, в которой был `docker compose up`, `build`,

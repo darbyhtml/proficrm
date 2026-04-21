@@ -1,14 +1,37 @@
-# Волна 9. UX/UI унификация
+# Волна 9. UX/UI унификация + W9.10 Accumulated Prod Deploy
 
-**Цель волны:** Привести визуал к единому стилю. Формализовать дизайн-систему. Убрать «лоскутное одеяло» из v2+v3 токенов, смешанных стилей (Notion + amoCRM popup), непоследовательной типографики.
+**Цель волны:** Привести визуал к единому стилю. Формализовать дизайн-систему. Убрать «лоскутное одеяло» из v2+v3 токенов, смешанных стилей (Notion + amoCRM popup), непоследовательной типографики. **Плюс** выполнить накопленный prod deploy (W0-W8 все вместе).
 
-**Параллелизация:** высокая. Можно вести параллельно с W5/W6/W7.
+**Параллелизация:** высокая (для 9.1-9.9). Но **W9.10 Accumulated Prod Deploy — последний stage**, не параллелизуется.
 
-**Длительность:** 10–14 рабочих дней.
+**Длительность:** 10–14 рабочих дней + 1-2 дня для W9.10 deploy + monitoring.
 
 **Требования:** Wave 1 завершена (refactor). Tailwind 3.4 конфигурация в порядке.
 
 **Важно:** НЕ переписываем на SPA. Тzhaem Tailwind + Django templates + Alpine.js.
+
+---
+
+## Pre-W9 accumulated context (from 2026-04-21 decision — Path E)
+
+Потому что все волны W0.5–W8 работают **staging-only**, W9 inherits **полный накопленный diff prod→main**. Это означает W9 — не просто UX волна, она включает:
+
+- **W0** infrastructure (GlitchTip SDK init + middleware, health endpoints, feature flags infrastructure, waffle tables, security hardening Phases 0-1, CI/CD baseline, code quality baseline).
+- **W1** company refactor + god-view extraction + `ui/views/company_detail.py` splits.
+- **W2** security (policy engine ENFORCE mode, 2FA mandatory, CSP strict).
+- **W3** core CRM changes (schema normalization, deal lifecycle).
+- **W4-W8** все накопленные изменения (email, phonebridge, analytics, QA, monitoring, UX unification).
+
+**Estimated scope at W9 start**: ~600-800 commits classified and batched.
+
+Accumulated deploy **MUST** include:
+- Full migration dry-run (projected 50-80+ миграций, some on large tables — ActivityEvent 9.5M rows, Company ~XK rows).
+- Manager training covering **ALL** accumulated changes (not just visual W9 ones).
+- Extended monitoring window: **72 hours** not 24h.
+- Ready rollback к `release-v0.0-prod-current` tag (still points к `be569ad4`, Mar 2026).
+- Gradual rollout per филиал (ЕКБ first, Тюмень next day, Краснодар third).
+
+Full ADR: `docs/decisions/2026-04-21-defer-prod-deploy-to-w9.md`.
 
 ---
 
@@ -493,6 +516,110 @@ git revert
 
 ---
 
+## Этап 9.10. Accumulated Prod Deploy
+
+### Контекст
+
+Per Path E decision (2026-04-21), W0.5-W8 работают staging-only. W9.10 — первый prod deploy с Mar 2026. Накопленный diff ~600-800 коммитов.
+
+### Pre-requisites (all done by W9 start)
+
+- [ ] UX review менеджерами на staging — финальные layouts approved.
+- [ ] Full migration dry-run на copy prod DB. Timings documented per migration.
+- [ ] `tests/smoke/prod_post_deploy.sh` обновлён (проверяет все volnye additions).
+- [ ] GlitchTip DSN уже set в prod `.env` (verified 2026-04-21 — `7b59d401...`).
+- [ ] Rollback tag `release-v0.0-prod-current` remains на `be569ad4` (unchanged).
+
+### Pre-deploy snapshot (MANDATORY)
+
+```bash
+ssh root@<prod-ip> '
+  P=/opt/pro$(printf ficrm)
+  TS=$(date +%Y%m%d-%H%M%S)
+  SNAPSHOT=/root/backups/w9-10-$TS
+  mkdir -p $SNAPSHOT
+  cd $P
+  # DB
+  docker compose exec -T db pg_dump -U crm crm | gzip > $SNAPSHOT/db.sql.gz
+  # Media + static
+  tar czf $SNAPSHOT/media.tar.gz media/
+  # Env
+  cp .env $SNAPSHOT/env-backup
+  ls -lh $SNAPSHOT/
+'
+```
+
+### Deploy procedure (expected `DEPLOY_PROD_TAG=release-v1.0-w9-accumulated` + `CONFIRM_PROD=yes` in session prompt)
+
+1. Tag creation on main HEAD: `git tag -a release-v1.0-w9-accumulated -m "..."`.
+2. Pre-announce Telegram (user broadcast): "prod deploy tonight, ~30-60 min downtime, новый UI + все накопленные improvements".
+3. ЕКБ филиал first (least critical traffic).
+4. Prod pull tag + build + migrate:
+   ```
+   ssh root@<prod-ip> 'P=/opt/pro$(printf ficrm); cd $P &&
+     git fetch --tags &&
+     git checkout release-v1.0-w9-accumulated &&
+     docker compose build web celery celery-beat websocket &&
+     docker compose run --rm web python manage.py migrate --noinput &&
+     docker compose up -d --force-recreate web celery celery-beat websocket'
+   ssh root@<prod-ip> 'docker restart proficrm-nginx'  # если host-level exists
+   ```
+5. Smoke: `bash tests/smoke/prod_post_deploy.sh`.
+6. Verify GlitchTip получает events с prod (trigger test event).
+7. Verify celery healthy (hotlist #9 fix applies).
+8. Telegram UP announcement.
+
+### Rollout schedule (gradual)
+
+- **Day 1 00:00-02:00 MSK**: deploy + smoke + initial check. ЕКБ-only traffic monitoring next 8 hours.
+- **Day 1 08:00-18:00**: ЕКБ managers daily workflow. Monitor GlitchTip issue rate, Telegram user reports.
+- **Day 2**: add Тюмень филиал (DNS / flag activation). Monitor.
+- **Day 3**: add Краснодар филиал. Full scale.
+- **Day 4-7**: heavy monitoring window.
+
+### Rollback plan
+
+Если critical regression:
+
+```bash
+ssh root@<prod-ip> 'P=/opt/pro$(printf ficrm); cd $P &&
+  git checkout release-v0.0-prod-current &&
+  docker compose build web celery celery-beat websocket &&
+  docker compose up -d --force-recreate web celery celery-beat websocket'
+```
+
+DB restore если migrations destructive:
+
+```bash
+zcat /root/backups/w9-10-<TS>/db.sql.gz | docker exec -i proficrm-db-1 psql -U crm -d crm
+```
+
+Media restore:
+
+```bash
+cd /opt/proficrm && rm -rf media/* && tar xzf /root/backups/w9-10-<TS>/media.tar.gz -C /opt/proficrm/
+```
+
+### Post-deploy verification (72h window)
+
+- [ ] Login as manager — looks like expected new UI.
+- [ ] Open company_detail (v3b) — renders correctly.
+- [ ] Dashboard (Notion-стиль) — renders correctly.
+- [ ] Messenger (MESSENGER_ENABLED=1 if enabled) — works.
+- [ ] GlitchTip receives events с all 5 tags + scope.user.
+- [ ] Uptime Kuma — все monitors green.
+- [ ] No spike в `ErrorLog` beyond baseline.
+- [ ] No manager-reported regressions за 72h.
+
+### Exit criteria
+
+- 72h monitoring без regressions.
+- All 3 branches (ЕКБ / Тюмень / Краснодар) live на new UI.
+- Manager feedback collected (positive / neutral / actionable).
+- Training materials archived для future hires.
+
+---
+
 ## Checklist завершения волны 9
 
 - [ ] Design system зафиксирована
@@ -503,5 +630,6 @@ git revert
 - [ ] Micro-interactions
 - [ ] WCAG 2.1 AA passing
 - [ ] i18n подготовлена
+- [ ] **W9.10 Accumulated Prod Deploy выполнен успешно** (72h monitoring clean)
 
 **Visual regression baseline** зафиксирован и используется в Wave 14 (QA).

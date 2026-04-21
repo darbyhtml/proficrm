@@ -1,5 +1,32 @@
 # Текущий спринт
 
+## [2026-04-21] — W0.5a DEFERRED until W9 (Path E decision)
+
+**Status**: 🛑 W0.5a prod deploy **deferred**.
+
+**Why**: Session D1 diagnostic (2026-04-21) выявил что:
+- `UI_V3B_DEFAULT` flag создан в W0.3, но **не wired** в views (grep в `backend/ui/views/` = 0 usages).
+- Legacy templates `company_list.html`, `dashboard.html` **удалены** в main (replaced in-place).
+- Deploy main на prod = automatic UX activation regardless of flags.
+
+User's Path E: **defer all prod deploys until W9** UX volna завершит full редизайн review. Current редизайн experimental, не final-approved. W9 будет single "release milestone" с dedicated manager training.
+
+**Consequences**:
+- Prod stays на `release-v0.0-prod-current` (`be569ad4`, Mar 2026) весь W1-W8 cycle.
+- All waves W0.5-W8 — staging-only.
+- GlitchTip observability blind on prod до W9 (~3-5 months). Mitigated: Uptime Kuma + `health_alert.sh` continue.
+- Point fixes allowed (security CVEs) через `CONFIRM_PROD=yes` markers — НЕ routine main sync.
+
+**Docs**:
+- `docs/decisions/2026-04-21-defer-prod-deploy-to-w9.md` — full ADR.
+- `docs/plan/10_wave_9_ux_ui.md` — W9.10 Accumulated Prod Deploy stage added.
+- `docs/release/w0-5a-infra-only-plan.md` — DEFERRED header.
+- `docs/audit/legacy-templates-check-2026-04-21.md` — diagnostic.
+
+**Next active wave**: **W0.5** (test infrastructure upgrade — factory_boy, pytest-xdist, pytest-playwright, coverage restore from Q15 45→50). Independent of prod. Pure dev workflow.
+
+---
+
 **[2026-04-20]** — Вечер: Wave 0.0+0.1 завершены (audit + tooling bootstrap) ✅
 
 **Wave 0.0 Bootstrap (коммит `ec67d771`)**: установлены radon 6.0.1, coverage 7.13.5, django-extensions 3.2.3, pygraphviz 1.14, pip-audit 2.9.0 в `requirements-dev.txt`; tokei 12.1.2 + graphviz 2.42.4 через apt на staging; conditional `django_extensions` в `INSTALLED_APPS` (только DEBUG).

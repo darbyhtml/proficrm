@@ -1,6 +1,28 @@
-# W0.5a-infra-only Deploy Plan
+# W0.5a-infra-only Deploy Plan — DEFERRED until W9
 
-**Status**: ⚠️ **BLOCKED на user decision** — Step 2 verdict из Session D1 revealed что original plan assumption не работает.
+**Status**: 🛑 **DEFERRED 2026-04-21**
+**Decision**: Path E (defer all prod deploy until W9 UX volna)
+**Reason**: Current редизайн не final-approved менеджерами; W9 will do complete redesign review.
+**Next prod deploy target**: After W9 completion (estimated 3-5 months, 2026-07 to 2026-09).
+
+Full ADR: `docs/decisions/2026-04-21-defer-prod-deploy-to-w9.md`.
+
+---
+
+## Why deferred (summary)
+
+After Session D1 diagnostic revealed UI_V3B_DEFAULT flag **не wired** в views + legacy templates **deleted в-place**, user rejected all 4 original paths (A/B/C/D):
+- **Path A/D** (accept UX change + training): user — редизайн ещё не final.
+- **Path B** (2-недели legacy-compat dev): would be discarded after W9 redesign.
+- **Path C** (selective revert): too risky — templates modified in-place.
+
+**Path E** added by user: freeze prod until W9 completes full UX review. Single "release milestone" at end of W9.
+
+---
+
+## Original plan content preserved below for W9 reference
+
+---
 
 **Session D1** (2026-04-21): diagnostic session только, no prod touch, no deploy.
 
