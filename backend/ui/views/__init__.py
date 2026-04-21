@@ -44,7 +44,6 @@ from ui.views.company_detail import (
     contact_phone_cold_call_reset,
     contact_phone_cold_call_toggle,
     contact_phone_comment_update,
-    phone_call_create,
 )
 
 # F4 R3: preview 3 вариантов редизайна карточки компании + quick-endpoints
@@ -95,6 +94,9 @@ from ui.views.mobile import (
 )
 
 # W1.2: extracted to pages/company/*
+from ui.views.pages.company.calls import (
+    phone_call_create,
+)
 from ui.views.pages.company.deals import (
     company_deal_add,
     company_deal_delete,
