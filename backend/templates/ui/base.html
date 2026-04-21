@@ -3740,7 +3740,7 @@
       })();
     </script>
     {% if user.is_authenticated %}
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Sidebar unread badge for messenger
       (function() {
         var badge = document.getElementById('messengerUnreadBadge');

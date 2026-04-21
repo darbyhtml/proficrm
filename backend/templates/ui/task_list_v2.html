@@ -474,7 +474,7 @@
   {% include "ui/_v2/v2_modal.html" %}
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 // CSP-safe обработчики: раньше здесь были inline onclick/onchange в шаблоне,
 // их блокирует strict script-src 'self'. Перенесено в addEventListener.
 
@@ -588,7 +588,7 @@ window.addEventListener('v2-modal:saved', function(){ setTimeout(() => window.lo
   });
 })();
 </script>
-<script>
+<script nonce="{{ csp_nonce }}">
 // Bulk selection + reschedule + V2Modal confirm (2026-04-18 redesign)
 (function(){
   const reassignForm = document.getElementById('v2BulkForm');

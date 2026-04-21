@@ -232,7 +232,7 @@
   </form>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 (function(){
   const root = document.currentScript.parentElement;
   const csrf = (root.querySelector('input[name=csrfmiddlewaretoken]') || {}).value || '';

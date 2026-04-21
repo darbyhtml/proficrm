@@ -361,7 +361,7 @@
   {% include "ui/_v2/v2_modal.html" %}
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 // WCAG + CSP: клик по строке компании → переход на карточку.
 // Раньше был inline onclick на <div> (блокируется strict CSP script-src 'self').
 // Теперь — через addEventListener с data-атрибутом, без inline-хендлеров.
