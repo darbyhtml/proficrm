@@ -44,12 +44,21 @@ _Снапшот: **2026-04-20**. Источник: Wave 0.1 audit, top-20 tech-d
 - **Коммиты W1.1:** `4c4c1223` (plan) → `6f6c9c5a` (search) → `2866430c` (tasks+http+cold_call) → `6c050d0a` (companies+company_filters) → `54fc1368` (black fix).
 - **Подробный отчёт:** `docs/release/w1-1-base-split-plan.md`.
 
-## 3. `backend/templates/ui/company_detail.html` — 8 781 LOC
+## 3. `backend/templates/ui/company_detail.html` — 8 781 LOC (PARTIAL ADDRESS 2026-04-21 W1.3)
 
 - **Score:** 100 (impact 5 × freq 5 × risk 4)
-- **Где лечится:** **Wave 9** (UX унификация) + **Wave 11** (CSP strict)
-- **Что внутри:** 33 inline `<script>` блока на ≈ 4 719 LOC JS, 6+ inline `<style>` на ≈ 200 LOC CSS
-- **План расщепления:**
+- **Где лечится:** **Wave 9** (UX унификация, full HTML split) + **Wave 2** (CSP strict enforcement)
+- **Статус W1.3 (2026-04-21, Scenario C partial fix)**:
+  - ✅ Все 10 inline event handlers (`onclick`, `onsubmit`) заменены на `data-*` + delegated JS (`backend/static/ui/js/pages/company_detail_handlers.js`, 53 LOC)
+  - ✅ Inline `<style>` block 157 LOC остался (небольшой, W2 cleanup)
+  - 🟡 33 inline `<script nonce>` blocks — оставлены (уже CSP-ready через nonce, ~4 719 LOC)
+- **W1.3 глобальная статистика** (весь проект, не только company_detail):
+  - 9 bare `<script>` → 0 (добавлен nonce)
+  - 5 top `<style>` blocks (2 684 LOC) вынесены в `backend/static/ui/css/pages/*.css` (65% reduction inline CSS)
+  - 10 handlers в company_detail.html конвертированы в addEventListener
+- **Подробный отчёт W1.3:** `docs/release/w1-3-execution-plan.md`.
+- **Что внутри (original):** 33 inline `<script>` блока на ≈ 4 719 LOC JS, 6+ inline `<style>` на ≈ 200 LOC CSS
+- **План расщепления (full, деферрено на W9):**
   - Выделить JS-логику в `backend/static/ui/company_detail/*.js` (по функциональным блокам: timeline, phone-edit, email-edit, delete-workflow, popup-menu, etc.)
   - Использовать `{% include %}` для повторяющихся partials (popup-menu, input-like edit, phone chip)
   - CSP nonce per-request для оставшихся inline scripts

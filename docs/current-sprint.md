@@ -1,5 +1,74 @@
 # Текущий спринт
 
+## [2026-04-21] — W1.3 Mini: inline JS/CSS extraction (Scenario C) ✅ CLOSED
+
+**Status**: ✅ ЗАКРЫТО. Hotlist #3 — **partial address** (JS/CSS extraction done, full HTML split deferred W9).
+
+**Scope**: Scenario C (user decision + PM rec) — extract inline JS/CSS без split HTML bodies, готовит CSP strict для W2 не throwaway перед W9.
+
+**Результат**:
+
+### Inventory delta (весь проект)
+| Metric | Before | After | Δ |
+|---|---|---|---|
+| Bare `<script>` (no nonce) | 9 | **0** | −9 ✅ |
+| Inline `<style>` blocks | 32 | 27 | −5 (top 5 by LOC) |
+| Inline CSS LOC | 4 131 | ~1 447 | **−2 684 (−65%)** ✅ |
+| Inline event handlers | 76 | 66 | −10 (company_detail.html only) |
+
+### 6 новых static файлов (2 738 LOC)
+- `css/pages/base_global.css` (864 LOC) — из base.html
+- `css/pages/company_detail_v3_b.css` (571 LOC)
+- `css/pages/messenger_conversations.css` (560 LOC)
+- `css/pages/_v2.css` (382 LOC)
+- `css/pages/_v3.css` (308 LOC)
+- `js/pages/company_detail_handlers.js` (53 LOC) — delegation для 10 handlers
+
+### Template size reductions
+- `ui/base.html`: 3 781 → 2 919 LOC (−23%)
+- `ui/messenger_conversations_unified.html`: 989 → 431 LOC (−56%)
+- `ui/company_detail_v3/b.html`: 1 812 → 1 243 LOC (−31%)
+- `ui/_v2/v2_styles.html`: 386 → 7 LOC (−98%)
+- `ui/_v2/v3_styles.html`: 316 → 11 LOC (−96%)
+
+**Quality gates**:
+- ✅ Tests: **1 140 passing** (baseline preserved after test_dashboard fix)
+- ✅ CI: 8/8 jobs green на `94943cb3`
+- ✅ Staging HEAD: `94943cb3` (auto-deploy success)
+- ✅ Staging smoke: 6/6 checks green
+- ✅ Kuma: Up (heartbeat 19:47)
+- ✅ Playwright E2E: `test_no_console_errors_on_company_card` добавлен
+
+**Коммиты** (9 total):
+1. `22f92693` — plan + inventory
+2. `5f94973e` — #1 add nonce to 9 bare scripts
+3. `2c19a345` — #2 extract base.html style
+4. `0e7d0df1` — #3 extract _v2/_v3 styles
+5. `306e99b8` — #4 extract company_detail_v3/b.html style
+6. `f6ff5cad` — #5 extract messenger_conversations style
+7. `fe69bdde` — #6 convert 10 event handlers
+8. `94943cb3` — fix test assertions + middleware comment + E2E test
+
+**Docs**:
+- `docs/audit/w1-3-inline-assets-inventory.md`
+- `docs/release/w1-3-execution-plan.md`
+- `docs/audit/hotlist.md` — item #3 переведён в PARTIAL ADDRESS
+
+**CSP readiness post-W1.3**:
+- Infrastructure: nonce generation ✅, context processor ✅, 0 bare scripts ✅
+- Blockers для strict enforce: 66 remaining handlers (campaign_detail 14, settings 19, etc) + 27 small styles
+- **W2 logical next step**: strict CSP switch после cleanup оставшихся handlers.
+
+**Deferred** (W2 + W9):
+- 66 event handlers в других templates
+- 27 smaller inline styles
+- Full extraction of 91 nonce scripts (~12 427 LOC) — throwaway перед W9 full UX redesign
+- `company_detail.html` HTML split (8 779 LOC) → partials — W9
+
+**Next**: **W1.4** — coverage 53% target + W1 cleanup (проверка метрик, docs consolidation, готовность к W2).
+
+---
+
 ## [2026-04-21] — W1.2 Mini: split `ui/views/company_detail.py` ✅ CLOSED
 
 **Status**: ✅ ЗАКРЫТО. Hotlist #1 tech-debt устранён (P0).
