@@ -1,0 +1,27 @@
+# Gitleaks config — extends default rules + project allowlist.
+#
+# https://github.com/gitleaks/gitleaks#configuration
+
+[extend]
+# Start from gitleaks default config
+useDefault = true
+
+[allowlist]
+description = "Project allowlist"
+paths = [
+    # Reviewed-public baseline hashes (contains SHA256 of test fixture passwords).
+    '''\.secrets\.baseline$''',
+    # Cleanup artifact — lists rejected sha prefixes, not live secrets.
+    '''docs/release/classification-.*\.csv$''',
+]
+
+regexes = [
+    # Dummy Fernet key used only in CI (.github/workflows/ci.yml).
+    # Non-production throwaway generated via Fernet.generate_key(). Used для
+    # testing encrypt_str/decrypt_str — real prod key lives в .env mode 600.
+    # Rotate this value if leaked (doesn't affect prod).
+    '''Cn0aJP0_TFTpEsyjPKd9StC0pU7We_oLkBq0wvCRhUg=''',
+    # Test fixture Fernet key (backend/mailer/tests.py, backend/ui/tests/test_amocrm_migrate.py).
+    # Dummy value для unit tests на encrypt/decrypt — never prod.
+    '''85--b5Z37dcxRDvHf_xmpOis4j_NGX''',
+]
