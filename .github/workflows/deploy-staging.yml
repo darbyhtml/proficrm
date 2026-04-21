@@ -36,12 +36,15 @@ jobs:
             cd /opt/proficrm-staging
 
             # ------------------------------------------------------------
-            # [1/6] git pull
+            # [1/6] git fetch + reset --hard origin/main
+            # (hard reset instead of pull — после filter-repo histories могут
+            # дивергировать, pull fails "divergent branches". Reset always
+            # matches remote state exactly.)
             # ------------------------------------------------------------
-            echo "=== [1/6] git fetch + pull origin main ==="
+            echo "=== [1/6] git fetch + reset to origin/main ==="
             git fetch origin main
             HEAD_BEFORE=$(git rev-parse HEAD)
-            git pull origin main
+            git reset --hard origin/main
             HEAD_AFTER=$(git rev-parse HEAD)
 
             if [ "$HEAD_BEFORE" = "$HEAD_AFTER" ]; then
