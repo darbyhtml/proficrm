@@ -38,9 +38,6 @@ from ui.views.company_detail import (
     company_update,
     contact_cold_call_reset,
     contact_cold_call_toggle,
-    contact_create,
-    contact_delete,
-    contact_edit,
     contact_phone_cold_call_reset,
     contact_phone_cold_call_toggle,
     contact_phone_comment_update,
@@ -96,6 +93,11 @@ from ui.views.mobile import (
 # W1.2: extracted to pages/company/*
 from ui.views.pages.company.calls import (
     phone_call_create,
+)
+from ui.views.pages.company.contacts import (
+    contact_create,
+    contact_delete,
+    contact_edit,
 )
 from ui.views.pages.company.deals import (
     company_deal_add,
