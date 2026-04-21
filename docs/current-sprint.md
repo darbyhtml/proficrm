@@ -270,9 +270,34 @@ CLOSEOUT.
 | GlitchTip      | UP (200 OK) |
 
 **Pending user** (optional, async):
-- Q9 — dual monitoring strategy (3 options).
-- Q10 — staging test user с realistic role/branch (для следующих real-HTTP тестов).
+- ~~Q9 — dual monitoring strategy~~ **RESOLVED 2026-04-21**: option C split-scope.
+- ~~Q10 — staging test user~~ **RESOLVED 2026-04-21**: `sdm / ooqu1bieNg`.
 - Проверить recovery alert от Kuma в Telegram (~06:47 UTC).
+
+**[2026-04-21 / 07:05 UTC]** — **W0.4 FINAL CLOSEOUT** ✅
+
+Track K — split-scope Kuma (Q9 resolved option C):
+- Monitor #1 CRM Production **paused** через `api.pause_monitor(id=1)`.
+  Historical data сохранена (active=False, не delete).
+- Monitor #4 Uptime Kuma self (external, HEAD, 401 OK) — добавлен.
+- `health_alert.sh` остаётся активным (cron */5 от sdm) как единственный
+  prod uptime monitor. Zero overlap на prod.
+
+Track L — real-traffic verification:
+- Из-за nginx IP whitelist на staging + DEBUG=0 в .env — использован путь
+  «django.test.Client через shell внутри web-контейнера» (Level 1 integration,
+  full Django MIDDLEWARE chain).
+- Новый endpoint `/_staff/trigger-test-error/` (3-level gated: env flag
+  `STAFF_DEBUG_ENDPOINTS_ENABLED`, `@login_required`, `user.is_staff`).
+  Default off — safe для prod.
+- Verification script `scripts/verify_sentry_real_traffic.py` (committed).
+- Event `66e3bae6c125...` (issue #9 CRM-STAGING) — все 5 custom + 2 auto tags
+  подтверждены: `branch=ekb role=admin request_id=c12820f7 feature_flags=none
+  environment=staging + user.id=1 user.username=sdm`.
+- Runbook `docs/runbooks/glitchtip-setup.md` дополнен §«Real-HTTP middleware
+  verification» с пошаговыми командами.
+
+**W0.4 DoD TRULY ACHIEVED** (verified через real HTTP chain с real session).
 
 ---
 

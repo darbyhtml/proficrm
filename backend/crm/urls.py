@@ -30,7 +30,7 @@ from companies.api import CompanyNoteViewSet, CompanyViewSet, ContactViewSet
 from core.api import FeatureFlagsView  # Wave 0.3
 from crm.health import health as liveness_view  # Wave 0.4
 from crm.health import ready as readiness_view  # Wave 0.4
-from crm.health import sentry_smoke  # Wave 0.4
+from crm.health import sentry_smoke, staff_trigger_test_error  # Wave 0.4
 from crm.views import health_check, metrics_endpoint, robots_txt, security_txt, sw_push_js
 from messenger.api import (
     AutomationRuleViewSet,
@@ -130,6 +130,9 @@ urlpatterns = [
     path("ready/", readiness_view, name="readiness"),
     # Smoke-test GlitchTip SDK — 404 в проде, 500 в DEBUG.
     path("_debug/sentry-error/", sentry_smoke, name="sentry_smoke"),
+    # W0.4 closeout: real-traffic verification endpoint для Playwright.
+    # 3-level gated: env flag + login + is_staff. 404 если выключено.
+    path("_staff/trigger-test-error/", staff_trigger_test_error, name="staff_test_error"),
     path("metrics", metrics_endpoint, name="metrics"),
     # Service Worker для push-уведомлений — отдаём напрямую (браузеры запрещают SW через redirect)
     path("sw-push.js", sw_push_js, name="sw_push"),

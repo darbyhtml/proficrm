@@ -158,6 +158,8 @@
 | Coverage | **51 %** (baseline 2026-04-20, gate `fail_under=50`) |
 | Актуальный аудит | **`docs/audit/README.md`** (snapshot 2026-04-20, Wave 0.1) |
 | Feature flags | **django-waffle 5.0** + обёртка `core.feature_flags` + 4 seed-флага (см. `docs/architecture/feature-flags.md`) |
+| Observability | **GlitchTip self-hosted** live на staging (since W0.4). Prod pending W0.5a sync. Verify tags через `scripts/verify_sentry_real_traffic.py`. См. `docs/runbooks/glitchtip-setup.md` |
+| Uptime monitoring | **Uptime Kuma** (staging + GlitchTip + uptime-self); **health_alert.sh** cron (prod local). Split-scope Q9-resolved 2026-04-21 |
 
 ## Архитектура — где что лежит
 

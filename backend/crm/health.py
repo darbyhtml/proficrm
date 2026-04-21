@@ -104,3 +104,40 @@ def sentry_smoke(_request: HttpRequest) -> JsonResponse:
         )
     # Намеренное исключение.
     raise RuntimeError("glitchtip-smoke-test (Wave 0.4)")
+
+
+@require_GET
+def staff_trigger_test_error(request: HttpRequest) -> JsonResponse:
+    """Real-traffic smoke для middleware chain verification.
+
+    Wave 0.4 closeout (2026-04-21): добавлен после regression — shell-level
+    `_enrich_scope()` call не эквивалент real HTTP. Этот endpoint позволяет
+    Playwright залогиниться → triggerить exception через real MIDDLEWARE
+    chain → verify 5 тегов в GlitchTip issue.
+
+    Gated по трём уровням защиты:
+    1. `STAFF_DEBUG_ENDPOINTS_ENABLED` env flag (default False) — на prod
+       выключено намеренно, на staging включается явно.
+    2. `@login_required` — анонимы получают 302 на login.
+    3. `user.is_staff == True` — только staff-пользователь (не обычный менеджер).
+
+    Usage (staging):
+        # С установленным session cookie залогиненного staff:
+        curl -H "Cookie: sessionid=..." https://crm-staging.groupprofi.ru/_staff/trigger-test-error/
+    """
+    if not getattr(settings, "STAFF_DEBUG_ENDPOINTS_ENABLED", False):
+        return JsonResponse({"error": "Endpoint выключен"}, status=404)
+
+    from django.contrib.auth.decorators import login_required, user_passes_test
+
+    # Runtime-применение декораторов (чтобы не срабатывали до env-gate выше).
+    inner = login_required(
+        user_passes_test(lambda u: u.is_staff)(
+            lambda r: _raise_test_error()
+        )
+    )
+    return inner(request)
+
+
+def _raise_test_error():
+    raise RuntimeError("w04-real-traffic-verify (staff-trigger)")

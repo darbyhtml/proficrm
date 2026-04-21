@@ -250,6 +250,85 @@ sudo systemctl reload cron
 
 ---
 
+## Real-HTTP middleware verification (периодически / после SDK config changes)
+
+**Причина**: shell-level тест (`RequestFactory` + ручной вызов `_enrich_scope()`)
+**не эквивалент** real HTTP через Django MIDDLEWARE chain. См.
+`docs/audit/process-lessons.md` §«Shell-level middleware test ≠ real HTTP request».
+
+**Когда запускать**:
+- После любых изменений `core/sentry_context.py` или `backend/crm/settings.py::sentry_sdk.init(...)`
+- После major upgrade Sentry SDK / GlitchTip
+- Периодически раз в неделю как canary
+
+### Pre-requisites
+
+- Staging has `STAFF_DEBUG_ENDPOINTS_ENABLED=1` in .env
+- Staging has `SENTRY_DSN` set
+- `SENTRY_ENVIRONMENT=staging` set
+- Staff user creds known (sdm на момент 2026-04-21, cm. `docs/open-questions.md` Q10)
+
+### Level 1 — Django TestClient (integration)
+
+```bash
+# Copy script into web container + run via Django shell
+ssh root@5.181.254.172 '
+docker cp /opt/proficrm-staging/scripts/verify_sentry_real_traffic.py \
+    crm_staging_web:/tmp/verify.py
+docker exec -e VERIFY_USERNAME=sdm crm_staging_web bash -c \
+    "cd /app/backend && python manage.py shell < /tmp/verify.py"
+'
+```
+
+Expected output:
+```
+[verify] Found user: id=1 username='sdm' role='admin' branch='ekb' is_staff=True
+[verify] HTTP status: 500
+[verify] Status 500 OK — Exception прошёл через MIDDLEWARE chain.
+[verify] Sentry SDK flushed.
+```
+
+Затем через API GlitchTip проверить тэги:
+```bash
+PASS=$(ssh root@5.181.254.172 'grep GLITCHTIP_ADMIN_PASSWORD /etc/proficrm/env.d/glitchtip.conf | cut -d= -f2')
+curl -sk https://glitchtip.groupprofi.ru/_allauth/browser/v1/config -c /tmp/ck -o /dev/null
+CSRF=$(grep csrftoken /tmp/ck | awk '{print $7}')
+curl -sk -X POST https://glitchtip.groupprofi.ru/_allauth/browser/v1/auth/login \
+    -H 'Content-Type: application/json' -H 'Referer: https://glitchtip.groupprofi.ru/' \
+    -H "X-CSRFToken: $CSRF" -b /tmp/ck -c /tmp/ck \
+    -d "{\"email\":\"admin@groupprofi.ru\",\"password\":\"$PASS\"}" -o /dev/null
+# Latest event от issue с 'w04-real-traffic-verify' в title
+curl -sk -b /tmp/ck 'https://glitchtip.groupprofi.ru/api/0/projects/groupprofi/crm-staging/issues/?limit=1' \
+    | python3 -c 'import json, sys; d=json.load(sys.stdin); print(d[0]["id"], d[0]["title"])'
+```
+
+**Expected tags** (всего 8):
+```
+  branch         = 'ekb'          ← Bug 1 fix (always set)
+  environment    = 'staging'       ← Bug 2 fix (not 'production')
+  feature_flags  = 'none'          ← W0.3 integration
+  request_id     = <8-char UUID>   ← RequestIdMiddleware
+  role           = 'admin'         ← user.role
+  server_name    = <container-id>  (Sentry auto)
+  user.id        = '1'             (scope.user auto)
+  user.username  = 'sdm'           (scope.user auto)
+```
+
+**Если хоть один custom tag (branch/role/request_id/feature_flags) отсутствует** —
+middleware chain сломан. Debug:
+1. `docker exec crm_staging_web bash -c 'cd /app/backend && python -c "from django.conf import settings; print(settings.MIDDLEWARE)"'`
+2. `SentryContextMiddleware` должен быть ПОСЛЕ `AuthenticationMiddleware`.
+3. Если tag `feature_flags=unknown` — проверить waffle (см. `docs/audit/process-lessons.md`).
+
+### Level 2 — Playwright browser flow (E2E, optional)
+
+Пропускаем если IP разработчика не в nginx staging whitelist. Или запускать
+из машины менеджера (whitelist IPs: 87.248.*, 185.*, 77.*, 193.*, 23.*, 109.*).
+
+Конфигурация — в `scripts/verify_sentry_real_traffic.py` docstring §«Level 2».
+
+---
+
 ## Login smoke tests (ОБЯЗАТЕЛЬНЫ после любого restart/recreate)
 
 Без зелёного прогона обоих тестов ниже — W0.4 deploy считается **НЕ завершённым**.

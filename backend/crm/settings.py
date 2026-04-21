@@ -72,6 +72,9 @@ if _SENTRY_DSN:
             # Default "development" — безопасно для dev-машин и CI (не смешивается
             # с prod events). Prod/staging задают явно через SENTRY_ENVIRONMENT в .env.
             environment=os.getenv("SENTRY_ENVIRONMENT", "development"),
+            # Wave 0.4 closeout (2026-04-21): staff-only test endpoints для
+            # real-traffic verification. По умолчанию выключено — safe для prod.
+            # На staging включается через STAFF_DEBUG_ENDPOINTS_ENABLED=1 в .env.
             release=os.getenv("SENTRY_RELEASE", ""),
             # Не отправляем PII (ФИО/email менеджеров) — только стек + request metadata.
             send_default_pii=False,
@@ -212,6 +215,10 @@ else:
 # Magic Link Authentication
 # Если установлено в 1, вход по паролю отключается (только magic links)
 MAGIC_LINK_ONLY = os.getenv("MAGIC_LINK_ONLY", "0") == "1"
+
+# Wave 0.4 closeout (2026-04-21): staff-only test endpoints для real-traffic
+# verification middleware/Sentry scope. 404 если выключено. Safe-default для prod.
+STAFF_DEBUG_ENDPOINTS_ENABLED = os.getenv("STAFF_DEBUG_ENDPOINTS_ENABLED", "0") == "1"
 
 
 # Application definition
