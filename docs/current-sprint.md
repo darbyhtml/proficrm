@@ -176,6 +176,48 @@ API (`crm-staging/1`, `crm-prod/2`). Аномалии нет — `/1` и `/2` п
 
 **Observability total memory**: GlitchTip 608 MB + Kuma 128 MB = **736 MB** (лимиты). Реально: 270 MB GlitchTip + 91 MB Kuma = 361 MB. Swap 1.0 GB стабилен.
 
+**[2026-04-21 / early morning]** — **Wave 0.4 CLOSEOUT** ✅
+
+После первого реального скриншота issue со staging пользователь выявил **3 бага**:
+
+1. **Bug 1** — `branch` тег отсутствовал. Причина: если `user.branch=None` или
+   `branch.code` пуст → SDK фильтрует empty tags. Фикс: ВСЕГДА ставим
+   `scope.set_tag("branch", ...)` с fallback `"none"` для anonymous/no-branch.
+2. **Bug 2** — `environment: production` на staging. Причина: `SENTRY_ENVIRONMENT`
+   env var не был задан → фолбек "production" из sentry init. Фикс:
+   `SENTRY_ENVIRONMENT=staging` в `/opt/proficrm-staging/.env` и
+   `SENTRY_ENVIRONMENT=production` в prod `.env` (CONFIRM_PROD=yes сессии).
+3. **Bug 3** — дубль `user_id` custom + `user.id` auto. Фикс: убрали custom
+   `user_id` tag, оставили только `scope.set_user({...})` → SDK auto-добавляет
+   `user.id` + `user.username` в scope.
+
+**Final API verification** (event `d0b4cd50bf0c...`): 8 тегов в issue со staging
+— `branch=ekb`, `environment=staging`, `feature_flags=none`, `request_id=w04fix1`,
+`role=admin`, `server_name=67129a7d6d76`, `user.id=1`, `user.username=sdm`. Нет
+custom `user_id`. DoD W0.4 **ACHIEVED**.
+
+**Track E — Telegram + Kuma + uptime.groupprofi.ru**:
+- **E.1**: найден `@proficrmdarbyoff_bot` в prod .env (`TG_BOT_TOKEN`, `TG_CHAT_ID=1363929250`).
+- **E.2**: скопирован в `/etc/proficrm/env.d/telegram-alerts.conf` (mode 600,
+  отдельный файл — uptime monitoring не зависит от prod .env lifecycle).
+- **E.3**: автоматизирован setup Kuma через `uptime-kuma-api` Python client
+  (запущен внутри `glitchtip-web`-контейнера с привязкой к `proficrm-uptime_default`
+  network). Результат: admin создан, Telegram notification channel (id=1)
+  добавлен, **test notification отправлен**, 3 monitors созданы (CRM Production,
+  CRM Staging, GlitchTip).
+- **E.4**: `/etc/nginx/sites-available/uptime.groupprofi.ru.conf` с reverse-proxy
+  + WebSocket support + basic auth. Certbot TLS выдан. Verify: HTTP 401 без
+  auth, HTTP 302 (dashboard redirect) с auth. Credentials в
+  `/etc/proficrm/env.d/nginx-uptime-basic.conf` (admin + random 24-char pwd).
+- **E.5 Alert test**: staging web остановлен в **05:58:39 UTC (04:58:39 UTC 2026-04-21)**,
+  восстановлен через 4 минуты. Таймлайн в `docs/audit/kuma-alert-test-2026-04-21.md`.
+  Подтверждение получения alerts — асинхронно, через пользователя.
+
+**Hotlist update**: добавлен item **#10** — prod без sentry_sdk.init + middleware
+(score 85, W0.5a блокер). Item #9 целевая волна уточнена.
+
+**Следующая сессия** — W0.5 или W0.5a (отдельный промпт).
+
 ---
 
 **[2026-04-20]** — Вечер: Frontend audit (5 агентов) + Refactor phases 0-3 + 1179 tests pass ✅

@@ -118,6 +118,30 @@ _Снапшот: **2026-04-20**. Источник: Wave 0.1 audit, top-20 tech-d
   ```
 - **Верификация:** `EXPLAIN ANALYZE` до/после на запросе из `settings_audit_log` view. Ожидаем → Index Scan вместо Seq Scan, 700ms → <50ms.
 
+## 10. Prod код без `sentry_sdk.init()` + без `SentryContextMiddleware` — errors невидимы
+
+- **Score:** 85 (impact 5 × freq 5 × risk 4-5 depending on error rate)
+- **Где лечится:** **W0.5a Release 1 sync wave** (tag `release-v1.0-w0-complete`)
+- **Контекст:** prod HEAD `be569ad` (2026-03-17) не содержит:
+  - `sentry_sdk.init(...)` в `settings.py` (интеграция появилась в `397eb85e`)
+  - `SentryContextMiddleware` в `MIDDLEWARE` (появилась в `09e1f94e`)
+  - `/live/` `/ready/` `/_debug/sentry-error/` endpoints (`crm/health.py`)
+  - `core.feature_flags` + `core.sentry_context` модули
+- **Сейчас в prod `.env`** (после W0.4 closeout 2026-04-21):
+  - `SENTRY_DSN=...` лежит безвредно (код не читает)
+  - `SENTRY_ENVIRONMENT=production` лежит безвредно (тоже)
+- **Что это значит бизнесу:** любой uncaught exception на prod **не доходит до GlitchTip**. Ошибки видны только в:
+  1. Django `ErrorLog` модель (через `crm.middleware.ErrorLoggingMiddleware`)
+  2. User-facing 500 ("Внутренняя ошибка сервера") — менеджер сообщает вручную
+  3. `docker logs proficrm-web-1` (ограничено retention Docker, последние ~N MB)
+- **После W0.5a sync** (`git checkout release-v1.0-w0-complete` + `docker compose up -d`):
+  - SDK сам подхватит SENTRY_DSN из env
+  - Middleware начнёт обогащать events 5 тегами (branch, role, request_id, feature_flags, + user.id/username через scope.user)
+  - `/live/` + `/ready/` появятся (можно мониторить через Kuma с более гранулярным health-check)
+- **Риск если W0.5a задержать:** каждая prod-ошибка до sync невидима. При росте трафика или рефакторинге (W1+) — критично. Максимум разумной задержки — **7 дней** от W0.4 closeout.
+
+---
+
 ## 9. `proficrm-celery-1` unhealthy на prod 11+ часов — Release 1 drift
 
 - **Score:** 75 (impact 5 × freq 3 × risk 5)
@@ -219,3 +243,4 @@ _Снапшот: **2026-04-20**. Источник: Wave 0.1 audit, top-20 tech-d
 | 2026-04-20 | Wave 0.2 deep audit celery tasks → добавлен item 8 (`escalate_waiting_conversations`, score 80). |
 | 2026-04-20 | Wave 0.2h: items #4 и #5 отмечены как `.min.js` BUILT (экономия 109 KB); подключение в шаблонах остаётся в Wave 10. |
 | 2026-04-20 | Wave 0.4 pre-flight → добавлен item 9 (`proficrm-celery-1 unhealthy`, score 75, Release 1 checklist). |
+| 2026-04-21 | Wave 0.4 closeout → добавлен item 10 (prod без sentry init + middleware, score 85, W0.5a блокер). |
