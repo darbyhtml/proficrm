@@ -218,6 +218,62 @@ custom `user_id`. DoD W0.4 **ACHIEVED**.
 
 **Следующая сессия** — W0.5 или W0.5a (отдельный промпт).
 
+**[2026-04-21 / morning]** — **W0.4 regression investigation + TRUE closeout** ✅
+
+После user screenshot с **role=anonymous/branch=none/environment=production** на staging events:
+
+**Track G — middleware reality check**:
+- Repro через `Client(raise_request_exception=False).force_login(user).get(...)` с `secure=True`
+- Event `1798b12f` (и позже `5d653234`) подтвердили: **middleware работает** для
+  login-flow. Все 5 custom tags корректны + auto `user.id`/`user.username`.
+- **Anonymous events в real traffic** (Kuma probes, public curl) — by design:
+  `role=anonymous`, `branch=none`. Не баг.
+- **`environment=production` на некоторых staging events** — historical (до Bug 2
+  fix). Новые events после `SENTRY_ENVIRONMENT=staging` — правильные.
+
+Gap в моём W0.4 closeout verification был: я использовал shell-level call
+`_enrich_scope()` вручную вместо `Client.force_login()`. Это **shell test не
+эквивалентен real HTTP через Django MIDDLEWARE chain**. Урок в
+`docs/audit/process-lessons.md` §«Shell-level middleware test ≠ real HTTP».
+
+**Track H — Kuma 403 root cause**: `/etc/nginx/sites-enabled/crm-staging` —
+**отдельный файл**, НЕ симлинк к `sites-available/` (что я предполагал). IP
+whitelist на staging server-level блокировал всех кроме IPs менеджеров. Kuma
+ходил через docker → публичный IP VPS (5.181.254.172) — не в whitelist.
+
+Fix: добавлены unrestricted `location = /live/ /ready/ /health/` с `allow all`
+overrides в `sites-enabled/crm-staging` (backup `sites-available/crm-staging.bak-20260421-0646`).
+Kuma heartbeats после фикса: 06:46 403 → 06:47 200 → recovery alert отправлен.
+
+Также `HEAD → 405`, но `GET → 200` (Kuma по default делает GET, всё ок).
+
+**Track I — existing monitoring found**:
+`/opt/proficrm/scripts/health_alert.sh` (cron `*/5` от sdm) — локальный probe
+на `127.0.0.1:8001/health/`, шлёт в тот же `@proficrmdarbyoff_bot / 1363929250`
+формата `🔴 CRM ПРОФИ — УПАЛ`. Работает с марта 2026. Overlap с Kuma
+только на prod CRM (Kuma ходит external, health_alert local).
+
+Detail: `docs/audit/existing-monitoring-inventory.md`. Q9 в `open-questions.md`
+— пользователю решить (рекомендуется split-scope, удалить CRM Production из
+Kuma, оставить local health_alert.sh + Kuma для staging+GlitchTip).
+
+**Track J — true DoD verify**: event `5d653234` через `Client.force_login` +
+secure=True — 8 tags включая все 5 custom (role=admin, branch=ekb,
+request_id=38676243, feature_flags=none, environment=staging). TRUE W0.4
+CLOSEOUT.
+
+**Kuma state финал** (2026-04-21 06:49 UTC):
+| Monitor | Status |
+|---------|--------|
+| CRM Production | UP (200 OK) |
+| CRM Staging    | UP (200 OK, было 403 до fix) |
+| GlitchTip      | UP (200 OK) |
+
+**Pending user** (optional, async):
+- Q9 — dual monitoring strategy (3 options).
+- Q10 — staging test user с realistic role/branch (для следующих real-HTTP тестов).
+- Проверить recovery alert от Kuma в Telegram (~06:47 UTC).
+
 ---
 
 **[2026-04-20]** — Вечер: Frontend audit (5 агентов) + Refactor phases 0-3 + 1179 tests pass ✅
