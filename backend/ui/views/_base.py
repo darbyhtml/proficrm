@@ -453,64 +453,8 @@ def _companies_with_overdue_flag(*, now):
 # Re-exports at end of file для backward compat.
 
 
-def _is_ajax(request: HttpRequest) -> bool:
-    # Django 4+ убрал request.is_ajax(); используем заголовок как и в других AJAX endpoints проекта.
-    return (request.headers.get("X-Requested-With") or "") == "XMLHttpRequest"
-
-
-def _safe_next_v3(request: HttpRequest, company_id) -> str | None:
-    """F4 R3: если POST/GET содержит `next`, который указывает на v3-preview
-    этой же компании — вернуть его. Whitelist защита от open-redirect.
-
-    Используется в view-хендлерах create/delete (deal/note/task/phone/email),
-    чтобы после submit возвращаться туда, откуда пришёл запрос (v3/b/ vs
-    классическая карточка).
-    """
-    nxt = (request.POST.get("next") or request.GET.get("next") or "").strip()
-    if not nxt:
-        return None
-    prefix = f"/companies/{company_id}/v3/"
-    # whitelist: только внутренние v3-URL этой компании
-    if nxt.startswith(prefix) and "\n" not in nxt and "\r" not in nxt:
-        return nxt
-    return None
-
-
-def _dt_label(dt: datetime | None) -> str:
-    if not dt:
-        return ""
-    try:
-        return timezone.localtime(dt).strftime("%d.%m.%Y %H:%M")
-    except Exception:
-        try:
-            return dt.strftime("%d.%m.%Y %H:%M")
-        except Exception:
-            return ""
-
-
-def _cold_call_json(
-    *,
-    entity: str,
-    entity_id: str,
-    is_cold_call: bool,
-    marked_at: datetime | None,
-    marked_by: str,
-    can_reset: bool,
-    message: str,
-) -> JsonResponse:
-    return JsonResponse(
-        {
-            "ok": True,
-            "entity": entity,
-            "id": entity_id,
-            "is_cold_call": bool(is_cold_call),
-            "has_mark": bool(marked_at),
-            "marked_at": _dt_label(marked_at),
-            "marked_by": marked_by or "",
-            "can_reset": bool(can_reset),
-            "message": message or "",
-        }
-    )
+# Request helpers extracted to helpers/http.py (W1.1).
+# Re-exports at end of file для backward compat.
 
 
 # ---------------------------------------------------------------------------
@@ -1062,143 +1006,12 @@ def _qs_without_page(request: HttpRequest, *, page_key: str = "page") -> str:
 # ---------------------------------------------------------------------------
 
 
-def _can_view_cold_call_reports(user):
-    if not user or not user.is_authenticated or not user.is_active:
-        return False
-    return bool(
-        user.is_superuser
-        or user.role
-        in (
-            User.Role.ADMIN,
-            User.Role.GROUP_MANAGER,
-            User.Role.BRANCH_DIRECTOR,
-            User.Role.SALES_HEAD,
-            User.Role.MANAGER,
-        )
-    )
+# Cold-call + month utilities extracted to helpers/cold_call.py (W1.1).
+# Re-exports at end of file для backward compat.
 
 
-def _cold_call_confirm_q():
-    return Q(
-        Q(company__primary_cold_marked_call_id=F("id"))
-        | Q(contact__cold_marked_call_id=F("id"))
-        | Q(company__phones__cold_marked_call_id=F("id"))
-        | Q(contact__phones__cold_marked_call_id=F("id"))
-    )
-
-
-def _month_start(d):
-    return d.replace(day=1)
-
-
-def _add_months(d, delta_months):
-    import calendar
-
-    y = d.year
-    m = d.month + int(delta_months)
-    while m <= 0:
-        y -= 1
-        m += 12
-    while m > 12:
-        y += 1
-        m -= 12
-    return _date(y, m, 1)
-
-
-def _month_label(d):
-    months = {
-        1: "Январь",
-        2: "Февраль",
-        3: "Март",
-        4: "Апрель",
-        5: "Май",
-        6: "Июнь",
-        7: "Июль",
-        8: "Август",
-        9: "Сентябрь",
-        10: "Октябрь",
-        11: "Ноябрь",
-        12: "Декабрь",
-    }
-    return f"{months.get(d.month, str(d.month))} {d.year}"
-
-
-def _can_manage_task_status_ui(user, task):
-    if not user or not user.is_authenticated or not user.is_active:
-        return False
-    if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
-        return True
-    if task.created_by_id and task.created_by_id == user.id:
-        return True
-    if task.assigned_to_id and task.assigned_to_id == user.id:
-        return True
-    if task.company_id:
-        try:
-            company = getattr(task, "company", None)
-            if company and company.responsible_id == user.id:
-                return True
-        except Exception:
-            pass
-    if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
-        branch_id = None
-        if task.company_id and getattr(task, "company", None):
-            branch_id = getattr(task.company, "branch_id", None)
-        if not branch_id and getattr(task, "assigned_to", None):
-            branch_id = getattr(task.assigned_to, "branch_id", None)
-        return bool(branch_id and branch_id == user.branch_id)
-    return False
-
-
-def _can_edit_task_ui(user, task):
-    if task.created_by_id and task.created_by_id == user.id:
-        return True
-    if task.assigned_to_id and task.assigned_to_id == user.id:
-        return True
-    if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
-        return True
-    if task.company_id:
-        try:
-            company = getattr(task, "company", None)
-            if company and company.responsible_id == user.id:
-                return True
-        except Exception:
-            pass
-    if (
-        user.role in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR)
-        and user.branch_id
-        and task.company_id
-    ):
-        try:
-            if getattr(task.company, "branch_id", None) == user.branch_id:
-                return True
-        except Exception:
-            pass
-    return False
-
-
-def _can_delete_task_ui(user, task):
-    if not user or not user.is_authenticated or not user.is_active:
-        return False
-    if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
-        return True
-    if task.created_by_id and task.created_by_id == user.id:
-        return True
-    if task.assigned_to_id and task.assigned_to_id == user.id:
-        return True
-    if task.company_id and getattr(task, "company", None):
-        try:
-            if getattr(task.company, "responsible_id", None) == user.id:
-                return True
-        except Exception:
-            pass
-    if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
-        branch_id = None
-        if task.company_id and getattr(task, "company", None):
-            branch_id = getattr(task.company, "branch_id", None)
-        if not branch_id and getattr(task, "assigned_to", None):
-            branch_id = getattr(task.assigned_to, "branch_id", None)
-        return bool(branch_id and branch_id == user.branch_id)
-    return False
+# Task access helpers extracted to helpers/tasks.py (W1.1).
+# Re-exports at end of file для backward compat.
 
 
 # -----------------------------------------------------------------------------
@@ -1207,10 +1020,28 @@ def _can_delete_task_ui(user, task):
 # In new code, prefer direct imports из ui.views.helpers.<submodule>.
 # -----------------------------------------------------------------------------
 
+from ui.views.helpers.cold_call import (
+    _add_months,
+    _can_view_cold_call_reports,
+    _cold_call_confirm_q,
+    _month_label,
+    _month_start,
+)
+from ui.views.helpers.http import (
+    _cold_call_json,
+    _dt_label,
+    _is_ajax,
+    _safe_next_v3,
+)
 from ui.views.helpers.search import (
     _normalize_email_for_search,
     _normalize_for_search,
     _normalize_phone_for_search,
     _tokenize_search_query,
+)
+from ui.views.helpers.tasks import (
+    _can_delete_task_ui,
+    _can_edit_task_ui,
+    _can_manage_task_status_ui,
 )
 
