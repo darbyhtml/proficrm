@@ -1,14 +1,17 @@
 """
-Sentry/GlitchTip context — Wave 0.4 (2026-04-20).
+Sentry/GlitchTip context — Wave 0.4 (2026-04-20, bugfix 2026-04-21).
 
 Middleware, который заполняет GlitchTip issue tags из request-context:
 
-    user_id         — id пользователя (None для анонимов)
-    role            — accounts.User.Role (MANAGER/TENDERIST/SALES_HEAD/...)
-    branch          — accounts.Branch.code (ekb/tmn/krd)
-    request_id      — короткий UUID, кросс-референс с logs
-    feature_flags   — CSV активных флагов (для триажа A/B: «ошибка только когда
-                      UI_V3B_DEFAULT=True?»)
+    user.id, user.username  — auto через scope.set_user() (Sentry SDK built-in)
+    role                    — accounts.User.Role (MANAGER/TENDERIST/SALES_HEAD/...)
+    branch                  — accounts.Branch.code (ekb/tmn/krd) или "none"
+    request_id              — короткий UUID, кросс-референс с logs
+    feature_flags           — CSV активных флагов (для триажа A/B: «ошибка только
+                              когда UI_V3B_DEFAULT=True?»), "none" или "unknown"
+
+    environment             — через sentry_sdk.init(environment=...) из env var
+                              SENTRY_ENVIRONMENT (production/staging/development).
 
 При отсутствии SENTRY_DSN sentry_sdk — no-op, middleware не ломается.
 
@@ -21,6 +24,14 @@ Middleware, который заполняет GlitchTip issue tags из request-
     ]
 
 Аналогичный Celery-handler — в core/celery_signals.py.
+
+Bugfixes 2026-04-21 (после первого реального скриншота issue):
+- Bug 1: `branch` тег пропадал когда `user.branch is None` или `branch.code` пуст
+  (Sentry SDK фильтрует empty tags). Теперь ВСЕГДА ставим — "none" fallback.
+- Bug 2: `environment: production` на staging — это настройка sentry_sdk.init().
+  Чинится через SENTRY_ENVIRONMENT env var в .env (этот файл не затронут).
+- Bug 3: дубль `user_id` custom + `user.id` auto из scope.user — убрали custom
+  `user_id` tag. Теперь только auto из set_user() → user.id / user.username.
 """
 
 from __future__ import annotations
@@ -57,19 +68,25 @@ class SentryContextMiddleware:
         if request_id:
             scope.set_tag("request_id", request_id)
 
-        # user / role / branch
+        # user + role + branch.
+        # Bug 3 fix: user.id/user.username приходят автоматически из set_user(),
+        # не дублируем custom user_id tag. role и branch остаются как custom
+        # tags — они не стандартные Sentry user-поля.
         user = getattr(request, "user", None)
+        role = "anonymous"
+        branch_code = "none"  # Bug 1 fix: ВСЕГДА ставим branch, fallback "none".
         if user is not None and getattr(user, "is_authenticated", False):
-            scope.set_tag("user_id", str(user.id))
             scope.set_user({"id": str(user.id), "username": user.get_username()})
-            role = getattr(user, "role", None)
-            if role:
-                scope.set_tag("role", str(role))
-            branch = getattr(user, "branch", None)
-            if branch is not None:
-                branch_code = getattr(branch, "code", None)
-                if branch_code:
-                    scope.set_tag("branch", str(branch_code))
+            raw_role = getattr(user, "role", None)
+            if raw_role:
+                role = str(raw_role)
+            branch_obj = getattr(user, "branch", None)
+            if branch_obj is not None:
+                raw_code = getattr(branch_obj, "code", None)
+                if raw_code:
+                    branch_code = str(raw_code)
+        scope.set_tag("role", role)
+        scope.set_tag("branch", branch_code)
 
         # feature_flags — CSV активных флагов для этого юзера.
         # Тег ставим ВСЕГДА, даже при сбоях waffle (как "unknown"), чтобы

@@ -105,21 +105,32 @@ class SentryContextMiddlewareTests(TestCase):
         return {"tags": captured_tags, "user": captured_user}
 
     def test_tags_written_for_authenticated_user(self) -> None:
-        """Все 5 тегов присутствуют для залогиненного юзера."""
+        """Все custom tags присутствуют для залогиненного юзера.
+
+        Bug 3 fix (2026-04-21): user.id/user.username приходят через
+        scope.set_user() (Sentry SDK auto), custom user_id tag убран.
+        Тут проверяем только custom теги + user scope.
+        """
         request = self.factory.get("/")
         request.user = self.user
         request.request_id = "abc12345"
         result = self._call_middleware(request)
         tags = result["tags"]
-        self.assertEqual(tags["user_id"], str(self.user.id))
         self.assertEqual(tags["role"], str(User.Role.MANAGER))
         self.assertEqual(tags["branch"], "ekb")
         self.assertEqual(tags["request_id"], "abc12345")
-        self.assertIn("feature_flags", tags)  # пустая строка тоже ок
+        self.assertIn("feature_flags", tags)
+        # Bug 3: user.id и user.username устанавливаются через set_user(), не set_tag.
         self.assertEqual(result["user"]["id"], str(self.user.id))
+        self.assertEqual(result["user"]["username"], self.user.username)
+        # Убедились что user_id custom tag ликвидирован:
+        self.assertNotIn("user_id", tags)
 
-    def test_anonymous_user_has_only_request_id_and_feature_flags(self) -> None:
-        """Анонимный юзер → user_id/role/branch не пишутся."""
+    def test_anonymous_user_role_anonymous_branch_none(self) -> None:
+        """Анонимный юзер → role='anonymous', branch='none', request_id+feature_flags.
+
+        Bug 1 fix (2026-04-21): branch теперь ВСЕГДА ставится — 'none' fallback.
+        """
         from django.contrib.auth.models import AnonymousUser
 
         request = self.factory.get("/")
@@ -129,12 +140,12 @@ class SentryContextMiddlewareTests(TestCase):
         tags = result["tags"]
         self.assertEqual(tags["request_id"], "xyz99999")
         self.assertIn("feature_flags", tags)
+        self.assertEqual(tags["role"], "anonymous")
+        self.assertEqual(tags["branch"], "none")
         self.assertNotIn("user_id", tags)
-        self.assertNotIn("role", tags)
-        self.assertNotIn("branch", tags)
 
-    def test_user_without_branch_skips_branch_tag(self) -> None:
-        """User без branch → тег 'branch' не пишется."""
+    def test_user_without_branch_has_branch_none(self) -> None:
+        """User без branch → Bug 1 fix: тег branch = 'none' (не пропадает)."""
         user_no_branch = _mk_user("no_branch", role=User.Role.ADMIN, branch=None)
         request = self.factory.get("/")
         request.user = user_no_branch
@@ -142,7 +153,35 @@ class SentryContextMiddlewareTests(TestCase):
         result = self._call_middleware(request)
         tags = result["tags"]
         self.assertEqual(tags["role"], str(User.Role.ADMIN))
-        self.assertNotIn("branch", tags)
+        # Bug 1 fix: branch тег ВСЕГДА set — fallback "none" для user.branch=None.
+        self.assertEqual(tags["branch"], "none")
+
+    def test_branch_tag_always_set_even_when_user_has_no_branch(self) -> None:
+        """Explicit regression test для Bug 1 (2026-04-21 скриншот из prod).
+
+        Ни один code path (anonymous, authenticated no-branch, authenticated
+        with-branch) не должен ПРОПУСТИТЬ 'branch' tag — SDK фильтрует empty,
+        а нам нужен определённый маркер 'none' для alert-rules.
+        """
+        from django.contrib.auth.models import AnonymousUser
+
+        # Case 1: anonymous → 'none'
+        req = self.factory.get("/")
+        req.user = AnonymousUser()
+        req.request_id = "r"
+        result = self._call_middleware(req)
+        self.assertEqual(result["tags"].get("branch"), "none")
+
+        # Case 2: authenticated без branch → 'none'
+        user_no_branch = _mk_user("nb2", branch=None)
+        req.user = user_no_branch
+        result = self._call_middleware(req)
+        self.assertEqual(result["tags"].get("branch"), "none")
+
+        # Case 3: authenticated с branch → код филиала
+        req.user = self.user  # from setUp, branch=ekb
+        result = self._call_middleware(req)
+        self.assertEqual(result["tags"].get("branch"), "ekb")
 
     def test_middleware_survives_missing_sentry_sdk(self) -> None:
         """Если sentry_sdk нет в окружении — middleware не падает."""

@@ -69,7 +69,9 @@ if _SENTRY_DSN:
             # traces_sample_rate=0.0 — отключаем performance-tracing (экономим free-tier квоту,
             # 5K events/мес. Ошибки важнее). Включать 0.05-0.1 после миграции на paid plan.
             traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.0")),
-            environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
+            # Default "development" — безопасно для dev-машин и CI (не смешивается
+            # с prod events). Prod/staging задают явно через SENTRY_ENVIRONMENT в .env.
+            environment=os.getenv("SENTRY_ENVIRONMENT", "development"),
             release=os.getenv("SENTRY_RELEASE", ""),
             # Не отправляем PII (ФИО/email менеджеров) — только стек + request metadata.
             send_default_pii=False,
