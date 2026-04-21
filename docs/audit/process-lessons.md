@@ -178,6 +178,158 @@ positive при правильной функции но сломанной ин
 
 ---
 
+## 2026-04-21 / Wave 0.4 SEV2 — «Tests pass + CI green» ≠ «staging healthy»
+
+### Что случилось
+
+Коммит `7e834829 test(w0.4): real-traffic verification — /_staff/trigger-test-error/ endpoint + script` 
+был запушен в main в **10:09 UTC** 21 апреля. Staging auto-deploy прошёл (git pull + build).
+
+Я **закрыл сессию** с репортом «W0.4 FINAL CLOSEOUT — all DoD achieved».
+
+В **10:12 UTC** Uptime Kuma прислал в Telegram-чат пользователя `[CRM Staging] is DOWN`. 
+В **~10:15 UTC** пользователь написал «SEV2: Staging DOWN 1.5+ часа после твоего коммита 7e834829».
+
+Staging был DOWN **~8 минут фактически** (MTTR 10:09 → 10:17), но пользователь это обнаружил 
+через Telegram alert уже ПОСЛЕ того, как я отчитался «complete». Двойная неудача:
+1. Не проверил post-deploy health — закрыл сессию без валидации.
+2. Celery crash-loop (waffle missing в старом образе) + nginx DNS кэш на старый IP web-контейнера 
+   проявились только при real HTTP traffic, не в shell-тесте.
+
+### Что это в процессе
+
+**DoD W0.4 включал** все функциональные проверки (middleware tests, real-traffic event, 
+Playwright UI flow). Ни одного пункта «staging external reachability после deploy».
+
+«Tests pass + commit pushed + CI green» было моим сигналом «готово». Это ложный сигнал.
+CI прогоняет тесты в изолированной среде (docker-in-docker, fresh containers). Он **не воспроизводит**:
+- Реальный rolling restart staging контейнеров
+- nginx DNS кэш на старый IP (specific к `docker compose` force-recreate)
+- Celery image drift (staging целеры мог остаться от предыдущего билда)
+- IP whitelist поверх /live/ /ready/ /health/ endpoint'ов
+
+**Класс ошибок**: «CI green поэтому deploy готов». Но CI green означает только что код 
+компилируется и тесты изоляционно проходят. Не означает что staging инфраструктура принимает 
+этот код.
+
+### Урок
+
+**После ЛЮБОГО изменения staging (push в main, docker compose up, build, restart) 
+ОБЯЗАТЕЛЬНО выполнить `make smoke-staging` в течение 5 минут**. Зелёный прогон — 
+жёсткое условие закрытия сессии.
+
+«Всё задеплоено» ≠ «staging здоров». Разрыв закрывается только external-reachability 
+probe через ту же сеть, что у внешнего пользователя (host nginx → staging nginx → web).
+
+### Правило на будущее (hard rule)
+
+**ЖЁСТКОЕ правило (hard rule)**: сессия, которая НЕ заканчивается зелёным `make smoke-staging`, 
+считается незакрытой. Либо чинишь, либо `git revert` до зелёного состояния.
+
+Механика:
+| Триггер | Обязательное действие |
+|---------|------------------------|
+| `git push` в main → auto-deploy staging | `make smoke-staging` в течение 5 минут |
+| Ручной `docker compose up/build/restart` на staging | `make smoke-staging` сразу после |
+| Любое изменение staging config (nginx, env, volumes) | `make smoke-staging` после применения |
+| Закрытие сессии, в которой были deploy-события | `make smoke-staging` финальный прогон |
+
+**Если smoke красный**:
+1. Не пиши «complete» / «готово» / «закрываю сессию».
+2. Диагностируй через `docker compose logs`, `docker ps`, nginx logs.
+3. Либо fix (пересобрать зависший контейнер, restart nginx для DNS), либо `git revert`.
+4. Re-run smoke до зелёного.
+
+### Применение
+
+- **Создан** `tests/smoke/staging_post_deploy.sh` — 6 probe'ов (3 health + home + login + API).
+- **Makefile targets** `smoke-staging` и `smoke-prod` (alias на bash скрипт).
+- **CLAUDE.md** — раздел «MANDATORY: End-of-session staging health check» в самом начале файла.
+- **Rule violations log** в CLAUDE.md — инцидент 7e834829 зафиксирован как первая запись.
+
+### Обобщение
+
+Каждая волна W0.N через W15 при завершении:
+1. Автоматизированный smoke (`make smoke-staging`) — зелёный.
+2. Без зелёного smoke — сессия не завершена, никаких «complete» в отчёте.
+3. Smoke запускается **после последнего коммита** push, не до.
+4. Если smoke красный 5+ минут — rollback (`git revert` + push) приоритетнее чем диагностика.
+
+---
+
+## 2026-04-21 / Wave 0.4 SEV2 — Monitoring alerts = PRIMARY events, не noise
+
+### Что случилось
+
+Пользователь получил в Telegram `[CRM Staging] is DOWN` alert в 10:12 UTC. Между этим моментом 
+и его сообщением «SEV2» прошло ~3 минуты. Я в это время был в процессе закрытия сессии 
+(писал финальный отчёт W0.4), alert я **не видел** — он пришёл в личный чат пользователя, 
+не в мою tool-output.
+
+Когда пользователь написал «SEV2», первая моя реакция могла бы быть «странный alert, 
+возможно ложный» (так я делал в прошлых сессиях с Kuma probe'ами). Это было бы ошибкой: 
+staging был реально down.
+
+### Что это в процессе
+
+В предыдущих сессиях (W0.4 setup) я не раз характеризовал Kuma alerts как «probe noise» 
+или «Kuma false positive» — когда Kuma ловила 403 на /live/ из-за IP whitelist. Это 
+сформировало у меня **ложный prior**: «alert может быть шумом».
+
+Это prior неприменим к production-level monitoring. Uptime Kuma настроен на user-facing 
+HTTPS endpoint. Если он говорит DOWN — он реально DOWN для внешнего пользователя, 
+независимо от того что видит `docker ps`.
+
+User-reported alert — даже сильнее чем Kuma native alert, потому что у пользователя 
+есть контекст (он видел предыдущие alerts, он знает что «странно» а что нет).
+
+### Урок
+
+**User-reported monitoring alerts («[CRM Staging] Down», любой Telegram alert переслан 
+пользователем) — PRIMARY events**. Никогда не характеризовать как «странный / возможно 
+ложный / проверю потом». Всегда верифицировать target environment **НЕМЕДЛЕННО** — 
+до любого другого обсуждения.
+
+### Правило на будущее (hard rule)
+
+**ЖЁСТКОЕ правило**: при получении от пользователя сообщения, содержащего:
+- «DOWN» / «down» / «недоступен» / «502» / «503» / «504»
+- Имя монитора (`[CRM Staging]`, `[CRM Production]`)
+- Скриншот Telegram alert
+
+→ **Первое действие ВСЕГДА**: `curl -sSk -o /dev/null -w '%{http_code}\n' https://<env>/live/` 
+или `make smoke-staging`. ДО того как отвечать на любые вопросы, ДО того как писать отчёт, 
+ДО reasoning о причинах.
+
+**Если smoke красный**: немедленно переходим в incident response mode:
+1. Assess (что именно сломано).
+2. Rollback vs fix (rollback предпочтительнее если fix > 10 минут).
+3. Verify (зелёный smoke + пользователь подтвердил UP).
+4. RCA (постфактум, после восстановления).
+
+**Запрещённые фразы** в ответ на alert:
+- «Странный alert»
+- «Возможно ложный positive»
+- «Kuma probe flake»
+- «Сейчас посмотрю, но скорее всего OK»
+- «Это из-за whitelist / networking / race condition [без verification]»
+
+### Применение
+
+- `CLAUDE.md` §«MANDATORY: End-of-session staging health check» — указано что alert = PRIMARY.
+- Этот урок (process-lessons #3) — фиксация hard rule.
+- Incident file `docs/audit/incidents/2026-04-21-staging-502.md` — timeline показывает 
+  что user-report пришёл до моей финальной валидации.
+
+### Обобщение
+
+User + automated monitoring — **два независимых сигнала**. Если хоть один говорит DOWN — 
+система DOWN до доказательства обратного. Моё внутреннее убеждение («я только что пушил 
+зелёный коммит, CI прошёл») — **не доказательство**. Доказательство — зелёный external 
+probe.
+
+---
+
 ## Template для новых уроков
 
 ```markdown

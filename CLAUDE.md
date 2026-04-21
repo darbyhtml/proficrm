@@ -1,5 +1,35 @@
 # Инструкция для Claude Code
 
+## 🔴 MANDATORY: End-of-session staging health check
+
+**Перед закрытием любой сессии, в которой был `docker compose up`, `build`,
+`restart`, или изменения staging code/config — запустить**:
+
+```bash
+make smoke-staging
+# или
+bash tests/smoke/staging_post_deploy.sh
+```
+
+**Все проверки должны быть зелёные (exit 0)**. Если хоть одна красная —
+**сессия не завершена**, нужно либо починить, либо `git revert`.
+
+Дополнительно:
+1. Проверить Kuma monitor «CRM Staging» показывает Up в последнем heartbeat
+   (`docker exec proficrm-uptime-uptime-kuma-1 sqlite3 /app/data/kuma.db
+   'SELECT datetime(time), status FROM heartbeat WHERE monitor_id=2 ORDER BY
+   time DESC LIMIT 1;'`).
+2. При пользовательских сообщениях о Telegram-alerts от мониторинга
+   **(`[CRM Staging] [🔴 Down]` и т.п.)** — это **primary event**, не noise.
+   Сначала проверить target environment, потом обсуждать что-либо ещё.
+
+**Rule violations log**:
+- **2026-04-21**: commit `7e834829` закрыл сессию с staging DOWN 8 минут
+  (nginx DNS cache на старый IP web после force-recreate + celery без waffle).
+  Alert в Telegram проигнорирован. Детали: `docs/audit/incidents/2026-04-21-staging-502.md`.
+
+---
+
 ## При старте каждой сессии прочитать:
 
 1. **CLAUDE.md** (этот файл)

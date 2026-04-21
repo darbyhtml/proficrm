@@ -104,6 +104,12 @@ ci: lint mypy bandit coverage ## Full CI-lite (lint + mypy + bandit + coverage)
 # JS minification (Wave 0.2h — quick win для 210 KB dead weight)
 # -----------------------------------------------------------------------------
 
+smoke-staging: ## MANDATORY end-of-session check — staging external reachability
+	bash tests/smoke/staging_post_deploy.sh
+
+smoke-prod: ## Prod post-deploy smoke (для gated deploys по release tag)
+	bash tests/smoke/prod_post_deploy.sh
+
 build-js: ## Minify operator-panel.js + widget.js via esbuild (npx — без глобальной установки)
 	@echo "▶ esbuild operator-panel..."
 	@npx --yes esbuild@0.25.9 backend/messenger/static/messenger/operator-panel.js \
