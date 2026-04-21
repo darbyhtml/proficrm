@@ -138,13 +138,6 @@ from ui.views.settings_core import (
     settings_users,
 )
 from ui.views.settings_integrations import (
-    settings_amocrm,
-    settings_amocrm_callback,
-    settings_amocrm_contacts_dry_run,
-    settings_amocrm_debug_contacts,
-    settings_amocrm_disconnect,
-    settings_amocrm_migrate,
-    settings_amocrm_migrate_progress,
     settings_calls_manager_detail,
     settings_calls_stats,
     settings_company_columns,

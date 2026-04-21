@@ -120,9 +120,8 @@ section-order = [
 # management commands — часто большие и простые, короткие функции с нетипичными
 # именами разрешаем
 "**/management/commands/*.py" = ["S603", "S607"]  # subprocess call is OK here
-# amocrm legacy module (marked for removal в W1 refactor) — содержит known
-# F821/F823/F601 дефекты, не trogать пока модуль жив.
-"backend/amocrm/migrate.py" = ["F821", "F823", "F601"]
+# backend/amocrm/migrate.py per-file-ignore removed 2026-04-21 — module
+# deleted entirely (W0.5b cleanup). No code remains to flag.
 
 # -----------------------------------------------------------------------------
 # Coverage (Wave 0.1 baseline: 51% → fail_under=50 с запасом −2%).
@@ -155,14 +154,11 @@ omit = [
     "backend/crm/wsgi.py",
     "backend/staticfiles/*",
     "backend/media/*",
-    # W0.5 (2026-04-21): exclude legacy amocrm module — marked for removal
-    # в W1 refactor. 3579 stmts, 14.5% coverage drags total down.
-    # Active tests for amocrm/* моделей still run (they're in `backend/*/tests*.py`)
-    # — we only exclude source from coverage %.
-    "backend/amocrm/migrate.py",
     # Management commands — большие scripts с manual invocation paths,
     # не in test suite by design.
     "*/management/commands/*",
+    # Note 2026-04-21: backend/amocrm/migrate.py omit removed —
+    # amocrm module deleted entirely (W0.5b cleanup). No longer need skip.
 ]
 
 # -----------------------------------------------------------------------------

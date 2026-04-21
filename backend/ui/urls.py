@@ -437,29 +437,8 @@ urlpatterns = [
     ),
     path("admin/import/", views.settings_import, name="settings_import"),
     path("admin/import/tasks/", views.settings_import_tasks, name="settings_import_tasks"),
-    path("admin/amocrm/", views.settings_amocrm, name="settings_amocrm"),
-    path("admin/amocrm/callback/", views.settings_amocrm_callback, name="settings_amocrm_callback"),
-    path(
-        "admin/amocrm/disconnect/",
-        views.settings_amocrm_disconnect,
-        name="settings_amocrm_disconnect",
-    ),
-    path(
-        "admin/amocrm/migrate/progress/",
-        views.settings_amocrm_migrate_progress,
-        name="settings_amocrm_migrate_progress",
-    ),
-    path("admin/amocrm/migrate/", views.settings_amocrm_migrate, name="settings_amocrm_migrate"),
-    path(
-        "admin/amocrm/contacts-dry-run/",
-        views.settings_amocrm_contacts_dry_run,
-        name="settings_amocrm_contacts_dry_run",
-    ),
-    path(
-        "admin/amocrm/debug-contacts/",
-        views.settings_amocrm_debug_contacts,
-        name="settings_amocrm_debug_contacts",
-    ),
+    # amoCRM integration removed 2026-04-21 (dead code — subscription expired).
+    # Historical URL routes removed. See docs/decisions/2026-04-21-remove-amocrm.md.
     path("admin/company-columns/", views.settings_company_columns, name="settings_company_columns"),
     path("admin/security/", views.settings_security, name="settings_security"),
     path("admin/mobile/overview/", views.settings_mobile_overview, name="settings_mobile_overview"),

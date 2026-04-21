@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AmoApiConfig, UiGlobalConfig, UiUserPreference
+from .models import UiGlobalConfig, UiUserPreference
 
 
 @admin.register(UiGlobalConfig)
@@ -9,16 +9,7 @@ class UiGlobalConfigAdmin(admin.ModelAdmin):
     readonly_fields = ("id",)
 
 
-@admin.register(AmoApiConfig)
-class AmoApiConfigAdmin(admin.ModelAdmin):
-    list_display = ("domain", "is_connected", "updated_at")
-    readonly_fields = ("id", "updated_at")
-
-    def is_connected(self, obj):
-        return obj.is_connected()
-
-    is_connected.boolean = True
-    is_connected.short_description = "Подключено"
+# AmoApiConfigAdmin removed 2026-04-21 (AmoApiConfig model deleted).
 
 
 @admin.register(UiUserPreference)

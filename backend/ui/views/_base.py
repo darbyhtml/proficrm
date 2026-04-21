@@ -96,12 +96,10 @@ from accounts.permissions import get_effective_user, get_view_as_user, require_a
 from policy.decorators import policy_required
 from policy.engine import decide as policy_decide
 from ui.cleaners import clean_int_id
-from ui.models import AmoApiConfig, UiGlobalConfig, UiUserPreference
+from ui.models import UiGlobalConfig, UiUserPreference
 from ui.templatetags.ui_extras import format_phone
 
 from ..forms import (
-    AmoApiConfigForm,
-    AmoMigrateFilterForm,
     BranchForm,
     CompanyContractForm,
     CompanyCreateForm,
@@ -249,7 +247,6 @@ __all__ = [
     "_date",
     "cache",
     "UiGlobalConfig",
-    "AmoApiConfig",
     "UiUserPreference",
     "require_admin",
     "get_effective_user",
@@ -279,8 +276,6 @@ __all__ = [
     "UserEditForm",
     "ImportCompaniesForm",
     "ImportTasksIcsForm",
-    "AmoApiConfigForm",
-    "AmoMigrateFilterForm",
     "CompanyListColumnsForm",
     # cross-module helpers (used in multiple sub-modules)
     "_can_view_cold_call_reports",

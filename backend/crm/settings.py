@@ -251,7 +251,6 @@ INSTALLED_APPS = [
     "mailer",
     "notifications",
     "phonebridge",
-    "amocrm",  # AmoCRM integration (migration tools and management commands)
     "policy",
     "messenger",
 ]

@@ -204,7 +204,7 @@ jobs:
         working-directory: backend
         run: |
           coverage run --source='.' \
-            --omit='*/migrations/*,*/tests*.py,*/test_*.py,*/conftest*.py,manage.py,crm/asgi.py,crm/wsgi.py,amocrm/migrate.py,*/management/commands/*' \
+            --omit='*/migrations/*,*/tests*.py,*/test_*.py,*/conftest*.py,manage.py,crm/asgi.py,crm/wsgi.py,*/management/commands/*' \
             manage.py test --verbosity=1
 
       - name: Coverage report + gate (fail_under=50 из pyproject.toml)
