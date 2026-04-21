@@ -8,16 +8,11 @@ from ui.views.analytics_v2 import analytics_v2_home
 from ui.views.company_detail import (
     company_cold_call_reset,
     company_cold_call_toggle,
-    company_contract_update,
     company_detail,
-    company_edit,
-    company_inline_update,
     company_phone_cold_call_reset,
     company_phone_cold_call_toggle,
     company_tasks_history,
     company_timeline_items,
-    company_transfer,
-    company_update,
     contact_cold_call_reset,
     contact_cold_call_toggle,
     contact_phone_cold_call_reset,
@@ -89,6 +84,13 @@ from ui.views.pages.company.deletion import (
     company_delete_request_approve,
     company_delete_request_cancel,
     company_delete_request_create,
+)
+from ui.views.pages.company.edit import (
+    company_contract_update,
+    company_edit,
+    company_inline_update,
+    company_transfer,
+    company_update,
 )
 from ui.views.pages.company.emails import (
     company_email_value_update,
