@@ -134,9 +134,7 @@ def is_enabled(
     # (1) Emergency kill-switch через env — перекрывает admin/DB.
     kill_var = f"FEATURE_FLAG_KILL_{flag}"
     if os.getenv(kill_var, "").strip() == "1":
-        logger.warning(
-            "feature_flag.kill_switch: %s forced OFF via env var %s", flag, kill_var
-        )
+        logger.warning("feature_flag.kill_switch: %s forced OFF via env var %s", flag, kill_var)
         return False
 
     # (2) Waffle lookup. Импорт локальный — модуль может использоваться

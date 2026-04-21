@@ -96,13 +96,13 @@ class SentryContextMiddleware:
         try:
             from core.feature_flags import active_flags_for_user
 
-            active = active_flags_for_user(user if getattr(user, "is_authenticated", False) else None)
+            active = active_flags_for_user(
+                user if getattr(user, "is_authenticated", False) else None
+            )
             enabled_names = sorted(name for name, on in active.items() if on)
             # Пустая строка Sentry SDK проглатывается (tag не шлётся),
             # поэтому при отсутствии включённых флагов пишем маркер "none".
             tag_value = ",".join(enabled_names) if enabled_names else "none"
         except Exception:
-            logger.warning(
-                "sentry_context: failed to compute active feature flags", exc_info=True
-            )
+            logger.warning("sentry_context: failed to compute active feature flags", exc_info=True)
         scope.set_tag("feature_flags", tag_value)

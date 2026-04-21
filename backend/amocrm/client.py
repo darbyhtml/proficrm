@@ -240,7 +240,8 @@ class AmoClient:
             ttype = self.cfg.token_type or "Bearer"
             headers["Authorization"] = f"{ttype} {tok}"
 
-        req = urllib.request.Request(
+        # Safe: URL из AmoApiConfig (valid amoCRM API endpoint), не user input.
+        req = urllib.request.Request(  # noqa: S310
             url=url, method=method.upper(), headers=headers, data=data_bytes
         )
         try:

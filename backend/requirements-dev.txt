@@ -26,9 +26,14 @@ coverage==7.13.5
 # Django-extensions даёт `manage.py graph_models` для ERD и `show_urls`/`shell_plus`
 django-extensions==3.2.3
 
-# Python-обёртка над Graphviz для graph_models --pygraphviz
-# Требует системный пакет graphviz + libgraphviz-dev
-pygraphviz==1.14
+# Python-обёртка над Graphviz для graph_models --pygraphviz.
+# НЕ в обязательных dev deps: требует системный `libgraphviz-dev`, ломает CI на
+# стандартных runner'ах без этого пакета. Install ad-hoc локально:
+#   sudo apt install graphviz libgraphviz-dev
+#   pip install pygraphviz==1.14
+# Альтернатива без pygraphviz: `manage.py graph_models --output models.dot` +
+# отдельно dot → png через `dot -Tpng models.dot -o models.png`.
+# pygraphviz==1.14  # disabled 2026-04-21 (CI blocker, removing from CI-installed deps)
 
 # Known-CVE scanner для Python-deps (Wave 0.2 добавит в CI, пока локально)
 pip-audit==2.9.0

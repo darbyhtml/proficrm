@@ -83,7 +83,9 @@ def ready(_request: HttpRequest) -> JsonResponse:
     # TODO Wave 10: добавить MinIO проверку через boto3 head_bucket.
 
     status_code = 200 if all_ok else 503
-    return JsonResponse({"status": "ok" if all_ok else "fail", "checks": checks}, status=status_code)
+    return JsonResponse(
+        {"status": "ok" if all_ok else "fail", "checks": checks}, status=status_code
+    )
 
 
 @csrf_exempt
@@ -99,9 +101,7 @@ def sentry_smoke(_request: HttpRequest) -> JsonResponse:
         curl https://crm-staging.groupprofi.ru/_debug/sentry-error/
     """
     if not settings.DEBUG:
-        return JsonResponse(
-            {"error": "Доступно только при DEBUG=True"}, status=404
-        )
+        return JsonResponse({"error": "Доступно только при DEBUG=True"}, status=404)
     # Намеренное исключение.
     raise RuntimeError("glitchtip-smoke-test (Wave 0.4)")
 
@@ -131,11 +131,7 @@ def staff_trigger_test_error(request: HttpRequest) -> JsonResponse:
     from django.contrib.auth.decorators import login_required, user_passes_test
 
     # Runtime-применение декораторов (чтобы не срабатывали до env-gate выше).
-    inner = login_required(
-        user_passes_test(lambda u: u.is_staff)(
-            lambda r: _raise_test_error()
-        )
-    )
+    inner = login_required(user_passes_test(lambda u: u.is_staff)(lambda r: _raise_test_error()))
     return inner(request)
 
 

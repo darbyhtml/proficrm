@@ -40,4 +40,6 @@ def messenger_format(value: str | None) -> str:
     # Переводы строк
     text = text.replace("\r\n", "\n").replace("\n", "<br>")
 
-    return mark_safe(text)
+    # Safe: input escaped via html.escape на строке 26 ПЕРЕД inserting tags.
+    # User content escaped; only hardcoded <strong>/<br>/<a> tags added.
+    return mark_safe(text)  # nosec B308 B703

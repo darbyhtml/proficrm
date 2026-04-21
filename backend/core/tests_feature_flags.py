@@ -81,9 +81,7 @@ class IsEnabledTests(TestCase):
         """Значения '0', 'true', 'yes', '' игнорируются — только ровно '1'."""
         with override_flag(UI_V3B_DEFAULT, active=True):
             for bad_val in ("", "0", "true", "yes", "on"):
-                with patch.dict(
-                    os.environ, {f"FEATURE_FLAG_KILL_{UI_V3B_DEFAULT}": bad_val}
-                ):
+                with patch.dict(os.environ, {f"FEATURE_FLAG_KILL_{UI_V3B_DEFAULT}": bad_val}):
                     self.assertTrue(
                         is_enabled(UI_V3B_DEFAULT, user=self.user),
                         f"Unexpected kill from value {bad_val!r}",

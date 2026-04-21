@@ -8,9 +8,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING
 
 from django.conf import settings
+
+if TYPE_CHECKING:
+    from companies.models import Region
 
 logger = logging.getLogger("messenger.widget")
 
@@ -45,8 +48,12 @@ def get_region_from_ip(ip: str) -> Region | None:
         import urllib.request
 
         url = f"http://ip-api.com/json/{urllib.parse.quote(ip)}?fields=regionName,countryCode"
-        req = urllib.request.Request(url, headers={"User-Agent": "ProfiCRM-Messenger/1.0"})
-        with urllib.request.urlopen(req, timeout=3) as resp:
+        # Safe: URL schema hardcoded `http://`, IP value urlencoded via
+        # urllib.parse.quote. No user-controlled scheme or file:// possible.
+        req = urllib.request.Request(  # noqa: S310
+            url, headers={"User-Agent": "ProfiCRM-Messenger/1.0"}
+        )
+        with urllib.request.urlopen(req, timeout=3) as resp:  # nosec B310  # noqa: S310
             data = json.loads(resp.read().decode())
     except Exception as e:
         logger.warning(

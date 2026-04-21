@@ -2,6 +2,7 @@
 Тесты импорта из amoCRM: run_id, блокировка параллельного импорта,
 progress API (active_run: null при отсутствии активного), один менеджер.
 """
+
 import re
 from contextlib import contextmanager
 from unittest.mock import patch

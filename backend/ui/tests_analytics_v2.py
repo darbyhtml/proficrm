@@ -291,7 +291,7 @@ class BranchDirectorDashboardTests(TestCase):
         # b2 первым (больше done).
         self.assertEqual(rank[0]["code"], "bd2")
         # Моё подразделение помечено is_mine.
-        mine = [r for r in rank if r["is_mine"]][0]
+        mine = next(r for r in rank if r["is_mine"])
         self.assertEqual(mine["code"], "bd1")
 
 

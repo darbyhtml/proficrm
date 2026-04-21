@@ -5,11 +5,14 @@ import secrets
 import threading
 import time as _time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from urllib.parse import urlparse
 
 from django.conf import settings
 from django.core.cache import cache
+
+if TYPE_CHECKING:
+    from messenger.models import Inbox
 from django.http import Http404
 from django.utils import timezone
 from rest_framework import exceptions

@@ -386,9 +386,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
 
         error_details = traceback.format_exc()
         logger.error("AMOCRM_MIGRATE_ERROR: Failed to load AmoApiConfig: %s", error_details)
-        messages.error(
-            request, f"Ошибка загрузки настроек amoCRM: {e!s}. Проверьте логи сервера."
-        )
+        messages.error(request, f"Ошибка загрузки настроек amoCRM: {e!s}. Проверьте логи сервера.")
         # Создаём пустой объект для рендера
         cfg = AmoApiConfig(domain="kmrprofi.amocrm.ru")
 

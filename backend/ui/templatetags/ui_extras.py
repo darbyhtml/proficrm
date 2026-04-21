@@ -57,7 +57,8 @@ def task_type_badge(task_type):
     Usage: {% task_type_badge task.type %}
     """
     if task_type is None:
-        return mark_safe(
+        # Safe: fully hardcoded HTML, no user content.
+        return mark_safe(  # nosec B308
             '<span class="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full '
             'bg-gray-100 text-gray-700">Без статуса</span>'
         )
@@ -80,7 +81,9 @@ def task_type_badge(task_type):
             f"</span>"
         )
 
-    return mark_safe(
+    # Safe: name escaped via conditional_escape (line 68); color_cls/icon_html
+    # derived from server-side constants (_COLOR_CLASSES, _BADGE_ICONS).
+    return mark_safe(  # nosec B308 B703
         f'<span class="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full {color_cls}">'
         f"{icon_html}<span>{name}</span></span>"
     )

@@ -203,7 +203,9 @@ Post-rollback:
 
 Исторические:
 - `release-v0.0-prod-current` — зафиксированное состояние prod до gated
-  promotion (2026-04-20, commit be569ad, 333 commits behind main).
+  promotion (2026-04-20, commit `be569ad4`, 330+ commits behind main).
+  **2026-04-21 verify**: tag survived `git filter-repo` в public-readiness
+  cleanup (commit pre-W0.4, не затронут фильтрацией). Rollback procedure OK.
 
 Типичные будущие:
 - `release-v1.0-w0-complete` — когда W0 (все 0.0-0.6 этапы) завершены,
