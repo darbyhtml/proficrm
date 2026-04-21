@@ -9,8 +9,6 @@ from ui.views.company_detail import (
     company_cold_call_reset,
     company_cold_call_toggle,
     company_contract_update,
-    company_deal_add,
-    company_deal_delete,
     company_delete_direct,
     company_delete_request_approve,
     company_delete_request_cancel,
@@ -96,6 +94,12 @@ from ui.views.mobile import (
     mobile_app_download,
     mobile_app_page,
     mobile_app_qr_image,
+)
+
+# W1.2: extracted to pages/company/*
+from ui.views.pages.company.deals import (
+    company_deal_add,
+    company_deal_delete,
 )
 from ui.views.reports import (
     cold_calls_report_day,
