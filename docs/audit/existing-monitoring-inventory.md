@@ -89,11 +89,28 @@ Crontab пользователя `sdm`:
 
 **Пользователь выбирает в Q9** (см. `docs/open-questions.md`).
 
-## До решения Q9 — что делаем
+## Q9 resolved 2026-04-21 — Option C (split-scope) implemented
 
-**Ничего не меняем.** Оба работают. Пользователь видит дубли в Telegram, но:
-- Оба алерта state-based (только при смене) — не спам каждую минуту.
-- Timing отличается: Kuma 1 мин, old script 5 мин — first-alert от Kuma, follow-up от old script.
-- Forget cost низкий, но double на redshold изменения.
+Пользователь выбрал вариант **C — split-scope**. Реализация:
 
-Рекомендация до Q9: Q9 решается «в течение недели» — не критично.
+1. **Kuma monitor #1 «CRM Production» paused** (не удалён — history сохраняется
+   для возможного re-enable). Action: `api.pause_monitor(id=1)` через
+   `uptime-kuma-api` client. Scripted в `scripts/_kuma_pause_prod.py`.
+2. **health_alert.sh** (cron `*/5 * * * *` от sdm) — **остаётся активным**,
+   единственный источник prod uptime alerts.
+3. **Uptime Kuma self-check добавлен** (id=4): HTTP HEAD на
+   `https://uptime.groupprofi.ru/` (401 принимается как OK = basic auth = nginx живой).
+
+### Текущий split
+
+| Источник | Scope | Active? |
+|----------|-------|---------|
+| `scripts/health_alert.sh` | prod CRM `127.0.0.1:8001/health/` (local) | ✅ yes |
+| Kuma monitor #1 CRM Production | ❌ paused (было crm.groupprofi.ru/health/ external) | ❌ no |
+| Kuma monitor #2 CRM Staging | crm-staging.groupprofi.ru/live/ | ✅ yes |
+| Kuma monitor #3 GlitchTip | glitchtip.groupprofi.ru/_health/ | ✅ yes |
+| Kuma monitor #4 Uptime Kuma self | uptime.groupprofi.ru/ (HEAD, 401 OK) | ✅ yes |
+
+Zero overlap на prod. Telegram чат получает:
+- `🔴 CRM ПРОФИ — УПАЛ` / `🟢 ВОССТАНОВЛЕН` — **только** от health_alert.sh (prod).
+- `[Monitor] [🔴 Down]` — **только** от Kuma (staging / GlitchTip / uptime-self).

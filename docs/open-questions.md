@@ -212,6 +212,31 @@ Storage — принцип «только бесплатное / self-hosted»).
 
 ## ✅ Закрытые
 
+### Q10 [2026-04-21] Staging test user для real-traffic verification
+
+**Ответ** (2026-04-21): `sdm / ooqu1bieNg` — staff superuser на staging.
+
+Используется в `scripts/verify_sentry_real_traffic.py` (env `VERIFY_USERNAME=sdm`)
+для real-HTTP verification middleware chain через Django `Client.force_login`.
+
+Event `66e3bae6c125...` (issue #9 CRM-STAGING) подтвердил работу middleware
+с этим пользователем: все 5 custom tags + 2 scope.user tags enriched корректно.
+
+Password в `/etc/proficrm/env.d/staging-qa-user.conf` на сервере (будет
+добавлен пользователем при необходимости — пока в ответе на Q9/Q10 указан
+inline, это временно).
+
+### Q9 [2026-04-21] Dual uptime monitoring strategy
+
+**Ответ** (2026-04-21): **Option C — split-scope**.
+
+Реализация:
+- Kuma monitor #1 «CRM Production» **paused** через `api.pause_monitor(id=1)`.
+- `scripts/health_alert.sh` остаётся единственным источником prod uptime alerts.
+- Kuma мониторит staging + GlitchTip + новый self-check (uptime.groupprofi.ru HEAD).
+
+Детали — `docs/audit/existing-monitoring-inventory.md` §«Q9 resolved».
+
 ### Q-policy [2026-04-20] Какой режим работы Claude Code с prod?
 
 **Ответ**: Gated promotion. Blanket hook-block на `/opt/proficrm/` отменён в
