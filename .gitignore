@@ -55,6 +55,10 @@ Desktop.ini
 export_columns.txt
 export_schema.json
 
+# Exception: release classification CSVs — version-controlled artifacts
+# (reproducible via scripts/release/classify_commits.py + refine_classification.py)
+!docs/release/*.csv
+
 # Справочная документация (внешние API)
 api_documentation_smtpbz.txt
 

@@ -1,0 +1,447 @@
+sha,date,subject,files,lines,category,hint,first_file
+a11c4566,2026-02-19,Messenger: apply rounded corners and border to entire unified layout section,2,8,🟠ux-gated,touches-templates-or-static,backend/messenger/static/messenger/operator-panel.js
+7f7467de,2026-02-19,Messenger: add autogrow textarea and Ctrl+V image paste for operator panel and widget,4,135,🟠ux-gated,touches-templates-or-static,backend/messenger/static/messenger/operator-panel.js
+e7f2f293,2026-02-19,Messenger: add attachment preview cards and image modal,4,588,🟠ux-gated,touches-templates-or-static,backend/messenger/static/messenger/operator-panel.js
+691ed722,2026-02-19,Messenger: fix duplicate messagesList declaration in operator panel,1,1,🟠ux-gated,reviewed: operator-panel.js UI fix,backend/messenger/static/messenger/operator-panel.js
+206ce1fc,2026-02-19,Messenger settings: fix logger extra name collision,1,2,🟠ux-gated,reviewed: ui/views.py logger fix (conservative),backend/ui/views.py
+681e69e5,2026-02-19,Widget: allow overriding API base URL via data attribute,2,8,🟠ux-gated,reviewed: widget-loader.js user-visible,backend/messenger/static/messenger/widget-loader.js
+6df89405,2026-02-19,"Messenger inbox: add channel type, website domain and improved embed snippet",2,87,🟠ux-gated,touches-templates-or-static,backend/templates/ui/settings/messenger_inbox_form.html
+b8ef9b9e,2026-02-19,Обновлён UI немодальной панели контакта: современные типы и управление email/телефонами,2,281,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail.html
+7fda4b51,2026-02-19,Messenger inbox: allow safe deletion,2,50,🟠ux-gated,touches-templates-or-static,backend/templates/ui/settings/messenger_inbox_form.html
+8ac976c6,2026-02-19,"Messenger widget: fix embed code, CORS and delivered helper",2,136,🟠ux-gated,touches-templates-or-static,backend/messenger/widget_api.py
+48c2eb81,2026-02-19,Staging: документировать CORS и исправить CORS для Widget API,4,22,🟢ops,reviewed: deploy_staging.sh + CORS config,deploy_staging.sh
+975418a1,2026-02-19,Messenger widget: fix safe logging extra fields,1,25,🟢ops,reviewed: logging_utils internal safe log,backend/messenger/logging_utils.py
+982b6ed7,2026-02-19,Widget: backoff polling on 429 and raise default poll rate,2,70,🟢ops,reviewed: settings.py 429 backoff rate,backend/crm/settings.py
+bdc93679,2026-02-19,Widget: улучшить SSE переподключение и nginx конфигурацию,3,86,🟠ux-gated,reviewed: widget.js SSE reconnect UI,backend/messenger/static/messenger/widget.js
+4b47b7a3,2026-02-20,"Live-chat: вкладки в форме источника, навигация подразделов, UI в стиле Chatwoot",13,583,🟠ux-gated,touches-templates-or-static,backend/docs/MESSENGER_UI_CHATWOOT_STYLE.md
+9bb2f020,2026-02-20,"Код-ревью Live-chat: форма при inbox=None, URL через {% url %}, вложенные формы, крошки, aria-current",11,220,🟠ux-gated,touches-templates-or-static,backend/docs/CODE_REVIEW_MESSENGER_UI.md
+51df6910,2026-02-20,"Исправление вкладок настроек источника: класс inbox-form-tabs, полная ширина",1,2,🟠ux-gated,touches-templates-or-static,backend/templates/ui/settings/messenger_inbox_form.html
+cafaf6df,2026-02-20,"Конструктор виджета: предпросмотр в стиле Chatwoot, обновление в реальном времени",1,120,🟠ux-gated,touches-templates-or-static,backend/templates/ui/settings/messenger_inbox_form.html
+4393ca05,2026-02-20,"Виджет: единые стили в предпросмотре и на сайте, обновлённый вид (тени, скругления, форма)",3,114,🟠ux-gated,touches-templates-or-static,backend/messenger/static/messenger/widget.css
+3e24e48b,2026-02-20,"Предпросмотр: два режима (По умолчанию / Чат), согласие и политика, виджет: картинки в новой вкладке, эмодзи и современный ввод",4,270,🟠ux-gated,touches-templates-or-static,backend/messenger/static/messenger/widget.css
+6076cad2,2026-02-20,Исправление: extra['name'] в логгере заменён на inbox_name (конфликт с LogRecord.name),1,2,🟠ux-gated,reviewed: ui/views.py logger inbox_name,backend/ui/views.py
+814fa391,2026-02-20,"Виджет: min-height 460px, лента сообщений 260–420px — без скукоживания",1,5,🟠ux-gated,reviewed: widget.css height/scroll,backend/messenger/static/messenger/widget.css
+112011e7,2026-02-20,"Виджет: убрать Chatwoot, пре-чат с согласием, высота, рабочие часы",8,506,🟠ux-gated,touches-templates-or-static,backend/crm/urls.py
+2089cab5,2026-02-20,"Виджет и Диалоги: кнопка в превью, ввод как в Telegram, эмодзи-пикер, Apple-эмодзи",5,510,🟠ux-gated,touches-templates-or-static,backend/messenger/static/messenger/operator-panel.js
+8e211ff6,2026-02-20,"Виджет и Диалоги: минималистичные иконки, эмодзи Apple как картинки",5,375,🟠ux-gated,touches-templates-or-static,backend/messenger/static/messenger/operator-panel.js
+f5d235fb,2026-02-20,Исправлена ошибка AttributeError при получении working_hours из настроек inbox,2,23,🟡featured,reviewed: messenger/utils.py working_hours fix,backend/messenger/utils.py
+083ed990,2026-02-20,"Исправления виджета: цвет текста, встроенные иконки, CORS для SSE, скрытие скроллбара, сохранение истории",3,145,🟠ux-gated,reviewed: widget.css text/icons/UI,backend/messenger/static/messenger/widget.css
+546c035d,2026-02-20,"Исправления виджета: CORS для SSE, отложенное создание диалога, улучшенный UI поля ввода, правильное отображение сообщений, скрытие политики",3,77,🟠ux-gated,reviewed: widget.css CORS+UI,backend/messenger/static/messenger/widget.css
+2eb79b18,2026-02-20,"Критические исправления виджета: OPTIONS для SSE, явное преобразование direction, синхронизация предпросмотра, улучшенное сохранение сообщений",3,32,🟠ux-gated,touches-templates-or-static,backend/messenger/static/messenger/widget.js
+87508432,2026-02-20,Критическое исправление: переведен SSE endpoint на обычный Django view для обхода проблем с DRF content negotiation,1,33,🟡featured,forced-review: messenger/widget_api.py SSE endpoint,backend/messenger/widget_api.py
+414af36a,2026-02-20,"Исправление сохранения и загрузки истории сообщений: не сбрасываем sinceId при bootstrap, правильно обрабатываем initialMessages, вызываем render после bootstrap в open",2,18,🟠ux-gated,reviewed: widget.js message history UX,backend/messenger/static/messenger/widget.js
+6e541b26,2026-02-20,"Добавлена возможность удаления чатов для роли Администратор: метод destroy в ConversationViewSet, кнопка удаления в UI, обработчик в operator-panel.js",4,186,🟠ux-gated,touches-templates-or-static,backend/messenger/api.py
+47c510e6,2026-02-20,Улучшение UI/UX мессенджера по образцу Chatwoot,30,7491,🟠ux-gated,touches-templates-or-static,.gitignore
+a18d2117,2026-02-20,Исправление: сокращение имён индексов до 30 символов,2,24,🟡featured,reviewed: messenger migration name shortening,backend/messenger/migrations/0011_add_composite_indexes_phase2.py
+5e030ec5,2026-02-20,Исправление миграции 0009: AddField вместо AlterField для новых полей,1,34,🟡featured,reviewed: messenger migration AddField/AlterField,backend/messenger/migrations/0009_add_critical_fields_phase1.py
+f461f727,2026-02-20,Исправление ошибок после переименования last_message_at,2,13,🟡featured,reviewed: messenger/api.py rename fix,backend/messenger/api.py
+d545148e,2026-02-20,Исправление: замена last_message_at на last_activity_at в ui/views.py,1,7,🟠ux-gated,reviewed: ui/views.py last_activity_at rename,backend/ui/views.py
+7ce8934b,2026-02-20,Исправление аналитики Messenger: расчёт средних в Python,1,93,🟠ux-gated,reviewed: ui/views.py messenger analytics UI,backend/ui/views.py
+0f5436b0,2026-02-20,Live-chat settings: redesign overview page по мотивам Chatwoot,2,220,🟠ux-gated,touches-templates-or-static,backend/templates/ui/settings/messenger_overview.html
+265537ae,2026-02-20,Fix: messenger overview template filter usage,1,2,🟠ux-gated,touches-templates-or-static,backend/templates/ui/settings/messenger_overview.html
+fd5b0b75,2026-03-02,Компании: кнопка Переназначить активна только при выборе нового ответственного,1,36,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_list.html
+3229e57f,2026-03-02,Feat: удаление пользователя из настроек (settings/users),3,87,🟠ux-gated,touches-templates-or-static,backend/templates/ui/settings/users.html
+4148a0c2,2026-04-02,Fix(merge): добавить messenger в INSTALLED_APPS,1,1,🟢ops,only-ops-files,backend/crm/settings.py
+41dedddc,2026-04-02,Fix(merge): восстановить удалённые messenger-файлы,30,3036,🟠ux-gated,touches-templates-or-static,backend/messenger/__init__.py
+60b9f87b,2026-04-02,Fix(merge): messenger views в пакет ui/views + INSTALLED_APPS,2,894,🟠ux-gated,fix+ui-touched,backend/ui/views/__init__.py
+ed4abc9d,2026-04-02,"Security(audit): XSS, open redirect, race conditions, CSP nonce, dead code",12,163,🟠ux-gated,touches-templates-or-static,backend/accounts/views.py
+2f080f88,2026-04-02,Feat(amoCRM): включить импорт email-писем из amoCRM,1,11,🟡featured,feat-subject-backend,backend/amocrm/migrate.py
+403a3cb1,2026-04-02,"Feat(Timeline): таймлайн истории компании — звонки, письма, передвижения",5,238,🟠ux-gated,touches-templates-or-static,backend/amocrm/migrate.py
+da4a7dd3,2026-04-02,Fix(amoCRM): update_fields использовали property-имена вместо реальных полей БД,2,8,🟠ux-gated,fix+ui-touched,backend/amocrm/client.py
+e8484698,2026-04-02,Fix(Timeline): модалка истории показывает полный таймлайн (звонки+письма+передвижения),1,153,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail.html
+9082c953,2026-04-02,Fix(Timeline): модалка истории — исправлена прокрутка,1,4,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail.html
+09c481bd,2026-04-02,"Feat(Timeline): полная история карточки — заметки, задачи, сделки, звонки CRM, рассылки, удаления",2,243,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail.html
+153863ac,2026-04-02,Feat(Timeline): фильтры + SMS тип + скрытие пустых категорий,4,163,🟠ux-gated,touches-templates-or-static,backend/amocrm/migrate.py
+e445d976,2026-04-02,UI(Timeline): надпись «Фильтр» + толще разделитель под кнопками,1,3,🟠ux-gated,ui-subject,backend/templates/ui/company_detail.html
+66a2cb7d,2026-04-02,"Feat(Timeline): лимит 2000, сортировка, sticky-шапка, счётчики фильтров",2,156,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail.html
+f2b2bac8,2026-04-03,Fix(Timeline): задачи разделены на «Создана» и «Выполнена» с правильными датами,2,37,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail.html
+d3974b95,2026-04-03,Fix(Timeline): запросы на удаление разделены на «Создан» и «Решение»,2,30,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail.html
+bc0061fc,2026-04-03,Feat(Messenger): операторская панель подключена к CRM + ролевые ограничения,9,316,🟠ux-gated,touches-templates-or-static,backend/crm/urls.py
+8d608020,2026-04-03,Fix(Messenger): критические исправления для production-ready качества,5,405,🟠ux-gated,fix+ui-touched,backend/messenger/api.py
+2e852d71,2026-04-03,"Feat(Messenger): Chatwoot/JivoChat-level UX — labels, canned responses, bulk actions, animations",18,1153,🟠ux-gated,touches-templates-or-static,backend/crm/exceptions.py
+d816bd1d,2026-04-03,Feat(Messenger): standalone widget test page at /widget-test/,3,133,🟡featured,feat-subject-backend,backend/crm/urls.py
+7fe9fd49,2026-04-03,Fix(Widget): skip CSP headers on widget-test page,2,8,🟡featured,reviewed: middleware CSP skip widget-test,backend/crm/middleware.py
+eeb1f16f,2026-04-03,Fix(Widget): force HTTPS in widget-test page URLs,1,5,🟡featured,reviewed: messenger/views.py HTTPS fix,backend/messenger/views.py
+1b9eddf1,2026-04-03,Fix(Widget): add @authentication_classes([]) to all widget API endpoints,1,10,🟢ops,fix-subject-internal,backend/messenger/widget_api.py
+35c4754e,2026-04-03,Fix(Messenger): CSP nonce on all script tags + keep unsafe-inline for event handlers,2,52,🟠ux-gated,touches-templates-or-static,backend/crm/middleware.py
+c68ff836,2026-04-03,Fix(CSP): use unsafe-inline without nonce for script-src,1,15,🟢ops,fix-subject-internal,backend/crm/middleware.py
+35e4d46a,2026-04-03,Fix(Messenger): unread variable scoping bug in updateConversationCardInPlace,1,6,🟠ux-gated,fix+ui-touched,backend/messenger/static/messenger/operator-panel.js
+c723d6ea,2026-04-03,Fix(Messenger): SSE stream 406 — add EventStreamRenderer for text/event-stream,1,11,🟡featured,reviewed: messenger/api.py SSE 406 fix,backend/messenger/api.py
+60fa7309,2026-04-03,Fix(Messenger): anti-flicker DOM update for conversation list,1,31,🟠ux-gated,fix+ui-touched,backend/messenger/static/messenger/operator-panel.js
+a9f19a24,2026-04-03,"Feat(Messenger): Phase 1 — sound, push notifications, global SSE, toast system",13,1424,🟠ux-gated,touches-templates-or-static,backend/crm/settings.py
+862abe93,2026-04-03,"Feat(Messenger): Phase 2 — widget customization, auto-resolve, Celery tasks",5,141,🟠ux-gated,feat+ui,backend/crm/settings.py
+01dbf4d3,2026-04-03,"Feat(Messenger): Phase 3 — campaigns, automation rules, analytics reporting",10,900,🟠ux-gated,feat+ui,backend/crm/urls.py
+9eb6714f,2026-04-03,"Feat(Messenger): P1/P2 — delivery status, email notify, macros, @mentions, contact merge",8,584,🟠ux-gated,feat+ui,backend/crm/urls.py
+32e87168,2026-04-03,Fix(Messenger): serve sw-push.js directly instead of redirect,2,26,🟡featured,reviewed: crm/urls.py sw-push.js,backend/crm/urls.py
+a48ea8ce,2026-04-03,"Fix(Messenger): sidebar badge, delete overlap, AbortError + settings UI",11,379,🟠ux-gated,touches-templates-or-static,backend/messenger/api.py
+cc179dac,2026-04-03,Fix(Settings): передать MESSENGER_ENABLED в контекст dashboard,1,5,🟠ux-gated,fix+ui-touched,backend/ui/views/settings_core.py
+680722d5,2026-04-03,UI(Settings): унифицировать стиль иконок Live-chat карточек,1,14,🟠ux-gated,ui-subject,backend/templates/ui/settings/dashboard.html
+23319ebf,2026-04-03,Fix(Analytics): убрать UnboundLocalError + скрыть вкладку аналитики чата,2,7,🟠ux-gated,touches-templates-or-static,backend/templates/ui/settings/messenger_nav.html
+f075adf1,2026-04-03,UI(Settings): единый квадратный размер иконок на всех карточках,1,32,🟠ux-gated,ui-subject,backend/templates/ui/settings/dashboard.html
+92f4c6da,2026-04-03,UI(Settings): заменить нечитаемую иконку Кампании на rocket-launch,1,3,🟠ux-gated,ui-subject,backend/templates/ui/settings/dashboard.html
+99d171db,2026-04-03,UI(LiveChat): полный редизайн всех страниц настроек,7,906,🟠ux-gated,ui-subject,backend/templates/ui/settings/messenger_automation.html
+29cbf214,2026-04-03,UI(Overview): убрать общий код виджета — он у каждого Inbox свой,1,29,🟠ux-gated,ui-subject,backend/templates/ui/settings/messenger_overview.html
+a961a006,2026-04-03,UI(Inbox): полный редизайн настроек источника,3,1237,🟠ux-gated,ui-subject,backend/templates/ui/settings/messenger_inbox_form.html
+a7e760ba,2026-04-03,UI(Settings): modernize routing & canned response forms,2,233,🟠ux-gated,ui-subject,backend/templates/ui/settings/messenger_canned_form.html
+4ecb0cb6,2026-04-03,"Feat(Messenger): WebSocket support, async dispatchers, widget demo modernization",12,943,🟠ux-gated,touches-templates-or-static,.mcp.json
+b3873f20,2026-04-03,Fix(Messenger): use AsyncWebsocketConsumer instead of AsyncJsonWebSocketConsumer,1,66,🟢ops,fix-subject-internal,backend/messenger/consumers.py
+17877449,2026-04-03,Fix(Messenger): replace broken url reverse in widget_demo template,1,2,🟡featured,forced-review: messenger widget_demo URL fix (false-positive hold),backend/messenger/templates/messenger/widget_demo.html
+38b600c9,2026-04-03,Fix(Messenger): hide 'Assign me' button for non-manager roles,1,4,🟠ux-gated,fix+ui-touched,backend/messenger/static/messenger/operator-panel.js
+b5780ff3,2026-04-03,Fix(Messenger): add cache-buster to operator-panel.js script tag,1,2,🟠ux-gated,touches-templates-or-static,backend/templates/ui/messenger_conversations_unified.html
+ef825afb,2026-04-03,Fix(Messenger): replace broken getAccessToken() with session-cookie auth in macros/mentions,2,10,🟡featured,forced-review: messenger macros/mentions auth fix (false-positive hold),backend/messenger/static/messenger/operator-panel.js
+861375e5,2026-04-03,Fix(Messenger): add body length validation in operator message API,1,6,🟡featured,reviewed: messenger/api.py validation,backend/messenger/api.py
+f8e8b20a,2026-04-04,"Harden(Messenger): transaction safety, file upload validation, session IP binding",5,271,🟡featured,reviewed: messenger/api.py transaction+IP,backend/messenger/api.py
+0157b41a,2026-04-04,"Harden(Messenger): consumers safety, Celery acks_late, nginx SSE, logging",5,113,🟢ops,fix-subject-internal,backend/crm/settings.py
+ce4fc548,2026-04-04,"Harden(Messenger): automation race fix, widget XSS, serializer fields, session TTL",4,75,🟠ux-gated,fix+ui-touched,backend/messenger/automation.py
+c024e719,2026-04-04,"Harden(Messenger): operator-panel leak fixes, widget destroy(), serializer whitelist",3,91,🟠ux-gated,fix+ui-touched,backend/messenger/serializers.py
+c96781f9,2026-04-04,Harden(Messenger): whitelist Campaign/AutomationRule serializer fields,1,11,🟡featured,reviewed: messenger/api.py serializer whitelist,backend/messenger/api.py
+5a88c6e5,2026-04-04,"Harden(Messenger): status filter validation, merge-contacts auth check",1,12,🟡featured,reviewed: messenger/api.py auth check,backend/messenger/api.py
+7fcdcdde,2026-04-04,Fix(Messenger): handle invalid UUID in merge-contacts (500 → 404),1,2,🟡featured,reviewed: messenger/api.py UUID handling,backend/messenger/api.py
+50f1efed,2026-04-04,Fix(Messenger): catch Django ValidationError for invalid UUID in merge-contacts,1,3,🟡featured,reviewed: messenger/api.py ValidationError,backend/messenger/api.py
+6e4620f5,2026-04-06,Fix(Widget): auto-load widget.css for external embedding,1,18,🟠ux-gated,fix+ui-touched,backend/messenger/static/messenger/widget.js
+18dbf9c9,2026-04-06,Fix(Nginx): add CORS handling for widget API in Docker nginx,1,20,🟢ops,only-ops-files,nginx/staging.conf
+4d3f71a1,2026-04-06,Fix(Nginx): remove CORS from nginx — Django handles it via _add_widget_cors_headers,1,21,🟢ops,only-ops-files,nginx/staging.conf
+34c19cbe,2026-04-06,"Fix(Nginx): handle widget OPTIONS preflight in nginx, POST CORS in Django",1,16,🟢ops,only-ops-files,nginx/staging.conf
+27131cef,2026-04-06,Fix(Widget): add CORS headers to campaigns endpoint,1,3,🟢ops,fix-subject-internal,backend/messenger/widget_api.py
+eeb51ac6,2026-04-06,Fix(Widget): add bound_ip and created_at fields to WidgetSession dataclass,1,2,🟢ops,fix-subject-internal,backend/messenger/utils.py
+b9e3f8b6,2026-04-06,"Fix(Messenger): SSE real-time — gevent workers, stream bugs, email notification",7,17,🟡featured,reviewed: Dockerfile.staging + messenger SSE gevent,Dockerfile.staging
+18deaa7b,2026-04-06,Fix(Messenger): switch gevent → gthread (psycopg3 incompatibility),3,5,🟢ops,only-ops-files,Dockerfile.staging
+f353c587,2026-04-06,Fix(Messenger): SSE двойная дедупликация + admin can_reply,3,25,🟠ux-gated,fix+ui-touched,backend/messenger/api.py
+ec56c0db,2026-04-06,Debug(Widget): add SSE + addMessageToUI console logging,1,15,🟠ux-gated,reviewed: widget.js debug logging (behavior change),backend/messenger/static/messenger/widget.js
+b26fadb5,2026-04-06,Fix(Widget): triple dedup bug — messages never rendered on reload,1,14,🟠ux-gated,fix+ui-touched,backend/messenger/static/messenger/widget.js
+6c3ba20b,2026-04-06,"Fix(Widget): remove debug logging, clean SSE handler",1,13,🟠ux-gated,fix+ui-touched,backend/messenger/static/messenger/widget.js
+92615b58,2026-04-06,"Docs: SSE P0 bug resolved, update sprint/roadmap/problems-solved",3,276,⚫trivial,docs-only,docs/current-sprint.md
+fa1627f6,2026-04-06,Docs(Wiki): update Obsidian wiki with SSE fix details,21,1301,⚫trivial,reviewed: docs/wiki SSE fix,docs/wiki/00-HOME.md
+b00ad093,2026-04-06,Feat: add Context7 MCP server for up-to-date library docs,3,192,🟡featured,feat-subject-backend,.mcp.json
+212480cc,2026-04-07,Fix(Companies): bulk transfer блокировался при наличии запрещённых компаний,2,25,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_list.html
+5f461e7c,2026-04-13,Feat(Messenger): add client_region field for auto-routing,3,77,🟡featured,feat-subject-backend,backend/messenger/migrations/0016_conversation_client_region.py
+395ec12b,2026-04-13,Feat(Messenger): add messenger_online heartbeat endpoint,5,91,🟡featured,feat-subject-backend,backend/accounts/migrations/0010_user_messenger_online.py
+68e7d195,2026-04-13,Feat(Accounts): add BranchRegion model + fixture from Polozhenie 2025-2026,7,373,🟡featured,feat-subject-backend,backend/accounts/fixtures/branch_regions_2025_2026.json
+fe115cc9,2026-04-13,Feat(Messenger): add ConversationTransfer model + API endpoint,5,231,🟡featured,feat-subject-backend,backend/messenger/api.py
+67633bdf,2026-04-13,Feat(Messenger): add Message.is_private + widget filter,4,105,🟡featured,feat-subject-backend,backend/messenger/migrations/0018_message_is_private.py
+4603c771,2026-04-13,Feat(Messenger): добавить флаг needs_help для эскалации диалога,2,35,🟡featured,feat-subject-backend,backend/messenger/migrations/0019_conversation_needs_help.py
+6ae7bc38,2026-04-13,Feat(Messenger): добавить MultiBranchRouter для маршрутизации по региону,3,151,🟡featured,feat-subject-backend,backend/messenger/assignment_services/__init__.py
+cbbc46f4,2026-04-13,Feat(Messenger): добавить BranchLoadBalancer для выбора менеджера,2,110,🟡featured,feat-subject-backend,backend/messenger/assignment_services/branch_load_balancer.py
+6ab55112,2026-04-13,Feat(Messenger): автоназначение диалога на менеджера филиала,4,197,🟡featured,feat-subject-backend,backend/messenger/apps.py
+d98549e4,2026-04-13,Feat(Messenger): ролевая видимость диалогов,2,191,🟡featured,feat-subject-backend,backend/messenger/selectors.py
+49eb8f91,2026-04-13,Feat(Messenger): celery task check_offline_operators,3,47,🟡featured,feat-subject-backend,backend/crm/settings.py
+3a62b66b,2026-04-13,Fix(Accounts): branch_regions fixture — tmn → tym (соответствие коду филиала Тюмень),1,56,🟢ops,fix-subject-internal,backend/accounts/fixtures/branch_regions_2025_2026.json
+12325a08,2026-04-13,Docs: Live-chat Backend Foundation (Plan 1) завершён,2,63,⚫trivial,reviewed: docs/current-sprint Plan 1,docs/current-sprint.md
+cce8224c,2026-04-13,Feat(Messenger): поля last_customer_msg_at и last_agent_msg_at,3,108,🟡featured,feat-subject-backend,backend/messenger/migrations/0020_conversation_msg_timestamps.py
+5c81536a,2026-04-13,Feat(Messenger): property ui_status + template tag + сериалайзер,5,141,🟠ux-gated,touches-templates-or-static,backend/messenger/models.py
+ac93be11,2026-04-13,Feat(Messenger): property waiting_minutes + пороги эскалации,3,82,🟡featured,feat-subject-backend,backend/messenger/models.py
+40ebff0a,2026-04-13,Feat(Messenger): CannedResponse.is_quick_button + sort_order,4,85,🟡featured,feat-subject-backend,backend/messenger/migrations/0021_cannedresponse_quick_button.py
+2a6df8b1,2026-04-13,Feat(Messenger): Plan 2 Task 5 — needs-help API + agents filters + branches endpoint,3,283,🟡featured,feat-subject-backend,backend/messenger/api.py
+3c57dae1,2026-04-13,"Refactor(Messenger): Plan 2 Task 5 — code review fixes (roles, imports, edge tests)",2,39,🔵refactor,refactor-subject,backend/messenger/api.py
+0ae5ae48,2026-04-13,Feat(Messenger): Plan 2 Task 6 — контекстная primary CTA и меню ⋯ в шапке диалога,1,227,🟠ux-gated,feat+ui,backend/messenger/static/messenger/operator-panel.js
+4551b0c4,2026-04-13,Feat(Messenger): Plan 2 Task 7 — resolve modal + 5s undo toast,2,234,🟠ux-gated,touches-templates-or-static,backend/messenger/static/messenger/operator-panel.js
+5bdef2c2,2026-04-13,Refactor(Messenger): Plan 2 Task 7 — error handling + resolve modal UX hints,2,7,🟠ux-gated,touches-templates-or-static,backend/messenger/static/messenger/operator-panel.js
+f6cbf47e,2026-04-13,Feat(Messenger): Plan 2 Task 8 — transfer modal с обязательной причиной и cross-branch предупреждением,2,325,🟠ux-gated,touches-templates-or-static,backend/messenger/static/messenger/operator-panel.js
+ae48596a,2026-04-13,Feat(Messenger): Plan 2 Task 9 — автосохранение черновиков сообщений в localStorage,1,159,🟠ux-gated,feat+ui,backend/messenger/static/messenger/operator-panel.js
+75abc684,2026-04-13,Feat(Messenger): Plan 2 Task 10 — визуальный аффорданс режима внутренней заметки,2,41,🟠ux-gated,touches-templates-or-static,backend/messenger/static/messenger/operator-panel.js
+53e58086,2026-04-13,Fix(Tests): accounts.tests_branch_region — update Тюмень code tmn→tym,1,2,🟢ops,fix-subject-internal,backend/accounts/tests_branch_region.py
+b7c01046,2026-04-13,Feat(Messenger): Plan 2 Task 11 — ряд кнопок быстрых ответов над полем ввода,3,144,🟠ux-gated,feat+ui,backend/messenger/api.py
+9dfa7614,2026-04-13,"Feat(Messenger): Plan 2 Task 12 — бейдж ""Позван старший"" в списке и шапке диалога",3,24,🟠ux-gated,feat+ui,backend/messenger/serializers.py
+da003917,2026-04-13,Docs: Plan 2 Operator UX Panel — current-sprint + Changelog,2,50,⚫trivial,reviewed: docs/current-sprint Plan 2,docs/current-sprint.md
+a909afa1,2026-04-13,"Feat(Messenger): Plan 3 Task 1 — поля resolution, escalation_level, last_escalated_at",3,90,🟡featured,feat-subject-backend,backend/messenger/migrations/0022_conversation_escalation_fields.py
+dec28f3d,2026-04-13,Feat(Policy): PolicyConfig.livechat_escalation JSONField + admin,4,65,🟡featured,feat-subject-backend,backend/messenger/tests/test_resolution_field.py
+5ef61040,2026-04-13,Feat(Messenger): Plan 3 Task 3 — Celery task escalate_waiting_conversations,3,223,🟡featured,feat-subject-backend,backend/crm/settings.py
+396273bb,2026-04-13,Feat(Messenger): Plan 3 Task 4 — resolution в сериалайзере и PATCH whitelist,2,44,🟡featured,feat-subject-backend,backend/messenger/serializers.py
+74afe30b,2026-04-13,Feat(Messenger): Plan 3 Task 5 — resolve modal сохраняет resolution,2,14,🟠ux-gated,touches-templates-or-static,backend/messenger/static/messenger/operator-panel.js
+40a3a5e8,2026-04-13,"Feat(Messenger): Plan 3 Task 6 — звук, desktop notification, title badge",1,101,🟠ux-gated,feat+ui,backend/messenger/static/messenger/operator-panel.js
+143926b6,2026-04-13,Feat(Messenger): Plan 3 Task 7 — favicon badge,3,64,🟠ux-gated,touches-templates-or-static,backend/messenger/static/messenger/favicon-badge.js
+6044624f,2026-04-13,Feat(Messenger): Plan 3 Task 8 — бейдж waiting_minutes в списке диалогов,1,13,🟠ux-gated,feat+ui,backend/messenger/static/messenger/operator-panel.js
+3f2355f7,2026-04-13,Feat(Messenger): Plan 3 Task 9 — подсветка эскалированных диалогов,2,29,🟠ux-gated,touches-templates-or-static,backend/messenger/static/messenger/operator-panel.js
+c8499529,2026-04-13,Docs: Plan 3 Notifications + Escalation — current-sprint + Changelog,2,63,⚫trivial,reviewed: docs/current-sprint Plan 3,docs/current-sprint.md
+36964061,2026-04-13,Feat(Messenger): Plan 4 Task 1 — Conversation.company FK,3,49,🟡featured,feat-subject-backend,backend/messenger/migrations/0023_conversation_company.py
+6ac1cc9f,2026-04-13,Feat(Messenger): Plan 4 Task 2 — autolink contact->company по email/phone,3,252,🟡featured,feat-subject-backend,backend/messenger/company_autolink.py
+db3bc1fa,2026-04-13,Feat(Messenger): Plan 4 Task 3 — GET /api/conversations/{id}/context/,2,191,🟡featured,feat-subject-backend,backend/messenger/api.py
+00fc2a69,2026-04-13,Feat(Messenger): Plan 4 Task 4 — правая панель использует /context/ API,1,126,🟠ux-gated,feat+ui,backend/messenger/static/messenger/operator-panel.js
+87650f28,2026-04-13,Docs: Plan 4 Live-chat Client Context Panel завершён,2,46,⚫trivial,reviewed: docs/current-sprint Plan 4,docs/current-sprint.md
+8df8beb7,2026-04-15,Chore: уборка репозитория и документации,26,8060,🟢ops,reviewed: .gitignore repo cleanup,.gitignore
+d48f7411,2026-04-15,Harden(Security): Phase 0 P0 fixes после аудита 2026-04-14,8,1153,🟢ops,reviewed: Harden Security Phase 0 P0 (Android+backend),android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/auth/TokenManager.kt
+4378f3ed,2026-04-15,Harden(Security): Phase 1 P1 fixes,5,87,🟢ops,reviewed: Harden Security Phase 1 P1 settings,backend/crm/settings.py
+72a58bc7,2026-04-15,"Harden/Chore: P0 cleanup — dead code, regex, double-poll, logout-all",5,12638,🟠ux-gated,touches-templates-or-static,backend/crm/settings.py
+58747499,2026-04-15,Harden(Phonebridge): rate-limit на pull/heartbeat/telemetry,2,15,🟢ops,reviewed: Harden Phonebridge rate-limit,backend/crm/settings.py
+e5784ff5,2026-04-15,Harden(Tasksapp): race-protection generate_recurring_tasks,1,178,🟢ops,fix-subject-internal,backend/tasksapp/tasks.py
+1f22c861,2026-04-15,Docs: current-sprint — Phase 0/1 hotfixes после аудита,1,37,⚫trivial,docs-only,docs/current-sprint.md
+e79013cd,2026-04-15,Harden(Android+Staging): compileSdk 35 + staging TLS/cookies/policy enforce,2,16,🟢ops,fix-subject-internal,android/CRMProfiDialer/app/build.gradle
+4fdb9340,2026-04-15,"Harden(Various): P1 hardening — observability, SSOT, authz, deps",7,66,🟢ops,reviewed: Harden P1 observability/SSOT/authz,backend/audit/models.py
+8a76ec99,2026-04-15,Fix(Companies): bulk_transfer — переиндексация FTS после .update(),1,19,🟠ux-gated,fix+ui-touched,backend/ui/views/company_list.py
+ee958090,2026-04-15,Harden(Performance+Security): bell-cache и SSRF guard для webhooks,2,128,🟢ops,fix-subject-internal,backend/messenger/integrations.py
+f8d5ad92,2026-04-15,"Fix(Various): P1 — убрали GET-side-effects, исправили битый URL, N+1, utcnow",7,60,🟠ux-gated,fix+ui-touched,backend/crm/celery.py
+ecefbe03,2026-04-15,Harden(Observability): явный logger вместо except pass + кэш /notifications/poll/,4,69,🟠ux-gated,fix+ui-touched,backend/audit/service.py
+e118a364,2026-04-15,"Feat(Messenger): webhook и push через Celery, валидация email/phone контактов",5,331,🟡featured,feat-subject-backend,backend/messenger/integrations.py
+880d4456,2026-04-15,Fix(tasksapp): защита от race в generate_recurring_tasks (P1-2),3,75,🔵refactor,reviewed: tasksapp migration race fix (internal),backend/tasksapp/migrations/0013_task_uniq_recurrence_occurrence.py
+0c30357c,2026-04-15,"Perf(UI): вернули кэш TaskTypeSelectWidget, снизили частоту polling (P2-2/3, P2-6, P2-11)",5,136,🟠ux-gated,touches-templates-or-static,backend/tasksapp/signals.py
+c1febf15,2026-04-15,Perf(reports): .iterator(chunk_size=500) в daily/monthly cold-call отчётах (P2-9),1,22,🟢ops,ops-subject,backend/ui/views/reports.py
+801d4879,2026-04-15,Docs: Phase 2 hotfixes — sprint лог с коммитами ecefbe0..c1febf1,1,46,⚫trivial,docs-only,docs/current-sprint.md
+a8e789ad,2026-04-15,Docs: problems-solved — 4 новые записи по Phase 2 hotfixes,1,124,⚫trivial,docs-only,docs/problems-solved.md
+a0399841,2026-04-15,Fix(Staging): X-Forwarded-Proto — пробрасывать исходный заголовок от host nginx,1,12,🟢ops,only-ops-files,nginx/staging.conf
+283c0bdf,2026-04-15,Feat(Infra): docker-compose.prod.yml — websocket (daphne) сервис для Django Channels,1,37,🟡featured,feat-subject-backend,docker-compose.prod.yml
+fc98953f,2026-04-15,Docs: CLAUDE.md — секция о графе знаний graphify + .gitignore,2,33,⚫trivial,reviewed: CLAUDE.md graphify section,.gitignore
+3e8df094,2026-04-15,Docs(Scope): P0-02 закрыт как намеренное бизнес-правило,2,40,⚫trivial,reviewed: scope.py docstring only,backend/accounts/scope.py
+221073e7,2026-04-15,Docs: сводная запись о stale-аудите 2026-04-14,1,19,⚫trivial,docs-only,docs/problems-solved.md
+14810601,2026-04-15,"Harden(UI): P0-19 — убрать Tailwind CDN, использовать только локальный build",7,63,🟠ux-gated,touches-templates-or-static,backend/crm/settings.py
+284366d3,2026-04-15,Fix(Accounts): post_save signal is_staff <- (role==ADMIN),3,167,🟢ops,fix-subject-internal,backend/accounts/apps.py
+45572f98,2026-04-15,Refactor(Templates): has_role templatetag + убрать хардкоды ролей,7,152,🟠ux-gated,touches-templates-or-static,backend/accounts/templatetags/__init__.py
+e7e09bfc,2026-04-15,Feat(Accounts): роль TENDERIST - read-only участник тендерного отдела,7,227,🟡featured,feat-subject-backend,backend/accounts/migrations/0013_add_tenderist_role.py
+9c60d1bb,2026-04-15,UI(i18n): Филиал → Подразделение в текстах шаблонов и verbose_name,37,238,🟠ux-gated,ui-subject,backend/accounts/models.py
+8b5aee49,2026-04-15,Build(Tailwind): расширение дизайн-токенов (brand palette + семантика + shadows),1,92,🟢ops,ops-subject,tailwind.config.js
+51b7ca7b,2026-04-15,Chore(ui): remove unused imports in view files,7,10,🔵refactor,reviewed: remove unused imports view files,backend/ui/views/company_detail.py
+e0286103,2026-04-15,Docs: current-sprint — K1..K6 подготовка перед редизайном,1,35,⚫trivial,docs-only,docs/current-sprint.md
+24ea4be3,2026-04-15,Feat(UI): Шаг 1 — preview редизайна рабочего стола (dashboard v2),5,509,🟠ux-gated,touches-templates-or-static,backend/templates/ui/dashboard_v2.html
+5b16171f,2026-04-15,Feat(UI): Шаг 2 — preview редизайна списка задач (tasks v2),5,296,🟠ux-gated,touches-templates-or-static,backend/templates/ui/task_list_v2.html
+b4a56124,2026-04-15,Feat(UI): Шаг 3 — preview редизайна списка компаний (companies v2),5,256,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_list_v2.html
+ddaefe87,2026-04-15,Feat(UI): Шаг 4 — preview редизайна админки (settings v2),5,313,🟠ux-gated,touches-templates-or-static,backend/templates/ui/settings/dashboard_v2.html
+0f0eaf35,2026-04-15,Docs: current-sprint — Шаги 1..4 редизайна (preview v2) завершены,1,23,⚫trivial,docs-only,docs/current-sprint.md
+2a57b5a8,2026-04-15,"Feat(UI v2): фундамент редизайна — shared CSS, toggle v1↔v2, dashboard эталон",7,1457,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_v2/v2_styles.html
+46e1a0c2,2026-04-15,Feat(UI v2): полировка tasks/companies/settings + toggle на всех v1,6,764,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_list.html
+0b33dcdd,2026-04-15,Docs: current-sprint — Фаза 1 редизайна v2 (визуальная полировка),1,19,⚫trivial,docs-only,docs/current-sprint.md
+3835a973,2026-04-15,Feat(accounts): фильтр full_name — «Фамилия Имя» для отображения пользователя,5,59,🟠ux-gated,touches-templates-or-static,backend/accounts/templatetags/accounts_extras.py
+c7723cc1,2026-04-15,Feat(UI v2): dashboard parity — deletion_requests + urgency + stale footer,1,67,🟠ux-gated,touches-templates-or-static,backend/templates/ui/dashboard_v2.html
+9fec3add,2026-04-15,Feat(UI v2): task_list parity — реальные фильтры,1,78,🟠ux-gated,touches-templates-or-static,backend/templates/ui/task_list_v2.html
+dad33c3b,2026-04-15,"Feat(UI v2): task_list parity — sort, date range, bulk, remember filters",1,183,🟠ux-gated,touches-templates-or-static,backend/templates/ui/task_list_v2.html
+a2931862,2026-04-15,Docs(sprint): Фаза 2 Tasks — sort/date/bulk/remember filters,1,21,⚫trivial,docs-only,docs/current-sprint.md
+a3aac5d9,2026-04-15,"Feat(UI v2): company_list parity — filters, sort, bulk transfer, remember",1,190,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_list_v2.html
+e0a85845,2026-04-15,"Feat(UI v2): settings parity — счётчики, security hint, AmoCRM hint",2,44,🟠ux-gated,touches-templates-or-static,backend/templates/ui/settings/dashboard_v2.html
+39b2b4ee,2026-04-15,Docs(sprint): Фаза 2 Companies + Settings parity завершены,1,16,⚫trivial,docs-only,docs/current-sprint.md
+9a19bdae,2026-04-15,UI(base): navbar v2 polish — Notion-style без изменения DOM,1,68,🟠ux-gated,ui-subject,backend/templates/ui/base.html
+4da7bf08,2026-04-15,Docs(sprint): Фаза 3 navbar polish — редизайн завершён,1,12,⚫trivial,docs-only,docs/current-sprint.md
+1d84432b,2026-04-15,"Feat(UI v2): company_list Phase 2 критичное — экспорт CSV, task_filter, без ответственного, per_page, can_transfer гард, bulk preview modal, apply_mode",1,216,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_list_v2.html
+7252b922,2026-04-15,"Feat(UI v2): task_list Phase 2 — inline действия, bulk reschedule, per_page, sort status/created_at/created_by, task_type badge",1,235,🟠ux-gated,touches-templates-or-static,backend/templates/ui/task_list_v2.html
+bf94d489,2026-04-15,"Feat(UI v2): dashboard Phase 2 — work_timezone badges, AJAX polling, описания задач, inline quick actions, ХЗ отчёты",1,163,🟠ux-gated,touches-templates-or-static,backend/templates/ui/dashboard_v2.html
+e172f532,2026-04-15,Docs: current-sprint — Phase 2 port gaps (3 коммита на company_list_v2 / task_list_v2 / dashboard_v2),1,10,⚫trivial,docs-only,docs/current-sprint.md
+c4738690,2026-04-15,Feat(UI v2): row enrichment (companies) + inline contract amount (dashboard),2,80,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_list_v2.html
+ade15cfd,2026-04-15,Docs: current-sprint — important tier v2 (c473869),1,10,⚫trivial,docs-only,docs/current-sprint.md
+20d15c2a,2026-04-15,Feat(UI v2): company_list_columns + task filter chips + mine/assignee sync,2,92,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_list_v2.html
+2f768cd6,2026-04-15,Docs: current-sprint — v2 columns + task filter chips (20d15c2),1,13,⚫trivial,docs-only,docs/current-sprint.md
+45e32d84,2026-04-15,Feat(UI v2): company_list_v2 — подсветка поиска в строках,1,12,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_list_v2.html
+a71336ce,2026-04-15,Docs: current-sprint — подсветка поиска v2 (45e32d8),1,7,⚫trivial,docs-only,docs/current-sprint.md
+f76b1397,2026-04-15,"UI(settings): иконки v2 — аудит, импорт, колонки, статистика, кампании, автоматизация, журнал ошибок",1,14,🟠ux-gated,ui-subject,backend/templates/ui/settings/dashboard_v2.html
+75ce5714,2026-04-15,Feat(ui): масштабирование v2 через CSS zoom — расширен диапазон font_scale до 0.85-1.30,3,45,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_v2/v2_styles.html
+cb772ac9,2026-04-15,Feat(settings): v2 — 4 пресета масштаба интерфейса с live-apply и AJAX сохранением,4,142,🟠ux-gated,touches-templates-or-static,backend/templates/ui/settings/dashboard_v2.html
+ff2382f8,2026-04-15,UI(tasks v2): компактный фильтр-бар — чипсы активных фильтров + popover со всеми полями,1,274,🟠ux-gated,ui-subject,backend/templates/ui/task_list_v2.html
+06492865,2026-04-15,UI(companies v2): компактный фильтр-бар — чипсы активных фильтров + popover со всеми полями,1,294,🟠ux-gated,ui-subject,backend/templates/ui/company_list_v2.html
+c29066bd,2026-04-15,"Docs: current-sprint — иконки v2, масштабирование UI (zoom), компактные фильтры tasks/companies",1,24,⚫trivial,docs-only,docs/current-sprint.md
+78fbd275,2026-04-15,"UI(v2): popover под кнопку «Фильтр», период в одну строку, tasks row cleanup",2,372,🟠ux-gated,ui-subject,backend/templates/ui/company_list_v2.html
+3cb01e05,2026-04-15,"UI(v2): bulk bar группы, company row overdue highlight + фикс счётчика задач",3,78,🟠ux-gated,ui-subject,backend/templates/ui/company_list_v2.html
+f7abe3d0,2026-04-15,UI(v2): per_page в пагинации + запоминание в UiUserPreference,6,134,🟠ux-gated,ui-subject,backend/templates/ui/company_list_v2.html
+d98fda08,2026-04-15,UI(v2): перенос v2-масштаба интерфейса из /settings/v2/ в /preferences/ui/,2,77,🟠ux-gated,ui-subject,backend/templates/ui/preferences_ui.html
+ca9b46a8,2026-04-15,UI(v2): multi-select фильтры компаний (status/sphere/region/branch/responsible),3,194,🟠ux-gated,ui-subject,backend/templates/ui/company_list_v2.html
+7e619039,2026-04-15,Feat(UI): management command seed_demo_data для наполнения дашборда,1,112,🟡featured,feat-subject-backend,backend/ui/management/commands/seed_demo_data.py
+6616287c,2026-04-15,"Feat(UI-v2): v2-modal/toast компонент + дашборд: круглый чекбокс задач, перестановка блоков",5,386,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_v2/v2_modal.html
+73572aa8,2026-04-15,Feat(UI-v2): task_create_v2_partial — создание задачи в v2-модалке (plashki + urgent),6,275,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_v2/task_create_partial.html
+82a33d5f,2026-04-15,Feat(UI-v2): task_view/edit_v2_partial — просмотр и редактирование в модалке,7,361,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_v2/task_edit_partial.html
+c20d9a66,2026-04-15,Feat(UI-v2): /tasks/ — цветной dot теперь работает как «выполнить» чекбокс,1,49,🟠ux-gated,touches-templates-or-static,backend/templates/ui/task_list_v2.html
+4212055a,2026-04-15,"UI(dashboard) + Docs: компактная шапка v2, закрываемый preview-баннер, sprint лог",4,157,🟠ux-gated,ui-subject,backend/templates/ui/dashboard_v2.html
+b3808d8c,2026-04-15,"Refactor(URLs): preferences->settings, settings->admin, django-admin",47,634,🟠ux-gated,touches-templates-or-static,backend/crm/urls.py
+821f5686,2026-04-15,Fix(UI): v2 task partials — подгрузка accounts_extras для фильтра full_name,2,4,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_v2/task_create_partial.html
+14d63e52,2026-04-15,Fix(UI): v2 task_create_v2_partial — FieldError Company.responsible,1,4,🟠ux-gated,fix+ui-touched,backend/ui/views/tasks.py
+3c670d7f,2026-04-15,Docs: problems-solved — 500 в v2 task partials (full_name + FieldError),1,33,⚫trivial,docs-only,docs/problems-solved.md
+88d97eeb,2026-04-15,"UI(v2): унификация task_view partial с v1 — иконки, история, комментарии, статус-кнопки",2,378,🟠ux-gated,ui-subject,backend/templates/ui/_v2/task_view_partial.html
+2ccc1123,2026-04-16,"Refactor(UI): v2 → основной интерфейс, удалены v1 шаблоны и preview",29,6843,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_v2/v2_styles.html
+86fbab25,2026-04-16,UI(v2): удалены preview-баннеры и CSS — v2 теперь без следов превью,6,90,🟠ux-gated,ui-subject,backend/templates/ui/_v2/v2_styles.html
+c27f3fdb,2026-04-16,"Fix(Dashboard): аудит и рефакторинг дашборда — performance, UX, accessibility",6,433,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_v2/v2_styles.html
+d43afe8e,2026-04-16,"Docs: аудит дашборда — current-sprint, problems-solved, decisions + удалён import json",4,41,🔵refactor,reviewed: remove unused dashboard imports,backend/ui/views/dashboard.py
+2e61a85d,2026-04-16,"Fix(Dashboard): отчёты JSON→HTML, модалка задач, фильтры, пустые блоки",7,322,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_v2/v2_styles.html
+95019326,2026-04-16,"Fix(Dashboard): отчёты в модалке, TaskType плашки, grid align-items:start",4,200,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_v2/task_create_partial.html
+cfee9de2,2026-04-16,Fix(Reports): добавлен tasks_done в текстовый формат отчёта,1,2,🟠ux-gated,fix+ui-touched,backend/ui/views/reports.py
+bea6f091,2026-04-16,Fix(UI): TaskType плашки — цветные иконки из справочника,2,45,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_v2/task_create_partial.html
+605fde33,2026-04-16,"UI(v2): цветные плашки TaskType — фон/текст/рамка на всю карточку, как в справочнике",2,42,🟠ux-gated,ui-subject,backend/templates/ui/_v2/task_create_partial.html
+0a946c99,2026-04-16,UI(v2): зелёная обводка + галочка при выборе типа задачи,2,14,🟠ux-gated,ui-subject,backend/templates/ui/_v2/task_create_partial.html
+65224fd2,2026-04-16,Fix(UI): V2Modal — выполнение <script> из partial после innerHTML,1,11,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_v2/v2_modal.html
+62ee7198,2026-04-16,"UI(v2): перестройка дашборда — 4 строки, одинаковая высота, 2 столбца для компаний",2,140,🟠ux-gated,ui-subject,backend/templates/ui/_v2/v2_styles.html
+133808cc,2026-04-16,"UI(v2): компании без задач — 10 шт, больше воздуха между элементами",2,10,🟠ux-gated,ui-subject,backend/templates/ui/dashboard_v2.html
+67828690,2026-04-16,"UI(v2): компании без задач — убрана полоска после заголовка, вертикальный разделитель между столбцами",1,27,🟠ux-gated,ui-subject,backend/templates/ui/dashboard_v2.html
+c7a33bc9,2026-04-16,Fix(UI): создание задачи — assigned_to не обязательное + сохранение due_at при ре-рендере,2,4,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_v2/task_create_partial.html
+1d7a1868,2026-04-16,Fix(UI): V2Modal — сброс dirty после успешного HTML-ответа (комментарий),1,2,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_v2/v2_modal.html
+f5ea32c3,2026-04-16,Fix(UI): сброс dirty после отправки комментария в task_view_partial,2,4,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_v2/task_view_partial.html
+190aee3f,2026-04-16,"Harden(Security+DB+Perf+DevOps): мастер-план Фазы 1-5 — безопасность, индексы, зависимости, производительность, DevOps",70,2805,🟠ux-gated,touches-templates-or-static,Dockerfile.staging
+dd23bea4,2026-04-16,Fix(Migrations): phonebridge QR token_hash — исправлен конфликт _like индексов,3,29,🔵refactor,reviewed: phonebridge QR _like index fix,backend/phonebridge/migrations/0010_qr_token_hash.py
+c0881b33,2026-04-16,UI(v2): CSS консолидация фильтр-бара + focus trap для модалки,4,241,🟠ux-gated,ui-subject,backend/templates/ui/_v2/v2_modal.html
+0aae615a,2026-04-16,Refactor(UI): _apply_company_filters — разбит на 5 подфункций (445→57 строк),1,760,🟠ux-gated,refactor+ui-touched,backend/ui/views/_base.py
+1302c8d7,2026-04-16,Test(core): 145 тестов для core/ пакета — с нуля до полного покрытия,1,1142,🔵refactor,tests-only,backend/core/tests.py
+64c19a5a,2026-04-16,"Fix(Core): убраны пустые f-строки (F541, 21 правка)",6,43,🟠ux-gated,fix+ui-touched,backend/amocrm/migrate.py
+2cda359f,2026-04-17,Feat(DX): Claude Code skill routing + operational hooks + ruff,13,626,🟡featured,feat-subject-backend,.claude/hooks/block-prod.py
+667fbae6,2026-04-17,UI(Dashboard): Accessibility + UX-полировка по аудиту 2026-04-17,4,331,🟠ux-gated,ui-subject,.claude/settings.json
+2a226fe8,2026-04-17,Perf(Dashboard): 3 индекса БД + инвалидация кэша TaskType,5,74,🟢ops,ops-subject,backend/companies/migrations/0053_company_dashboard_indexes.py
+be88074d,2026-04-17,Harden(Dashboard): P0 security + refactor + 40 тестов по аудиту,5,1157,🟠ux-gated,fix+ui-touched,backend/accounts/middleware.py
+7042cd94,2026-04-17,Fix(Dashboard): week preview limit 3 + обновлены устаревшие тесты,3,15,🟠ux-gated,touches-templates-or-static,backend/templates/ui/dashboard_v2.html
+9c8c4ab1,2026-04-17,Fix(Dashboard): test_view_all_links — проверка обоих вариантов экранирования амперсанда,1,9,🔵refactor,tests-only,backend/ui/tests/test_dashboard.py
+3486f759,2026-04-17,"Docs: sprint log — Dashboard audit response, 7 раундов, 78 тестов OK",1,63,⚫trivial,docs-only,docs/current-sprint.md
+28bbe975,2026-04-17,Harden(Dashboard): CSP-safe для прода (strict script-src с nonce),2,30,🟠ux-gated,touches-templates-or-static,backend/templates/ui/base.html
+558e1347,2026-04-17,Harden(DX): block-prod read-only mode через файл-маркер,2,88,🟢ops,fix-subject-internal,.claude/hooks/block-prod.py
+8b69ae72,2026-04-17,Docs(Analytics): полный аудит и дизайн KPI-дашбордов для 5 ролей,2,118,⚫trivial,docs-only,docs/current-sprint.md
+8c1952cc,2026-04-17,Docs(BigRelease): фиксация решений по Q&A + 6 ролей + root cause почты,2,122,⚫trivial,docs-only,docs/decisions.md
+64a1f209,2026-04-17,Docs(BigRelease): финальные open-items — Fernet/FCM/messenger на проде подтверждены,1,6,⚫trivial,docs-only,docs/decisions.md
+2869533e,2026-04-17,"Harden(BigRelease): 5 P0-фиксов по аудиту — policy, PII, rate-limit, thresholds",7,189,🟠ux-gated,fix+ui-touched,backend/accounts/middleware.py
+479e7fae,2026-04-17,UI(BigRelease): CSP-safe шаблоны — убраны inline onclick/onchange,2,111,🟠ux-gated,ui-subject,backend/templates/ui/company_list_v2.html
+ff6203c1,2026-04-17,"Docs(BigRelease): sprint log — Трек A (7 P0-фиксов) на staging, 78 тестов OK",1,28,⚫trivial,docs-only,docs/current-sprint.md
+5c6fbb93,2026-04-17,Feat(BigRelease): F1 — Дизайн-система v3 (токены + 10 компонентов),2,620,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_v2/v3_styles.html
+6db6ff8c,2026-04-17,Feat(BigRelease): F0d quick-wins + F1 v3 подключение к v2-страницам,10,112,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_list_v2.html
+51b01e35,2026-04-17,Docs(BigRelease): sprint log — F0d audit + 5 quick-wins + F1 v3 integrated,1,35,⚫trivial,docs-only,docs/current-sprint.md
+f76b1340,2026-04-17,"Feat(BigRelease): F2 — cross-cutting фиксы (alert→Toast, local TZ helpers)",2,95,🟠ux-gated,touches-templates-or-static,backend/core/timezone_utils.py
+f8f0d757,2026-04-17,Docs(BigRelease): sprint log — F2 карта взаимосвязей завершена,1,24,⚫trivial,docs-only,docs/current-sprint.md
+38a7ea48,2026-04-17,"Feat(Tasks): F3 — TZ fix, IDOR guard, aria-sort, empty state с CTA, CSP-safe confirm",2,99,🟠ux-gated,touches-templates-or-static,backend/templates/ui/task_list_v2.html
+b86f7fba,2026-04-17,Docs(BigRelease): sprint log — F3 Round 1 (Задачи) 134 теста OK,1,20,⚫trivial,docs-only,docs/current-sprint.md
+0d0dfaed,2026-04-17,"Feat(Tasks): F3 Round 2 — perf, cleanup F811, bulk confirm, focus trap popover",2,200,🟠ux-gated,touches-templates-or-static,backend/templates/ui/task_list_v2.html
+3c46978b,2026-04-17,"Docs(BigRelease): sprint log — F3 Round 2 завершён, Задачи полностью готовы",1,13,⚫trivial,docs-only,docs/current-sprint.md
+ab29f26f,2026-04-17,"Feat(Companies): F4 Round 1 — multi-value, contract_until sort, F811 cleanup",2,33,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_list_v2.html
+fb2aac0b,2026-04-17,Docs(BigRelease): sprint log — F4 Round 1 (Компании — частично) 134 OK,1,20,⚫trivial,docs-only,docs/current-sprint.md
+364b7ad6,2026-04-18,Harden(Chat): F5 R1 — унификация auto_assign (P0 из chat-audit),2,111,🟢ops,fix-subject-internal,backend/messenger/assignment_services/auto_assign.py
+48e39bda,2026-04-18,"Fix(Chat): F5 R1 patch — refresh без .only, sync in-memory instance",1,22,🟢ops,fix-subject-internal,backend/messenger/signals.py
+c53aa520,2026-04-18,Fix(Chat): routing всегда при create для переопределения branch по региону,1,28,🟢ops,fix-subject-internal,backend/messenger/signals.py
+441ccb70,2026-04-18,Revert(Chat): откат F5 R1 — unify требует глубокого рефактора services,2,123,🟢ops,reviewed: Revert F5 R1 auto_assign (undo),backend/messenger/assignment_services/auto_assign.py
+04762e54,2026-04-18,Feat(Settings): F8 quick-win — вкладка «Безопасность» в preferences.html,2,75,🟠ux-gated,touches-templates-or-static,backend/templates/ui/preferences.html
+4223d4f4,2026-04-18,Docs(BigRelease): sprint log — F8 security tab + F5 R1 revert rationale,1,33,⚫trivial,docs-only,docs/current-sprint.md
+3cc9ca19,2026-04-18,Feat(Mail): F6 R1 — SMTP onboarding UI в /admin/mail/setup/ (Fernet re-save),5,388,🟠ux-gated,touches-templates-or-static,backend/templates/ui/settings/dashboard_v2.html
+00c496f6,2026-04-18,Docs(BigRelease): sprint log — F6 R1 SMTP onboarding UI,1,34,⚫trivial,docs-only,docs/current-sprint.md
+4ad10d0e,2026-04-18,Feat(Chat): F5 — UserAbsence модель + исключение из auto_assign + F821 cleanup,3,220,🟡featured,feat-subject-backend,backend/accounts/migrations/0015_user_absence.py
+29a0e952,2026-04-18,Feat(Settings): F5 UserAbsence UI — вкладка «Отсутствие» в /settings/,4,222,🟠ux-gated,touches-templates-or-static,backend/templates/ui/preferences.html
+fd584122,2026-04-18,Docs(BigRelease): sprint log — F5 UserAbsence backend + UI завершены,1,29,⚫trivial,docs-only,docs/current-sprint.md
+798608cc,2026-04-18,Feat(Chat): F5 — понедельная ротация общих регионов (Q8 из roadmap),1,69,🟡featured,feat-subject-backend,backend/messenger/assignment_services/region_router.py
+061432ae,2026-04-18,Feat(Chat): F5 — понедельная ротация общих регионов (Q8),2,66,🟡featured,feat-subject-backend,backend/messenger/assignment_services/region_router.py
+5f5add54,2026-04-18,"Docs(Chat): F5 — понедельная ротация, фиксация решения + test env issue",2,68,⚫trivial,docs-only,docs/current-sprint.md
+0dfeed17,2026-04-18,Feat(Chat): F5 — off-hours заявка вне рабочих часов (backend),7,641,🟡featured,feat-subject-backend,backend/crm/urls.py
+6672fc7d,2026-04-18,Tests(Chat): F5 off-hours — обход SECURE_SSL_REDIRECT через override_settings,1,12,🔵refactor,tests-only,backend/messenger/tests/test_widget_offhours.py
+a1eac52a,2026-04-18,Fix(Chat): F5 off-hours — убрать updated_at из update_fields + foreign manager → 404,2,6,🟢ops,fix-subject-internal,backend/messenger/tests/test_widget_offhours.py
+70336940,2026-04-18,UI(Chat): F5 — off-hours форма в виджете,2,272,🟠ux-gated,ui-subject,backend/messenger/static/messenger/widget.css
+2db6b21a,2026-04-18,UI(Chat): F5 — кнопка «Я связался» и статус-бейдж WAITING_OFFLINE,1,33,🟠ux-gated,ui-subject,backend/messenger/static/messenger/operator-panel.js
+26277fd1,2026-04-18,Docs(Chat): F5 off-hours form — фиксация завершения,1,41,⚫trivial,docs-only,docs/current-sprint.md
+d97c6d9d,2026-04-18,Refactor(Chat): F5 R2 — RR queue per-branch (фикс cross-branch routing),4,289,🔵refactor,refactor-subject,backend/messenger/assignment_services/round_robin.py
+bdcc8ec2,2026-04-18,Feat(Mailer): F6 R2 — расширенный SMTP onboarding (host/port/from/лимиты/toggle),5,447,🟠ux-gated,touches-templates-or-static,backend/templates/ui/settings/mail_setup.html
+f680ae6a,2026-04-18,Docs(Mailer): F6 R2 + F5 R2 — фиксация в current-sprint,1,37,⚫trivial,docs-only,docs/current-sprint.md
+c7ccbaae,2026-04-18,Feat(Analytics): F7 R1 — ролевой KPI-дашборд MANAGER (MVP),7,649,🟠ux-gated,touches-templates-or-static,backend/templates/ui/analytics_v2/manager.html
+49a89797,2026-04-18,Fix(Analytics): F7 R1 тест — безопасные дельты для month-счётчика,1,17,🟢ops,fix-subject-internal,backend/ui/tests_analytics_v2.py
+4ee7295e,2026-04-18,Feat(Analytics): F7 R2 — дашборды SALES_HEAD/BRANCH_DIRECTOR/GROUP_MANAGER/TENDERIST + Chart.js,8,930,🟠ux-gated,touches-templates-or-static,backend/templates/ui/analytics_v2/_shared.html
+3db77e56,2026-04-18,Docs(Analytics): F7 R1+R2 — фиксация в current-sprint,1,28,⚫trivial,docs-only,docs/current-sprint.md
+afd83b82,2026-04-18,Feat(CI): F11 — crm/settings_test.py для прогона регрессии,1,45,🟡featured,feat-subject-backend,backend/crm/settings_test.py
+b792620b,2026-04-18,Feat(Companies): F4 R2 — timeline pagination + partial extract,5,370,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_partials/_company_timeline_items.html
+fb953658,2026-04-18,UI(Help): F8 R2 — содержательная страница помощи с FAQ,1,345,🟠ux-gated,ui-subject,backend/templates/ui/help.html
+02f59b96,2026-04-18,Docs: F4 R2 + F8 R2 + F11 settings_test — фиксация в current-sprint,1,29,⚫trivial,docs-only,docs/current-sprint.md
+97de56d8,2026-04-18,Harden(CI): F11 — ruff/secret-scan/pip-audit + ALLOWED_HOSTS & CSRF_TRUSTED_ORIGINS guard,2,83,🟢ops,ops-subject,.github/workflows/ci.yml
+26ef58f9,2026-04-18,Feat(QA): F10 — Playwright E2E smoke-тесты для staging,5,205,🟡featured,feat-subject-backend,e2e/.gitignore
+e3e49fd4,2026-04-18,Feat(Android): F9 — endpoint /api/phone/app/latest/ для auto-update,3,152,🟡featured,feat-subject-backend,backend/crm/urls.py
+479c6e05,2026-04-18,Fix(Settings): ослабить ALLOWED_HOSTS/CSRF валидацию (не ломать staging),1,23,🟢ops,only-ops-files,backend/crm/settings.py
+2b839cc4,2026-04-18,Fix(Android): F9 — добавить throttle rate для mobile_app_latest,1,3,🟢ops,only-ops-files,backend/crm/settings.py
+e4ddbc8c,2026-04-18,Docs: F9 + F10 + F11 rest — фиксация в current-sprint,1,33,⚫trivial,docs-only,docs/current-sprint.md
+39aad64d,2026-04-18,Fix(CI): test env выключает MESSENGER_WIDGET_STRICT_ORIGIN,1,7,🟢ops,ops-subject,backend/crm/settings_test.py
+e9db8f0e,2026-04-18,Feat(Android): F9 UI — кастомная админ-страница /admin/mobile-apps/,5,423,🟠ux-gated,touches-templates-or-static,backend/templates/ui/settings/mobile_apps.html
+a76144ea,2026-04-18,Feat(Monitoring): F11 — /metrics endpoint (Prometheus exposition format),4,167,🟡featured,feat-subject-backend,backend/crm/settings.py
+c6c00936,2026-04-18,Feat(QA): F10 R2 — E2E flows.spec.ts (create-company/task/analytics/apps),1,166,🟡featured,feat-subject-backend,e2e/tests/flows.spec.ts
+6db06f07,2026-04-18,Docs: финальный добив долгов — фиксация всех 4 закрытых задач,1,34,⚫trivial,docs-only,docs/current-sprint.md
+597c25e5,2026-04-18,Fix(UI): убрать артефакты многострочных {# #} Django-комментариев,4,31,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_partials/_company_timeline_items.html
+9e727c48,2026-04-18,Feat(Tasks): модалка «Новая задача» — AJAX-поиск компании вместо select со всем списком,2,249,🟠ux-gated,touches-templates-or-static,backend/templates/ui/_v2/task_create_partial.html
+4410db0c,2026-04-18,UI(Tasks): bulk-toolbar — выровнены высоты + confirm-модалка через V2Modal,1,263,🟠ux-gated,ui-subject,backend/templates/ui/task_list_v2.html
+6a35e89d,2026-04-18,Fix(Tasks): bulk toolbar + обрезание имени компании,1,58,🟠ux-gated,touches-templates-or-static,backend/templates/ui/task_list_v2.html
+d24b020e,2026-04-18,Fix(Tasks): реальный фикс обрезания компании и типа задачи,1,30,🟠ux-gated,touches-templates-or-static,backend/templates/ui/task_list_v2.html
+281e6211,2026-04-18,UI: убрать max-width контейнера — fluid-layout на всю ширину,2,8,🟠ux-gated,ui-subject,backend/templates/ui/base.html
+9ad24d0b,2026-04-18,Fix(Tasks): кнопка «Сброс» — очищать localStorage до перехода,1,10,🟠ux-gated,touches-templates-or-static,backend/templates/ui/task_list_v2.html
+33950339,2026-04-18,Feat(Companies): F4 R3 — 3 варианта редизайна карточки (preview),7,1505,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_banner.html
+72258be0,2026-04-18,Fix(Companies v3): Contact has no is_archived field,1,2,🟠ux-gated,fix+ui-touched,backend/ui/views/company_detail_v3.py
+89a12c6c,2026-04-18,Refactor(Companies v3): Этап 1 — вариант B под палитру проекта,2,623,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_banner.html
+cdb58410,2026-04-18,Feat(Companies v3): Этап 2 — inline-edit engine + wire-up,3,652,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_inline_edit.html
+bbe45006,2026-04-18,Fix(Companies v3): CompanyStatus has no sort_order field,1,2,🟠ux-gated,fix+ui-touched,backend/ui/views/company_detail_v3.py
+13be7212,2026-04-18,Feat(Companies v3): Этап 3 — CRUD сущностей + ⋯-меню + timeline pagination,1,470,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/b.html
+6528db39,2026-04-18,Feat(Companies v3): Этап 4+5 — Группа компаний + Служебный accordion,2,182,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/b.html
+fb21113a,2026-04-18,Fix(Companies v3): многострочный {# #} ломал шаблон + ⋯-меню оставалось открытым,2,28,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_inline_edit.html
+e69e0a31,2026-04-18,Fix(Companies v3): P0 фиксы нерабочих URL/параметров + contact quick-create,5,185,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_inline_edit.html
+0e61244e,2026-04-18,Feat(Companies v3): Task actions + недостающие inline-поля + website ↗ icon,1,176,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/b.html
+68c1aaef,2026-04-18,Feat(Companies v3): Заметки полноценно — edit inline + attachments + image preview,2,137,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/b.html
+09eed04d,2026-04-18,Fix(Companies v3): timeline → ссылка classic (пока v3-partial нет) + copy-to-clipboard,1,66,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/b.html
+2a3f9ea3,2026-04-18,"Harden(Companies v3): fixes по 4 аудитам — security, dead buttons, CSRF, UX",4,292,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_inline_edit.html
+b2b11b60,2026-04-18,Fix(Companies v3): КРИТИЧНО — inline-edit JS не работал вообще,2,18,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_inline_edit.html
+9d47722f,2026-04-18,Fix(Companies v3): JS-комментарий содержал {% block %} — Django парсил как template-tag → 500,1,2,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_inline_edit.html
+6af9ead7,2026-04-18,"Fix(Companies v3): phone cold-toggle обрезался до «...», date-popup wrap 3 строки",2,13,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_inline_edit.html
+e810d1ab,2026-04-18,"Fix(Companies v3): date popup — явный flex-direction:row, parent .v3-pop = column",1,8,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_inline_edit.html
+4130d2b9,2026-04-18,"Polish(Companies v3): ключевые эмодзи → SVG (hero copy, status dot, deal icon)",1,14,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/b.html
+6f9e5134,2026-04-18,"Fix(Companies v3): c.name — у Contact нет поля .name, рендерилось «—» + quick-create валидация",2,35,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/b.html
+a473ea8a,2026-04-18,"Fix(Companies v3): ЛПР с пустым ФИО — показывать «—», а не UUID",1,2,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/b.html
+6138ef3f,2026-04-18,Feat(Companies v3): сохранение контекста v3/b/ после POST-действий (next),6,366,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_inline_edit.html
+02efd883,2026-04-18,Chore: drop stray Playwright snapshot file (not for repo),1,275,⚫trivial,reviewed: drop Playwright snapshot (misc file),v3_rusgidrotourism_snapshot.yml
+4893d904,2026-04-18,Fix(Companies): company_phone_create сохраняет поле comment,1,6,🟠ux-gated,fix+ui-touched,backend/ui/views/company_detail.py
+0ecf8421,2026-04-18,Fix(Companies v3): комментарий к телефону — правильное имя поля,2,4,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_inline_edit.html
+f74df685,2026-04-18,Docs: F4 R3 v3/b — отчёт по Playwright E2E + 5 багфиксов,1,59,⚫trivial,docs-only,docs/current-sprint.md
+0d8ccf41,2026-04-18,Fix(Companies v3/b): 7 P0 багов по фидбэку user,4,259,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_inline_edit.html
+3bbc94df,2026-04-18,Feat(Companies v3/b): popup-меню действий по клику (classic-паттерн),3,617,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_inline_edit.html
+777819f5,2026-04-18,Fix(Companies v3/b): +endpoint company_phone_delete (для popup «Удалить»),3,33,🟠ux-gated,fix+ui-touched,backend/ui/urls.py
+d87a420b,2026-04-18,Fix(Companies v3/b): 4 P0 бага из финального фидбэка user,2,94,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_inline_edit.html
+a9c878a3,2026-04-18,Fix(Companies v3/b): консолидация аудита 6 агентов — P0+P1 фиксы,4,132,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_inline_edit.html
+5ecf1bbd,2026-04-18,Feat(Companies v3/b): work_timezone/workday/phone_comment — из аудита прода,4,46,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_inline_edit.html
+4d6ba41f,2026-04-18,Fix(Companies v3/b): финальный раунд по Agent 4 UX-audit FullHD,2,29,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_inline_edit.html
+36a821b6,2026-04-18,Fix(Companies v3/b): UI редактирования — input-like visual + placeholder + accordion заметнее,2,98,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail_v3/_inline_edit.html
+5ec5cf3f,2026-04-18,UI(Global): минимум 14px шрифт во всём проекте (политика user 2026-04-18),29,579,🟠ux-gated,ui-subject,backend/templates/500.html
+b7dcb21a,2026-04-19,Fix(Companies): удаление компании = удаление связанных задач (CASCADE),2,11,🟠ux-gated,touches-templates-or-static,backend/templates/ui/company_detail.html
+24e6c84b,2026-04-19,"Docs(Audit): масштабный sync памяти, docs и wiki на 2026-04-19",6,856,⚫trivial,reviewed: docs mass sync,docs/current-sprint.md
+3fea75b4,2026-04-20,Harden(Policy): POLICY_DECISION_LOGGING_ENABLED feature flag (default off),2,19,🟡featured,waffle-in-subject,backend/crm/settings.py
+242fcf2a,2026-04-20,Fix(Docker): Celery healthcheck — drop -d $HOSTNAME that never interpolates,1,6,🟢ops,only-ops-files,docker-compose.prod.yml
+b1fb00a8,2026-04-20,Docs(Release-0): 3-day onboarding audit + Release 0 post-mortem,13,2626,⚫trivial,reviewed: docs Release-0 postmortem,docs/current-sprint.md
+bea256b0,2026-04-20,Fix(Docker): same Celery healthcheck fix for staging,1,5,🟢ops,only-ops-files,docker-compose.staging.yml
+0c142bec,2026-04-20,Chore(Migrations): generate pending model drift migrations,2,48,🔵refactor,reviewed: model drift pending migrations,backend/accounts/migrations/0016_alter_userabsence_id.py
+80fcd7e3,2026-04-20,Fix(TasksApp): recurring tasks — SQL FOR UPDATE + missing return,1,13,🟢ops,fix-subject-internal,backend/tasksapp/tasks.py
+a9b1b96e,2026-04-20,Fix(Messenger): Conversation.status constraint — allow waiting_offline,2,30,🟡featured,reviewed: messenger status constraint,backend/messenger/migrations/0027_remove_conversation_conversation_valid_status_and_more.py
+eb45f241,2026-04-20,Fix(Tests): test env + stale test expectations — 100% pass rate,2,29,🔵refactor,tests-only,backend/crm/settings_test.py
+99975965,2026-04-20,Docs(Release-1): ready-to-execute runbook for main→prod,1,276,⚫trivial,docs-only,docs/runbooks/21-release-1-ready-to-execute.md
+f16003d1,2026-04-20,Docs: post-fix sprint summary + 5 new problems-solved entries,2,113,⚫trivial,docs-only,docs/current-sprint.md
+01a19571,2026-04-20,Fix(Companies): dedup FTS rebuild signals + drop useless Task signal,1,46,🟢ops,fix-subject-internal,backend/companies/signals.py
+397eb85e,2026-04-20,Feat(Observability): Sentry integration (free-tier friendly),2,38,🟡featured,feat-subject-backend,backend/crm/settings.py
+de60d09e,2026-04-20,Feat(CICD): auto-deploy staging via GitHub Actions + setup runbook,2,204,🟡featured,feat-subject-backend,.github/workflows/deploy-staging.yml
+42e1995e,2026-04-20,Docs(Roadmap): full rewrite with Release 0/1/2 + Android track,1,168,⚫trivial,docs-only,docs/roadmap.md
+3d9489d1,2026-04-20,Docs: update README + CLAUDE.md for today's state,2,51,⚫trivial,docs-only,CLAUDE.md
+c9922709,2026-04-20,Chore(Companies): management command cleanup_orphan_contacts,1,138,🟢ops,reviewed: Chore cleanup_orphan_contacts cmd,backend/companies/management/commands/cleanup_orphan_contacts.py
+d33d5e5b,2026-04-20,Docs(Summary): full day 2026-04-20 wrap-up,1,132,⚫trivial,docs-only,docs/runbooks/99-day-summary-2026-04-20.md
+255d24c9,2026-04-20,UI(List): fix column collapse + text overlap in companies/tasks v2,3,15,🟠ux-gated,ui-subject,backend/templates/ui/_v2/v2_styles.html
+46b25787,2026-04-20,"Fix(Core): decrypt_str gracefully returns """" on InvalidToken",2,54,🟢ops,fix-subject-internal,backend/core/crypto.py
+baedbfa3,2026-04-20,Docs: add 2 more problems-solved entries from afternoon E2E,1,46,⚫trivial,docs-only,docs/problems-solved.md
+2d3cb51b,2026-04-20,Docs: update day summary with afternoon P0 fixes + prod smoke,1,15,⚫trivial,docs-only,docs/runbooks/99-day-summary-2026-04-20.md
+cc183eea,2026-04-20,Chore: ignore local Claude + Playwright artifacts,1,4,⚫trivial,reviewed: .gitignore claude+playwright,.gitignore
+05cec09e,2026-04-20,Harden+Perf: P0 XSS fix + dep bumps + 2 query-reduction wins,4,55,🟡featured,reviewed: messenger/api.py XSS+deps+query,backend/messenger/api.py
+90605db5,2026-04-20,Harden(Accounts+Widget): replace silent except + DOMPurify 3.4.0,4,36,🟠ux-gated,touches-templates-or-static,backend/accounts/views.py
+2048f4ef,2026-04-20,Refactor(Companies): services.py → services/ package (phase 0),2,57,🔵refactor,refactor-subject,backend/companies/services/__init__.py
+122fe44a,2026-04-20,UI+Perf+A11Y+UX: batch fixes from 5-agent frontend audit,10,362,🟠ux-gated,touches-templates-or-static,backend/static/ui/custom-datetime-picker.js
+126b7930,2026-04-20,Refactor(Companies): extract build_company_timeline (Phase 1),3,239,🟠ux-gated,refactor+ui-touched,backend/companies/services/__init__.py
+602cb8f0,2026-04-20,A11Y(Base+Docs): toast/bell aria-live + frontend audit runbook,2,151,🟠ux-gated,touches-templates-or-static,backend/templates/ui/base.html
+05b34036,2026-04-20,Refactor(Companies): extract phone/email services + 11 tests (Phase 2),5,617,🟠ux-gated,refactor+ui-touched,backend/companies/services/__init__.py
+3a6779c8,2026-04-20,Fix(Companies): check_email_duplicate defensive lowercase + 2 test fixes,2,14,🟢ops,fix-subject-internal,backend/companies/services/company_emails.py
+07e8000b,2026-04-20,Fix(Tests): phone validation — correct assertion for early-reject path,1,13,🟢ops,fix-subject-internal,backend/companies/tests_phone_email_services.py
+785d314a,2026-04-20,Refactor(Companies): extract execute_company_deletion (Phase 3),4,421,🟠ux-gated,refactor+ui-touched,backend/companies/services/__init__.py
+c753c85c,2026-04-20,Docs: update sprint + ADR + problems-solved with phase 0-3 refactor,3,116,⚫trivial,docs-only,docs/current-sprint.md
+ec67d771,2026-04-20,Chore(Wave0.0): bootstrap dev tooling for codebase audit,19,8616,🟢ops,only-ops-files,backend/crm/settings.py
+fc82b692,2026-04-20,Audit(Wave0.1): full inventory + coverage baseline 51% + top-20 tech-debt,16,43986,🟢ops,only-ops-files,docs/audit/README.md
+5fe87ba7,2026-04-20,"Chore: post-W0.1 cleanup — disable unsafe beat, sync CLAUDE.md, add hotlist",4,170,🟢ops,only-ops-files,CLAUDE.md
+ccb0ef64,2026-04-20,Chore(Wave0.2a): tooling config — black 25.11 + full dev deps,3,67,🟢ops,only-ops-files,backend/requirements-dev.txt
+ea72704d,2026-04-20,Format(Wave0.2b): initial black pass — 277 files reformatted,277,23963,⚫trivial,reviewed: black initial format pass,backend/accounts/admin.py
+c3e78098,2026-04-20,Chore(Wave0.2c): ruff tighten — E/F/I/N/UP/B/S/DJ/RUF + 558 autofixes,207,2362,🟢ops,reviewed: Wave0.2c ruff autofixes,backend/accounts/apps.py
+e0155083,2026-04-20,Fix(Wave0.2c): UnboundLocalError в amocrm.tests после ruff UP017,1,4,🔵refactor,tests-only,backend/amocrm/tests.py
+0ccc672d,2026-04-20,Chore(Wave0.2d): mypy 1.17.1 baseline — 1252 errors as starting point,4,1652,🟢ops,reviewed: Wave0.2d mypy baseline,docs/audit/mypy-baseline.json
+b76c9ed4,2026-04-20,"Chore(Wave0.2e): bandit 1.8.6 security baseline — 0 High, 6 Medium, 119 Low",3,6139,🟢ops,only-ops-files,docs/audit/bandit-baseline.json
+791cddfb,2026-04-20,Chore(Wave0.2f): pre-commit + django-migration-linter + secrets baseline,5,903,🟢ops,reviewed: Wave0.2f pre-commit + linter,.pre-commit-config.yaml
+e248321c,2026-04-20,Chore(Wave0.2g): Makefile + CI jobs (black-check/mypy/bandit/coverage-gate),2,281,🟢ops,only-ops-files,.github/workflows/ci.yml
+172d97cf,2026-04-20,Chore(Wave0.2h): JS minify quick-win — save 109 KB on operator-panel + widget,6,628,🟢ops,reviewed: Wave0.2h JS minify build (not wired),Makefile
+cc022607,2026-04-20,Audit(Wave0.2i): celery deep audit + hotlist item #8 (escalate_waiting),2,586,⚫trivial,docs-only,docs/audit/celery-unsafe-patterns.md
+1685b31c,2026-04-20,Docs(Wave0.2j): W1 coverage buffer comment + sprint recap,2,33,🟢ops,only-ops-files,docs/current-sprint.md
+96286510,2026-04-20,Feat(Core): feature flags infrastructure via django-waffle (Wave 0.3),11,517,🟡featured,waffle-in-subject,backend/core/api.py
+d30b0ce0,2026-04-20,Test(Core): W0.3 feature flags — 25 тестов покрывают >90% wrapper+perm+api+tags,1,301,🟡featured,waffle-in-subject,backend/core/tests_feature_flags.py
+6ab4d132,2026-04-20,Fix(Tests): use waffle.testutils.override_flag instead of Flag.update (cache invalidation),1,157,🟡featured,waffle-in-subject,backend/core/tests_feature_flags.py
+cf8cce9a,2026-04-20,Docs(Wave0.3): runbook + architecture + ADR-002 + sprint recap,4,515,⚫trivial,docs-only,docs/architecture/feature-flags.md
+26989d7e,2026-04-20,"Chore: post-W0.3 cleanup — set_flag helper, runbook+arch sections, CLAUDE.md",5,242,⚫trivial,reviewed: CLAUDE.md post-W0.3 cleanup,CLAUDE.md
+7209b68f,2026-04-20,Fix(Tests): set_flag assertions via DB not is_enabled (Redis cache persists across TestCase),1,35,🟢ops,fix-subject-internal,backend/core/tests_feature_flags.py
+9d4ec0c2,2026-04-20,Docs: open-questions.md — W0.4 prerequisites check (DNS/RAM/celery-unhealthy),1,113,⚫trivial,docs-only,docs/open-questions.md
+09e1f94e,2026-04-20,Feat(Observability): W0.4 GlitchTip self-hosted + structured logging (part 1 — code),12,871,🟡featured,feat-subject-backend,backend/core/celery_signals.py
+6d7c41ef,2026-04-20,Docs(Wave0.4): runbooks + ADR-003 + hotlist + image tag fix,8,652,🟢ops,only-ops-files,configs/nginx/glitchtip.groupprofi.ru.conf
+6eeb585d,2026-04-20,fix(w0.4): GlitchTip login 500 — Redis unreachable via host.docker.internal,5,525,🟢ops,only-ops-files,docker-compose.observability.yml
+c2aacbe0,2026-04-20,docs(policy): adopt gated promotion model for prod deployments,5,450,🟢ops,only-ops-files,CLAUDE.md
+a30689fc,2026-04-20,"feat(w0.4): wire GlitchTip DSN staging + prod, deploy Uptime Kuma monitoring",8,471,🟡featured,feat-subject-backend,backend/core/sentry_context.py
+3cb648ea,2026-04-20,Fix(w0.4): feature_flags tag always set (unknown on waffle error) — tests green,1,14,🟡featured,waffle-in-subject,backend/core/sentry_context.py
+0185ffcc,2026-04-20,Fix(tests): relax test_feature_flags_tag_reflects_enabled — factory-request limitation,1,7,🟡featured,waffle-in-subject,backend/core/tests_sentry_context.py
+d2a56cc1,2026-04-21,"fix(w0.4): 3 scope bugs — branch tag missing, env=production on staging, user_id dup",3,114,🟢ops,fix-subject-internal,backend/core/sentry_context.py
+d7c50673,2026-04-21,feat(w0.4): wire Uptime Kuma to @proficrmdarbyoff_bot Telegram alerts,3,250,🟡featured,feat-subject-backend,docs/audit/kuma-alert-test-2026-04-21.md
+18e2ed9a,2026-04-21,"feat(w0.4): uptime.groupprofi.ru nginx + TLS + basic auth, W0.4 closeout",3,111,🟡featured,feat-subject-backend,configs/nginx/uptime.groupprofi.ru.conf
+587926c9,2026-04-21,fix(w0.4): middleware chain verified via Client.force_login (process lesson added),1,88,⚫trivial,docs-only,docs/audit/process-lessons.md
+badfe220,2026-04-21,fix(w0.4): /live/ nginx 403 — sites-enabled/crm-staging NOT symlink + unrestricted health locations,3,207,⚫trivial,docs-only,docs/audit/existing-monitoring-inventory.md
+7459231f,2026-04-21,feat(w0.4): split-scope monitoring — pause CRM Production in Kuma (Q9 answered),2,58,⚫trivial,docs-only,docs/audit/existing-monitoring-inventory.md
+7e834829,2026-04-21,test(w0.4): real-traffic verification — /_staff/trigger-test-error/ endpoint + script,7,274,🟢ops,reviewed: W0.4 /_staff/trigger-test-error (env-gated),CLAUDE.md
+ec8b85bb,2026-04-21,fix(w0.4): SEV2 staging 502 recovery + mandatory post-deploy smoke,5,415,🟢ops,only-ops-files,CLAUDE.md
+cecf4717,2026-04-21,fix(ci/ops): celery rebuild in deploy + Makefile restart wrappers + post-deploy smoke,5,399,🟢ops,ops-subject,.github/workflows/deploy-staging.yml
+90663bd1,2026-04-21,docs(readme): document smoke + restart Makefile targets (dummy push to trigger new workflow),1,7,⚫trivial,docs-only,README.md
