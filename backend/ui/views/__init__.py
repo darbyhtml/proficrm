@@ -6,17 +6,9 @@ from ui.views._base import RESPONSIBLE_FILTER_NONE, STRONG_CONFIRM_THRESHOLD
 # F7 R1: ролевые KPI-дашборды v2
 from ui.views.analytics_v2 import analytics_v2_home
 from ui.views.company_detail import (
-    company_cold_call_reset,
-    company_cold_call_toggle,
     company_detail,
-    company_phone_cold_call_reset,
-    company_phone_cold_call_toggle,
     company_tasks_history,
     company_timeline_items,
-    contact_cold_call_reset,
-    contact_cold_call_toggle,
-    contact_phone_cold_call_reset,
-    contact_phone_cold_call_toggle,
 )
 
 # F4 R3: preview 3 вариантов редизайна карточки компании + quick-endpoints
@@ -69,6 +61,16 @@ from ui.views.mobile import (
 # W1.2: extracted to pages/company/*
 from ui.views.pages.company.calls import (
     phone_call_create,
+)
+from ui.views.pages.company.cold_call import (
+    company_cold_call_reset,
+    company_cold_call_toggle,
+    company_phone_cold_call_reset,
+    company_phone_cold_call_toggle,
+    contact_cold_call_reset,
+    contact_cold_call_toggle,
+    contact_phone_cold_call_reset,
+    contact_phone_cold_call_toggle,
 )
 from ui.views.pages.company.contacts import (
     contact_create,
