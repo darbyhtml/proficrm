@@ -70,3 +70,36 @@ detect-secrets==1.5.0
 # Django migration linter (бесплатный). Ловит unsafe миграции на 9.5M-строк
 # таблицах (ADD COLUMN NOT NULL без default, ALTER TYPE, etc.).
 django-migration-linter==6.0.0
+
+# -----------------------------------------------------------------------------
+# Wave 0.5 (2026-04-21): test infrastructure upgrade.
+# docs/plan/02_wave_0_5_test_infra.md
+# -----------------------------------------------------------------------------
+
+# Test factories (replaces manual User.objects.create_user() в 100+ мест).
+# Используется через tests/fixtures/factories.py — hot-path models only
+# (User, Company, Contact, Task). Остальные 65 моделей — в W1.
+factory-boy==3.3.1
+
+# Faker — realistic test data. Locale `ru_RU` — Russian names/phones/addresses
+# match'ат user base и показывают как система реально работает с Russian input.
+Faker==30.10.0
+
+# Pytest stack — parallel execution, unified runner для Django tests.
+# Django native runner (manage.py test) продолжает работать параллельно.
+pytest==8.4.1
+pytest-django==4.11.1
+pytest-cov==6.0.0
+
+# pytest-xdist: parallel test execution через N workers.
+# Usage: pytest -n auto (= CPU count), или pytest -n 4.
+pytest-xdist==3.8.0
+
+# Retry flaky tests (timing-sensitive Kuma probes, SSE streams, etc).
+# Marker: @pytest.mark.flaky(reruns=2).
+pytest-rerunfailures==14.0
+
+# E2E browser tests via Playwright. Used in tests/e2e/ — не каждый CI run,
+# separate workflow .github/workflows/e2e.yml.
+pytest-playwright==0.6.2
+playwright==1.48.0
