@@ -32,6 +32,7 @@ RESOURCES: tuple[PolicyResource, ...] = (
     PolicyResource("ui:tasks:list", "page", "Задачи: список"),
     PolicyResource("ui:tasks:detail", "page", "Задачи: просмотр"),
     PolicyResource("ui:analytics", "page", "Аналитика"),
+    PolicyResource("ui:analytics:v2", "page", "Аналитика v2 (ролевой дашборд)"),
     PolicyResource("ui:help", "page", "Помощь"),
     PolicyResource("ui:preferences", "page", "Настройки пользователя"),
     PolicyResource("ui:mobile_app", "page", "Мобильное приложение"),
@@ -166,6 +167,18 @@ RESOURCES: tuple[PolicyResource, ...] = (
         "ui:mobile_app:download", "action", "Мобильное приложение: скачать APK", sensitive=True
     ),
     PolicyResource("ui:mobile_app:qr", "action", "Мобильное приложение: QR вход"),
+    # Messenger self-service (W2.1.3b)
+    PolicyResource(
+        "ui:messenger:agent_status",
+        "action",
+        "Messenger: обновить свой статус оператора (self-service)",
+    ),
+    # Tasks actions (W2.1.3b codification)
+    PolicyResource(
+        "ui:tasks:comment:add",
+        "action",
+        "Задачи: добавить комментарий (inline checks остаются as defense-in-depth)",
+    ),
     PolicyResource(
         "ui:settings:view_as:update",
         "action",
