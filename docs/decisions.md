@@ -1,5 +1,51 @@
 # Архитектурные решения
 
+## ADR-005 [2026-04-22] TOTP 2FA для админов — soft-mandatory + exclude из test env (W2.2)
+
+**Контекст.** W2.2 требует mandatory 2FA для admin-role users (is_superuser / is_staff / role='admin') чтобы закрыть attack vector: credential stuffing + leaked admin password. Варианты реализации: hard-mandatory (admin без device не может залогиниться вообще) или soft-mandatory (admin без device может войти, но немедленно redirect'ится на setup flow; все остальные non-safe paths недоступны пока не configured).
+
+**Альтернативы.**
+1. **django-otp / django-two-factor-auth** — полная pluggable система с admin UI, QR setup, recovery codes. Зрелая (10k+ stars). Но:
+   - Требует `DEFAULT_AUTHENTICATION_BACKENDS` override + template overrides.
+   - Дополнительные deps (django-formtools, phonenumber_field для SMS).
+   - Overkill для одного flow (TOTP-only, без SMS / email / push).
+2. **pyotp + custom middleware** — минимум deps (только `pyotp==2.9.0` + `qrcode[pil]`), 2 модели, ~200 LOC views + middleware.
+3. **Hard-mandatory** — admin без confirmed device не может войти (login view сам проверяет device). Проблема: lockout risk при первом запуске + нет graceful migration path для existing admins.
+4. **Soft-mandatory** — admin без device может войти, но сразу redirect'ится к `/accounts/2fa/setup/`. Safe paths allowlist (login, 2fa/*, static, health, api) bypass middleware.
+
+**Решение.**
+- **Custom реализация на pyotp** (option 2): `AdminTOTPDevice` + `AdminRecoveryCode` models + `TwoFactorMandatoryMiddleware` + 2 views (setup, verify).
+- **Soft-mandatory pattern** (option 4): admin без device → redirect к setup; admin с device без verified session → redirect к verify; non-admin — pass-through.
+- **Test env exclusion**: `settings_test.py` удаляет middleware из `MIDDLEWARE` list чтобы не ломать ~50-100 существующих тестов, которые делают `c.force_login(admin) + c.get('/...')` и ожидают 200. Coverage 2FA сохраняется через `accounts/tests_2fa.py` (20 тестов, MW создаётся вручную через `RequestFactory`).
+
+Причины:
+- **Минимум deps + lockout-safe**: safe paths allowlist включает `/accounts/2fa/setup/` и `/accounts/2fa/verify/` — даже admin без device может достичь setup flow. Login тоже в safe list — можно логиниться, setup будет первое, что покажется.
+- **Graceful migration**: existing admins могут войти, пройти setup, получить recovery codes, без service outage.
+- **Test suite safe**: exclude из test env сохраняет 1179 existing tests без правки каждого.
+- **Simpler surface**: меньше кода, чем django-two-factor, легче audit, легче rollback.
+
+**Последствия.**
+- ✅ sdm прошёл manual setup в browser (2026-04-22 08:58-09:00 UTC). `AdminTOTPDevice(user=sdm, confirmed=True)` в БД.
+- ✅ Middleware enabled в commit `89eb02af`. Deploy b9302703 success. Staging verified.
+- ✅ Admin без verified session → 302 на `/accounts/2fa/verify/?next=<path>`.
+- ✅ Non-admin (MANAGER, TENDERIST, BRANCH_DIRECTOR, etc.) — pass-through.
+- ⚠️ Session cookie `otp_verified` per-session (expire при logout). Admin каждый login должен verify token (по design).
+- ⚠️ `settings_test.py` расходится с production `MIDDLEWARE` list — test env не тестирует middleware-integration с другими MW. Compensated через `accounts/tests_2fa.py` unit-level coverage.
+
+**Rollback.** `docs/runbooks/2fa-rollback.md` — 4 варианта:
+1. Admin lost phone → recovery code (10 one-time codes, SHA-256 hashed).
+2. Admin lost phone + no recovery codes → disable device via Django shell (`AdminTOTPDevice.objects.filter(user__username='X').delete()`) — пользователь при следующем логине redirect на setup.
+3. Middleware ломает prod → revert commit `89eb02af` + re-deploy (staging rollback функция сделает auto — commit не в rollback path).
+4. Полный откат W2.2 → revert `bffa31b9` (infrastructure) + `89eb02af` (enable) + migration rollback `accounts.0016`.
+
+**Связанные документы.**
+- Runbook: `docs/runbooks/2fa-rollback.md`.
+- User guide: `docs/dev/2fa-admin-setup.md`.
+- Code: `backend/accounts/models.py` (AdminTOTPDevice, AdminRecoveryCode), `backend/accounts/views_2fa.py`, `backend/accounts/middleware_2fa.py`, `backend/accounts/migrations/0017_w2_admin_totp.py`, `backend/accounts/tests_2fa.py`.
+- Deploy-workflow fix: commit `1e7e0daa` (stdin consumption bug в deploy-staging.yml, blocker для верного W2.2 deploy до его устранения).
+
+---
+
 ## ADR-004 [2026-04-20] Uptime Kuma self-hosted вместо UptimeRobot (Wave 0.4 Track D)
 
 **Контекст.** W0.4 DoD требует uptime-мониторинг 3 сервисов (CRM prod, CRM staging, GlitchTip) с alerts в Telegram при падении. План v1.2 (00_MASTER_PLAN.md §6) упоминает UptimeRobot free-tier. При попытке настроить проверилось:

@@ -1,5 +1,63 @@
 # Текущий спринт
 
+## [2026-04-22] — W2.2 COMPLETED — TOTP 2FA enforcement ACTIVE + deploy workflow fixed
+
+**Status**: ✅ Soft-mandatory 2FA live на staging. Admin users без verified session → redirect `/accounts/2fa/verify/`. Non-admin users не затронуты.
+
+### Delivered
+
+**Infrastructure (earlier session)**:
+- `AdminTOTPDevice` + `AdminRecoveryCode` models (migration 0017).
+- `views_2fa.py` (setup + verify flows) + templates (`accounts/2fa/*.html`).
+- URL routes `/accounts/2fa/setup/` + `/accounts/2fa/verify/`.
+- `middleware_2fa.TwoFactorMandatoryMiddleware` (soft-mandatory, не hard lockout).
+- 20 tests (models + middleware + views) — ALL pass.
+
+**Enforcement activation (this session)**:
+- User completed manual 2FA setup для sdm в browser: `AdminTOTPDevice(user=sdm, confirmed=True)` в БД.
+- Middleware registered в `settings.MIDDLEWARE` после `AuthenticationMiddleware`.
+- Removed из `settings_test.py` MIDDLEWARE list — чтобы сохранить существующие 1179 tests (десятки force_login(admin) + c.get('/...') ожидают 200, а получили бы 302 на verify).
+- External + internal verification: admin без flag → 302 на verify, admin с flag → 200, manager → 200, safe paths bypass.
+
+**Deploy workflow hotfix** (`1e7e0daa`):
+- Fixed stdin consumption bug в `.github/workflows/deploy-staging.yml` (line 95 migrate).
+- Added `-T` flag + `</dev/null` + `set -euxo pipefail` + `=== DEPLOY FULLY COMPLETED ===` marker.
+- Verified: последние 3 deploys (1e7e0daa, 89eb02af, b9302703) показывают ВСЕ 6 steps + completion marker.
+
+### Verification
+
+- ✅ accounts.tests_2fa: 20/20 pass
+- ✅ accounts + ui.tests_w2_group_b/d_codification: 115/115 pass (regression-clean)
+- ✅ staging deploy b9302703: все 6 steps + DEPLOY FULLY COMPLETED
+- ✅ staging smoke 6/6 green
+- ✅ Kuma monitor_id=2: status=1 (last heartbeat 09:03:52 UTC)
+- ✅ Django Client matrix:
+  - ADMIN no flag → 302 `/accounts/2fa/verify/?next=/companies/`
+  - ADMIN with flag → 200
+  - MANAGER (boa) → 200 (не затронут)
+  - /accounts/2fa/setup/ для confirmed admin → 302 dashboard (safe path bypass работает, view сам redirect'ит)
+
+### Commits (this session)
+
+- `89eb02af` — feat(2fa): enable TwoFactorMandatoryMiddleware (W2.2 — soft-mandatory for admins)
+- `b9302703` — style(2fa): apply black to settings_test.py MIDDLEWARE filter
+
+### Rollback path
+
+- `docs/runbooks/2fa-rollback.md` (4 options including `git revert 89eb02af` + re-deploy).
+- Admin lockout safeguard: safe paths include `/accounts/2fa/setup/` + `/accounts/2fa/verify/` — even admin без device может reach setup flow.
+
+### Next
+
+- **W2.1.3c**: bulk codify Group B (3 endpoints × 1-line decorator add) — done earlier today.
+- **W2.1.4**: Group A settings_* migration (64 endpoints × 4 sub-sessions).
+- **W2.1.5**: inline `enforce()` → decorator migration (57 locations, primarily mailer).
+- **W2.3**: CSP strict mode.
+
+User to decide ordering.
+
+---
+
 ## [2026-04-22] — W2.1.3b COMPLETED — Group D codified + Group B audit
 
 **Status**: ✅ W2 first real behavioral session done. Zero regression.
