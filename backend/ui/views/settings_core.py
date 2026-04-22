@@ -32,6 +32,7 @@ from ui.views._base import (
     log_event,
     login_required,
     messages,
+    policy_required,
     redirect,
     render,
     require_admin,
@@ -43,7 +44,10 @@ logger = logging.getLogger(__name__)
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:dashboard")
 def settings_dashboard(request: HttpRequest) -> HttpResponse:
+    # W2.1.4.1: inline require_admin() preserved as defense-in-depth.
+    # Декоратор @policy_required = primary gate (audit + policy engine).
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
