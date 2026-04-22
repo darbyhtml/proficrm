@@ -35,6 +35,7 @@ from accounts.permissions import require_admin
 from audit.models import ActivityEvent
 from audit.service import log_event
 from mailer.models import GlobalMailAccount
+from policy.decorators import policy_required
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +61,10 @@ def _fernet_status(account: GlobalMailAccount) -> dict:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:mail:setup")
 def settings_mail_setup(request: HttpRequest) -> HttpResponse:
     """Страница настройки SMTP — состояние + форма пересохранения пароля."""
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -78,12 +81,14 @@ def settings_mail_setup(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @require_POST
+@policy_required(resource_type="action", resource="ui:settings:mail:save_password")
 def settings_mail_save_password(request: HttpRequest) -> HttpResponse:
     """Пересохранить SMTP-пароль (перешифровать текущим MAILER_FERNET_KEY).
 
     Ключевая операция для разрешения Fernet InvalidToken на проде
     (см. mailer-audit P0, decisions.md 2026-04-17).
     """
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -140,12 +145,14 @@ def settings_mail_save_password(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @require_POST
+@policy_required(resource_type="action", resource="ui:settings:mail:test_send")
 def settings_mail_test_send(request: HttpRequest) -> HttpResponse:
     """Отправить тест-письмо через текущие SMTP-настройки.
 
     Проверка end-to-end: расшифровка пароля → TLS handshake → отправка.
     Получатель — email текущего пользователя (из User.email).
     """
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -235,11 +242,13 @@ _STR_FIELDS = ("smtp_host", "smtp_username", "from_email", "from_name")
 
 @login_required
 @require_POST
+@policy_required(resource_type="action", resource="ui:settings:mail:save_config")
 def settings_mail_save_config(request: HttpRequest) -> HttpResponse:
     """Сохранить host/port/username/from_email/from_name/STARTTLS и лимиты.
 
     Пароль не трогаем (для него — отдельный endpoint save_password).
     """
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -304,8 +313,10 @@ def settings_mail_save_config(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @require_POST
+@policy_required(resource_type="action", resource="ui:settings:mail:toggle_enabled")
 def settings_mail_toggle_enabled(request: HttpRequest) -> HttpResponse:
     """Включить/отключить массовую отправку через is_enabled."""
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
