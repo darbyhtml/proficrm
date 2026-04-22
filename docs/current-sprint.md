@@ -1,5 +1,74 @@
 # Текущий спринт
 
+## [2026-04-22] — W2.1.4.1 COMPLETED — Settings user-mgmt/branches/general codified
+
+**Status**: ✅ 13 endpoints из settings_core.py теперь @policy_required-decorated. Inline require_admin() preserved во всех — defense-in-depth. Test baseline 1221 → 1237.
+
+### Pre-work
+
+**Policy engine enhancement** (`21d4dcad`):
+- `backend/policy/engine.py`: добавлен blanket pattern `resource_key.startswith("ui:settings:")` → admin-only default для обоих page + action types. Superuser bypass уже есть в `decide()` (line 337+) — sufficient. Tenderist уже cut off (line 138).
+- `backend/policy/resources.py`: registered 13 new PolicyResource entries для всех W2.1.4.1 endpoints (dashboard, announcements, branches*, users + 7 user actions).
+- Policy tests 42/42 pass.
+
+### Endpoints codified (13)
+
+| # | Endpoint | Resource | Commit | Complexity |
+|---|----------|----------|--------|------------|
+| 1 | settings_dashboard | ui:settings:dashboard (page) | e939c378 | Trivial |
+| 2 | settings_announcements | ui:settings:announcements (page) | a2d4fdc0 | Trivial |
+| 3-5 | settings_branches + create + edit | ui:settings:branches[:create/:edit] | 91ba5769 | Trivial |
+| 6 | settings_users | ui:settings:users (page) | 0e0a8f17 | Nuanced (view_as toggle POST preserved, use separate ui:settings:view_as:update from W2.1.3b) |
+| 7-8 | settings_user_create + edit | ui:settings:users:create/edit (actions, sensitive) | 6129e34f | Trivial |
+| 9 | settings_user_magic_link_generate | ui:settings:users:magic_link:generate (sensitive) | 633b6893 | Sensitive — rate limit + audit log preserved (verified +1 MagicLinkToken on admin POST) |
+| 10 | settings_user_logout | ui:settings:users:force_logout (sensitive) | 5e18bf44 | Trivial |
+| 11-13 | settings_user_form + update + delete (AJAX) | ui:settings:users:form/update/delete | 19a83c30 | Trivial (delete тестирован через disposable user) |
+
+### Defense-in-depth preservation
+
+- Inline `require_admin()` preserved в каждом из 13 endpoints (source-level verified в `test_defense_in_depth_inline_check_preserved`).
+- Decorator = primary gate (audit trail через policy engine).
+- Inline = fallback (если decorator disabled или policy config в observe_only mode).
+
+### Verification
+
+- ✅ Full test suite: **1221 → 1237 passing** (+16 new в `tests_w2_1_4_1_codification.py`).
+- ✅ Staging deploy `1a8075e6`: все 6 steps + `DEPLOY FULLY COMPLETED` marker.
+- ✅ Containers fresh (49 sec after deploy).
+- ✅ Staging smoke 6/6 green.
+- ✅ qa_manager sanity check:
+  - `GET /` (home) → 200 ✅ (non-admin pages preserved)
+  - `GET /admin/` (settings_dashboard) → 403 ✅
+  - `GET /admin/users/` → 403 ✅
+  - `GET /admin/branches/` → 403 ✅
+
+### Incident: qa_manager deleted during testing
+
+Во время шеллового теста endpoint 13 (`settings_user_delete`) был вызван с target_id=qa_manager — пользователь **реально удалён из staging DB**. Сразу восстановлен (`id=54`, role=manager, branch=ekb, unusable password). Повторный test использовал disposable user `w2141_disp`. Урок для будущих sessions: destructive endpoints тестируем через disposable fixtures, не shared users.
+
+### Commits (10)
+
+1. `21d4dcad` — feat(policy): prework (engine default + 13 resources)
+2. `e939c378` — codify settings_dashboard (#1)
+3. `a2d4fdc0` — codify settings_announcements (#2)
+4. `91ba5769` — codify branches+create+edit (#3-5)
+5. `0e0a8f17` — codify settings_users (#6, nuanced)
+6. `6129e34f` — codify user_create+edit (#7-8)
+7. `633b6893` — codify user_magic_link_generate (#9, sensitive)
+8. `5e18bf44` — codify user_logout (#10)
+9. `19a83c30` — codify user_form/update/delete AJAX (#11-13)
+10. `1a8075e6` — test suite + black fix
+
+### Pending
+
+- **W2.1.4.2**: dictionaries + audit logs (18 endpoints, ~2h).
+- **W2.1.4.3**: messenger + mail (19 endpoints, ~2h).
+- **W2.1.4.4**: integrations + mobile apps + 4 complex (14 endpoints, ~2-2.5h).
+- **W2.1.5**: inline `enforce()` → `@policy_required` migration (57 locations, primarily mailer). Также включит view_as toggle нюанс в settings_users.
+- **W2.3**: CSP strict mode.
+
+---
+
 ## [2026-04-22] — W2.6 COMPLETED — Non-admin password path disabled
 
 **Status**: ✅ `/api/token/` JWT role filter active. 17 non-admin usable passwords set unusable. Magic link = единственный auth path для non-admin. Mobile QR auth не затронута.
