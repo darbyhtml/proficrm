@@ -60,10 +60,7 @@ MESSENGER_WIDGET_STRICT_ORIGIN = False
 # ожидает 200, а получит 302 на verify). Tests, специфичные для 2FA
 # (accounts/tests_2fa.py) сами создают MW вручную через RequestFactory
 # и не зависят от global MIDDLEWARE, так что coverage сохраняется.
-MIDDLEWARE = [
-    m for m in MIDDLEWARE
-    if m != "accounts.middleware_2fa.TwoFactorMandatoryMiddleware"
-]
+MIDDLEWARE = [m for m in MIDDLEWARE if m != "accounts.middleware_2fa.TwoFactorMandatoryMiddleware"]
 
 # ── Логирование: не шумим в тестах ──
 import logging
