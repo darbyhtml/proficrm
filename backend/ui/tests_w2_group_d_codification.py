@@ -86,7 +86,11 @@ class W2GroupDCodificationTests(TestCase):
         self.assertEqual(r.status_code, 200, "Admin should see /analytics/v2/")
 
     # --- Endpoint #2: messenger_agent_status ---
+    # settings_test default имеет MESSENGER_ENABLED=False — view raises Http404
+    # через `ensure_messenger_enabled_view()` helper. Staging .env задаёт =1.
+    # Override нужен для CI parity со staging runtime behavior.
 
+    @override_settings(MESSENGER_ENABLED=True)
     def test_messenger_agent_status_self_service_redirect(self):
         """POST updates own AgentProfile, redirects to messenger."""
         c = Client()
@@ -94,6 +98,7 @@ class W2GroupDCodificationTests(TestCase):
         r = c.post("/messenger/me/status/", {"status": "online", "next": "/"})
         self.assertEqual(r.status_code, 302, "Expected redirect after status update")
 
+    @override_settings(MESSENGER_ENABLED=True)
     def test_messenger_agent_status_get_redirects(self):
         """GET (wrong method) redirects to conversations."""
         c = Client()
