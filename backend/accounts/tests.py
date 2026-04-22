@@ -288,17 +288,25 @@ class JwtLoginSmokeTest(TestCase):
     def tearDown(self):
         cache.clear()
 
-    def test_jwt_login_success_returns_tokens_and_is_admin(self):
+    def test_jwt_login_admin_blocked_w27(self):
+        """W2.7 (2026-04-22): admin JWT password login отключён 403.
+
+        Было (W2.6): admin получал 200 + tokens. Stayed blocked для non-admin.
+        Сейчас (W2.7): все получают 403 — audit показал ZERO admin JWT usage
+        на prod (30d), W2.7 = symbolic hardening без incremental impact.
+
+        Admins должны использовать web /login/ с 2FA для auth.
+        """
         response = self.client.post(
             "/api/token/",
             {"username": "jwtadmin", "password": "jwtpass123"},
             content_type="application/json",
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 403)
         data = response.json()
-        self.assertIn("access", data)
-        self.assertIn("refresh", data)
-        self.assertTrue(data.get("is_admin"))
+        # Токены НЕ должны присутствовать
+        self.assertNotIn("access", data)
+        self.assertNotIn("refresh", data)
 
     def test_jwt_login_wrong_credentials_returns_401(self):
         response = self.client.post(

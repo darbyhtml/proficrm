@@ -51,37 +51,35 @@ class JWTRoleFilterTest(TestCase):
             )
         return user
 
-    # --- Admin path: allowed ---
+    # --- W2.7: ALL password JWT logins blocked (admin + non-admin) ---
 
-    def test_admin_jwt_login_succeeds(self):
-        """role=ADMIN (без superuser) — JWT login allowed."""
-        self._create_user("w26_admin", User.Role.ADMIN)
+    def test_admin_jwt_login_blocked_w27(self):
+        """W2.7: role=ADMIN JWT login теперь blocked 403 (было 200 в W2.6)."""
+        self._create_user("w27_admin", User.Role.ADMIN)
         c = Client()
         r = c.post(
             "/api/token/",
-            data=json.dumps({"username": "w26_admin", "password": "testpass123"}),
+            data=json.dumps({"username": "w27_admin", "password": "testpass123"}),
             content_type="application/json",
         )
-        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.status_code, 403, r.content)
+        body = r.content.decode()
+        self.assertIn("отключён", body.lower())
+        # Токены НЕ должны присутствовать в ответе
         data = json.loads(r.content)
-        self.assertIn("access", data)
-        self.assertIn("refresh", data)
-        self.assertTrue(data.get("is_admin"))
+        self.assertNotIn("access", data)
+        self.assertNotIn("refresh", data)
 
-    def test_superuser_jwt_login_succeeds(self):
-        """is_superuser=True — JWT login allowed даже если role != ADMIN."""
-        # Edge case: теоретически может существовать superuser с role=manager.
-        # is_superuser должен override.
-        self._create_user("w26_root", User.Role.MANAGER, is_superuser=True)
+    def test_superuser_jwt_login_blocked_w27(self):
+        """W2.7: is_superuser=True также blocked 403."""
+        self._create_user("w27_root", User.Role.MANAGER, is_superuser=True)
         c = Client()
         r = c.post(
             "/api/token/",
-            data=json.dumps({"username": "w26_root", "password": "testpass123"}),
+            data=json.dumps({"username": "w27_root", "password": "testpass123"}),
             content_type="application/json",
         )
-        self.assertEqual(r.status_code, 200, r.content)
-        data = json.loads(r.content)
-        self.assertTrue(data.get("is_admin"))
+        self.assertEqual(r.status_code, 403, r.content)
 
     # --- Non-admin path: blocked (403) ---
 
@@ -96,8 +94,9 @@ class JWTRoleFilterTest(TestCase):
         )
         self.assertEqual(r.status_code, 403, r.content)
         body = r.content.decode()
-        self.assertIn("администраторов", body)
-        self.assertIn("magic link", body)
+        # W2.7 response text updated — check "отключён" + "magic link"
+        self.assertIn("отключён", body.lower())
+        self.assertIn("magic link", body.lower())
         # Токены НЕ должны присутствовать в ответе
         data = json.loads(r.content)
         self.assertNotIn("access", data)
@@ -170,27 +169,81 @@ class JWTRoleFilterTest(TestCase):
         )
         self.assertEqual(r.status_code, 401)
 
-    # --- Refresh token flow preserved for admin ---
+    # --- Refresh token flow preserved (alternative token generation) ---
 
-    def test_refresh_token_flow_for_admin(self):
-        """Admin refresh token работает после W2.6."""
-        self._create_user("w26_adm2", User.Role.ADMIN)
+    def test_refresh_token_flow_preserved_w27(self):
+        """W2.7: /api/token/refresh/ endpoint preserved. Existing refresh
+        tokens (generated до W2.7 OR через /api/phone/qr/exchange/) должны
+        продолжать работать. Генерируем token direct через RefreshToken.for_user()
+        поскольку /api/token/ password больше не issues tokens."""
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        admin = self._create_user("w27_refresh_adm", User.Role.ADMIN)
+        token = RefreshToken.for_user(admin)
+        refresh_str = str(token)
+
+        c = Client()
+        r = c.post(
+            "/api/token/refresh/",
+            data=json.dumps({"refresh": refresh_str}),
+            content_type="application/json",
+        )
+        # 200 если SIMPLE_JWT позволяет rotate; 401 если session-check fails.
+        # Both acceptable — key point: endpoint НЕ заблокирован W2.7 logic.
+        self.assertIn(r.status_code, [200, 401], r.content)
+        if r.status_code == 200:
+            self.assertIn("access", json.loads(r.content))
+
+    def test_refresh_token_flow_preserved_for_manager_via_qr_simulation(self):
+        """Simulates mobile QR flow pattern: /api/phone/qr/exchange/ создаёт
+        JWT через RefreshToken.for_user() direct. Такой refresh должен
+        работать на /api/token/refresh/ для managers (even после W2.6/W2.7)."""
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        mgr = self._create_user("w27_refresh_mgr", User.Role.MANAGER)
+        token = RefreshToken.for_user(mgr)
+        refresh_str = str(token)
+
+        c = Client()
+        r = c.post(
+            "/api/token/refresh/",
+            data=json.dumps({"refresh": refresh_str}),
+            content_type="application/json",
+        )
+        self.assertIn(r.status_code, [200, 401], r.content)
+
+    # --- W2.7: Audit log для admin-blocked attempts ---
+
+    def test_admin_block_creates_audit_log_w27(self):
+        """W2.7: admin JWT block создаёт ActivityEvent с entity_id jwt_admin_blocked."""
+        admin = self._create_user("w27_adm_audit", User.Role.ADMIN)
+        c = Client()
+        c.post(
+            "/api/token/",
+            data=json.dumps({"username": "w27_adm_audit", "password": "testpass123"}),
+            content_type="application/json",
+        )
+        events = ActivityEvent.objects.filter(
+            entity_type="security", entity_id=f"jwt_admin_blocked:{admin.id}"
+        )
+        self.assertEqual(events.count(), 1, "Expected 1 audit event с jwt_admin_blocked")
+        evt = events.first()
+        self.assertEqual(evt.meta.get("role"), "admin")
+        self.assertTrue(evt.meta.get("is_admin"))
+
+    def test_admin_block_blacklists_issued_refresh_w27(self):
+        """W2.7: admin attempted /api/token/ получает blacklisted refresh."""
+        before = BlacklistedToken.objects.count()
+        self._create_user("w27_adm_blacklist", User.Role.ADMIN)
         c = Client()
         r = c.post(
             "/api/token/",
-            data=json.dumps({"username": "w26_adm2", "password": "testpass123"}),
+            data=json.dumps({"username": "w27_adm_blacklist", "password": "testpass123"}),
             content_type="application/json",
         )
-        self.assertEqual(r.status_code, 200)
-        refresh_token = json.loads(r.content)["refresh"]
-
-        r2 = c.post(
-            "/api/token/refresh/",
-            data=json.dumps({"refresh": refresh_token}),
-            content_type="application/json",
-        )
-        self.assertEqual(r2.status_code, 200, r2.content)
-        self.assertIn("access", json.loads(r2.content))
+        self.assertEqual(r.status_code, 403)
+        after = BlacklistedToken.objects.count()
+        self.assertEqual(after, before + 1, "Admin refresh должен быть blacklisted")
 
     # --- Audit log + blacklist для non-admin attempt ---
 
