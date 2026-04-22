@@ -16,17 +16,20 @@ from mailer.mail_content import apply_signature
 from mailer.models import Campaign, CampaignQueue, CampaignRecipient
 from mailer.utils import html_to_text
 from mailer.views._helpers import _can_manage_campaign
+from policy.decorators import policy_required
 from policy.engine import enforce
 
 logger = logging.getLogger(__name__)
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:mail:campaigns:detail")
 def campaign_html_preview(request: HttpRequest, campaign_id) -> HttpResponse:
     """
     Возвращает полное HTML письма для отображения в <iframe>.
     Открывается во вкладке или во встроенном фрейме в UI.
     """
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="page",
@@ -58,8 +61,10 @@ def campaign_html_preview(request: HttpRequest, campaign_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:attachment:download")
 def campaign_attachment_download(request: HttpRequest, campaign_id) -> HttpResponse:
     """Скачивание вложения кампании с оригинальным именем файла."""
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -83,6 +88,7 @@ def campaign_attachment_download(request: HttpRequest, campaign_id) -> HttpRespo
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:edit")
 def campaign_attachment_delete(request: HttpRequest, campaign_id) -> HttpResponse:
     """AJAX удаление вложения кампании."""
     if request.method != "POST":
@@ -90,6 +96,7 @@ def campaign_attachment_delete(request: HttpRequest, campaign_id) -> HttpRespons
 
         return JsonResponse({"success": False, "error": "Метод не разрешен"}, status=405)
 
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -124,8 +131,10 @@ def campaign_attachment_delete(request: HttpRequest, campaign_id) -> HttpRespons
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:export_failed")
 def campaign_export_failed(request: HttpRequest, campaign_id) -> HttpResponse:
     """Скачать список FAILED получателей в CSV."""
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -165,8 +174,10 @@ def campaign_export_failed(request: HttpRequest, campaign_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:retry_failed")
 def campaign_retry_failed(request: HttpRequest, campaign_id) -> HttpResponse:
     """Повторная отправка: переводит всех FAILED получателей обратно в PENDING."""
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",

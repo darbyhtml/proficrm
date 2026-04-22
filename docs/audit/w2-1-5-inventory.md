@@ -125,8 +125,63 @@ End-of-session:
 
 ---
 
-## Session artifacts (so far)
+## Scope adjustment (post-analysis)
 
-- This doc: inventory + plan.
-- Zero code changes (will be added в 11+ subsequent commits).
-- Baseline preserved: 1316 tests OK, smoke 6/6.
+### phonebridge/api.py deferred — APIView class-method pattern
+
+Original plan listed 11 files, 57 enforce() calls. During codification
+phonebridge/api.py (12 calls) was analyzed:
+
+- All 12 calls wrapped в DRF `APIView` class methods (`post`/`get`/`put`).
+- `@policy_required` decorator designed для function views (signature
+  `wrapper(request, *args, **kwargs)`). APIView methods have signature
+  `(self, request, *args, **kwargs)` — needs `@method_decorator` wrapper.
+- Adding `@method_decorator(policy_required(...), name='post')` на каждый
+  класс = more boilerplate, same effective behavior as existing inline
+  enforce() (which already runs через `has_permission`/dispatch).
+- Alternative: DRF `PolicyPermission` class (`policy/drf.py`) uses
+  `policy_resource_prefix` + action pattern. Phonebridge views have
+  single-resource-per-class design, не fit этот pattern.
+
+**Decision**: Skip phonebridge/api.py. Inline enforce() preserved как
+single defense layer (same как существующее поведение). Document explicit
+exclusion. Any future refactor toward DRF ViewSets can revisit.
+
+### Actual codified count
+
+- **10 files, 45 enforce() calls** получили `@policy_required` decorator.
+- **1 file (phonebridge/api.py), 12 enforce() calls** остаются inline-only (documented exclusion).
+- **12 inline-only inside POST conditional branches** (mailer/views/settings.py line 88, 236, 301, 340; mailer/views/recipients.py line 608, 629 — all inside single views с decorator на outer function, cannot move к class-level).
+
+---
+
+## Summary
+
+| File | enforce() calls | With @policy_required | Inline-only (conditional) |
+|------|-----------------|------------------------|---------------------------|
+| mailer/views/polling.py | 2 | 2 | 0 |
+| mailer/views/campaigns/list_detail.py | 2 | 2 | 0 |
+| mailer/views/unsubscribe.py | 3 | 3 | 0 |
+| mailer/views/campaigns/templates_views.py | 3 | 3 | 0 |
+| mailer/views/sending.py | 4 | 4 | 0 |
+| mailer/views/campaigns/crud.py | 4 | 4 | 0 |
+| mailer/views/campaigns/files.py | 5 | 5 | 0 |
+| notifications/views.py | 5 | 5 | 0 |
+| mailer/views/settings.py | 8 | 4 | 4 (POST-branch conditionals) |
+| mailer/views/recipients.py | 9 | 7 | 2 (reset_failed/reset_all scope branches) |
+| phonebridge/api.py | 12 | 0 | 12 (**APIView deferred**) |
+| **Total** | **57** | **39** | **18** |
+
+39 new `@policy_required` decorators applied. 18 inline enforce() calls
+preserved inline-only (either branch-conditional или APIView deferred).
+All 57 inline enforce() calls **preserved** (defense-in-depth intact).
+
+---
+
+## Session artifacts
+
+- Inventory doc: this file.
+- Code changes: 10 files modified + 4 resources registered + 1 commit
+  per logical unit.
+- Tests: mailer suite 191/191, full suite 1316/1316.
+- Baseline preserved: smoke 6/6.

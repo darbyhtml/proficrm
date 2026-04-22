@@ -32,13 +32,16 @@ from mailer.models import (
 )
 from mailer.utils import html_to_text, msk_day_bounds
 from mailer.views._helpers import _can_manage_campaign, _smtp_bz_today_stats_cached
+from policy.decorators import policy_required
 from policy.engine import enforce
 
 logger = logging.getLogger(__name__)
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:mail:campaigns")
 def campaigns(request: HttpRequest) -> HttpResponse:
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="page",
@@ -466,7 +469,9 @@ def campaigns(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:mail:campaigns:detail")
 def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="page",

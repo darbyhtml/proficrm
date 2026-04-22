@@ -17,12 +17,14 @@ from mailer.constants import PER_USER_DAILY_LIMIT_DEFAULT
 from mailer.models import Campaign, CampaignQueue, CampaignRecipient, GlobalMailAccount, SendLog
 from mailer.utils import msk_day_bounds
 from mailer.views._helpers import _can_manage_campaign
+from policy.decorators import policy_required
 from policy.engine import enforce
 
 logger = logging.getLogger(__name__)
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:progress:poll")
 def mail_progress_poll(request: HttpRequest) -> JsonResponse:
     """
     Лёгкий polling для глобального виджета прогресса рассылки.
@@ -31,6 +33,7 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
     ВАЖНО: reason_code и next_run_at берутся из CampaignQueue (единый источник правды).
     """
     user: User = request.user
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -179,9 +182,11 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:detail")
 def campaign_progress_poll(request: HttpRequest, campaign_id) -> JsonResponse:
     """Опрос прогресса одной кампании для live-обновления на странице детали."""
     user: User = request.user
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",

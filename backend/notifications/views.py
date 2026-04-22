@@ -13,6 +13,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from companies.models import Company
 from notifications.context_processors import notifications_panel
 from notifications.models import CrmAnnouncement, CrmAnnouncementRead, Notification
+from policy.decorators import policy_required
 from policy.engine import enforce
 from tasksapp.models import Task
 
@@ -26,9 +27,11 @@ def _safe_redirect_url(request, url, fallback="/"):
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:notifications:mark_all_read")
 def mark_all_read(request: HttpRequest) -> HttpResponse:
     if request.method != "POST":
         return redirect(_safe_redirect_url(request, request.META.get("HTTP_REFERER")))
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -42,9 +45,11 @@ def mark_all_read(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:notifications:mark_read")
 def mark_read(request: HttpRequest, notification_id: int) -> HttpResponse:
     if request.method != "POST":
         return redirect(_safe_redirect_url(request, request.META.get("HTTP_REFERER")))
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -59,6 +64,7 @@ def mark_read(request: HttpRequest, notification_id: int) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:notifications:poll")
 def poll(request: HttpRequest) -> HttpResponse:
     """
     Live-обновление колокольчика: возвращает JSON со списком непрочитанных уведомлений и напоминаний.
@@ -71,6 +77,7 @@ def poll(request: HttpRequest) -> HttpResponse:
     Инвалидация при `mark_as_read` (строка 46) работает корректно — пользователь видит
     обновление сразу, а не ждёт expire.
     """
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -137,8 +144,10 @@ def poll(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:notifications:all")
 def all_notifications(request: HttpRequest) -> HttpResponse:
     """Страница со всеми уведомлениями (непрочитанными и прочитанными)."""
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="page",
@@ -168,8 +177,10 @@ def all_notifications(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:notifications:reminders")
 def all_reminders(request: HttpRequest) -> HttpResponse:
     """Страница со всеми напоминаниями (задачи и договоры)."""
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="page",

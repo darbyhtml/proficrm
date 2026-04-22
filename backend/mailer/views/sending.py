@@ -24,18 +24,21 @@ from mailer.utils import get_next_send_window_start, html_to_text, msk_day_bound
 from mailer.views._helpers import _can_manage_campaign
 from notifications.models import Notification
 from notifications.service import notify
+from policy.decorators import policy_required
 from policy.engine import enforce
 
 logger = logging.getLogger(__name__)
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:start")
 def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
     """Запуск автоматической рассылки кампании."""
     if request.method != "POST":
         return redirect("campaign_detail", campaign_id=campaign_id)
 
     user: User = request.user
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -180,12 +183,14 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:pause")
 def campaign_pause(request: HttpRequest, campaign_id) -> HttpResponse:
     """Постановка кампании на паузу."""
     if request.method != "POST":
         return redirect("campaign_detail", campaign_id=campaign_id)
 
     user: User = request.user
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -226,12 +231,14 @@ def campaign_pause(request: HttpRequest, campaign_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:resume")
 def campaign_resume(request: HttpRequest, campaign_id) -> HttpResponse:
     """Продолжение рассылки кампании после паузы."""
     if request.method != "POST":
         return redirect("campaign_detail", campaign_id=campaign_id)
 
     user: User = request.user
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -398,6 +405,7 @@ def campaign_resume(request: HttpRequest, campaign_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:test_send")
 def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
     """
     Отправка тестового письма кампании на себя.
@@ -405,6 +413,7 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
     ВАЖНО: Тестовое письмо НЕ должно менять статус получателей (CampaignRecipient.status).
     """
     user: User = request.user
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",

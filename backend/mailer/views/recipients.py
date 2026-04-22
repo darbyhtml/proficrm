@@ -21,18 +21,21 @@ from mailer.constants import COOLDOWN_DAYS_DEFAULT
 from mailer.forms import CampaignGenerateRecipientsForm, CampaignRecipientAddForm
 from mailer.models import Campaign, CampaignQueue, CampaignRecipient, EmailCooldown, Unsubscribe
 from mailer.views._helpers import _can_manage_campaign
+from policy.decorators import policy_required
 from policy.engine import enforce
 
 logger = logging.getLogger(__name__)
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:pick")
 def campaign_pick(request: HttpRequest) -> JsonResponse:
     """
     Список кампаний, доступных пользователю для добавления email из карточки компании.
     Поддерживает поиск (?q=...) и пагинацию (?page=N, page_size=25/50).
     """
     user: User = request.user
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -84,9 +87,11 @@ def campaign_pick(request: HttpRequest) -> JsonResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:add_email")
 def campaign_add_email(request: HttpRequest) -> JsonResponse:
     """Добавить email в выбранную кампанию (AJAX)."""
     user: User = request.user
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -180,7 +185,9 @@ def campaign_add_email(request: HttpRequest) -> JsonResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:recipients:add")
 def campaign_recipient_add(request: HttpRequest, campaign_id) -> HttpResponse:
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -247,7 +254,9 @@ def campaign_recipient_add(request: HttpRequest, campaign_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:recipients:delete")
 def campaign_recipient_delete(request: HttpRequest, campaign_id, recipient_id) -> HttpResponse:
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -270,8 +279,10 @@ def campaign_recipient_delete(request: HttpRequest, campaign_id, recipient_id) -
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:recipients:bulk_delete")
 def campaign_recipients_bulk_delete(request: HttpRequest, campaign_id) -> HttpResponse:
     """Массовое удаление получателей."""
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -322,10 +333,12 @@ def campaign_recipients_bulk_delete(request: HttpRequest, campaign_id) -> HttpRe
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:recipients:generate")
 def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpResponse:
     """
     Генерируем получателей из email контактов + основного email компании.
     """
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -667,8 +680,10 @@ def campaign_recipients_reset(request: HttpRequest, campaign_id) -> HttpResponse
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:clear")
 def campaign_clear(request: HttpRequest, campaign_id) -> HttpResponse:
     """Очистить кампанию от получателей. Перед очисткой ставим cooldown на email."""
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",

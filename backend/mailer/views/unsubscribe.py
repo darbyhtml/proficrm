@@ -16,6 +16,7 @@ from django.views.decorators.csrf import csrf_exempt
 from accounts.models import User
 from mailer.constants import UNSUBSCRIBE_RATE_LIMIT_PER_HOUR
 from mailer.models import Unsubscribe, UnsubscribeToken
+from policy.decorators import policy_required
 from policy.engine import enforce
 
 logger = logging.getLogger(__name__)
@@ -62,9 +63,11 @@ def unsubscribe(request: HttpRequest, token: str) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:unsubscribes:list")
 def mail_unsubscribes_list(request: HttpRequest) -> JsonResponse:
     """Список отписок (для админского модального окна в разделе "Почта")."""
     user: User = request.user
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -120,9 +123,11 @@ def mail_unsubscribes_list(request: HttpRequest) -> JsonResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:unsubscribes:delete")
 def mail_unsubscribes_delete(request: HttpRequest) -> JsonResponse:
     """Удаление выбранных email из списка отписок (админ)."""
     user: User = request.user
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -156,9 +161,11 @@ def mail_unsubscribes_delete(request: HttpRequest) -> JsonResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:unsubscribes:clear")
 def mail_unsubscribes_clear(request: HttpRequest) -> JsonResponse:
     """Полная очистка списка отписок (админ)."""
     user: User = request.user
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",

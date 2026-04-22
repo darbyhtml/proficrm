@@ -15,14 +15,17 @@ from accounts.models import User
 from accounts.permissions import require_admin
 from mailer.models import Campaign
 from mailer.views._helpers import _can_manage_campaign
+from policy.decorators import policy_required
 from policy.engine import enforce
 
 logger = logging.getLogger(__name__)
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:create")
 def campaign_save_as_template(request: HttpRequest, campaign_id) -> HttpResponse:
     """Сохранить кампанию как шаблон (копия с is_template=True, без получателей)."""
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -53,8 +56,10 @@ def campaign_save_as_template(request: HttpRequest, campaign_id) -> HttpResponse
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:create")
 def campaign_create_from_template(request: HttpRequest, template_id) -> HttpResponse:
     """Создать новую кампанию на основе шаблона."""
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -96,8 +101,10 @@ def campaign_template_delete(request: HttpRequest, template_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:mail:campaigns")
 def campaign_templates(request: HttpRequest) -> HttpResponse:
     """Список шаблонов писем."""
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="page",

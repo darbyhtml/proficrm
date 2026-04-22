@@ -34,14 +34,17 @@ from mailer.views._helpers import (
     _dispatch_test_email,
     _smtp_bz_today_stats_cached,
 )
+from policy.decorators import policy_required
 from policy.engine import enforce
 
 logger = logging.getLogger(__name__)
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:mail:signature")
 def mail_signature(request: HttpRequest) -> HttpResponse:
     """Настройка подписи (персональная, для всех пользователей)."""
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="page",
@@ -72,8 +75,10 @@ def mail_signature(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:mail:settings")
 def mail_settings(request: HttpRequest) -> HttpResponse:
     """Настройки SMTP. Редактирует только администратор (глобально для всей CRM)."""
+    # W2.1.5: inline enforce() preserved as defense-in-depth (also see POST branch below).
     enforce(
         user=request.user,
         resource_type="page",
@@ -152,11 +157,14 @@ def mail_settings(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:mail:admin")
 def mail_admin(request: HttpRequest) -> HttpResponse:
     """
     Админ-панель рассылок с табами: Обзор, Настройки SMTP, Лимиты, Аналитика, Очередь.
     Доступна только администратору.
     """
+    # W2.1.5: inline enforce() preserved as defense-in-depth (also see tab POST
+    # branches below which use ui:mail:settings:update for specific actions).
     enforce(
         user=request.user,
         resource_type="page",
@@ -524,8 +532,10 @@ def mail_admin(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:quota:poll")
 def mail_quota_poll(request: HttpRequest) -> JsonResponse:
     """Лёгкий эндпоинт для автообновления блока квоты/тарифа на странице кампаний."""
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",

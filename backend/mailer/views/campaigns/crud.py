@@ -18,13 +18,16 @@ from audit.service import log_event
 from mailer.forms import CampaignForm
 from mailer.models import Campaign, GlobalMailAccount
 from mailer.views._helpers import _can_manage_campaign, _contains_links
+from policy.decorators import policy_required
 from policy.engine import enforce
 
 logger = logging.getLogger(__name__)
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:create")
 def campaign_create(request: HttpRequest) -> HttpResponse:
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -64,7 +67,9 @@ def campaign_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:edit")
 def campaign_edit(request: HttpRequest, campaign_id) -> HttpResponse:
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -138,7 +143,9 @@ def campaign_edit(request: HttpRequest, campaign_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:delete")
 def campaign_delete(request: HttpRequest, campaign_id) -> HttpResponse:
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
@@ -173,8 +180,10 @@ def campaign_delete(request: HttpRequest, campaign_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mail:campaigns:create")
 def campaign_clone(request: HttpRequest, campaign_id) -> HttpResponse:
     """Дублировать кампанию — копирует название, тему, тело. Без получателей."""
+    # W2.1.5: inline enforce() preserved as defense-in-depth.
     enforce(
         user=request.user,
         resource_type="action",
