@@ -7,6 +7,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
     <meta name="googlebot" content="noindex, nofollow" />
+    {# W2.3 Phase 2a: CSP nonce exposure для dynamic script creation patterns #}
+    {# (e.g., v2_modal.html::runScripts() clones <script> elements из AJAX fragments). #}
+    {# Cloned scripts must include nonce attribute для strict CSP compliance. #}
+    <meta name="csp-nonce" content="{{ request.csp_nonce }}">
     <title>{% block title %}CRM ПРОФИ{% endblock %}</title>
     <link rel="icon" type="image/svg+xml" href="{% static 'ui/favicon-v2.svg' %}">
     <link rel="shortcut icon" href="{% static 'ui/favicon-v2.svg' %}">
