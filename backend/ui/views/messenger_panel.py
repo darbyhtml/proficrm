@@ -218,6 +218,7 @@ def messenger_conversations_unified(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:messenger:agent_status")
 def messenger_agent_status(request: HttpRequest) -> HttpResponse:
     """
     Обновление статуса оператора (online/away/busy/offline).
