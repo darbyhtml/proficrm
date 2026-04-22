@@ -287,6 +287,12 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # W2.2: Soft-mandatory 2FA для admin-role users. Admin без confirmed
+    # AdminTOTPDevice → redirect к /accounts/2fa/setup/. Admin с device но
+    # без session `otp_verified` → redirect к /accounts/2fa/verify/.
+    # Non-admin users не affected. Safe paths (login, 2fa/*, api/*, static,
+    # health) bypass middleware. Activated 2026-04-22 после manual sdm setup.
+    "accounts.middleware_2fa.TwoFactorMandatoryMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "waffle.middleware.WaffleMiddleware",  # Wave 0.3: для Sample-флагов + per-request caching

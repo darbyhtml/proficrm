@@ -53,6 +53,18 @@ PASSWORD_HASHERS = [
 # Выключаем strict для тестовой среды (обратная совместимость dev).
 MESSENGER_WIDGET_STRICT_ORIGIN = False
 
+# ── W2.2: TwoFactorMandatoryMiddleware — remove из test env ──
+# В проде/staging middleware redirect'ит admin без 2FA session-флага к
+# /accounts/2fa/verify/ перед любым non-safe path. В тестовой среде это
+# ломает десятки существующих тестов (force_login(admin) + c.get("/...")
+# ожидает 200, а получит 302 на verify). Tests, специфичные для 2FA
+# (accounts/tests_2fa.py) сами создают MW вручную через RequestFactory
+# и не зависят от global MIDDLEWARE, так что coverage сохраняется.
+MIDDLEWARE = [
+    m for m in MIDDLEWARE
+    if m != "accounts.middleware_2fa.TwoFactorMandatoryMiddleware"
+]
+
 # ── Логирование: не шумим в тестах ──
 import logging
 
