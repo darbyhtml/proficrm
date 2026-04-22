@@ -588,7 +588,12 @@ def settings_branch_edit(request: HttpRequest, branch_id: int) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:users")
 def settings_users(request: HttpRequest) -> HttpResponse:
+    # W2.1.4.1: inline require_admin() preserved as defense-in-depth.
+    # Note: POST с toggle_view_as использует отдельную policy resource
+    # `ui:settings:view_as:update` (codified W2.1.3b) — inline enforce()
+    # будет добавлен отдельно в W2.1.5 (inline enforce → decorator migration).
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
