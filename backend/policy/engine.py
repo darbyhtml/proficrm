@@ -169,11 +169,23 @@ def baseline_allowed_for_role(
             )
         if resource_key == "ui:settings":
             return bool(role == User.Role.ADMIN)
+        # W2.1.4 (2026-04-22): blanket default для всех ui:settings:* pages —
+        # admin-only. Любая granular settings-page (dashboard/branches/users/
+        # dicts/activity/error_log/access/messenger/mail/mobile_apps/data) =
+        # admin tool. Tenderist уже отрезан выше (return False на line 138).
+        # Суперпользователь bypass'ится в decide() (line 337+), сюда не дойдёт.
+        if resource_key.startswith("ui:settings:"):
+            return bool(role == User.Role.ADMIN)
 
     # Actions (coarse RBAC gate; object/branch checks stay in code)
     if resource_type == PolicyRule.ResourceType.ACTION:
         # --- Settings / admin tools ---
         if resource_key in ("ui:settings:view_as:update", "ui:settings:view_as:reset"):
+            return bool(role == User.Role.ADMIN)
+        # W2.1.4 (2026-04-22): blanket default для всех ui:settings:* actions —
+        # admin-only. Охватывает user/branch/dict CRUD, audit log resolve,
+        # magic link generation, etc. Parallel к page default выше.
+        if resource_key.startswith("ui:settings:"):
             return bool(role == User.Role.ADMIN)
 
         # --- Notifications: allowed for any authenticated user ---
