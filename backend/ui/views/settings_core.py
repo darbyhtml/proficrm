@@ -832,7 +832,9 @@ def settings_users(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:users:create")
 def settings_user_create(request: HttpRequest) -> HttpResponse:
+    # W2.1.4.1: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -872,7 +874,9 @@ def settings_user_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:users:edit")
 def settings_user_edit(request: HttpRequest, user_id: int) -> HttpResponse:
+    # W2.1.4.1: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
