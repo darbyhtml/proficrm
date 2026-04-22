@@ -363,10 +363,12 @@ def settings_messenger_analytics(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:messenger:inbox:edit")
 def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) -> HttpResponse:
     """
     Создание/редактирование Inbox.
     """
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
