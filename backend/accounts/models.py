@@ -287,3 +287,109 @@ class UserAbsence(models.Model):
     def is_active_on(self, date) -> bool:
         """Проверяет, покрывает ли период указанную дату."""
         return self.start_date <= date <= self.end_date
+
+
+# ---------------------------------------------------------------------------
+# W2.2 — TOTP 2FA infrastructure (mandatory для admins)
+# ---------------------------------------------------------------------------
+
+
+class AdminTOTPDevice(models.Model):
+    """TOTP device для admin 2FA.
+
+    Простая 1-user-per-device модель. Use case:
+    - Admin scans QR → generated secret_key saved.
+    - Admin enters 6-digit code → device.confirmed=True.
+    - Subsequent logins require TOTP verification через `pyotp.TOTP(secret).verify(code)`.
+    """
+
+    user = models.OneToOneField(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="admin_totp",
+    )
+    secret_key = models.CharField(
+        "TOTP secret (base32)",
+        max_length=32,
+        help_text="Generated on setup, shared with authenticator app via QR.",
+    )
+    confirmed = models.BooleanField(
+        "Confirmed (активное устройство)",
+        default=False,
+        help_text="True после successful verify 6-digit кода на setup.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_verified_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "TOTP устройство (admin)"
+        verbose_name_plural = "TOTP устройства (admin)"
+
+    def __str__(self) -> str:
+        status = "confirmed" if self.confirmed else "pending"
+        return f"TOTP[{self.user.username}] ({status})"
+
+    def verify(self, token: str) -> bool:
+        """Verify 6-digit TOTP token. ±1 window (30s each side для clock drift)."""
+        import pyotp
+
+        if not token or not token.strip():
+            return False
+        totp = pyotp.TOTP(self.secret_key)
+        ok = totp.verify(token.strip(), valid_window=1)
+        if ok:
+            self.last_verified_at = timezone.now()
+            self.save(update_fields=["last_verified_at"])
+        return ok
+
+    def provisioning_uri(self, issuer: str = "CRM ПРОФИ") -> str:
+        """otpauth:// URI для QR-кода."""
+        import pyotp
+
+        totp = pyotp.TOTP(self.secret_key)
+        label = self.user.email or self.user.username
+        return totp.provisioning_uri(name=label, issuer_name=issuer)
+
+
+class AdminRecoveryCode(models.Model):
+    """One-time recovery code для admin 2FA.
+
+    10 codes generated on setup. SHA-256 hash stored (not plaintext).
+    Each can be used exactly once.
+    """
+
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="admin_recovery_codes",
+    )
+    code_hash = models.CharField("SHA-256 hash", max_length=64)
+    used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Recovery code (admin)"
+        verbose_name_plural = "Recovery codes (admin)"
+        indexes = [
+            models.Index(fields=["user", "used"]),
+        ]
+
+    @staticmethod
+    def hash_code(code: str) -> str:
+        return hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+    @classmethod
+    def verify_and_consume(cls, user, code: str) -> bool:
+        """Verify + mark used. Returns True if matched."""
+        if not code or not code.strip():
+            return False
+        normalized = code.strip().upper().replace("-", "")
+        code_hash = cls.hash_code(normalized)
+        row = cls.objects.filter(user=user, code_hash=code_hash, used=False).first()
+        if not row:
+            return False
+        row.used = True
+        row.used_at = timezone.now()
+        row.save(update_fields=["used", "used_at"])
+        return True

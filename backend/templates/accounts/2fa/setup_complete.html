@@ -1,0 +1,30 @@
+{% extends "ui/base.html" %}
+{% block title %}2FA активирован — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+<div style="max-width:560px;margin:2rem auto;padding:1.5rem;background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+  <h1 style="color:#059669;margin-top:0;">✅ 2FA настроен</h1>
+  <p>Двухфакторная аутентификация успешно активирована для вашего аккаунта.</p>
+
+  <div style="background:#FEF3C7;border-left:4px solid #F59E0B;padding:1rem;border-radius:6px;margin:1rem 0;">
+    <h2 style="margin-top:0;font-size:16px;color:#92400E;">⚠️ Сохраните recovery codes</h2>
+    <p style="margin:0.5rem 0;">Каждый код можно использовать <strong>один раз</strong> если потеряете доступ к authenticator-приложению.</p>
+    <p style="margin:0;"><strong>Эти коды показаны только сейчас. Скопируйте их в password-manager.</strong></p>
+  </div>
+
+  <div style="background:#F3F4F6;padding:1rem;border-radius:8px;font-family:monospace;font-size:16px;margin:1rem 0;">
+    {% for code in recovery_codes %}
+      <div style="padding:0.3rem 0;">{{ code }}</div>
+    {% endfor %}
+  </div>
+
+  <p style="font-size:14px;color:#6B7280;">
+    Если потеряете authenticator и recovery codes — обратитесь к системному администратору для manual reset через shell.
+    См. <code>docs/runbooks/2fa-rollback.md</code>.
+  </p>
+
+  <a href="/" style="display:inline-block;margin-top:1rem;padding:0.7rem 1.5rem;background:#01948E;color:white;text-decoration:none;border-radius:8px;font-weight:600;">
+    Перейти на дашборд
+  </a>
+</div>
+{% endblock %}

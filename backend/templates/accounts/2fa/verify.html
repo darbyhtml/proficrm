@@ -1,0 +1,38 @@
+{% extends "ui/base.html" %}
+{% block title %}Подтверждение 2FA — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+<div style="max-width:420px;margin:2rem auto;padding:1.5rem;background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+  <h1 style="margin-top:0;font-size:22px;">Подтверждение двухфакторной аутентификации</h1>
+  <p>Введите 6-значный код из authenticator-приложения.</p>
+
+  <form method="post" action="{% url 'totp_verify' %}">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <label style="display:block;margin-bottom:0.5rem;font-weight:600;">Код из приложения:</label>
+    <input type="text" name="token" maxlength="6" pattern="\d{6}" autocomplete="one-time-code"
+           inputmode="numeric" autofocus
+           style="width:100%;padding:0.6rem;font-size:18px;letter-spacing:3px;text-align:center;border:1px solid #E5E7EB;border-radius:8px;font-family:monospace;">
+
+    <details style="margin:1rem 0;">
+      <summary style="cursor:pointer;font-size:14px;color:#6B7280;">Использовать recovery code</summary>
+      <label style="display:block;margin-top:0.5rem;font-weight:600;font-size:14px;">Recovery code:</label>
+      <input type="text" name="recovery_code" placeholder="XXXX-XXXX"
+             style="width:100%;padding:0.5rem;margin-top:0.3rem;border:1px solid #E5E7EB;border-radius:6px;font-family:monospace;">
+      <p style="font-size:12px;color:#6B7280;margin-top:0.3rem;">Каждый recovery code можно использовать один раз.</p>
+    </details>
+
+    <button type="submit" style="margin-top:1rem;width:100%;padding:0.7rem;background:#01948E;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;">
+      Подтвердить
+    </button>
+  </form>
+
+  {% if messages %}
+    <ul style="margin-top:1rem;padding:0;list-style:none;">
+      {% for message in messages %}
+        <li style="padding:0.5rem;border-radius:6px;background:{% if message.tags == 'error' %}#FEE2E2;color:#991B1B{% else %}#DBEAFE;color:#1E40AF{% endif %};">{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</div>
+{% endblock %}

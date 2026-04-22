@@ -26,6 +26,8 @@ from rest_framework import routers
 from accounts.jwt_views import LoggedTokenRefreshView, SecureTokenObtainPairView
 from accounts.models import User
 from accounts.views import SecureLoginView, magic_link_login
+from accounts.views_2fa import totp_setup as _totp_setup
+from accounts.views_2fa import totp_verify as _totp_verify
 from companies.api import CompanyNoteViewSet, CompanyViewSet, ContactViewSet
 from core.api import FeatureFlagsView  # Wave 0.3
 from crm.health import health as liveness_view  # Wave 0.4
@@ -145,6 +147,9 @@ urlpatterns = [
     # Session auth for UI (without weird /login/login/ prefixes) - с защитой от брутфорса
     path("login/", SecureLoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    # W2.2 — TOTP 2FA для admins (middleware enforcement pending separate commit)
+    path("accounts/2fa/setup/", _totp_setup, name="totp_setup"),
+    path("accounts/2fa/verify/", _totp_verify, name="totp_verify"),
     # Magic link authentication
     path("auth/magic/<str:token>/", magic_link_login, name="magic_link_login"),
     # JWT token endpoints: canonical + /api/v1/ alias (no names for aliases to avoid conflicts)

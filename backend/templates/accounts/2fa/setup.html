@@ -1,0 +1,39 @@
+{% extends "ui/base.html" %}
+{% load static %}
+{% block title %}Настройка 2FA — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+<div style="max-width:520px;margin:2rem auto;padding:1.5rem;background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+  <h1 style="margin-top:0;font-size:22px;">Настройка двухфакторной аутентификации</h1>
+  <p>Отсканируйте QR-код в приложении Google Authenticator, Authy, 1Password или аналогичном TOTP-клиенте.</p>
+
+  <div style="text-align:center;margin:1.25rem 0;">
+    <img src="data:image/png;base64,{{ qr_base64 }}" alt="TOTP QR-код"
+         style="max-width:256px;border:1px solid #E5E7EB;border-radius:8px;padding:8px;background:white;">
+  </div>
+
+  <details style="margin-bottom:1rem;">
+    <summary style="cursor:pointer;font-weight:600;">Ручной ввод секрета</summary>
+    <p style="font-family:monospace;background:#F3F4F6;padding:0.5rem;border-radius:6px;word-break:break-all;margin-top:0.5rem;">{{ secret }}</p>
+  </details>
+
+  <form method="post" action="{% url 'totp_setup' %}">
+    {% csrf_token %}
+    <label style="display:block;margin-bottom:0.5rem;font-weight:600;">Введите 6-значный код из приложения:</label>
+    <input type="text" name="token" maxlength="6" pattern="\d{6}" required autocomplete="one-time-code"
+           inputmode="numeric"
+           style="width:100%;padding:0.6rem;font-size:18px;letter-spacing:3px;text-align:center;border:1px solid #E5E7EB;border-radius:8px;font-family:monospace;">
+    <button type="submit" style="margin-top:1rem;width:100%;padding:0.7rem;background:#01948E;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;">
+      Подтвердить и активировать 2FA
+    </button>
+  </form>
+
+  {% if messages %}
+    <ul style="margin-top:1rem;padding:0;list-style:none;">
+      {% for message in messages %}
+        <li style="padding:0.5rem;border-radius:6px;background:{% if message.tags == 'error' %}#FEE2E2;color:#991B1B{% else %}#DBEAFE;color:#1E40AF{% endif %};">{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</div>
+{% endblock %}

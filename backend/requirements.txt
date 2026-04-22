@@ -12,6 +12,7 @@ celery==5.5.2
 redis==5.2.1
 django-redis==5.4.0
 qrcode[pil]==8.2
+pyotp==2.9.0  # W2.2 — TOTP 2FA mandatory для admins
 requests==2.33.1
 firebase-admin==7.1.0
 phonenumbers==9.0.28
