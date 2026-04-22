@@ -1,4 +1,5 @@
 {% extends "ui/base.html" %}
+{% load static %}
 {% load accounts_extras %}
 {% block title %}{% if mode == 'edit' %}Редактировать пользователя{% else %}Новый пользователь{% endif %} — CRM ПРОФИ{% endblock %}
 
@@ -125,7 +126,8 @@
                 type="button"
                 id="tab-key-token"
                 class="flex-1 px-4 py-2 text-sm font-medium text-center transition-colors bg-brand-teal text-white"
-                onclick="switchAccessKeyTab('token')"
+                data-action="switch-access-key-tab"
+                data-tab="token"
               >
                 Ключ доступа
               </button>
@@ -133,7 +135,8 @@
                 type="button"
                 id="tab-key-link"
                 class="flex-1 px-4 py-2 text-sm font-medium text-center transition-colors text-brand-dark/60 hover:text-brand-dark hover:bg-brand-soft/20"
-                onclick="switchAccessKeyTab('link')"
+                data-action="switch-access-key-tab"
+                data-tab="link"
               >
                 Ссылка
               </button>
@@ -143,7 +146,7 @@
             <div id="access-key-token-content" class="space-y-2">
               <div class="flex items-center gap-2">
                 <input type="text" id="magicTokenInput" value="{{ magic_link_generated.token }}" readonly class="input flex-1 font-mono text-xs" />
-                <button type="button" class="btn btn-outline text-sm" onclick="copyMagicToken()">📋 Копировать</button>
+                <button type="button" class="btn btn-outline text-sm" data-action="copy-magic-token">📋 Копировать</button>
               </div>
             </div>
             
@@ -151,7 +154,7 @@
             <div id="access-key-link-content" class="space-y-2 hidden">
               <div class="flex items-center gap-2">
                 <input type="text" id="magicLinkInput" value="{{ magic_link_generated.link }}" readonly class="input flex-1 font-mono text-xs" />
-                <button type="button" class="btn btn-outline text-sm" onclick="copyMagicLink()">📋 Копировать</button>
+                <button type="button" class="btn btn-outline text-sm" data-action="copy-magic-link">📋 Копировать</button>
               </div>
             </div>
             
@@ -180,7 +183,7 @@
                   </svg>
                 </button>
               </div>
-              <button type="button" class="btn btn-outline text-sm" onclick="copyAdminPassword()">📋 Копировать</button>
+              <button type="button" class="btn btn-outline text-sm" data-action="copy-admin-password">📋 Копировать</button>
             </div>
             <div class="text-xs text-brand-dark/60">
               ⚠️ Пароль показывается только один раз. Сохраните его или скопируйте.
@@ -262,6 +265,8 @@
     {% endif %}
   </div>
 
+  {# W2.3 Phase 2c: data-action listeners в pages/user_form.js (функции остаются inline т.к. используют Django-переменные). #}
+  <script src="{% static 'ui/js/pages/user_form.js' %}" nonce="{{ csp_nonce }}"></script>
   <script nonce="{{ csp_nonce }}">
     function switchAccessKeyTab(tab) {
       const tokenTab = document.getElementById('tab-key-token');
