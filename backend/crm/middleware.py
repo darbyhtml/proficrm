@@ -14,6 +14,17 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
     """
     Добавляет дополнительные security headers, включая CSP.
     Генерирует CSP nonce per-request и сохраняет его в request.csp_nonce.
+
+    W2.3 Phase 1 (2026-04-22): middleware теперь emits 2 parallel CSP headers:
+    - `Content-Security-Policy` (enforce): оставляет 'unsafe-inline' как
+      safety net — 66 inline event handlers остаются legit до Phase 2
+      cleanup. Также injects nonce для 91 `<script nonce=...>` templates.
+    - `Content-Security-Policy-Report-Only` (shadow strict): same directives
+      но БЕЗ 'unsafe-inline' на script-src. Browsers логируют violations
+      в /csp-report/, НЕ блокируют rendering. Monitoring mode для Phase 2.
+
+    После Phase 2 (inline handlers extracted) + 48h clean monitoring,
+    Phase 3 swaps: strict становится enforce, old enforce removed.
     """
 
     def process_request(self, request):
@@ -25,14 +36,18 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
             return response
 
         # Добавляем CSP только в production
-        # NB: nonce генерируется (request.csp_nonce), но пока не встраивается
-        # в CSP-заголовок, т.к. при наличии nonce браузер игнорирует
-        # unsafe-inline, а часть шаблонов всё ещё содержит inline onclick/style.
-        # W1.3 (2026-04-21): извлечены top 5 styles (2676 LOC) + 10 handlers в
-        # company_detail.html + 9 bare scripts получили nonce. Оставшиеся
-        # 66 handlers + 27 стилей + ~81 nonce-scripts — cleanup в W2/W9.
-        if not settings.DEBUG and getattr(settings, "CSP_HEADER", None):
-            response["Content-Security-Policy"] = settings.CSP_HEADER
+        if not settings.DEBUG:
+            nonce = getattr(request, "csp_nonce", "")
+            # Enforce policy (safety net, preserves 'unsafe-inline' Phase 1).
+            enforce_template = getattr(settings, "CSP_HEADER_ENFORCE_TEMPLATE", None)
+            if enforce_template:
+                response["Content-Security-Policy"] = enforce_template.format(nonce=nonce)
+            # Shadow strict policy (report-only, no 'unsafe-inline' script-src).
+            strict_template = getattr(settings, "CSP_HEADER_STRICT_TEMPLATE", None)
+            if strict_template:
+                response["Content-Security-Policy-Report-Only"] = strict_template.format(
+                    nonce=nonce
+                )
 
         # Permissions-Policy (ограничение доступа к браузерным API)
         if not settings.DEBUG:

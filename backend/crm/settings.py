@@ -187,19 +187,45 @@ if not DEBUG:
     # Защита от утечки информации через ошибки
     SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
-    # Content Security Policy (CSP) - защита от XSS
-    # Разрешаем только доверенные источники для скриптов и стилей
+    # Content Security Policy (CSP) - защита от XSS.
+    #
+    # W2.3 Phase 1 (2026-04-22):
+    # - Middleware теперь генерирует per-request nonce + builds headers
+    #   dynamically (see crm/middleware.py SecurityHeadersMiddleware).
+    # - Настройки-строки используются как TEMPLATES для middleware,
+    #   {nonce} placeholder заменяется per-request.
+    # - Enforce (safety net, 'unsafe-inline' сохраняется): полностью
+    #   backward-compatible с current inline handlers + styles.
+    # - Shadow report-only (strict, no 'unsafe-inline' на script-src):
+    #   monitoring mode — violations logged в /csp-report/, не blocking.
+    #
+    # style-src strict — deferred к W9 (673 inline style="..." нужно extract).
     CSP_DEFAULT_SRC = os.getenv("CSP_DEFAULT_SRC", "'self'")
-    CSP_SCRIPT_SRC = os.getenv("CSP_SCRIPT_SRC", "'self' 'unsafe-inline'")
+    # Enforce script-src: keep 'unsafe-inline' для safety net
+    # + add 'nonce-{nonce}' placeholder (middleware substitutes per request)
+    # + add CDN allowlist (cdn.jsdelivr.net = Chart.js на analytics v2).
+    CSP_SCRIPT_SRC_ENFORCE = os.getenv(
+        "CSP_SCRIPT_SRC_ENFORCE",
+        "'self' 'unsafe-inline' 'nonce-{nonce}' https://cdn.jsdelivr.net",
+    )
+    # Shadow strict script-src: no 'unsafe-inline', только nonce + 'self' + CDN.
+    CSP_SCRIPT_SRC_STRICT = os.getenv(
+        "CSP_SCRIPT_SRC_STRICT",
+        "'self' 'nonce-{nonce}' https://cdn.jsdelivr.net",
+    )
+    # Style-src: 'unsafe-inline' deferred к W9 (673 inline style="").
     CSP_STYLE_SRC = os.getenv("CSP_STYLE_SRC", "'self' 'unsafe-inline'")
     CSP_IMG_SRC = os.getenv("CSP_IMG_SRC", "'self' data: https: blob:")
     CSP_FONT_SRC = os.getenv("CSP_FONT_SRC", "'self' data:")
     CSP_CONNECT_SRC = os.getenv("CSP_CONNECT_SRC", "'self'")
 
-    # Формируем CSP заголовок (только в production)
-    CSP_HEADER = (
+    # Report URI для shadow strict policy violations.
+    CSP_REPORT_URI = os.getenv("CSP_REPORT_URI", "/csp-report/")
+
+    # Templates для per-request header build (middleware substitutes {nonce}).
+    CSP_HEADER_ENFORCE_TEMPLATE = (
         f"default-src {CSP_DEFAULT_SRC}; "
-        f"script-src {CSP_SCRIPT_SRC}; "
+        f"script-src {CSP_SCRIPT_SRC_ENFORCE}; "
         f"style-src {CSP_STYLE_SRC}; "
         f"img-src {CSP_IMG_SRC}; "
         f"font-src {CSP_FONT_SRC}; "
@@ -208,9 +234,25 @@ if not DEBUG:
         "base-uri 'self'; "
         "form-action 'self';"
     )
+    CSP_HEADER_STRICT_TEMPLATE = (
+        f"default-src {CSP_DEFAULT_SRC}; "
+        f"script-src {CSP_SCRIPT_SRC_STRICT}; "
+        f"style-src {CSP_STYLE_SRC}; "
+        f"img-src {CSP_IMG_SRC}; "
+        f"font-src {CSP_FONT_SRC}; "
+        f"connect-src {CSP_CONNECT_SRC}; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        f"report-uri {CSP_REPORT_URI};"
+    )
+    # Legacy alias (some tests reference CSP_HEADER directly — keep working).
+    CSP_HEADER = CSP_HEADER_ENFORCE_TEMPLATE
 else:
     # В development режиме CSP не применяется (может мешать разработке)
     CSP_HEADER = None
+    CSP_HEADER_ENFORCE_TEMPLATE = None
+    CSP_HEADER_STRICT_TEMPLATE = None
 
 # Magic Link Authentication
 # Если установлено в 1, вход по паролю отключается (только magic links)

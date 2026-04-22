@@ -30,6 +30,7 @@ from accounts.views_2fa import totp_setup as _totp_setup
 from accounts.views_2fa import totp_verify as _totp_verify
 from companies.api import CompanyNoteViewSet, CompanyViewSet, ContactViewSet
 from core.api import FeatureFlagsView  # Wave 0.3
+from core.csp_report import csp_report_view as _csp_report_view  # W2.3 Phase 1
 from crm.health import health as liveness_view  # Wave 0.4
 from crm.health import ready as readiness_view  # Wave 0.4
 from crm.health import sentry_smoke, staff_trigger_test_error  # Wave 0.4
@@ -152,6 +153,8 @@ urlpatterns = [
     path("accounts/2fa/verify/", _totp_verify, name="totp_verify"),
     # Magic link authentication
     path("auth/magic/<str:token>/", magic_link_login, name="magic_link_login"),
+    # W2.3 Phase 1 — CSP violation report endpoint
+    path("csp-report/", _csp_report_view, name="csp_report"),
     # JWT token endpoints: canonical + /api/v1/ alias (no names for aliases to avoid conflicts)
     path("api/token/", SecureTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/token/refresh/", LoggedTokenRefreshView.as_view(), name="token_refresh"),
