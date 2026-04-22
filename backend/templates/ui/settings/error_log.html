@@ -1,4 +1,5 @@
 {% extends "ui/base.html" %}
+{% load static %}
 {% block title %}Лог ошибок — CRM ПРОФИ{% endblock %}
 
 {% block content %}
@@ -122,14 +123,14 @@
               </td>
               <td class="px-4 py-3">
                 <div class="flex gap-2">
-                  <button type="button" class="btn btn-outline btn-sm" onclick="showErrorDetails('{{ error.id }}')">Детали</button>
+                  <button type="button" class="btn btn-outline btn-sm" data-action="show-error-details" data-error-id="{{ error.id }}">Детали</button>
                   {% if error.resolved %}
                     <form method="post" action="/admin/error-log/{{ error.id }}/unresolve/" class="inline">
                       {% csrf_token %}
                       <button type="submit" class="btn btn-outline btn-sm">Снять отметку</button>
                     </form>
                   {% else %}
-                    <button type="button" class="btn btn-primary btn-sm" onclick="showResolveModal('{{ error.id }}')">Исправлено</button>
+                    <button type="button" class="btn btn-primary btn-sm" data-action="show-resolve-modal" data-error-id="{{ error.id }}">Исправлено</button>
                   {% endif %}
                 </div>
               </td>
@@ -164,7 +165,7 @@
     <div class="bg-white rounded-2xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-xl font-semibold">Детали ошибки</h2>
-        <button type="button" class="btn btn-outline btn-sm" onclick="closeErrorDetails()">✕</button>
+        <button type="button" class="btn btn-outline btn-sm" data-action="close-error-details">✕</button>
       </div>
       <div id="errorDetailsContent" class="space-y-4">
         {# Контент будет загружен через AJAX #}
@@ -177,7 +178,7 @@
     <div class="bg-white rounded-2xl p-6 max-w-2xl w-full mx-4">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-xl font-semibold">Отметить как исправленную</h2>
-        <button type="button" class="btn btn-outline btn-sm" onclick="closeResolveModal()">✕</button>
+        <button type="button" class="btn btn-outline btn-sm" data-action="close-resolve-modal">✕</button>
       </div>
       <form id="resolveForm" method="post" class="space-y-4">
         {% csrf_token %}
@@ -186,119 +187,13 @@
           <textarea name="notes" class="textarea" rows="4" placeholder="Опишите, что было исправлено..."></textarea>
         </div>
         <div class="flex gap-2 justify-end">
-          <button type="button" class="btn btn-outline" onclick="closeResolveModal()">Отмена</button>
+          <button type="button" class="btn btn-outline" data-action="close-resolve-modal">Отмена</button>
           <button type="submit" class="btn btn-primary">Отметить как исправленную</button>
         </div>
       </form>
     </div>
   </div>
 
-  <script nonce="{{ csp_nonce }}">
-    let currentErrorId = null;
-
-    function showErrorDetails(errorId) {
-      currentErrorId = errorId;
-      const modal = document.getElementById('errorDetailsModal');
-      const content = document.getElementById('errorDetailsContent');
-      content.innerHTML = '<div class="text-center py-8"><div class="animate-spin w-8 h-8 border-4 border-brand-teal border-t-transparent rounded-full mx-auto"></div><div class="mt-4 text-brand-dark/70">Загрузка...</div></div>';
-      modal.classList.remove('hidden');
-
-      fetch(`/admin/error-log/${errorId}/details/`)
-        .then(response => response.json())
-        .then(data => {
-          content.innerHTML = `
-            <div class="space-y-4">
-              <div>
-                <div class="text-sm text-brand-dark/70 mb-1">Когда произошло</div>
-                <div class="font-mono text-sm">${data.created_at}</div>
-              </div>
-              <div>
-                <div class="text-sm text-brand-dark/70 mb-1">Уровень</div>
-                <div><span class="badge ${data.level === 'critical' ? 'badge-danger' : data.level === 'error' ? 'badge-warn' : data.level === 'warning' ? 'badge-progress' : 'badge'}">${data.level_display}</span></div>
-              </div>
-              <div>
-                <div class="text-sm text-brand-dark/70 mb-1">Тип исключения</div>
-                <div class="font-mono text-sm">${data.exception_type || '—'}</div>
-              </div>
-              <div>
-                <div class="text-sm text-brand-dark/70 mb-1">Сообщение</div>
-                <div class="bg-brand-soft/20 p-3 rounded-lg font-mono text-xs whitespace-pre-wrap">${escapeHtml(data.message || '—')}</div>
-              </div>
-              <div>
-                <div class="text-sm text-brand-dark/70 mb-1">Трассировка</div>
-                <div class="bg-brand-soft/20 p-3 rounded-lg font-mono text-xs whitespace-pre-wrap overflow-x-auto">${escapeHtml(data.traceback || '—')}</div>
-              </div>
-              <div>
-                <div class="text-sm text-brand-dark/70 mb-1">Запрос</div>
-                <div class="bg-brand-soft/20 p-3 rounded-lg font-mono text-xs">${data.method} ${data.path}</div>
-              </div>
-              <div>
-                <div class="text-sm text-brand-dark/70 mb-1">Пользователь</div>
-                <div>${data.user || '—'}</div>
-              </div>
-              <div>
-                <div class="text-sm text-brand-dark/70 mb-1">IP адрес</div>
-                <div class="font-mono text-xs">${data.ip_address || '—'}</div>
-              </div>
-              <div>
-                <div class="text-sm text-brand-dark/70 mb-1">User-Agent</div>
-                <div class="font-mono text-xs text-brand-dark/70">${data.user_agent || '—'}</div>
-              </div>
-              ${data.request_data ? `
-              <div>
-                <div class="text-sm text-brand-dark/70 mb-1">Данные запроса</div>
-                <div class="bg-brand-soft/20 p-3 rounded-lg font-mono text-xs whitespace-pre-wrap overflow-x-auto">${escapeHtml(JSON.stringify(data.request_data, null, 2))}</div>
-              </div>
-              ` : ''}
-              ${data.notes ? `
-              <div>
-                <div class="text-sm text-brand-dark/70 mb-1">Заметки</div>
-                <div class="bg-brand-soft/20 p-3 rounded-lg">${escapeHtml(data.notes)}</div>
-              </div>
-              ` : ''}
-            </div>
-          `;
-        })
-        .catch(error => {
-          content.innerHTML = `<div class="text-red-600">Ошибка загрузки: ${error.message}</div>`;
-        });
-    }
-
-    function closeErrorDetails() {
-      document.getElementById('errorDetailsModal').classList.add('hidden');
-      currentErrorId = null;
-    }
-
-    function showResolveModal(errorId) {
-      currentErrorId = errorId;
-      const form = document.getElementById('resolveForm');
-      form.action = `/admin/error-log/${errorId}/resolve/`;
-      document.getElementById('resolveModal').classList.remove('hidden');
-    }
-
-    function closeResolveModal() {
-      document.getElementById('resolveModal').classList.add('hidden');
-      document.getElementById('resolveForm').reset();
-      currentErrorId = null;
-    }
-
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    // Закрытие модальных окон по клику вне их
-    document.getElementById('errorDetailsModal').addEventListener('click', function(e) {
-      if (e.target === this) {
-        closeErrorDetails();
-      }
-    });
-
-    document.getElementById('resolveModal').addEventListener('click', function(e) {
-      if (e.target === this) {
-        closeResolveModal();
-      }
-    });
-  </script>
+  {# W2.3 Phase 2c: handlers + modals logic извлечены в pages/error_log.js. #}
+  <script src="{% static 'ui/js/pages/error_log.js' %}" nonce="{{ csp_nonce }}"></script>
 {% endblock %}
