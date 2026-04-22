@@ -15,16 +15,17 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
     Добавляет дополнительные security headers, включая CSP.
     Генерирует CSP nonce per-request и сохраняет его в request.csp_nonce.
 
-    W2.3 Phase 1 (2026-04-22): middleware теперь emits 2 parallel CSP headers:
-    - `Content-Security-Policy` (enforce): оставляет 'unsafe-inline' как
-      safety net — 66 inline event handlers остаются legit до Phase 2
-      cleanup. Также injects nonce для 91 `<script nonce=...>` templates.
-    - `Content-Security-Policy-Report-Only` (shadow strict): same directives
-      но БЕЗ 'unsafe-inline' на script-src. Browsers логируют violations
-      в /csp-report/, НЕ блокируют rendering. Monitoring mode для Phase 2.
+    W2.3 Phase 3 (2026-04-22): middleware emits 2 parallel CSP headers:
+    - `Content-Security-Policy` (enforce, strict): script-src БЕЗ 'unsafe-inline'.
+      Browser actively blocks inline scripts/handlers — XSS protection.
+      Phase 2a/2b/2c уже extracted 39 inline handlers, remaining ~37 в
+      rarely-visited tail templates deferred к W9.
+    - `Content-Security-Policy-Report-Only` (shadow): identical к enforce,
+      дублируется как safety net. Любой residual inline handler triggers
+      violation report в /csp-report/ (crm.csp logger) через оба
+      headers — enforce блокирует, report-only логирует для visibility.
 
-    После Phase 2 (inline handlers extracted) + 48h clean monitoring,
-    Phase 3 swaps: strict становится enforce, old enforce removed.
+    style-src 'unsafe-inline' preserved (deferred к W9 — 673 inline style=).
     """
 
     def process_request(self, request):

@@ -1,11 +1,15 @@
-"""W2.3 Phase 1 — CSP infrastructure tests.
+"""W2.3 CSP infrastructure tests.
+
+Phase 1: enforce allows 'unsafe-inline' (safety net), shadow report-only strict.
+Phase 3 (2026-04-22): enforce теперь strict — identical к shadow report-only.
 
 Tests covered:
 - SecurityHeadersMiddleware emits both enforce + report-only headers.
 - Nonce unique per request, present в оба headers.
 - CDN allowlist (cdn.jsdelivr.net) present в script-src.
+- W2.3 Phase 3: ENFORCE header omits 'unsafe-inline' в script-src.
 - Strict header omits 'unsafe-inline' для script-src.
-- Strict header имеет report-uri.
+- Both headers имеют report-uri (Phase 3: enforce also reports).
 - /csp-report/ endpoint принимает valid reports → 204.
 - /csp-report/ rejects: oversized, invalid JSON, GET method.
 """
@@ -20,16 +24,20 @@ from django.test import Client, TestCase, override_settings
 # Production-mode CSP headers активны только при DEBUG=False.
 # Также CSP templates загружаются в settings.py блоке `if not DEBUG`, поэтому
 # надо выставить их explicitly для test override.
+#
+# W2.3 Phase 3: enforce теперь strict (no 'unsafe-inline' в script-src) +
+# имеет report-uri. Шаблоны ниже match production defaults.
 CSP_ENFORCE_TEMPLATE = (
     "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline' 'nonce-{nonce}' https://cdn.jsdelivr.net; "
+    "script-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net; "
     "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data: https: blob:; "
     "font-src 'self' data:; "
     "connect-src 'self'; "
     "frame-ancestors 'none'; "
     "base-uri 'self'; "
-    "form-action 'self';"
+    "form-action 'self'; "
+    "report-uri /csp-report/;"
 )
 CSP_STRICT_TEMPLATE = (
     "default-src 'self'; "
@@ -65,12 +73,28 @@ class CSPHeadersTest(TestCase):
     def test_enforce_header_present(self):
         headers = self._fetch_headers()
         self.assertIn("Content-Security-Policy", headers)
-        # Enforce keeps 'unsafe-inline' (safety net Phase 1)
+        # W2.3 Phase 3: style-src keeps 'unsafe-inline' (W9 scope);
+        # script-src checked separately в test_enforce_script_src_strict.
         self.assertIn("'unsafe-inline'", headers["Content-Security-Policy"])
 
     def test_report_only_header_present(self):
         headers = self._fetch_headers()
         self.assertIn("Content-Security-Policy-Report-Only", headers)
+
+    def test_enforce_script_src_strict(self):
+        """W2.3 Phase 3: ENFORCE script-src БЕЗ 'unsafe-inline'."""
+        headers = self._fetch_headers()
+        enforce = headers["Content-Security-Policy"]
+        match = re.search(r"script-src\s+([^;]+);", enforce)
+        self.assertIsNotNone(match, "script-src directive должен присутствовать в enforce")
+        script_src = match.group(1)
+        self.assertNotIn(
+            "'unsafe-inline'",
+            script_src,
+            f"Phase 3: enforce script-src НЕ должен содержать 'unsafe-inline': {script_src}",
+        )
+        self.assertIn("'self'", script_src)
+        self.assertIn("nonce-", script_src, "nonce должен присутствовать")
 
     def test_strict_header_omits_unsafe_inline_in_script_src(self):
         """Shadow strict: script-src БЕЗ 'unsafe-inline'."""
@@ -114,6 +138,15 @@ class CSPHeadersTest(TestCase):
             "report-uri /csp-report/",
             headers["Content-Security-Policy-Report-Only"],
             "Strict policy должен иметь report-uri",
+        )
+
+    def test_report_uri_in_enforce_header(self):
+        """W2.3 Phase 3: enforce policy тоже имеет report-uri для visibility."""
+        headers = self._fetch_headers()
+        self.assertIn(
+            "report-uri /csp-report/",
+            headers["Content-Security-Policy"],
+            "Phase 3: enforce policy должен иметь report-uri",
         )
 
     def test_frame_ancestors_in_enforce(self):

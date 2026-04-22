@@ -194,21 +194,29 @@ if not DEBUG:
     #   dynamically (see crm/middleware.py SecurityHeadersMiddleware).
     # - Настройки-строки используются как TEMPLATES для middleware,
     #   {nonce} placeholder заменяется per-request.
-    # - Enforce (safety net, 'unsafe-inline' сохраняется): полностью
-    #   backward-compatible с current inline handlers + styles.
-    # - Shadow report-only (strict, no 'unsafe-inline' на script-src):
-    #   monitoring mode — violations logged в /csp-report/, не blocking.
+    # - W2.3 Phase 3 (2026-04-22): enforce теперь strict (no 'unsafe-inline'
+    #   на script-src). Browser actively blocks inline scripts/handlers,
+    #   nonce-based + CDN allowlist остаются единственными способами execute.
+    # - Shadow report-only (identical к enforce post-Phase-3): safety net
+    #   для deferred tail handlers — violations logged в /csp-report/
+    #   даже если enforce уже заблокировал (belt-and-suspenders visibility).
     #
-    # style-src strict — deferred к W9 (673 inline style="..." нужно extract).
+    # style-src 'unsafe-inline' сохраняется — deferred к W9 (673 inline style="").
     CSP_DEFAULT_SRC = os.getenv("CSP_DEFAULT_SRC", "'self'")
     # Enforce script-src: keep 'unsafe-inline' для safety net
     # + add 'nonce-{nonce}' placeholder (middleware substitutes per request)
     # + add CDN allowlist (cdn.jsdelivr.net = Chart.js на analytics v2).
+    #
+    # W2.3 Phase 3 (2026-04-22): enforce теперь strict (no 'unsafe-inline').
+    # Phase 2a/2b/2c extracted 39 inline handlers; Phase 3 switches browser
+    # из report-only mode в active blocking. Shadow report-only policy
+    # остаётся active как safety net для ~37 deferred tail handlers (W9 scope).
     CSP_SCRIPT_SRC_ENFORCE = os.getenv(
         "CSP_SCRIPT_SRC_ENFORCE",
-        "'self' 'unsafe-inline' 'nonce-{nonce}' https://cdn.jsdelivr.net",
+        "'self' 'nonce-{nonce}' https://cdn.jsdelivr.net",
     )
-    # Shadow strict script-src: no 'unsafe-inline', только nonce + 'self' + CDN.
+    # Shadow strict script-src: identical к enforce post-Phase-3.
+    # Kept as separate variable для future flexibility (independent tuning).
     CSP_SCRIPT_SRC_STRICT = os.getenv(
         "CSP_SCRIPT_SRC_STRICT",
         "'self' 'nonce-{nonce}' https://cdn.jsdelivr.net",
@@ -223,6 +231,9 @@ if not DEBUG:
     CSP_REPORT_URI = os.getenv("CSP_REPORT_URI", "/csp-report/")
 
     # Templates для per-request header build (middleware substitutes {nonce}).
+    # W2.3 Phase 3: enforce теперь включает report-uri — violations от
+    # deferred tail handlers логируются даже в strict mode (они теперь
+    # БЛОКИРУЮТСЯ браузером + пишутся в crm.csp logger для visibility).
     CSP_HEADER_ENFORCE_TEMPLATE = (
         f"default-src {CSP_DEFAULT_SRC}; "
         f"script-src {CSP_SCRIPT_SRC_ENFORCE}; "
@@ -232,7 +243,8 @@ if not DEBUG:
         f"connect-src {CSP_CONNECT_SRC}; "
         "frame-ancestors 'none'; "
         "base-uri 'self'; "
-        "form-action 'self';"
+        "form-action 'self'; "
+        f"report-uri {CSP_REPORT_URI};"
     )
     CSP_HEADER_STRICT_TEMPLATE = (
         f"default-src {CSP_DEFAULT_SRC}; "
