@@ -1298,7 +1298,9 @@ def settings_dicts(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:dicts:company_status:create")
 def settings_company_status_create(request: HttpRequest) -> HttpResponse:
+    # W2.1.4.2: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -1372,8 +1374,10 @@ def settings_task_type_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:dicts:company_status:edit")
 def settings_company_status_edit(request: HttpRequest, status_id: int) -> HttpResponse:
     """Редактирование статуса компании через модалку (AJAX)"""
+    # W2.1.4.2: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
     status = get_object_or_404(CompanyStatus, id=status_id)
@@ -1400,8 +1404,10 @@ def settings_company_status_edit(request: HttpRequest, status_id: int) -> HttpRe
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:dicts:company_status:delete")
 def settings_company_status_delete(request: HttpRequest, status_id: int) -> HttpResponse:
     """Удаление статуса компании"""
+    # W2.1.4.2: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
     if request.method != "POST":
