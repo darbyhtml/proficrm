@@ -1,4 +1,5 @@
 {% extends "ui/base.html" %}
+{% load static %}
 {% block title %}{{ campaign.name }} — CRM ПРОФИ{% endblock %}
 
 {% block content %}
@@ -119,7 +120,7 @@
             </form>
           {% endif %}
           
-          <button class="btn-icon btn bg-orange-500 text-white hover:bg-orange-600" type="button" onclick="document.getElementById('generateModal').classList.remove('hidden'); if (window.initMailRegionDropdown) window.initMailRegionDropdown();" title="Сгенерировать получателей">
+          <button class="btn-icon btn bg-orange-500 text-white hover:bg-orange-600" type="button" data-action="open-generate-modal" title="Сгенерировать получателей">
             <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
             </svg>
@@ -393,7 +394,7 @@
               <a class="btn btn-outline {% if view == 'all' %}bg-brand-soft/50 font-medium{% endif %}" style="padding:.25rem .6rem;font-size:.75rem" href="?view=all">Все ({{ counts.total }})</a>
             </div>
             {% if page and recipients_by_company %}
-              <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/bulk-delete/" id="bulkDeleteForm" onsubmit="return confirm('Удалить выбранных получателей?');" style="display:none;">
+              <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/bulk-delete/" id="bulkDeleteForm" data-confirm="Удалить выбранных получателей?" style="display:none;">
                 {% csrf_token %}
                 <button type="submit" class="btn" style="background:#dc2626;color:#fff;padding:.5rem 1rem;font-size:.875rem">Удалить выбранные</button>
               </form>
@@ -445,7 +446,7 @@
                             {% endif %}
                           </div>
                           <div class="flex items-center gap-2">
-                            <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/{{ r.id }}/delete/" onsubmit="return confirm('Удалить получателя {{ r.email }}?');" style="display:inline;">
+                            <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/{{ r.id }}/delete/" data-confirm="Удалить получателя {{ r.email }}?" style="display:inline;">
                               {% csrf_token %}
                               <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.7rem" type="submit" title="Удалить">×</button>
                             </form>
@@ -483,7 +484,7 @@
                 <div class="flex items-center gap-2">
                   <form method="get" class="flex items-center gap-2" id="perPageForm">
                     <label class="text-sm text-brand-dark/80 whitespace-nowrap">На странице:</label>
-                    <select name="per_page" class="select" onchange="this.form.submit()" style="padding:.25rem .5rem;font-size:.875rem;min-width:auto">
+                    <select name="per_page" class="select" data-action="filter-submit" style="padding:.25rem .5rem;font-size:.875rem;min-width:auto">
                       <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
                       <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
                       <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
@@ -507,7 +508,7 @@
             {% else %}
               <form method="get" class="flex items-center gap-2" id="perPageForm">
                 <label class="text-sm text-brand-dark/80 whitespace-nowrap">На странице:</label>
-                <select name="per_page" class="select" onchange="this.form.submit()" style="padding:.25rem .5rem;font-size:.875rem;min-width:auto">
+                <select name="per_page" class="select" data-action="filter-submit" style="padding:.25rem .5rem;font-size:.875rem;min-width:auto">
                   <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
                   <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
                   <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
@@ -721,7 +722,7 @@
             </div>
             <div class="flex flex-col gap-2">
               {% if counts.failed > 0 %}
-                <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/reset/" onsubmit="return confirm('Вернуть в очередь ТОЛЬКО ошибочные email?');" class="inline">
+                <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/reset/" data-confirm="Вернуть в очередь ТОЛЬКО ошибочные email?" class="inline">
                   {% csrf_token %}
                   <input type="hidden" name="scope" value="failed" />
                   <button class="btn w-full flex items-center gap-2 justify-start" type="submit" title="Вернуть в очередь только ошибочные (FAILED → PENDING)" style="background:#fff7ed;border:1px solid #fdba74;color:#9a3412;padding:0.55rem 0.75rem;font-size:0.875rem">
@@ -734,7 +735,7 @@
                 </form>
               {% endif %}
               {% if view_is_admin %}
-                <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/reset/" onsubmit="return confirm('ВНИМАНИЕ: это вернёт в очередь даже УЖЕ ОТПРАВЛЕННЫЕ email. Письма могут уйти повторно. Продолжить?');" class="inline">
+                <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/reset/" data-confirm="ВНИМАНИЕ: это вернёт в очередь даже УЖЕ ОТПРАВЛЕННЫЕ email. Письма могут уйти повторно. Продолжить?" class="inline">
                   {% csrf_token %}
                   <input type="hidden" name="scope" value="all" />
                   <button class="btn w-full flex items-center gap-2 justify-start" type="submit" title="ОПАСНО: вернёт в очередь и отправленные (SENT/FAILED → PENDING)" style="background:#fff1f2;border:1px solid #fda4af;color:#9f1239;padding:0.55rem 0.75rem;font-size:0.875rem">
@@ -746,7 +747,7 @@
                   </button>
                 </form>
               {% endif %}
-              <form method="post" action="/mail/campaigns/{{ campaign.id }}/clear/" onsubmit="return confirm('Очистить кампанию?');" class="inline">
+              <form method="post" action="/mail/campaigns/{{ campaign.id }}/clear/" data-confirm="Очистить кампанию?" class="inline">
                 {% csrf_token %}
                 <button class="btn w-full flex items-center gap-2 justify-start" type="submit" title="Удалит всех получателей и поставит cooldown на email" style="background:#f8fafc;border:1px solid #cbd5e1;color:#0f172a;padding:0.55rem 0.75rem;font-size:0.875rem">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
@@ -810,7 +811,7 @@
 
   {# Модальное окно генерации получателей #}
   <div id="generateModal" class="hidden fixed inset-0 z-[120] flex items-center justify-center bg-black/30 transition-opacity">
-    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" data-stop-propagation>
       <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
         <h2 class="text-xl font-semibold flex items-center gap-2">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
@@ -818,7 +819,7 @@
           </svg>
           Сгенерировать получателей
         </h2>
-        <button type="button" onclick="document.getElementById('generateModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 transition-colors">
+        <button type="button" data-action="close-generate-modal" class="text-gray-400 hover:text-gray-600 transition-colors">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -896,7 +897,7 @@
               <label class="block text-sm font-medium text-gray-700 mb-2">Статус</label>
               <div class="border border-gray-300 rounded-lg p-2 max-h-32 overflow-y-auto bg-white">
                 <label class="flex items-center gap-2 p-1 hover:bg-gray-50 rounded cursor-pointer">
-                  <input type="checkbox" name="status_all" id="statusAll" class="rounded" onchange="toggleAllStatuses(this)" />
+                  <input type="checkbox" name="status_all" id="statusAll" class="rounded" data-action="toggle-all-statuses" />
                   <span class="text-sm">Все статусы</span>
                 </label>
                 <div class="border-t border-gray-200 mt-1 pt-1 space-y-1" id="statusContainer">
@@ -915,7 +916,7 @@
               <label class="block text-sm font-medium text-gray-700 mb-2">Сфера</label>
               <div class="border border-gray-300 rounded-lg p-2 max-h-32 overflow-y-auto bg-white">
                 <label class="flex items-center gap-2 p-1 hover:bg-gray-50 rounded cursor-pointer">
-                  <input type="checkbox" name="sphere_all" id="sphereAll" class="rounded" onchange="toggleAllSpheres(this)" />
+                  <input type="checkbox" name="sphere_all" id="sphereAll" class="rounded" data-action="toggle-all-spheres" />
                   <span class="text-sm">Все сферы</span>
                 </label>
                 <div class="border-t border-gray-200 mt-1 pt-1 space-y-1" id="sphereContainer">
@@ -953,7 +954,7 @@
                   </div>
                   <div class="max-h-32 overflow-y-auto">
                     <label class="flex items-center gap-2 p-1 hover:bg-gray-50 rounded cursor-pointer">
-                      <input type="checkbox" name="region_all" id="regionAll" class="rounded" onchange="toggleAllRegions(this)" />
+                      <input type="checkbox" name="region_all" id="regionAll" class="rounded" data-action="toggle-all-regions" />
                       <span class="text-sm">Все области</span>
                     </label>
                     <div class="border-t border-gray-200 mt-1 pt-1 space-y-1" id="regionContainer">
@@ -1020,7 +1021,7 @@
         
         {# Кнопки #}
         <div class="flex items-center justify-end gap-3 border-t border-gray-200 pt-4">
-          <button type="button" onclick="document.getElementById('generateModal').classList.add('hidden')" class="btn btn-outline">
+          <button type="button" data-action="close-generate-modal" class="btn btn-outline">
             Отмена
           </button>
           <button type="submit" class="btn btn-primary">
@@ -1114,6 +1115,8 @@
 {% endblock %}
 
 {% block extra_js %}
+  {# W2.3 Phase 2c: delegated listeners для data-action / data-confirm / data-stop-propagation в pages/mail_campaign_detail.js. #}
+  <script src="{% static 'ui/js/pages/mail_campaign_detail.js' %}" nonce="{{ csp_nonce }}"></script>
   <script nonce="{{ csp_nonce }}">
     (function () {
       const statsEl = document.getElementById('campaign-stats');
