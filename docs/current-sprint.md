@@ -1,5 +1,87 @@
 # Текущий спринт
 
+## 🎯 [2026-04-22] — W2 CODIFICATION MILESTONE — 110 endpoints routed through policy engine
+
+All CRM access points now have `@policy_required` decorator audit layer:
+
+| Wave | Scope | Endpoints |
+|------|-------|-----------|
+| W2.1.3b/c | Group D + Group B bulk (earlier) | 7 |
+| W2.1.4.1 | user-mgmt + branches + general | 13 |
+| W2.1.4.2 | dictionaries + audit logs | 18 |
+| W2.1.4.3 | messenger + mail | 19 |
+| W2.1.4.4 | integrations + mobile + complex | 14 |
+| W2.1.5 | inline enforce() → decorator (mailer + notifications) | **39** |
+| **TOTAL** | **All codified** | **110** |
+
+Deferred (not in W2 scope): phonebridge/api.py 12 APIView-class-method enforces — class-method pattern нужен `@method_decorator` wrapper без clear benefit over inline enforce(). Documented exclusion.
+
+Defense-in-depth: **all inline checks preserved** (require_admin, enforce, role allowlists). Decorators = explicit audit layer; inline = fallback.
+
+---
+
+## [2026-04-22] — W2.1.5 COMPLETED — Inline enforce() codified (39 endpoints)
+
+**Status**: ✅ 39 endpoints across 10 files now have `@policy_required` decorator. All 57 inline enforce() calls preserved as defense-in-depth. Test baseline 1316 → 1320.
+
+### Pre-work (`65a596e6`)
+
+- **57 inline enforce() calls** mapped across 11 files (matches W2.1.1 inventory).
+- **4 missing resources registered**: `phone:qr:status`, `ui:mail:campaigns:{attachment:download, export_failed, retry_failed}`.
+- Inventory doc: `docs/audit/w2-1-5-inventory.md`.
+- Policy regression: 42/42 pass.
+
+### Codification (`4614ef10`)
+
+**10 files touched, 39 decorators applied**:
+
+| File | enforce() calls | Decorators |
+|------|-----------------|------------|
+| mailer/views/polling.py | 2 | 2 |
+| mailer/views/campaigns/list_detail.py | 2 | 2 |
+| mailer/views/unsubscribe.py | 3 | 3 |
+| mailer/views/campaigns/templates_views.py | 3 | 3 |
+| mailer/views/sending.py | 4 | 4 |
+| mailer/views/campaigns/crud.py | 4 | 4 |
+| mailer/views/campaigns/files.py | 5 | 5 |
+| notifications/views.py | 5 | 5 |
+| mailer/views/settings.py | 8 | 4 (4 inline-only в POST branches) |
+| mailer/views/recipients.py | 9 | 7 (2 inline-only в scope branches) |
+| **Total** | **45** | **39** |
+
+**Deferred**: phonebridge/api.py (12 APIView-class-method enforces). Per-method `@method_decorator` wrapper или DRF `PolicyPermission` class refactor — decision: skip, inline enforce() already sufficient, avoid boilerplate без benefit. Documented в `docs/audit/w2-1-5-inventory.md`.
+
+### Verification
+
+- ✅ **Tests: 1316 → 1320** (+4 new в `tests_w2_1_5_codification.py`).
+- ✅ Mailer regression: 191/191. Notifications regression: included в full suite.
+- ✅ CI green на `4614ef10`.
+- ✅ Staging deploy: all 6 steps + `DEPLOY FULLY COMPLETED`.
+- ✅ Staging smoke: 6/6 green.
+- ✅ Leftover disposable users: 0.
+- ✅ Defense-in-depth source-level verified: all 39 codified views have both `@policy_required` decorator AND inline `enforce()` call.
+
+### Commits (2)
+
+- `65a596e6` — audit(w2.1.5): inventory + 4 resources.
+- `4614ef10` — feat(policy): W2.1.5 codify 39 inline enforce() via @policy_required.
+
+### Parallel observation — CSP monitoring (W2.3 Phase 1)
+
+CSP violations в last 3h: **0** (staging не активно used для browsing — expected). Continued monitoring. Ready для Phase 2 / Phase 3 when user decides.
+
+### Pending W2
+
+- **W2.3 Phase 2**: inline event handler extraction (66 handlers, 3-5h, 3-4 sub-sessions).
+- **W2.3 Phase 3**: report-only → enforce switch (~30 min after 48h clean).
+- **W2 END**: after W2.3 Phase 3 — all W2 hardening complete.
+
+### Pending pre-W9 deploy
+
+- **nkv Android migration** (HIGH — hotlist entry).
+
+---
+
 ## [2026-04-22] — W2.3 Phase 1 COMPLETED — CSP infrastructure (nonce + shadow strict + report endpoint)
 
 **Status**: ✅ Infrastructure deployed на staging. Shadow `Content-Security-Policy-Report-Only` с strict script-src активен для monitoring. Enforce header сохраняет `'unsafe-inline'` как safety net до Phase 2.
