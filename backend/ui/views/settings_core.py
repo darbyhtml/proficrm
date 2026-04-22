@@ -974,9 +974,7 @@ def settings_user_edit(request: HttpRequest, user_id: int) -> HttpResponse:
 
 
 @login_required
-@policy_required(
-    resource_type="action", resource="ui:settings:users:magic_link:generate"
-)
+@policy_required(resource_type="action", resource="ui:settings:users:magic_link:generate")
 def settings_user_magic_link_generate(request: HttpRequest, user_id: int) -> HttpResponse:
     """
     Генерация одноразовой ссылки входа для пользователя (только для админа).
