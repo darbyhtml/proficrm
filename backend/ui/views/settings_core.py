@@ -1358,7 +1358,9 @@ def settings_contract_type_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:dicts:task_type:create")
 def settings_task_type_create(request: HttpRequest) -> HttpResponse:
+    # W2.1.4.2: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -1545,8 +1547,10 @@ def settings_contract_type_delete(request: HttpRequest, contract_type_id: int) -
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:dicts:task_type:edit")
 def settings_task_type_edit(request: HttpRequest, task_type_id: int) -> HttpResponse:
     """Редактирование типа задачи через модалку (AJAX)"""
+    # W2.1.4.2: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
     task_type = get_object_or_404(TaskType, id=task_type_id)
@@ -1585,8 +1589,10 @@ def settings_task_type_edit(request: HttpRequest, task_type_id: int) -> HttpResp
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:dicts:task_type:delete")
 def settings_task_type_delete(request: HttpRequest, task_type_id: int) -> HttpResponse:
     """Удаление типа задачи"""
+    # W2.1.4.2: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
     if request.method != "POST":
