@@ -249,6 +249,101 @@ RESOURCES: tuple[PolicyResource, ...] = (
         "Settings: удалить пользователя",
         sensitive=True,
     ),
+    # ---- W2.1.4.2: settings dictionaries + audit logs (18 resources) ----
+    # Dictionaries (13)
+    PolicyResource("ui:settings:dicts", "page", "Settings: справочники (index)"),
+    PolicyResource(
+        "ui:settings:dicts:company_status:create",
+        "action",
+        "Settings: создать статус компании",
+    ),
+    PolicyResource(
+        "ui:settings:dicts:company_status:edit",
+        "action",
+        "Settings: редактировать статус компании",
+    ),
+    PolicyResource(
+        "ui:settings:dicts:company_status:delete",
+        "action",
+        "Settings: удалить статус компании",
+        sensitive=True,
+    ),
+    PolicyResource(
+        "ui:settings:dicts:company_sphere:create",
+        "action",
+        "Settings: создать сферу компании",
+    ),
+    PolicyResource(
+        "ui:settings:dicts:company_sphere:edit",
+        "action",
+        "Settings: редактировать сферу компании",
+    ),
+    PolicyResource(
+        "ui:settings:dicts:company_sphere:delete",
+        "action",
+        "Settings: удалить сферу компании",
+        sensitive=True,
+    ),
+    PolicyResource(
+        "ui:settings:dicts:contract_type:create",
+        "action",
+        "Settings: создать вид договора",
+    ),
+    PolicyResource(
+        "ui:settings:dicts:contract_type:edit",
+        "action",
+        "Settings: редактировать вид договора",
+    ),
+    PolicyResource(
+        "ui:settings:dicts:contract_type:delete",
+        "action",
+        "Settings: удалить вид договора",
+        sensitive=True,
+    ),
+    PolicyResource(
+        "ui:settings:dicts:task_type:create",
+        "action",
+        "Settings: создать тип задачи",
+    ),
+    PolicyResource(
+        "ui:settings:dicts:task_type:edit",
+        "action",
+        "Settings: редактировать тип задачи",
+    ),
+    PolicyResource(
+        "ui:settings:dicts:task_type:delete",
+        "action",
+        "Settings: удалить тип задачи",
+        sensitive=True,
+    ),
+    # Audit logs (5)
+    PolicyResource(
+        "ui:settings:activity",
+        "page",
+        "Settings: журнал действий (audit activity)",
+        sensitive=True,
+    ),
+    PolicyResource(
+        "ui:settings:error_log",
+        "page",
+        "Settings: журнал ошибок (error_log)",
+        sensitive=True,
+    ),
+    PolicyResource(
+        "ui:settings:error_log:resolve",
+        "action",
+        "Settings: отметить ошибку resolved",
+    ),
+    PolicyResource(
+        "ui:settings:error_log:unresolve",
+        "action",
+        "Settings: снять отметку resolved",
+    ),
+    PolicyResource(
+        "ui:settings:error_log:details",
+        "action",
+        "Settings: детали ошибки (AJAX)",
+    ),
     # ---- DRF API actions ----
     PolicyResource("api:companies:list", "action", "API: компании (list)"),
     PolicyResource("api:companies:retrieve", "action", "API: компании (retrieve)"),
