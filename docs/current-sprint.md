@@ -1,5 +1,72 @@
 # Текущий спринт
 
+## [2026-04-22] — W2.7 COMPLETED — JWT admin password block (auth consistency closed)
+
+**Status**: ✅ `/api/token/` password login отключён для ВСЕХ users (admin + non-admin). Staging only. Auth surface теперь consistent — admin должен использовать web /login/ с 2FA.
+
+### Context — audit informed scope change
+
+Initial audit (`cf895143`) triggered STOP condition: real okhttp/Android traffic на prod `/api/token/`. User identification audit (`2f952171`) resolved:
+- User: **Непеаниди Ксения** (`nkv`, manager, 98 JWT logins/30d)
+- **ZERO admin JWT usage на prod в 30 days** — W2.7 adds zero incremental impact over W2.6.
+- W2.7 proceeds safely (staging). Pre-W9 blocker для nkv migration tracked в hotlist.
+
+### Changes (`42c8aea9`)
+
+- `backend/accounts/jwt_views.py`: removed non-admin-only filter — теперь ALL users blocked from /api/token/ password flow.
+- Audit reason distinguished: `jwt_admin_blocked` vs `jwt_non_admin_blocked`.
+- Meta `is_admin` flag для analytics.
+- Response text updated: mentions both admin web+2FA path и magic link.
+- Blacklist issued refresh token (defense-in-depth preserved from W2.6).
+
+### Auth landscape after W2.7
+
+| Path | Admin | Non-admin | Mobile |
+|------|-------|-----------|--------|
+| Web `/login/` | ✅ password + 2FA (primary) | ❌ blocked (W2.6) | N/A |
+| `/auth/magic/<token>/` | — | ✅ magic link (primary) | — |
+| `/api/token/` password | ❌ **403 (W2.7)** | ❌ 403 (W2.6) | ❌ 403 |
+| `/api/token/refresh/` | ✅ preserved | ✅ preserved | ✅ preserved |
+| `/api/phone/qr/exchange/` | ✅ QR | ✅ QR | ✅ primary |
+
+### Verification
+
+- ✅ **Tests: 1298 → 1301** (+3 net; 5 modified W2.6/W2.7 tests pass, 1 legacy test updated).
+- ✅ CI green на `42c8aea9`.
+- ✅ Staging deploy: все 6 steps + `DEPLOY FULLY COMPLETED`.
+- ✅ Containers fresh (1 min uptime).
+- ✅ Staging smoke: 6/6 green.
+- ✅ External verification:
+  - Admin valid password → **403** ✅ `{"detail":"JWT вход по логину и паролю отключён..."}`
+  - Admin wrong password → 401 ✅ (auth fails first, no leak)
+  - Manager wrong password → 401 ✅
+  - Mobile QR `/api/phone/qr/exchange/` → 400 invalid token ✅ (orthogonal, unaffected)
+  - Web `/login/` → 200 ✅ (unaffected)
+
+### 🔴 Pre-W9 blocker: nkv Android migration
+
+Added entry в `docs/audit/hotlist.md` — **HIGH severity, blocks W9 prod deploy**.
+- nkv (manager, 98 JWT logins/30d prod) must migrate к QR flow before W9.
+- Xiaomi 23129RN51X device, active 2026-04-22 16:10 MSK.
+- Owner: user (coordinate с nkv + Android developer).
+- References: `docs/audit/w2-7-jwt-usage.md` + `docs/audit/w2-7-android-user-identified.md`.
+
+### Commits (2 + docs)
+
+- `42c8aea9` — feat(auth): W2.7 extend JWT block to admin users
+- `cf895143` + `2f952171` — audits (committed earlier this session)
+
+### Pending W2
+
+- **W2.3**: CSP strict mode (~2-3h).
+- **W2.1.5**: inline `enforce()` → `@policy_required` migration (57 locations).
+
+### Pending pre-W9 deploy (blockers)
+
+- **nkv Android migration** (hotlist — HIGH). Must complete before W9 bundles W2.6+W2.7 к prod.
+
+---
+
 ## 🎯 [2026-04-22] — W2.1.4 MILESTONE — 64/64 settings endpoints codified
 
 W2.1.4 wave **complete across 4 sub-sessions**:

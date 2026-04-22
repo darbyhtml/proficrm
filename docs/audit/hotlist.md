@@ -31,6 +31,83 @@ Remaining hotlist items для W2+:
 
 ---
 
+## 🔴 HOTLIST NEW (W2 security wave): nkv Android migration — pre-W9 blocker
+
+**Severity**: HIGH (blocks W9 prod deploy of W2.6+W2.7 changes).
+**Discovered**: W2.7 audit, 2026-04-22.
+**Status**: OPEN — требует coordination с пользователем.
+
+### User affected
+
+- Full name: Непеаниди Ксения
+- Username: **nkv** (prod user id=13)
+- Role: **manager** (НЕ admin)
+- Email: `nkv@kurskpk.ru`
+- Branch: (per W2.6 W2.1.4.1 audit — branch visible в prod DB)
+
+### Issue
+
+Active Android app user с password JWT auth на prod. Когда W2.6 deploys на prod (W9 bundle), её Android app **перестанет** работать — W2.6 blocks manager JWT login.
+
+### Evidence (prod DB audit 2026-04-22)
+
+- Device: Xiaomi **23129RN51X** (Android)
+- Device registered: 2026-01-12 (~4 months ago, stable device_id)
+- Last seen active: **2026-04-22 13:10 UTC** (16:10 MSK)
+- **98 `jwt_login_success` events в последние 30 days** (~3-4 логина в день)
+- **0 `MobileAppQrToken` records** — она никогда не использовала QR flow
+- External IP: 83.239.67.30 (её ISP/mobile carrier)
+
+### Root cause
+
+Её Android app (version field empty в `phonebridge_phonedevice.app_version`) либо:
+- Старая версия app без QR flow UI.
+- Official flow имел password fallback.
+- Unofficial build.
+
+### Impact если W9 deploys без migration
+
+- Next login attempt на mobile → 403.
+- App crashes/stuck при попытке auth.
+- Support escalation + emergency rollback или hotfix.
+
+### Required before W9 prod deploy
+
+1. **Verify current APK version** на nkv's phone — supports QR flow?
+   - Check `/admin/mobile-apps/` на prod для active builds.
+   - Compare с installed version через support contact.
+2. **Upgrade APK** если needed (distribute latest build).
+3. **Coordinate migration window** (~30 min):
+   - Admin logs в web + 2FA.
+   - `/mobile-app/` → generate QR для nkv.
+   - nkv scans с Android app.
+   - QR exchange → new JWT (stored в app).
+4. **Verify migration**: 7 days после migration → 0 `jwt_login_success` from user_id=13.
+
+### Owner
+
+User (coordinates с nkv через Android developer + support contact).
+
+### Blocks
+
+- W9 prod deploy of any W2.6+ changes (including W2.7, W2.1.4.1-4, etc).
+- До migration completion: accumulated staging changes **не могут быть** deployed на prod safely.
+
+### Alternative mitigation options
+
+- **A**: Migrate nkv — standard path. Recommended.
+- **B**: Create dedicated non-admin JWT endpoint (`/api/token/magic-exchange/`) — magic link → JWT. Keeps backward compat для Android app that can't support QR. Feature request for W2.x+.
+- **C**: Waive W2.6 prod deploy. Keep `/api/token/` password открытым на prod. Dead code drift между staging (hardened) и prod (legacy). Not recommended.
+
+### References
+
+- Audit: `docs/audit/w2-7-jwt-usage.md` (W2.7 initial audit, stop condition)
+- Audit: `docs/audit/w2-7-android-user-identified.md` (user identification + revised recommendation)
+- W2.6 commit: `ab89c287` (non-admin JWT block, staging-only)
+- W2.7 commit: `42c8aea9` (admin JWT block, staging-only)
+
+---
+
 ## 1. `backend/ui/views/company_detail.py` — УДАЛЁН ✅ CLOSED 2026-04-21 (W1.2)
 
 - **Score:** 100 (impact 5 × freq 5 × risk 4) — было
