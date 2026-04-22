@@ -1,5 +1,75 @@
 # Текущий спринт
 
+## [2026-04-22] — W2.1.3b COMPLETED — Group D codified + Group B audit
+
+**Status**: ✅ W2 first real behavioral session done. Zero regression.
+
+### Delivered
+
+**Group B audit (read-only)**:
+- Actual count: **3 endpoints** (not 7 per W2.1.1 — W1.4 dedup + W2.1.2a reclassification).
+- All 3 = Category 1 (legit alt protection):
+  1. `cold_call.py::company_cold_call_toggle` (@require_can_view_company — use `ui:companies:cold_call:toggle`)
+  2. `cold_call.py::company_cold_call_reset` (use `ui:companies:cold_call:reset`)
+  3. `detail.py::company_timeline_items` (use `ui:companies:detail`)
+- All resources уже registered → bulk codify trivial in next session.
+
+**Group D codification** (4/4 endpoints — incremental commits):
+- `analytics_v2_home` → `@policy_required(page, ui:analytics:v2)` (new resource)
+- `messenger_agent_status` → `@policy_required(action, ui:messenger:agent_status)` (new)
+- `task_add_comment` → `@policy_required(action, ui:tasks:comment:add)` (new, F3 IDOR-fix preserved)
+- `task_view_v2_partial` → `@policy_required(page, ui:tasks:detail)` (reuse existing)
+
+**Defense-in-depth preserved** для всех:
+- F3 IDOR-fix (visible_tasks_qs + _can_edit_task_ui) — inline checks остались.
+- `_v2_load_task_for_user` role-based visibility — осталась.
+- Structural OneToOne isolation для agent_status — осталась.
+
+**Verification suite (10 new tests)**:
+- `backend/ui/tests_w2_group_d_codification.py`.
+- Covers: allow-all access, admin access, IDOR preservation, cross-branch denial.
+- qa_manager + admin scenarios проверены по каждому endpoint.
+
+**Prod diagnostic (Step 0.3)**:
+- BLOCKED by Path E hook (нельзя cd в prod path even для read-only).
+- Documented indirect estimation + pre-W9 SQL query template (user runs manually ~1 week before W9).
+
+**Staging retention (Step 0.2)**:
+- Beat task `purge-old-policy-events` не ran today (auto-deploy W2.1.3a после 03:15 MSK).
+- 7.48M events older than 14 days — clean up tomorrow 03:15 MSK.
+
+### Commits (8)
+
+1. `4c37fc2d` — audit(w2): prod policy events diagnostic blocked (Path E)
+2. `503b98a0` — audit(w2.1.3b): Group B alt decorators classification — 3 endpoints
+3. `5456ee52` — feat(policy): register 3 new resources for W2.1.3b
+4. `a3eedfa5` — feat(policy): codify analytics_v2_home (#1)
+5. `d607b526` — feat(policy): codify messenger_agent_status (#2)
+6. `5f8d8284` — feat(policy): codify task_add_comment (#3) defense-in-depth
+7. `c62e114f` — feat(policy): codify task_view_v2_partial (#4)
+8. `1afd8f92` — test(policy): verification suite 10 tests
+
+### Quality
+- ✅ Tests: **1172 → 1182 passing** (+10 new)
+- ✅ Staging smoke: 6/6 green
+- ✅ Each endpoint verified individually BEFORE + AFTER
+- ✅ Full suite run after endpoint #4 — regression-clean
+- ✅ Ruff + black: clean
+
+### Docs
+- `docs/audit/w2-prod-policy-diagnostic-2026-04-22.md` (new)
+- `docs/audit/w2-group-b-audit.md` (new)
+
+### Next
+
+- **W2.1.3c**: bulk codify Group B (3 endpoints × 1-line decorator add).
+- **W2.1.4**: Group A settings_* migration (64 endpoints × 4 sub-sessions).
+- **W2.1.5**: inline `enforce()` → decorator migration (57 locations, primarily mailer).
+
+User to decide ordering.
+
+---
+
 ## [2026-04-22] — W2.1.3a COMPLETED — setup (qa_manager + Q17)
 
 **Status**: ✅ W2 security wave in progress. Session 3a (setup) done.
