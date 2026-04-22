@@ -1,5 +1,85 @@
 # Текущий спринт
 
+## [2026-04-22] — W2.3 Phase 1 COMPLETED — CSP infrastructure (nonce + shadow strict + report endpoint)
+
+**Status**: ✅ Infrastructure deployed на staging. Shadow `Content-Security-Policy-Report-Only` с strict script-src активен для monitoring. Enforce header сохраняет `'unsafe-inline'` как safety net до Phase 2.
+
+### Changes (`15f4a543`)
+
+**`crm/middleware.py`** — SecurityHeadersMiddleware rebuilt:
+- Per-request nonce generation (preserved W1.3 pattern).
+- Builds enforce + shadow strict headers from settings templates.
+- Emits BOTH `Content-Security-Policy` (enforce) + `Content-Security-Policy-Report-Only` (strict).
+
+**`crm/settings.py`** — CSP config:
+- `CSP_HEADER_ENFORCE_TEMPLATE`: `'self' 'unsafe-inline' 'nonce-{nonce}' https://cdn.jsdelivr.net` (safety net).
+- `CSP_HEADER_STRICT_TEMPLATE`: `'self' 'nonce-{nonce}' https://cdn.jsdelivr.net` + `report-uri /csp-report/` (no `'unsafe-inline'` на script-src).
+- `style-src 'self' 'unsafe-inline'` в обеих policies — deferred к W9 (673 inline `style=""`).
+- Legacy `CSP_HEADER` alias preserved.
+
+**`core/csp_report.py`** (new) — violation receiver:
+- POST `/csp-report/` → 204 No Content.
+- CSRF-exempt, require_POST, 10KB body cap.
+- Validates: dict top-level, unwraps `csp-report` key per W3C spec.
+- Logs к `crm.csp` logger (WARNING level, includes full report в `extra`).
+
+**`core/tests_csp.py`** (new, 15 tests):
+- Middleware: both headers, nonce unique per-request, nonce в обоих, CDN allowlist, strict omits `'unsafe-inline'` script-src, report-uri present, frame-ancestors regression.
+- Endpoint: valid → 204, unwrapped → 204, oversized → 400, invalid JSON → 400, GET → 405, CSRF exempt, non-dict → 400.
+
+### External verification
+
+```
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'nonce-XXX' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; ...; frame-ancestors 'none'; base-uri 'self'; form-action 'self';
+
+Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'nonce-XXX' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; ...; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; report-uri /csp-report/;
+```
+
+- ✅ Both headers present, nonce unique per-request (verified via 2 separate curl calls).
+- ✅ CDN allowlisted в обоих.
+- ✅ `report-uri /csp-report/` в strict.
+- ✅ POST valid report → **204** + logged к `crm.csp` logger:
+  ```
+  WARNING crm.csp: CSP violation: directive=script-src blocked=inline document=https://.../test/ source=test.js:42
+  ```
+- ✅ Invalid JSON → 400, oversized → 400, GET → 405.
+
+### Quality
+
+- ✅ **Tests: 1301 → 1316** (+15 new в `core.tests_csp`).
+- ✅ CI green на `15f4a543`.
+- ✅ Staging deploy: all 6 steps + `DEPLOY FULLY COMPLETED`.
+- ✅ Containers fresh (2 min uptime).
+- ✅ Staging smoke: 6/6 green.
+
+### Rollout phase status
+
+| Phase | Scope | Status |
+|-------|-------|--------|
+| **Phase 1** | Nonce + shadow strict + report endpoint | ✅ **DONE** (this session) |
+| Phase 2 | Extract 66 inline event handlers | Pending (3-5h, 3-4 sub-sessions) |
+| Phase 3 | Flip report-only → enforce strict (after 48h clean) | Pending |
+| style-src strict | Inline `style=""` cleanup (673 attrs) | Deferred к W9 |
+
+### Monitoring
+
+Shadow strict policy активен — browsers начнут отправлять violations на `/csp-report/`. Следующее monitoring window:
+- **Next check** (via docker logs): `docker compose logs --since 24h web | grep "CSP violation"`.
+- Expected violations: inline event handlers (66) + any dynamic content we missed.
+- Violations **НЕ блокируют** rendering пока (report-only mode).
+
+### Commits (1)
+
+- `15f4a543` — feat(security): W2.3 Phase 1 CSP infrastructure
+
+### Pending W2
+
+- **W2.3 Phase 2**: extract 66 inline event handlers (3-5h).
+- **W2.3 Phase 3**: flip to enforce (~30 min).
+- **W2.1.5**: inline `enforce()` → `@policy_required` migration (57 locations).
+
+---
+
 ## [2026-04-22] — W2.7 COMPLETED — JWT admin password block (auth consistency closed)
 
 **Status**: ✅ `/api/token/` password login отключён для ВСЕХ users (admin + non-admin). Staging only. Auth surface теперь consistent — admin должен использовать web /login/ с 2FA.
