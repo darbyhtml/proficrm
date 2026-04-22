@@ -1,5 +1,56 @@
 # Текущий спринт
 
+## [2026-04-22] — W1 WAVE CLOSED ✅ (W1.4 wrap-up)
+
+**Status**: ✅ **W1 Refactor Wave завершена**. Все 4 mini-sessions zeroед. Готов к W2 — Security hardening.
+
+### W1 итоги
+| Mini | Goal | Result |
+|------|------|--------|
+| W1.1 | Split `_base.py` | 1 251 → 371 LOC (−70%), 6 helpers |
+| W1.2 | Split `company_detail.py` | 3 022 LOC → deleted, 10 pages/company/*.py |
+| W1.3 | Inline JS/CSS extract | 2 684 LOC CSS extracted (−65%), 0 bare scripts |
+| W1.4 | cold_call dedup + coverage 53% | 691→608 LOC, 10%→78% cov, total 52%→53% |
+
+### W1.4 deliverables (2026-04-22)
+- **24 URL-layer tests** (`backend/ui/tests_cold_call_views.py`) — safety net
+- **cold_call.py dedup**: 691 → 608 LOC, 279 → 225 stmts (−19%). `_CCConfig` dataclass + 2 generic impls + 8 thin wrappers.
+- **Coverage total 52% → 53%** — автоматически через dedup (smaller stmts count)
+- **`pyproject.toml fail_under`**: 50 → **53** ✅
+- **Tests**: 1 140 → **1 164** passing
+
+**W1.4 commits** (3):
+1. `563a937d` — test(cold_call): 24 safety tests before dedup
+2. `e266bdfd` — refactor(cold_call): generic impl dedup
+3. (final docs)
+
+### W1 grand total
+- 4 mini-sessions, 2 дня
+- ~40 atomic commits
+- 24 новых модуля (helpers + pages + static CSS/JS + tests)
+- −3 902 LOC god-file removed (`_base.py` −880 + `company_detail.py` −3 022)
+- +24 new tests
+- Coverage +1 pp (W1 target achieved)
+- CSP strict foundations prepared (0 bare scripts, CSP middleware updated)
+- 7+ hotlist items closed / partial
+
+**Docs**:
+- `docs/release/w1-wave-closure.md` — полный rollup
+- `docs/audit/hotlist.md` — W1 closure summary
+- `docs/audit/cold-call-dedup-inventory.md` — dedup inventory
+- `docs/audit/w1-baseline-post-w1-1.md`, `docs/audit/company-detail-inventory.md`, `docs/audit/w1-3-inline-assets-inventory.md`
+- `docs/release/w1-{1,2,3}-*.md` — per-mini plans
+
+**Next**: **W2 — Security hardening**. Pre-context per Path E:
+- Staging users: 1 (Dmitry). No manager rollout.
+- Admin: 2. 2FA rollout ~20 min.
+- Prod frozen до W9 — W2 policy enforce staging only.
+- 83 mutating endpoints без `@policy_required` (Wave 0.1 P1 blocker).
+- 66 remaining inline event handlers (W1.3 deferred).
+- CSP strict switch (W1.3 foundation ready).
+
+---
+
 ## [2026-04-21] — W1.3 Mini: inline JS/CSS extraction (Scenario C) ✅ CLOSED
 
 **Status**: ✅ ЗАКРЫТО. Hotlist #3 — **partial address** (JS/CSS extraction done, full HTML split deferred W9).

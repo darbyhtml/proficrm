@@ -8,6 +8,29 @@ _Снапшот: **2026-04-20**. Источник: Wave 0.1 audit, top-20 tech-d
 
 ---
 
+## W1 closure summary (2026-04-22)
+
+W1 wave (4 mini-sessions, 2 дня) закрыл следующие items:
+
+| # | Item | Status | Wave |
+|---|------|--------|------|
+| 1 | `company_detail.py` 3022 LOC | ✅ CLOSED (deleted) | W1.2 |
+| 2 | `_base.py` 1251 LOC | ✅ CLOSED (371 LOC shim) | W1.1 |
+| 3 | `company_detail.html` 8781 LOC | 🟡 PARTIAL (W1.3 JS/CSS + W2 + W9) |
+| — | `cold_call.py` outlier 691 LOC | ✅ CLOSED (dedup 608 LOC + 78% coverage) | W1.4 |
+| — | Coverage 51% → **53%** | ✅ W1 target achieved | W1.4 |
+
+Full W1 details: `docs/release/w1-1-base-split-plan.md`, `docs/release/w1-2-company-detail-split-plan.md`, `docs/release/w1-3-execution-plan.md`, `docs/audit/cold-call-dedup-inventory.md`.
+
+Remaining hotlist items для W2+:
+- #3 `company_detail.html` full split — W9.
+- #4-5 minified JS bundles — W10 (подключение `.min.js` в templates).
+- #6 `purge_old_activity_events` chunking — W3.
+- #7 ActivityEvent composite index — W3.
+- #8-10 другие items — W2-W3 по priority.
+
+---
+
 ## 1. `backend/ui/views/company_detail.py` — УДАЛЁН ✅ CLOSED 2026-04-21 (W1.2)
 
 - **Score:** 100 (impact 5 × freq 5 × risk 4) — было

@@ -224,3 +224,66 @@ Session → Locale → Common → CSRF → Auth → Messages → XFrame → Erro
 | celery | python:3.13-slim | — | 2 concurrency |
 | celery-beat | python:3.13-slim | — | scheduler |
 | websocket | python:3.13-slim | 8000 | Daphne |
+
+## W1 Refactor Results (2026-04-21 → 2026-04-22)
+
+**Volna W1 закрыта** в 4 mini-sessions. Zero behavior change, staging-only per Path E.
+
+### god-files eliminated
+
+| File | Before | After | Delta |
+|------|--------|-------|-------|
+| `backend/ui/views/_base.py` | 1 251 LOC | 371 LOC (shim) | −70% |
+| `backend/ui/views/company_detail.py` | 3 022 LOC | 0 (deleted) | −100% |
+| `backend/ui/views/pages/company/cold_call.py` | 691 LOC (W1.2 extract) | 608 LOC (W1.4 dedup) | −12% |
+
+### New structure
+
+```
+backend/ui/views/
+├── _base.py             # 371 LOC (W1.1: shim с re-exports для backward compat)
+├── helpers/             # W1.1 — 6 shared helper modules
+│   ├── search.py        (65)    normalizers (phone/email/text)
+│   ├── tasks.py         (87)    permissions UI
+│   ├── http.py          (72)    request helpers
+│   ├── cold_call.py     (74)    date + permission utilities
+│   ├── companies.py     (178)   access/edit/notifications/cache
+│   └── company_filters.py (512) list filters + FTS
+└── pages/company/       # W1.2 — 10 thematic views
+    ├── detail.py        (393)   main card + timeline + tasks_history
+    ├── edit.py          (420)   edit/update/inline/transfer/contract
+    ├── deletion.py      (280)   4-stage delete workflow
+    ├── contacts.py      (228)   contact CRUD
+    ├── notes.py         (474)   notes + attachments + pin
+    ├── deals.py         (128)   deal CRUD
+    ├── cold_call.py     (608)   8 endpoints через _CCConfig + generic impl (W1.4 dedup)
+    ├── phones.py        (436)   phone CRUD + comments
+    ├── emails.py        (136)   email updates
+    └── calls.py         (150)   PhoneBridge call request
+
+backend/static/ui/      # W1.3 — extracted inline assets
+├── css/pages/
+│   ├── base_global.css        (864)   from ui/base.html
+│   ├── company_detail_v3_b.css(571)   from v3/b.html
+│   ├── messenger_conversations.css (560)
+│   ├── _v2.css                (382)
+│   └── _v3.css                (308)
+└── js/pages/
+    └── company_detail_handlers.js (53)  10 handlers delegation
+```
+
+### Security foundations (prep для W2 CSP strict)
+
+- 9 bare `<script>` blocks получили `{{ csp_nonce }}` → 0 bare scripts.
+- 10 inline event handlers в `company_detail.html` → `addEventListener` в external JS.
+- CSP nonce генерация через `SecurityHeadersMiddleware` — готова к enforce switch.
+- Deferred в W2: 66 handlers + 27 styles + full nonce script extract.
+
+### Metrics
+
+- **Coverage**: 51% (W0) → 52% (W1 start) → **53%** (W1 end). `fail_under` bumped 50 → 53.
+- **Tests**: 1 140 → **1 164** (+24 cold_call URL tests).
+- **Templates**: 109 scanned, 53 с inline content. Top 5 styles extracted (65% CSS LOC).
+- **Commits**: ~40 atomic across 4 mini-sessions.
+
+Full rollup: `docs/release/w1-wave-closure.md`.

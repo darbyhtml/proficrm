@@ -208,9 +208,9 @@ norecursedirs = [
 #   W0.5: 50 (restored, buffer from 55% actual)
 #   W1:   48 temporary — phases 4-6 delete legacy (company_detail), coverage
 #         может просесть на удалённом code with tests
-#   W1 end: 53
+#   W1 end: 53 ✅ achieved 2026-04-22 (W1.4 cold_call dedup + tests)
 #   W2-W14: +2-5%/wave → 85 final
-fail_under = 50
+fail_under = 53
 skip_empty = true
 show_missing = false
 precision = 1
