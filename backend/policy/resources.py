@@ -151,6 +151,23 @@ RESOURCES: tuple[PolicyResource, ...] = (
         "ui:mail:campaigns:send_step", "action", "Почта: кампания (send step)", sensitive=True
     ),
     PolicyResource("ui:mail:campaigns:start", "action", "Почта: кампания (старт)", sensitive=True),
+    PolicyResource(
+        "ui:mail:campaigns:attachment:download",
+        "action",
+        "Почта: кампания (скачать вложение)",
+    ),
+    PolicyResource(
+        "ui:mail:campaigns:export_failed",
+        "action",
+        "Почта: кампания (экспорт failed recipients CSV)",
+        sensitive=True,
+    ),
+    PolicyResource(
+        "ui:mail:campaigns:retry_failed",
+        "action",
+        "Почта: кампания (retry failed recipients)",
+        sensitive=True,
+    ),
     PolicyResource("ui:mail:campaigns:pause", "action", "Почта: кампания (пауза)", sensitive=True),
     PolicyResource(
         "ui:mail:campaigns:resume", "action", "Почта: кампания (продолжить)", sensitive=True
@@ -550,6 +567,7 @@ RESOURCES: tuple[PolicyResource, ...] = (
     PolicyResource("phone:logs:upload", "action", "Phone API: загрузка логов", sensitive=True),
     PolicyResource("phone:qr:create", "action", "Phone API: создать QR токен", sensitive=True),
     PolicyResource("phone:qr:exchange", "action", "Phone API: обмен QR токена"),
+    PolicyResource("phone:qr:status", "action", "Phone API: статус QR токена"),
     PolicyResource("phone:logout", "action", "Phone API: logout"),
     PolicyResource("phone:logout_all", "action", "Phone API: logout all", sensitive=True),
     PolicyResource("phone:user:info", "action", "Phone API: user info"),
