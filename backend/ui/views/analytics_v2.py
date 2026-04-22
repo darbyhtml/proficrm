@@ -13,6 +13,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 
 from accounts.models import User
+from policy.decorators import policy_required
 from ui.analytics_service import (
     get_branch_director_dashboard,
     get_group_manager_dashboard,
@@ -23,6 +24,7 @@ from ui.analytics_service import (
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:analytics:v2")
 def analytics_v2_home(request: HttpRequest) -> HttpResponse:
     """Роутер: по роли пользователя показывает нужный дашборд.
 
