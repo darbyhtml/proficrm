@@ -1610,7 +1610,9 @@ def settings_task_type_delete(request: HttpRequest, task_type_id: int) -> HttpRe
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:activity")
 def settings_activity(request: HttpRequest) -> HttpResponse:
+    # W2.1.4.2: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
