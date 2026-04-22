@@ -1069,11 +1069,13 @@ def settings_user_magic_link_generate(request: HttpRequest, user_id: int) -> Htt
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:users:force_logout")
 def settings_user_logout(request: HttpRequest, user_id: int) -> HttpResponse:
     """
     Принудительное разлогинивание пользователя (завершение всех его сессий).
     URL: /settings/users/<user_id>/logout/
     """
+    # W2.1.4.1: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
