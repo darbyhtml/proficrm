@@ -538,7 +538,9 @@ def settings_access_role(request: HttpRequest, role: str) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:branches")
 def settings_branches(request: HttpRequest) -> HttpResponse:
+    # W2.1.4.1: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -547,7 +549,9 @@ def settings_branches(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:branches:create")
 def settings_branch_create(request: HttpRequest) -> HttpResponse:
+    # W2.1.4.1: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -563,7 +567,9 @@ def settings_branch_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:branches:edit")
 def settings_branch_edit(request: HttpRequest, branch_id: int) -> HttpResponse:
+    # W2.1.4.1: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
