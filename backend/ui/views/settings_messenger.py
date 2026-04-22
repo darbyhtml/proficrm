@@ -107,10 +107,12 @@ def settings_messenger_overview(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:messenger:inbox:source_choose")
 def settings_messenger_source_choose(request: HttpRequest) -> HttpResponse:
     """
     Выбор типа источника перед созданием (шаг 1 в стиле Chatwoot).
     """
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -123,10 +125,12 @@ def settings_messenger_source_choose(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:messenger:inbox:ready")
 def settings_messenger_inbox_ready(request: HttpRequest, inbox_id: int) -> HttpResponse:
     """
     Страница «Источник готов» после создания: код вставки, Копировать, Перейти к настройкам.
     """
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
