@@ -634,4 +634,59 @@ Initial tag: `release-v0.0-prod-current` на commit `be569ad` (prod state
 на 333 commits, healthcheck-fix (`242fcf2a`) не дошёл — применится при
 первом prod-deploy по gated promotion.
 
+### Q17 [2026-04-22] Policy decision logging strategy для W9 prod deploy
+
+**Status**: Open, decision needed before W9.
+
+**Context**:
+- Staging текущий: `POLICY_DECISION_LOGGING_ENABLED = False` (disabled Release 0, 2026-04-20).
+- Historical data (staging, 14 дней, logging был включён частично):
+  **2 026 518 policy events** → ~**145K events/day на 1 user staging**.
+- Проекция на 50-user prod: ~5-7 million events/day → catastrophic audit table growth.
+- Context на staging: 100% allowed=true (superuser Dmitry, matched_effect=superuser_allow).
+  0 real denies recorded — staging validation essentially useless для rule logic validation.
+
+**Problem для W9 prod enforce**:
+- Prod enforce на 50 users will have **legitimate workflows blocked occasionally** пока rules
+  не refined (false positives inevitable при первом rollout).
+- Without logs, diagnosing "какое rule blocked которого user" = ad-hoc Telegram reporting.
+- Rollback decision требует evidence rate, которого нет.
+- Existing audit table уже 9.5M записей, дополнительные 5-7M/day быстро приведут к DB issues.
+
+**Options**:
+
+1. **Enable logging full** — 5-7M events/day. Requires retention policy (TTL 7-14 days via
+   Celery beat), separate table / partition, indices на (created_at, resource, allowed).
+
+2. **Sampled logging** — 1-5% decisions logged, 20-100× reduction. Trade-off: могут
+   пропустить rare denies важных user paths.
+
+3. **Deny-only logging** — only would-be-denies logged. 99%+ savings. **Claude recommendation**.
+   - Realistic volume: 5-50K/day.
+   - Allows = uninteresting signal (by design rules). Denies = actionable events.
+
+4. **On-demand logging** — admin toggle flag per-session (runtime switch). Zero baseline
+   overhead. Harder workflow (admin должен заметить проблему → switch → repro → switch off).
+
+5. **External audit log** — ClickHouse / Loki / GlitchTip breadcrumbs. Decouples DB health,
+   но deployment cost. Overkill для 50-user prod.
+
+**Claude recommendation**: **Option 3 (deny-only)** + retention TTL 14 days.
+
+Implementation sketch — `policy/engine.py::_log_decision()`:
+```python
+if decision.allowed:
+    return  # skip successful allows
+# existing logging logic for denies only
+```
+
+Plus: Celery beat `purge_old_policy_events` task nightly, TTL 14 дней.
+
+**Decision needed**: User approval before:
+- W2.2 (чтобы 2FA flow имел denials logged для debugging)
+- W9 prod deploy (must be в place before enforce activation на prod)
+
+**Related finding**: current staging = 100% superuser traffic → useless для validation.
+**Non-superuser test account** на staging would fix этот gap для W2 mid-session audit.
+
 — остальные вопросы активны —
