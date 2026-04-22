@@ -354,8 +354,13 @@ def company_tasks_history(request: HttpRequest, company_id) -> HttpResponse:
 
 @login_required
 @require_can_view_company
+@policy_required(resource_type="page", resource="ui:companies:detail")
 def company_timeline_items(request: HttpRequest, company_id) -> HttpResponse:
     """AJAX-подгрузка timeline-событий (F4 R2 2026-04-18).
+
+    W2.1.3c: @policy_required добавлен (reuse existing ui:companies:detail
+    resource — same page scope). @require_can_view_company остаётся
+    (defense-in-depth, visibility check same as parent company_detail view).
 
     GET /companies/<company_id>/timeline/items/?offset=50&limit=50 →
     HTML-фрагмент с <li> элементами из _company_timeline_items.html.

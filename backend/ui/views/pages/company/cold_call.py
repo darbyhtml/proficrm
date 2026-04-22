@@ -296,8 +296,14 @@ _CC_COMPANY = _CCConfig(
 
 @login_required
 @require_can_view_company
+@policy_required(resource_type="action", resource="ui:companies:cold_call:toggle")
 def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
-    """Отметить основной контакт компании как холодный звонок."""
+    """Отметить основной контакт компании как холодный звонок.
+
+    W2.1.3c: @policy_required добавлен (existing resource, parity с
+    contact_*/phone_* variants которые уже codified). @require_can_view_company
+    остаётся как visibility check (defense-in-depth).
+    """
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
     from companies.services import ColdCallService
@@ -319,8 +325,14 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
 
 @login_required
 @require_can_view_company
+@policy_required(resource_type="action", resource="ui:companies:cold_call:reset")
 def company_cold_call_reset(request: HttpRequest, company_id) -> HttpResponse:
-    """Откатить отметку холодного звонка для основного контакта компании (admin only)."""
+    """Откатить отметку холодного звонка для основного контакта компании (admin only).
+
+    W2.1.3c: @policy_required добавлен (existing resource, parity с
+    contact_*/phone_* variants). @require_can_view_company + inline
+    _cc_admin_guard в _cc_reset_impl остаются (defense-in-depth).
+    """
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
     guard = _cc_admin_guard(request)
