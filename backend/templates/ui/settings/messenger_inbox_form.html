@@ -102,7 +102,7 @@
           <div>
             <div class="flex items-center justify-between mb-1.5">
               <span class="text-sm font-medium text-brand-dark">Стандартный</span>
-              <button type="button" onclick="copyCode()" class="text-xs text-brand-teal hover:text-brand-dark transition">Копировать</button>
+              <button type="button" data-action="copy-code" class="text-xs text-brand-teal hover:text-brand-dark transition">Копировать</button>
             </div>
             <pre class="bg-brand-dark text-white/90 p-3 rounded-xl text-xs overflow-x-auto"><code id="embed-code">&lt;script src="{{ base_url }}/static/messenger/widget.js" data-widget-token="{{ inbox.widget_token }}" data-api-base-url="{{ base_url }}"&gt;&lt;/script&gt;</code></pre>
           </div>
@@ -110,7 +110,7 @@
           <div>
             <div class="flex items-center justify-between mb-1.5">
               <span class="text-sm font-medium text-brand-dark">С ленивой загрузкой <span class="text-xs font-normal text-brand-dark/40">(рекомендуется)</span></span>
-              <button type="button" onclick="copyLazyCode()" class="text-xs text-brand-teal hover:text-brand-dark transition">Копировать</button>
+              <button type="button" data-action="copy-lazy-code" class="text-xs text-brand-teal hover:text-brand-dark transition">Копировать</button>
             </div>
             <pre class="bg-brand-dark text-white/90 p-3 rounded-xl text-xs overflow-x-auto"><code id="embed-code-lazy">&lt;script src="{{ base_url }}/static/messenger/widget-loader.js" data-widget-token="{{ inbox.widget_token }}" data-api-base-url="{{ base_url }}" data-load-on-scroll="1" data-load-after="5"&gt;&lt;/script&gt;</code></pre>
             <p class="text-xs text-brand-dark/40 mt-1">Виджет загрузится при первом скролле или через 5 сек. Не влияет на скорость загрузки страницы.</p>
@@ -122,7 +122,7 @@
             <div class="text-xs text-brand-dark/50 mb-0.5">Токен</div>
             <code class="text-xs text-brand-dark/70 break-all">{{ inbox.widget_token }}</code>
           </div>
-          <button type="button" onclick="copyToken()" class="btn btn-outline btn-sm shrink-0">Копировать токен</button>
+          <button type="button" data-action="copy-token" class="btn btn-outline btn-sm shrink-0">Копировать токен</button>
           <a href="/widget-demo/?token={{ inbox.widget_token }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm shrink-0">Демо</a>
         </div>
       </div>
@@ -447,7 +447,7 @@
       <div class="bg-red-50 rounded-2xl border border-red-200 p-5 space-y-4">
         <h2 class="font-semibold text-red-700">Удаление источника</h2>
         <p class="text-sm text-red-700/80">Это действие необратимо. Нельзя удалить источник, к которому привязаны диалоги.</p>
-        <form method="post" action="{% url 'settings_messenger_inbox_edit' inbox.id %}" onsubmit="return confirm('Удалить источник «{{ inbox.name }}»? Это нельзя отменить.');">
+        <form method="post" action="{% url 'settings_messenger_inbox_edit' inbox.id %}" data-confirm="Удалить источник «{{ inbox.name }}»? Это нельзя отменить.">
           {% csrf_token %}
           <input type="hidden" name="action" value="delete_inbox">
           <button type="submit" class="btn btn-danger">Удалить «{{ inbox.name }}»</button>
@@ -457,7 +457,7 @@
       <div class="bg-white rounded-2xl border border-brand-soft/60 p-5 space-y-3">
         <h2 class="font-semibold text-brand-dark">Сменить токен</h2>
         <p class="text-sm text-brand-dark/60">После смены старый токен перестанет работать. Обновите код виджета на всех сайтах.</p>
-        <form method="post" action="{% url 'settings_messenger_inbox_edit' inbox.id %}" onsubmit="return confirm('Старый токен перестанет работать. Виджеты на сайтах нужно будет обновить. Продолжить?');" class="inline">
+        <form method="post" action="{% url 'settings_messenger_inbox_edit' inbox.id %}" data-confirm="Старый токен перестанет работать. Виджеты на сайтах нужно будет обновить. Продолжить?" class="inline">
           {% csrf_token %}
           <input type="hidden" name="action" value="regenerate_token">
           <button type="submit" class="btn btn-outline text-red-600 border-red-200 hover:bg-red-50">Сгенерировать новый токен</button>
@@ -474,6 +474,8 @@
   </form>
 </div>
 
+{# W2.3 Phase 2c: copy-* + data-confirm delegated listeners в pages/messenger_inbox_form.js. #}
+<script src="{% static 'ui/js/pages/messenger_inbox_form.js' %}" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
 (function() {
   var tabList = document.querySelector('.inbox-form-tabs');
