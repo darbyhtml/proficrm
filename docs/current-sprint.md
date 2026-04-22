@@ -1,5 +1,58 @@
 # Текущий спринт
 
+## [2026-04-22] — W2.1.3a COMPLETED — setup (qa_manager + Q17)
+
+**Status**: ✅ W2 security wave in progress. Session 3a (setup) done.
+
+### Delivered
+
+**qa_manager staging test account**:
+- Role: MANAGER, branch: EKB (Екатеринбург), user id=53.
+- Non-superuser (bypasses prevented) — позволяет validate actual policy rules.
+- Password: `/etc/proficrm/env.d/staging-qa-user.conf` (mode 600).
+- Login verified: `Client.login=True`, dashboard 200, admin/ 302.
+- Docs: `docs/dev/staging-test-accounts.md`.
+
+**Q17 deny-only policy logging implemented**:
+- `policy.engine._log_decision()`: early return если `decision.allowed=True` (99%+ traffic skip).
+- `POLICY_DECISION_LOGGING_ENABLED`: default `"0"` → `"1"` (enabled после Q17 filter safe).
+- Staging .env updated: `POLICY_DECISION_LOGGING_ENABLED=1`.
+- 3 unit tests: allowed not logged, denied logged, master flag still works.
+
+**14-day retention Celery beat task**:
+- `backend/policy/tasks.py::purge_old_policy_events` — chunked 10K per batch delete.
+- Beat schedule: `purge-old-policy-events` daily 03:15 MSK.
+- 4 unit tests: old deleted, recent preserved, non-policy untouched, custom retention_days.
+
+**Verification**:
+- Full test suite: **1164 → 1172 passing** (+8 new).
+- E2E через qa_manager:
+  - `GET /companies/bulk-transfer/` (admin-only) → 403 → logged ✅
+  - `GET /` (dashboard) → 200 → NOT logged ✅
+- Historical bloat found: 7 477 886 policy events older than 14 days — beat task cleans overnight.
+
+### Commits (2)
+- `fe9afc6a` — docs(w2.1.3a): staging QA test account qa_manager reference
+- `56b54890` — feat(policy): Q17 deny-only decision logging + 14-day retention
+
+### Docs
+- `docs/dev/staging-test-accounts.md` — new
+- `docs/open-questions.md` — Q17 RESOLVED
+
+### Quality
+- ✅ Tests: 1172 passing (baseline 1164 + 8 new)
+- ✅ Staging smoke: 6/6 green
+- ✅ Kuma: Up
+- ✅ Ruff + black: clean
+
+### Next: W2.1.3b
+
+- Audit Group B (7 views: alt decorators — likely OK).
+- Codify Group D (4 endpoints — все LOW severity per W2.1.2a audit).
+- Verify policies через qa_manager (actual denial behavior for MANAGER role).
+
+---
+
 ## [2026-04-22] — W1 WAVE CLOSED ✅ (W1.4 wrap-up)
 
 **Status**: ✅ **W1 Refactor Wave завершена**. Все 4 mini-sessions zeroед. Готов к W2 — Security hardening.

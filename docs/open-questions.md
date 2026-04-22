@@ -634,9 +634,29 @@ Initial tag: `release-v0.0-prod-current` на commit `be569ad` (prod state
 на 333 commits, healthcheck-fix (`242fcf2a`) не дошёл — применится при
 первом prod-deploy по gated promotion.
 
-### Q17 [2026-04-22] Policy decision logging strategy для W9 prod deploy
+### Q17 [2026-04-22] Policy decision logging strategy для W9 prod deploy — **RESOLVED (W2.1.3a)**
 
-**Status**: Open, decision needed before W9.
+**Decision**: Option 3 (deny-only logging) + Option 1 retention (14-day TTL via Celery beat).
+
+**Implementation**: W2.1.3a commits `fe9afc6a`, `56b54890`:
+- `policy.engine._log_decision()` — early return if `decision.allowed` (Q17 filter).
+- `POLICY_DECISION_LOGGING_ENABLED=1` (default ON, was 0 per Release 0).
+- `policy.purge_old_events` Celery beat task — daily 03:15 MSK, 14-day retention, chunked delete (10K per batch).
+- 7 new unit tests (3 logging filter + 4 retention).
+
+**Staging verification** (2026-04-22):
+- qa_manager (non-superuser, MANAGER/EKB) → `/companies/bulk-transfer/` → 403 denied → logged ✅
+- qa_manager → `/` (dashboard allowed) → 200 → NOT logged ✅
+- Historical bloat identified: 7,477,886 events older than 14 days — beat task will clean overnight.
+
+**Pre-W9 checklist**:
+- [x] Staging deny-only logging verified working.
+- [x] 14-day retention task scheduled.
+- [x] Tests passing (1172 total, +8 new).
+- [ ] Prod .env: set POLICY_DECISION_LOGGING_ENABLED=1 as part of W9.10 accumulated deploy.
+- [ ] Pre-W9 check: estimate prod baseline after first 48h enforce.
+
+**Original context (kept for reference)**:
 
 **Context**:
 - Staging текущий: `POLICY_DECISION_LOGGING_ENABLED = False` (disabled Release 0, 2026-04-20).
