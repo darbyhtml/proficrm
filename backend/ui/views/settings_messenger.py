@@ -1099,8 +1099,10 @@ def settings_messenger_canned_delete(request: HttpRequest, response_id: int) -> 
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:messenger:campaigns")
 def settings_messenger_campaigns(request: HttpRequest) -> HttpResponse:
     """CRUD для кампаний (список + создание/редактирование inline)."""
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -1145,8 +1147,10 @@ def settings_messenger_campaigns(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:messenger:automation")
 def settings_messenger_automation(request: HttpRequest) -> HttpResponse:
     """CRUD для правил автоматизации + макросов."""
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
