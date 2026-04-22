@@ -155,7 +155,9 @@ class W2144CodificationTests(TestCase):
         self._assert_admin_ok_manager_tenderist_denied("GET", "/admin/mobile-apps/")
 
     def test_settings_mobile_apps_upload(self):
-        self._assert_admin_ok_manager_tenderist_denied("POST", "/admin/mobile-apps/upload/", data={})
+        self._assert_admin_ok_manager_tenderist_denied(
+            "POST", "/admin/mobile-apps/upload/", data={}
+        )
 
     def test_settings_mobile_apps_toggle(self):
         self._assert_admin_ok_manager_tenderist_denied(
