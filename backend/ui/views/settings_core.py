@@ -1634,8 +1634,10 @@ def settings_activity(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:error_log")
 def settings_error_log(request: HttpRequest) -> HttpResponse:
     """Страница лога ошибок (аналогично error_log в MODX CMS)."""
+    # W2.1.4.2: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
