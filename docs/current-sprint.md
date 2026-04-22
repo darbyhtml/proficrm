@@ -1,5 +1,86 @@
 # Текущий спринт
 
+## [2026-04-22] — W2.1.4.2 COMPLETED — Dictionaries + audit logs codified
+
+**Status**: ✅ 18 endpoints из settings_core.py теперь `@policy_required`-decorated. Inline require_admin() preserved в each. Test baseline 1237 → 1257. Zero leftover disposable fixtures.
+
+### Pre-work (`77733917`)
+
+- **`backend/core/test_utils.py`** (new): `make_disposable_user(role, branch)` + `make_disposable_dict_entry(model_class)` helpers. Pattern `disp_<timestamp_ns>` для unique naming + clear "safe to delete" signal. Prevents W2.1.4.1 incident recurrence.
+- **`backend/policy/resources.py`**: 18 new PolicyResource entries (13 dict + 5 audit).
+- Policy regression: 42/42 pass.
+
+### Endpoints codified (18)
+
+**Dictionaries (13)**:
+
+| Commit | Scope | Resource prefix |
+|--------|-------|-----------------|
+| `82bd3281` | settings_dicts (page) | ui:settings:dicts |
+| `edb9773b` | company_status × CRUD | ui:settings:dicts:company_status:* |
+| `8dbbc5aa` | company_sphere × CRUD | ui:settings:dicts:company_sphere:* |
+| `5ebd5b2b` | contract_type × CRUD | ui:settings:dicts:contract_type:* |
+| `d32bad5c` | task_type × CRUD | ui:settings:dicts:task_type:* |
+
+**Audit logs (5)**:
+
+| Commit | Scope | Resource |
+|--------|-------|----------|
+| `8d776e6e` | settings_activity | ui:settings:activity (page, sensitive) |
+| `a311f459` | settings_error_log | ui:settings:error_log (page, sensitive) |
+| `e584b95a` | error_log × resolve/unresolve/details | ui:settings:error_log:* (actions) |
+
+### Defense-in-depth preservation
+
+- Inline `require_admin()` preserved во всех 18 endpoints (source-level verified в `test_defense_in_depth_all_endpoints`).
+- Decorator = primary gate (policy engine + audit).
+- Inline = fallback (если decorator disabled или policy config в observe_only).
+
+### Disposable fixture discipline
+
+Все destructive endpoint tests использовали disposable patterns:
+- `test_company_status_delete/sphere/contract/task_type` — `make_disposable_dict_entry(model)` created per test.
+- `test_settings_error_log_resolve/unresolve` — `_make_disposable_error_log()` helper creates per-test ErrorLog, verifies admin mutation + manager 403.
+- Shell smoke testing identical pattern (no shared staging users touched).
+- **Zero leftover fixtures на staging** (0 users/statuses/spheres/types/error logs с `disp_` prefix).
+
+### Verification
+
+- ✅ Full test suite: **1237 → 1257 passing** (+20 new в `tests_w2_1_4_2_codification.py`).
+- ✅ Policy regression: 42/42 pass.
+- ✅ Staging deploy `a9c05c84`: все 6 steps + `DEPLOY FULLY COMPLETED` marker.
+- ✅ Containers fresh (52 sec after deploy).
+- ✅ Staging smoke 6/6 green.
+- ✅ qa_manager sanity:
+  - `GET /` → 200 ✅
+  - `GET /admin/dicts/` → 403 ✅
+  - `GET /admin/activity/` → 403 ✅
+  - `GET /admin/error-log/` → 403 ✅
+- ✅ Leftover disposable fixtures: **all 0** (users, CompanyStatus, CompanySphere, ContractType, TaskType, ErrorLog).
+
+### Commits (10)
+
+1. `77733917` — prework (helpers + 18 resources)
+2. `82bd3281` — settings_dicts (#1)
+3. `edb9773b` — company_status CRUD (#2)
+4. `8dbbc5aa` — company_sphere CRUD (#3)
+5. `5ebd5b2b` — contract_type CRUD (#4)
+6. `d32bad5c` — task_type CRUD (#5)
+7. `8d776e6e` — settings_activity (#6)
+8. `a311f459` — settings_error_log (#7)
+9. `e584b95a` — error_log actions (#8)
+10. `a9c05c84` — tests_w2_1_4_2_codification.py (20 tests)
+
+### Pending
+
+- **W2.1.4.3**: messenger + mail (19 endpoints, ~2h).
+- **W2.1.4.4**: integrations + mobile apps + 4 complex (14 endpoints, ~2-2.5h). **Scope includes**: calls_stats/calls_manager_detail → role-mixed [MANAGER/SALES_HEAD/BRANCH_DIRECTOR/GROUP_MANAGER/ADMIN] deny TENDERIST (per user decision).
+- **W2.1.5**: inline `enforce()` → `@policy_required` migration (57 locations).
+- **W2.3**: CSP strict mode.
+- **W2.7**: block admin password на JWT (post-W2.3).
+
+---
+
 ## [2026-04-22] — W2.1.4.1 COMPLETED — Settings user-mgmt/branches/general codified
 
 **Status**: ✅ 13 endpoints из settings_core.py теперь @policy_required-decorated. Inline require_admin() preserved во всех — defense-in-depth. Test baseline 1221 → 1237.
