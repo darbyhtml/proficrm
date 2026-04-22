@@ -19,13 +19,16 @@ from accounts.permissions import require_admin
 from audit.models import ActivityEvent
 from audit.service import log_event
 from phonebridge.models import MobileAppBuild
+from policy.decorators import policy_required
 
 logger = logging.getLogger(__name__)
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:mobile_apps")
 def settings_mobile_apps(request: HttpRequest) -> HttpResponse:
     """Список всех загруженных APK + форма загрузки новой версии."""
+    # W2.1.4.4: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -44,8 +47,10 @@ def settings_mobile_apps(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @require_POST
+@policy_required(resource_type="action", resource="ui:settings:mobile_apps:upload")
 def settings_mobile_apps_upload(request: HttpRequest) -> HttpResponse:
     """Загрузка нового APK. Поля: version_name, version_code, file."""
+    # W2.1.4.4: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -117,8 +122,10 @@ def settings_mobile_apps_upload(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @require_POST
+@policy_required(resource_type="action", resource="ui:settings:mobile_apps:toggle")
 def settings_mobile_apps_toggle(request: HttpRequest, build_id: str) -> HttpResponse:
     """Включить/выключить активность конкретного билда."""
+    # W2.1.4.4: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
