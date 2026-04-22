@@ -68,6 +68,7 @@ def settings_dashboard(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:announcements")
 def settings_announcements(request: HttpRequest) -> HttpResponse:
     from django.contrib.auth import get_user_model
 
@@ -75,6 +76,7 @@ def settings_announcements(request: HttpRequest) -> HttpResponse:
 
     User = get_user_model()
 
+    # W2.1.4.1: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
