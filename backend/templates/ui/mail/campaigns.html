@@ -1,4 +1,5 @@
 {% extends "ui/base.html" %}
+{% load static %}
 {% block title %}Почта — CRM ПРОФИ{% endblock %}
 
 {% block content %}
@@ -98,7 +99,7 @@
             </div>
             <div class="flex items-center gap-2 text-xs muted shrink-0">
               <span id="quota-auto-refresh-status">Обновляется автоматически</span>
-              <button type="button" class="btn btn-outline btn-sm" onclick="window.__refreshQuota && window.__refreshQuota(true)">Обновить</button>
+              <button type="button" class="btn btn-outline btn-sm" data-action="quota-refresh">Обновить</button>
             </div>
           </div>
           {% if user_limit_info.is_limit_reached %}
@@ -159,7 +160,7 @@
         <form method="get" action="" class="flex items-center gap-3 flex-nowrap min-w-0">
           <span class="text-sm font-medium muted shrink-0">Фильтр:</span>
           {% if branches_for_filter|length > 1 %}
-            <select name="branch" class="input w-auto min-w-[10rem] shrink-0" onchange="this.form.submit()">
+            <select name="branch" class="input w-auto min-w-[10rem] shrink-0" data-action="filter-submit">
               <option value="">Все подразделения</option>
               {% for b in branches_for_filter %}
                 <option value="{{ b.id }}" {% if filter_branch_id and filter_branch_id|add:0 == b.id %}selected{% endif %}>{{ b.name }}</option>
@@ -167,7 +168,7 @@
             </select>
           {% endif %}
           {% if managers_for_filter|length > 1 %}
-            <select name="manager" class="input w-auto min-w-[11rem] shrink-0" onchange="this.form.submit()">
+            <select name="manager" class="input w-auto min-w-[11rem] shrink-0" data-action="filter-submit">
               <option value="">Все менеджеры</option>
               {% for u in managers_for_filter %}
                 <option value="{{ u.id }}" {% if filter_manager_id and filter_manager_id|add:0 == u.id %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>
@@ -317,6 +318,8 @@
 {% endblock %}
 
 {% block extra_js %}
+  {# W2.3 Phase 2b: filter-submit + quota-refresh delegated listeners вынесены в pages/mail_campaigns.js. #}
+  <script src="{% static 'ui/js/pages/mail_campaigns.js' %}" nonce="{{ csp_nonce }}"></script>
   <script nonce="{{ csp_nonce }}">
     // Клик по строке таблицы с data-href — переход без onclick на <tr>
     document.addEventListener('click', function(e) {
