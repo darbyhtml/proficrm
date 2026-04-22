@@ -429,6 +429,91 @@ RESOURCES: tuple[PolicyResource, ...] = (
         "Settings: почта (переключить массовую отправку)",
         sensitive=True,
     ),
+    # ---- W2.1.4.4: settings integrations + mobile apps + complex (14) ----
+    # Integrations (7 admin-only)
+    PolicyResource(
+        "ui:settings:data:import_companies",
+        "action",
+        "Settings: импорт компаний (CSV)",
+        sensitive=True,
+    ),
+    PolicyResource(
+        "ui:settings:data:import_tasks",
+        "action",
+        "Settings: импорт задач (CSV)",
+        sensitive=True,
+    ),
+    PolicyResource(
+        "ui:settings:company_columns",
+        "page",
+        "Settings: настройка колонок компаний (admin)",
+    ),
+    PolicyResource(
+        "ui:settings:security",
+        "page",
+        "Settings: безопасность (lockouts, failed logins)",
+        sensitive=True,
+    ),
+    PolicyResource(
+        "ui:settings:mobile_devices:list",
+        "page",
+        "Settings: mobile devices (список)",
+    ),
+    PolicyResource(
+        "ui:settings:mobile_devices:overview",
+        "page",
+        "Settings: mobile devices (обзор)",
+    ),
+    PolicyResource(
+        "ui:settings:mobile_devices:detail",
+        "page",
+        "Settings: mobile devices (детали)",
+    ),
+    # Mobile apps CRUD (3 admin-only)
+    PolicyResource("ui:settings:mobile_apps", "page", "Settings: mobile apps (APK список)"),
+    PolicyResource(
+        "ui:settings:mobile_apps:upload",
+        "action",
+        "Settings: загрузить APK",
+        sensitive=True,
+    ),
+    PolicyResource(
+        "ui:settings:mobile_apps:toggle",
+        "action",
+        "Settings: toggle APK build активность",
+        sensitive=True,
+    ),
+    # Bootstrap-safety (2) — policy self-management.
+    # Superuser bypass работает через engine.decide() (line 337), поэтому
+    # даже случайный DENY rule на role=admin не lockout'ит superuser.
+    # Non-superuser admin с DENY rule — at lockout risk (1 user на staging
+    # на момент W2.1.4.4, документировано).
+    PolicyResource(
+        "ui:settings:access",
+        "page",
+        "Settings: policy rules management (bootstrap-safe via superuser bypass)",
+        sensitive=True,
+    ),
+    PolicyResource(
+        "ui:settings:access:role",
+        "page",
+        "Settings: per-role permissions editor (bootstrap-safe)",
+        sensitive=True,
+    ),
+    # Role-mixed (2) — НЕ admin-only. Allow MANAGER/SALES_HEAD/
+    # BRANCH_DIRECTOR/GROUP_MANAGER/ADMIN, deny TENDERIST. Explicit
+    # PolicyRule seeds в migration 0004_* т.к. blanket ui:settings:*
+    # pattern даёт admin-only по умолчанию.
+    PolicyResource(
+        "ui:settings:calls:stats",
+        "page",
+        "Settings: статистика звонков (role-mixed: team leads + admins)",
+    ),
+    PolicyResource(
+        "ui:settings:calls:manager_detail",
+        "page",
+        "Settings: детали звонков менеджера (role-mixed)",
+    ),
     # ---- DRF API actions ----
     PolicyResource("api:companies:list", "action", "API: компании (list)"),
     PolicyResource("api:companies:retrieve", "action", "API: компании (retrieve)"),
