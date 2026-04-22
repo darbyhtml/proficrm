@@ -25,13 +25,16 @@ from messenger.models import (
     RoutingRule,
 )
 from messenger.utils import ensure_messenger_enabled_view
+from policy.decorators import policy_required
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:messenger:overview")
 def settings_messenger_overview(request: HttpRequest) -> HttpResponse:
     """
     Обзор Inbox'ов и быстрые действия.
     """
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
