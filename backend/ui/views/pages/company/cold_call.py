@@ -1,6 +1,8 @@
-"""Cold-call toggles + resets (W1.2 refactor).
+"""Cold-call toggles + resets (W1.2 extraction → W1.4 dedup).
 
-Extracted из `backend/ui/views/company_detail.py` в W1.2. Zero behavior change.
+W1.2 (2026-04-21): Extracted from `company_detail.py` — 8 functions × ~85 LOC = 691 LOC total.
+W1.4 (2026-04-22): Deduplicated → 1 generic toggle + 1 generic reset + 8 thin wrappers.
+Zero external API change — все 8 URL endpoints остались теми же.
 
 8 endpoints для 4 entity × 2 action (toggle/reset):
 - `company_cold_call_toggle` — POST /companies/<uuid>/cold-call/toggle/
@@ -12,15 +14,21 @@ Extracted из `backend/ui/views/company_detail.py` в W1.2. Zero behavior chang
 - `company_phone_cold_call_toggle` — POST /company-phones/<id>/cold-call/toggle/
 - `company_phone_cold_call_reset` — POST /company-phones/<id>/cold-call/reset/
 
-Size note (~650 LOC): все 8 функций структурно идентичны (entity permission check +
-confirmation + already-marked check + ColdCallService delegation + AJAX/redirect response).
-Дальнейшее разделение на `cold_call_company.py` + `cold_call_contact.py` было бы cosmetic —
-оставлено одним модулем для когерентности паттерна.
+Paramterized по:
+- `entity_kind` — ключ в JSON (company/contact/contact_phone/company_phone)
+- `is_marked_attr`, `marked_at_attr`, `marked_by_attr` — имена полей на модели
+- Service callable (ColdCallService.mark_X / reset_X)
+- Человекочитаемые сообщения для success/already/not_marked
+- `check_no_phone` — только Company.toggle делает edge-case check
+
+Safety net: 24 URL-layer tests в backend/ui/tests_cold_call_views.py (W1.4 #1).
 """
 
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
+from typing import Any, Callable
 
 from ui.views._base import (
     ActivityEvent,
@@ -48,31 +56,69 @@ from ui.views._base import (
 logger = logging.getLogger(__name__)
 
 
-@login_required
-@require_can_view_company
-def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
-    """
-    Отметить основной контакт компании как холодный звонок.
-    Отметку можно поставить только один раз.
-    """
-    if request.method != "POST":
-        return redirect("company_detail", company_id=company_id)
+# ---------------------------------------------------------------------------
+# Generic config + handlers (W1.4 dedup)
+# ---------------------------------------------------------------------------
 
-    user: User = request.user
-    company = get_object_or_404(
-        Company.objects.select_related("responsible", "branch", "primary_cold_marked_by"),
-        id=company_id,
+
+@dataclass(frozen=True)
+class _CCConfig:
+    """Entity-specific config для generic cold-call handlers."""
+
+    entity_kind: str  # "company" | "contact" | "contact_phone" | "company_phone"
+    is_marked_attr: str
+    marked_at_attr: str
+    marked_by_attr: str
+    # Сервис-методы (привязываются к ColdCallService в wrapper)
+    mark_fn: Callable[..., dict[str, Any]] | None = None
+    reset_fn: Callable[..., dict[str, Any]] | None = None
+    service_kwarg: str = ""  # e.g. "company" / "contact" / "contact_phone"
+    # Сообщения
+    permission_error: str = "Нет прав на изменение признака 'Холодный звонок'."
+    already_marked_msg: str = "Уже отмечен как холодный."
+    not_marked_msg: str = "Не отмечен как холодный."
+    success_mark_msg: str = "Отмечено: холодный звонок."
+    success_reset_msg: str = "Отметка холодного звонка отменена."
+    log_mark_msg: str = "Отмечено: холодный звонок"
+    log_reset_msg: str = "Откат: холодный звонок"
+    # Entity-kind-flags
+    check_no_phone: bool = False  # только Company.toggle
+
+
+def _cc_get_marked(entity: Any, cfg: _CCConfig) -> tuple[bool, Any, Any]:
+    """Читает current is_marked / marked_at / marked_by с entity per cfg."""
+    return (
+        bool(getattr(entity, cfg.is_marked_attr, False)),
+        getattr(entity, cfg.marked_at_attr, None),
+        getattr(entity, cfg.marked_by_attr, None),
     )
+
+
+def _cc_toggle_impl(
+    *,
+    request: HttpRequest,
+    entity: Any,
+    company: Company | None,
+    user: User,
+    cfg: _CCConfig,
+    already_redirect_target: tuple[str, Any],
+    entity_label: str = "",
+) -> HttpResponse:
+    """Generic toggle handler (shared by 4 wrappers).
+
+    entity_label — человекочитаемое имя (например, phone number) для log и
+    сообщений, если `{entity_label}` в шаблоне. Default empty.
+    """
+    # Permission — только для toggle (reset делает свой admin check)
     if not _can_edit_company(user, company):
         if _is_ajax(request):
-            return JsonResponse(
-                {"ok": False, "error": "Нет прав на изменение признака 'Холодный звонок'."},
-                status=403,
-            )
-        messages.error(request, "Нет прав на изменение признака 'Холодный звонок'.")
-        return redirect("company_detail", company_id=company.id)
+            return JsonResponse({"ok": False, "error": cfg.permission_error}, status=403)
+        messages.error(request, cfg.permission_error)
+        if company:
+            return redirect("company_detail", company_id=company.id)
+        return redirect("dashboard")
 
-    # Проверка подтверждения
+    # Подтверждение
     confirmed = request.POST.get("confirmed") == "1"
     if not confirmed:
         if _is_ajax(request):
@@ -80,81 +126,250 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
                 {"ok": False, "error": "Требуется подтверждение действия."}, status=400
             )
         messages.error(request, "Требуется подтверждение действия.")
-        return redirect("company_detail", company_id=company.id)
+        return redirect(already_redirect_target[0], **already_redirect_target[1])
 
-    # Проверка: уже отмечен?
-    if company.primary_contact_is_cold_call:
+    # Already-marked?
+    is_marked, marked_at, marked_by = _cc_get_marked(entity, cfg)
+    if is_marked:
         if _is_ajax(request):
             return _cold_call_json(
-                entity="company",
-                entity_id=str(company.id),
+                entity=cfg.entity_kind,
+                entity_id=str(entity.id),
                 is_cold_call=True,
-                marked_at=company.primary_cold_marked_at,
-                marked_by=str(company.primary_cold_marked_by or ""),
+                marked_at=marked_at,
+                marked_by=str(marked_by or ""),
                 can_reset=bool(require_admin(user)),
-                message="Основной контакт уже отмечен как холодный.",
+                message=cfg.already_marked_msg,
             )
-        messages.info(request, "Основной контакт уже отмечен как холодный.")
-        return redirect("company_detail", company_id=company.id)
+        messages.info(request, cfg.already_marked_msg)
+        return redirect(already_redirect_target[0], **already_redirect_target[1])
 
+    # Service call
     from companies.services import ColdCallService
 
-    result = ColdCallService.mark_company(company=company, user=user)
+    result = cfg.mark_fn(**{cfg.service_kwarg: entity, "user": user})  # type: ignore[misc]
 
-    if result.get("no_phone"):
+    # Edge case: Company.toggle — no main phone
+    if cfg.check_no_phone and result.get("no_phone"):
         if _is_ajax(request):
             return JsonResponse(
                 {"ok": False, "error": "У компании не задан основной телефон."}, status=400
             )
         messages.error(request, "У компании не задан основной телефон.")
-        return redirect("company_detail", company_id=company.id)
+        return redirect(already_redirect_target[0], **already_redirect_target[1])
 
     last_call = result.get("call")
 
+    # AJAX response
     if _is_ajax(request):
-        company.refresh_from_db(
-            fields=[
-                "primary_contact_is_cold_call",
-                "primary_cold_marked_at",
-                "primary_cold_marked_by",
-            ]
-        )
+        entity.refresh_from_db(fields=[cfg.is_marked_attr, cfg.marked_at_attr, cfg.marked_by_attr])
+        _, new_marked_at, new_marked_by = _cc_get_marked(entity, cfg)
         return _cold_call_json(
-            entity="company",
-            entity_id=str(company.id),
+            entity=cfg.entity_kind,
+            entity_id=str(entity.id),
             is_cold_call=True,
-            marked_at=company.primary_cold_marked_at,
-            marked_by=str(company.primary_cold_marked_by or ""),
+            marked_at=new_marked_at,
+            marked_by=str(new_marked_by or ""),
             can_reset=bool(require_admin(user)),
-            message="Отмечено: холодный звонок (основной контакт).",
+            message=cfg.success_mark_msg,
         )
 
-    messages.success(request, "Отмечено: холодный звонок (основной контакт).")
-    meta = {}
+    # Non-AJAX: message + redirect + log
+    messages.success(request, cfg.success_mark_msg)
+    meta: dict[str, Any] = {}
     if last_call:
         meta["call_id"] = str(last_call.id)
+    # Extra meta per entity
+    if cfg.entity_kind in ("contact", "contact_phone", "company_phone"):
+        meta[f"{cfg.entity_kind}_id"] = str(entity.id)
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.UPDATE,
-        entity_type="company",
-        entity_id=company.id,
-        company_id=company.id,
-        message="Отмечено: холодный звонок (осн. контакт)",
+        entity_type=cfg.entity_kind,
+        entity_id=entity.id if cfg.entity_kind == "company" else str(entity.id),
+        company_id=company.id if company else None,
+        message=cfg.log_mark_msg,
         meta=meta,
     )
-    return redirect("company_detail", company_id=company.id)
+    return redirect(already_redirect_target[0], **already_redirect_target[1])
+
+
+def _cc_reset_impl(
+    *,
+    request: HttpRequest,
+    entity: Any,
+    company: Company | None,
+    user: User,
+    cfg: _CCConfig,
+    already_redirect_target: tuple[str, Any],
+) -> HttpResponse:
+    """Generic reset handler (shared by 4 wrappers). Requires admin."""
+    # Not-marked?
+    is_marked, marked_at, marked_by = _cc_get_marked(entity, cfg)
+    # Для phones проверка чуть расширена: not is_marked AND not marked_at
+    # Для company/contact — просто not is_marked (исторически так было в company_*)
+    if cfg.entity_kind in ("contact_phone", "company_phone"):
+        not_set = (not is_marked) and (not marked_at)
+    else:
+        not_set = not is_marked
+    if not_set:
+        if _is_ajax(request):
+            return _cold_call_json(
+                entity=cfg.entity_kind,
+                entity_id=str(entity.id),
+                is_cold_call=False,
+                marked_at=marked_at,
+                marked_by=str(marked_by or ""),
+                can_reset=True,
+                message=cfg.not_marked_msg,
+            )
+        messages.info(request, cfg.not_marked_msg)
+        return redirect(already_redirect_target[0], **already_redirect_target[1])
+
+    # Service call
+    cfg.reset_fn(**{cfg.service_kwarg: entity, "user": user})  # type: ignore[misc]
+
+    # AJAX response
+    if _is_ajax(request):
+        return _cold_call_json(
+            entity=cfg.entity_kind,
+            entity_id=str(entity.id),
+            is_cold_call=False,
+            marked_at=None,
+            marked_by="",
+            can_reset=True,
+            message=cfg.success_reset_msg,
+        )
+
+    # Non-AJAX
+    messages.success(request, cfg.success_reset_msg)
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type=cfg.entity_kind,
+        entity_id=entity.id if cfg.entity_kind == "company" else str(entity.id),
+        company_id=company.id if company else None,
+        message=cfg.log_reset_msg,
+    )
+    return redirect(already_redirect_target[0], **already_redirect_target[1])
+
+
+def _cc_admin_guard(request: HttpRequest) -> HttpResponse | None:
+    """Возвращает 403 response если user не admin. Иначе None."""
+    user: User = request.user
+    if require_admin(user):
+        return None
+    if _is_ajax(request):
+        return JsonResponse(
+            {
+                "ok": False,
+                "error": "Только администратор может откатить отметку холодного звонка.",
+            },
+            status=403,
+        )
+    messages.error(request, "Только администратор может откатить отметку холодного звонка.")
+    return None  # caller ответственен за redirect
+
+
+# ---------------------------------------------------------------------------
+# 8 thin wrappers — preserve public URL routing
+# ---------------------------------------------------------------------------
+
+
+# --- Company ---
+_CC_COMPANY = _CCConfig(
+    entity_kind="company",
+    is_marked_attr="primary_contact_is_cold_call",
+    marked_at_attr="primary_cold_marked_at",
+    marked_by_attr="primary_cold_marked_by",
+    service_kwarg="company",
+    permission_error="Нет прав на изменение признака 'Холодный звонок'.",
+    already_marked_msg="Основной контакт уже отмечен как холодный.",
+    not_marked_msg="Основной контакт не отмечен как холодный.",
+    success_mark_msg="Отмечено: холодный звонок (основной контакт).",
+    success_reset_msg="Отметка холодного звонка отменена (основной контакт).",
+    log_mark_msg="Отмечено: холодный звонок (осн. контакт)",
+    log_reset_msg="Откат: холодный звонок (осн. контакт)",
+    check_no_phone=True,
+)
+
+
+@login_required
+@require_can_view_company
+def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
+    """Отметить основной контакт компании как холодный звонок."""
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+    from companies.services import ColdCallService
+
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch", "primary_cold_marked_by"),
+        id=company_id,
+    )
+    cfg = _CCConfig(**{**_CC_COMPANY.__dict__, "mark_fn": ColdCallService.mark_company})
+    return _cc_toggle_impl(
+        request=request,
+        entity=company,
+        company=company,
+        user=request.user,
+        cfg=cfg,
+        already_redirect_target=("company_detail", {"company_id": company.id}),
+    )
+
+
+@login_required
+@require_can_view_company
+def company_cold_call_reset(request: HttpRequest, company_id) -> HttpResponse:
+    """Откатить отметку холодного звонка для основного контакта компании (admin only)."""
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+    guard = _cc_admin_guard(request)
+    if guard is not None:
+        return guard
+    # non-AJAX non-admin — fallthrough:
+    if not require_admin(request.user):
+        return redirect("company_detail", company_id=company_id)
+    from companies.services import ColdCallService
+
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch"), id=company_id
+    )
+    cfg = _CCConfig(**{**_CC_COMPANY.__dict__, "reset_fn": ColdCallService.reset_company})
+    return _cc_reset_impl(
+        request=request,
+        entity=company,
+        company=company,
+        user=request.user,
+        cfg=cfg,
+        already_redirect_target=("company_detail", {"company_id": company.id}),
+    )
+
+
+# --- Contact ---
+_CC_CONTACT = _CCConfig(
+    entity_kind="contact",
+    is_marked_attr="is_cold_call",
+    marked_at_attr="cold_marked_at",
+    marked_by_attr="cold_marked_by",
+    service_kwarg="contact",
+    permission_error="Нет прав на изменение контактов этой компании.",
+    already_marked_msg="Контакт уже отмечен как холодный.",
+    not_marked_msg="Контакт не отмечен как холодный.",
+    success_mark_msg="Отмечено: холодный звонок (контакт).",
+    success_reset_msg="Отметка холодного звонка отменена (контакт).",
+    log_mark_msg="Отмечено: холодный звонок (контакт)",
+    log_reset_msg="Откат: холодный звонок (контакт)",
+)
 
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:cold_call:toggle")
 def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
-    """
-    Отметить контакт как холодный звонок.
-    Отметку можно поставить только один раз.
-    """
+    """Отметить контакт как холодный звонок."""
     if request.method != "POST":
         return redirect("dashboard")
-    user: User = request.user
+    from companies.services import ColdCallService
+
     contact = get_object_or_404(
         Contact.objects.select_related("company", "cold_marked_by"), id=contact_id
     )
@@ -162,220 +377,69 @@ def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
     if not company:
         messages.error(request, "Контакт не привязан к компании.")
         return redirect("dashboard")
-    if not _can_edit_company(user, company):
-        if _is_ajax(request):
-            return JsonResponse(
-                {"ok": False, "error": "Нет прав на изменение контактов этой компании."}, status=403
-            )
-        messages.error(request, "Нет прав на изменение контактов этой компании.")
-        return redirect("company_detail", company_id=company.id)
-
-    # Проверка подтверждения
-    confirmed = request.POST.get("confirmed") == "1"
-    if not confirmed:
-        if _is_ajax(request):
-            return JsonResponse(
-                {"ok": False, "error": "Требуется подтверждение действия."}, status=400
-            )
-        messages.error(request, "Требуется подтверждение действия.")
-        return redirect("company_detail", company_id=company.id)
-
-    # Проверка: уже отмечен?
-    if contact.is_cold_call:
-        if _is_ajax(request):
-            return _cold_call_json(
-                entity="contact",
-                entity_id=str(contact.id),
-                is_cold_call=True,
-                marked_at=contact.cold_marked_at,
-                marked_by=str(contact.cold_marked_by or ""),
-                can_reset=bool(require_admin(user)),
-                message="Контакт уже отмечен как холодный.",
-            )
-        messages.info(request, "Контакт уже отмечен как холодный.")
-        return redirect("company_detail", company_id=company.id)
-
-    from companies.services import ColdCallService
-
-    result = ColdCallService.mark_contact(contact=contact, user=user)
-    last_call = result.get("call")
-
-    if _is_ajax(request):
-        contact.refresh_from_db(fields=["is_cold_call", "cold_marked_at", "cold_marked_by"])
-        return _cold_call_json(
-            entity="contact",
-            entity_id=str(contact.id),
-            is_cold_call=True,
-            marked_at=contact.cold_marked_at,
-            marked_by=str(contact.cold_marked_by or ""),
-            can_reset=bool(require_admin(user)),
-            message="Отмечено: холодный звонок (контакт).",
-        )
-
-    messages.success(request, "Отмечено: холодный звонок (контакт).")
-    meta = {"contact_id": str(contact.id)}
-    if last_call:
-        meta["call_id"] = str(last_call.id)
-    log_event(
-        actor=user,
-        verb=ActivityEvent.Verb.UPDATE,
-        entity_type="contact",
-        entity_id=str(contact.id),
-        company_id=company.id,
-        message="Отмечено: холодный звонок (контакт)",
-        meta=meta,
+    cfg = _CCConfig(**{**_CC_CONTACT.__dict__, "mark_fn": ColdCallService.mark_contact})
+    return _cc_toggle_impl(
+        request=request,
+        entity=contact,
+        company=company,
+        user=request.user,
+        cfg=cfg,
+        already_redirect_target=("company_detail", {"company_id": company.id}),
     )
-    return redirect("company_detail", company_id=company.id)
-
-
-@login_required
-@require_can_view_company
-def company_cold_call_reset(request: HttpRequest, company_id) -> HttpResponse:
-    """
-    Откатить отметку холодного звонка для основного контакта компании.
-    Доступно только администраторам.
-    """
-    if request.method != "POST":
-        return redirect("company_detail", company_id=company_id)
-
-    user: User = request.user
-    if not require_admin(user):
-        if _is_ajax(request):
-            return JsonResponse(
-                {
-                    "ok": False,
-                    "error": "Только администратор может откатить отметку холодного звонка.",
-                },
-                status=403,
-            )
-        messages.error(request, "Только администратор может откатить отметку холодного звонка.")
-        return redirect("company_detail", company_id=company_id)
-
-    company = get_object_or_404(
-        Company.objects.select_related("responsible", "branch"), id=company_id
-    )
-
-    if not company.primary_contact_is_cold_call:
-        if _is_ajax(request):
-            return _cold_call_json(
-                entity="company",
-                entity_id=str(company.id),
-                is_cold_call=False,
-                marked_at=company.primary_cold_marked_at,
-                marked_by=str(company.primary_cold_marked_by or ""),
-                can_reset=True,
-                message="Основной контакт не отмечен как холодный.",
-            )
-        messages.info(request, "Основной контакт не отмечен как холодный.")
-        return redirect("company_detail", company_id=company.id)
-
-    from companies.services import ColdCallService
-
-    ColdCallService.reset_company(company=company, user=user)
-
-    if _is_ajax(request):
-        return _cold_call_json(
-            entity="company",
-            entity_id=str(company.id),
-            is_cold_call=False,
-            marked_at=None,
-            marked_by="",
-            can_reset=True,
-            message="Отметка холодного звонка отменена (основной контакт).",
-        )
-
-    messages.success(request, "Отметка холодного звонка отменена (основной контакт).")
-    log_event(
-        actor=user,
-        verb=ActivityEvent.Verb.UPDATE,
-        entity_type="company",
-        entity_id=company.id,
-        company_id=company.id,
-        message="Откат: холодный звонок (осн. контакт)",
-    )
-    return redirect("company_detail", company_id=company.id)
 
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:cold_call:reset")
 def contact_cold_call_reset(request: HttpRequest, contact_id) -> HttpResponse:
-    """
-    Откатить отметку холодного звонка для контакта.
-    Доступно только администраторам.
-    """
+    """Откат отметки холодного звонка для контакта (admin only)."""
     if request.method != "POST":
         return redirect("dashboard")
-
-    user: User = request.user
-    if not require_admin(user):
-        if _is_ajax(request):
-            return JsonResponse(
-                {
-                    "ok": False,
-                    "error": "Только администратор может откатить отметку холодного звонка.",
-                },
-                status=403,
-            )
-        messages.error(request, "Только администратор может откатить отметку холодного звонка.")
+    guard = _cc_admin_guard(request)
+    if guard is not None:
+        return guard
+    if not require_admin(request.user):
         return redirect("dashboard")
+    from companies.services import ColdCallService
 
     contact = get_object_or_404(Contact.objects.select_related("company"), id=contact_id)
     company = contact.company
     if not company:
         messages.error(request, "Контакт не привязан к компании.")
         return redirect("dashboard")
-
-    if not contact.is_cold_call:
-        if _is_ajax(request):
-            return _cold_call_json(
-                entity="contact",
-                entity_id=str(contact.id),
-                is_cold_call=False,
-                marked_at=contact.cold_marked_at,
-                marked_by=str(contact.cold_marked_by or ""),
-                can_reset=True,
-                message="Контакт не отмечен как холодный.",
-            )
-        messages.info(request, "Контакт не отмечен как холодный.")
-        return redirect("company_detail", company_id=company.id)
-
-    from companies.services import ColdCallService
-
-    ColdCallService.reset_contact(contact=contact, user=user)
-
-    if _is_ajax(request):
-        return _cold_call_json(
-            entity="contact",
-            entity_id=str(contact.id),
-            is_cold_call=False,
-            marked_at=None,
-            marked_by="",
-            can_reset=True,
-            message="Отметка холодного звонка отменена (контакт).",
-        )
-
-    messages.success(request, "Отметка холодного звонка отменена (контакт).")
-    log_event(
-        actor=user,
-        verb=ActivityEvent.Verb.UPDATE,
-        entity_type="contact",
-        entity_id=str(contact.id),
-        company_id=company.id,
-        message="Откат: холодный звонок (контакт)",
+    cfg = _CCConfig(**{**_CC_CONTACT.__dict__, "reset_fn": ColdCallService.reset_contact})
+    return _cc_reset_impl(
+        request=request,
+        entity=contact,
+        company=company,
+        user=request.user,
+        cfg=cfg,
+        already_redirect_target=("company_detail", {"company_id": company.id}),
     )
-    return redirect("company_detail", company_id=company.id)
+
+
+# --- ContactPhone ---
+def _cc_contact_phone_cfg() -> _CCConfig:
+    return _CCConfig(
+        entity_kind="contact_phone",
+        is_marked_attr="is_cold_call",
+        marked_at_attr="cold_marked_at",
+        marked_by_attr="cold_marked_by",
+        service_kwarg="contact_phone",
+        permission_error="Нет прав на изменение контактов этой компании.",
+        already_marked_msg="Этот номер уже отмечен как холодный.",
+        not_marked_msg="Этот номер не отмечен как холодный.",
+        # success_mark / log_mark — patched per instance с phone value
+    )
 
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:cold_call:toggle")
 def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> HttpResponse:
-    """
-    Отметить конкретный номер телефона контакта как холодный звонок.
-    Отметку можно поставить только один раз.
-    """
+    """Отметить номер телефона контакта как холодный звонок."""
     if request.method != "POST":
         return redirect("dashboard")
-    user: User = request.user
+    from companies.services import ColdCallService
+
     try:
         contact_phone = get_object_or_404(
             ContactPhone.objects.select_related("contact__company", "cold_marked_by"),
@@ -394,94 +458,37 @@ def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> Ht
     if not company:
         messages.error(request, "Контакт не привязан к компании.")
         return redirect("dashboard")
-    if not _can_edit_company(user, company):
-        if _is_ajax(request):
-            return JsonResponse(
-                {"ok": False, "error": "Нет прав на изменение контактов этой компании."}, status=403
-            )
-        messages.error(request, "Нет прав на изменение контактов этой компании.")
-        return redirect("company_detail", company_id=company.id)
-
-    # Проверка подтверждения
-    confirmed = request.POST.get("confirmed") == "1"
-    if not confirmed:
-        if _is_ajax(request):
-            return JsonResponse(
-                {"ok": False, "error": "Требуется подтверждение действия."}, status=400
-            )
-        messages.error(request, "Требуется подтверждение действия.")
-        return redirect("company_detail", company_id=company.id)
-
-    # Проверка: уже отмечен?
-    if contact_phone.is_cold_call:
-        if _is_ajax(request):
-            return _cold_call_json(
-                entity="contact_phone",
-                entity_id=str(contact_phone.id),
-                is_cold_call=True,
-                marked_at=contact_phone.cold_marked_at,
-                marked_by=str(contact_phone.cold_marked_by or ""),
-                can_reset=bool(require_admin(user)),
-                message="Этот номер уже отмечен как холодный.",
-            )
-        messages.info(request, "Этот номер уже отмечен как холодный.")
-        return redirect("company_detail", company_id=company.id)
-
-    from companies.services import ColdCallService
-
-    result = ColdCallService.mark_contact_phone(contact_phone=contact_phone, user=user)
-    last_call = result.get("call")
-
-    if _is_ajax(request):
-        contact_phone.refresh_from_db(fields=["is_cold_call", "cold_marked_at", "cold_marked_by"])
-        return _cold_call_json(
-            entity="contact_phone",
-            entity_id=str(contact_phone.id),
-            is_cold_call=True,
-            marked_at=contact_phone.cold_marked_at,
-            marked_by=str(contact_phone.cold_marked_by or ""),
-            can_reset=bool(require_admin(user)),
-            message=f"Отмечено: холодный звонок (номер {contact_phone.value}).",
-        )
-
-    messages.success(request, f"Отмечено: холодный звонок (номер {contact_phone.value}).")
-    meta = {"contact_phone_id": str(contact_phone.id)}
-    if last_call:
-        meta["call_id"] = str(last_call.id)
-    log_event(
-        actor=user,
-        verb=ActivityEvent.Verb.UPDATE,
-        entity_type="contact_phone",
-        entity_id=str(contact_phone.id),
-        company_id=company.id,
-        message=f"Отмечено: холодный звонок (номер {contact_phone.value})",
-        meta=meta,
+    phone_val = contact_phone.value
+    cfg = _CCConfig(
+        **{
+            **_cc_contact_phone_cfg().__dict__,
+            "mark_fn": ColdCallService.mark_contact_phone,
+            "success_mark_msg": f"Отмечено: холодный звонок (номер {phone_val}).",
+            "log_mark_msg": f"Отмечено: холодный звонок (номер {phone_val})",
+        }
     )
-    return redirect("company_detail", company_id=company.id)
+    return _cc_toggle_impl(
+        request=request,
+        entity=contact_phone,
+        company=company,
+        user=request.user,
+        cfg=cfg,
+        already_redirect_target=("company_detail", {"company_id": company.id}),
+    )
 
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:cold_call:reset")
 def contact_phone_cold_call_reset(request: HttpRequest, contact_phone_id) -> HttpResponse:
-    """
-    Откатить отметку холодного звонка для конкретного номера телефона контакта.
-    Доступно только администраторам.
-    """
+    """Откат отметки холодного звонка для номера контакта (admin only)."""
     if request.method != "POST":
         return redirect("dashboard")
-
-    user: User = request.user
-    if not require_admin(user):
-        if _is_ajax(request):
-            return JsonResponse(
-                {
-                    "ok": False,
-                    "error": "Только администратор может откатить отметку холодного звонка.",
-                },
-                status=403,
-            )
-        messages.error(request, "Только администратор может откатить отметку холодного звонка.")
+    guard = _cc_admin_guard(request)
+    if guard is not None:
+        return guard
+    if not require_admin(request.user):
         return redirect("dashboard")
+    from companies.services import ColdCallService
 
     contact_phone = get_object_or_404(
         ContactPhone.objects.select_related("contact__company"), id=contact_phone_id
@@ -491,61 +498,51 @@ def contact_phone_cold_call_reset(request: HttpRequest, contact_phone_id) -> Htt
     if not company:
         messages.error(request, "Контакт не привязан к компании.")
         return redirect("dashboard")
-
-    if not contact_phone.is_cold_call and not contact_phone.cold_marked_at:
-        if _is_ajax(request):
-            return _cold_call_json(
-                entity="contact_phone",
-                entity_id=str(contact_phone.id),
-                is_cold_call=False,
-                marked_at=contact_phone.cold_marked_at,
-                marked_by=str(contact_phone.cold_marked_by or ""),
-                can_reset=True,
-                message="Этот номер не отмечен как холодный.",
-            )
-        messages.info(request, "Этот номер не отмечен как холодный.")
-        return redirect("company_detail", company_id=company.id)
-
-    from companies.services import ColdCallService
-
-    ColdCallService.reset_contact_phone(contact_phone=contact_phone, user=user)
-
-    if _is_ajax(request):
-        return _cold_call_json(
-            entity="contact_phone",
-            entity_id=str(contact_phone.id),
-            is_cold_call=False,
-            marked_at=None,
-            marked_by="",
-            can_reset=True,
-            message=f"Отметка холодного звонка отменена (номер {contact_phone.value}).",
-        )
-
-    messages.success(request, f"Отметка холодного звонка отменена (номер {contact_phone.value}).")
-    log_event(
-        actor=user,
-        verb=ActivityEvent.Verb.UPDATE,
-        entity_type="contact_phone",
-        entity_id=str(contact_phone.id),
-        company_id=company.id,
-        message=f"Откат: холодный звонок (номер {contact_phone.value})",
+    phone_val = contact_phone.value
+    cfg = _CCConfig(
+        **{
+            **_cc_contact_phone_cfg().__dict__,
+            "reset_fn": ColdCallService.reset_contact_phone,
+            "success_reset_msg": f"Отметка холодного звонка отменена (номер {phone_val}).",
+            "log_reset_msg": f"Откат: холодный звонок (номер {phone_val})",
+        }
     )
-    return redirect("company_detail", company_id=company.id)
+    return _cc_reset_impl(
+        request=request,
+        entity=contact_phone,
+        company=company,
+        user=request.user,
+        cfg=cfg,
+        already_redirect_target=("company_detail", {"company_id": company.id}),
+    )
+
+
+# --- CompanyPhone ---
+def _cc_company_phone_cfg() -> _CCConfig:
+    return _CCConfig(
+        entity_kind="company_phone",
+        is_marked_attr="is_cold_call",
+        marked_at_attr="cold_marked_at",
+        marked_by_attr="cold_marked_by",
+        service_kwarg="company_phone",
+        permission_error="Нет прав на изменение данных этой компании.",
+        already_marked_msg="Этот номер уже отмечен как холодный.",
+        not_marked_msg="Этот номер не отмечен как холодный.",
+    )
 
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:cold_call:toggle")
 def company_phone_cold_call_toggle(request: HttpRequest, company_phone_id) -> HttpResponse:
-    """
-    Отметить конкретный дополнительный номер телефона компании как холодный звонок.
-    Аналогично contact_phone_cold_call_toggle, но для CompanyPhone.
-    """
+    """Отметить дополнительный номер телефона компании как холодный звонок."""
     if request.method != "POST":
         return redirect("dashboard")
-    user: User = request.user
+    from companies.services import ColdCallService
+
     try:
         company_phone = get_object_or_404(
-            CompanyPhone.objects.select_related("company", "cold_marked_by"), id=company_phone_id
+            CompanyPhone.objects.select_related("company", "cold_marked_by"),
+            id=company_phone_id,
         )
     except Exception as e:
         logger.error(f"Error finding CompanyPhone {company_phone_id}: {e}", exc_info=True)
@@ -556,136 +553,56 @@ def company_phone_cold_call_toggle(request: HttpRequest, company_phone_id) -> Ht
         messages.error(request, "Ошибка: номер телефона не найден.")
         return redirect("dashboard")
     company = company_phone.company
-    if not _can_edit_company(user, company):
-        if _is_ajax(request):
-            return JsonResponse(
-                {"ok": False, "error": "Нет прав на изменение данных этой компании."}, status=403
-            )
-        messages.error(request, "Нет прав на изменение данных этой компании.")
-        return redirect("company_detail", company_id=company.id)
-
-    # Проверка подтверждения
-    confirmed = request.POST.get("confirmed") == "1"
-    if not confirmed:
-        if _is_ajax(request):
-            return JsonResponse(
-                {"ok": False, "error": "Требуется подтверждение действия."}, status=400
-            )
-        messages.error(request, "Требуется подтверждение действия.")
-        return redirect("company_detail", company_id=company.id)
-
-    # Проверка: уже отмечен?
-    if company_phone.is_cold_call:
-        if _is_ajax(request):
-            return _cold_call_json(
-                entity="company_phone",
-                entity_id=str(company_phone.id),
-                is_cold_call=True,
-                marked_at=company_phone.cold_marked_at,
-                marked_by=str(company_phone.cold_marked_by or ""),
-                can_reset=bool(require_admin(user)),
-                message="Этот номер уже отмечен как холодный.",
-            )
-        messages.info(request, "Этот номер уже отмечен как холодный.")
-        return redirect("company_detail", company_id=company.id)
-
-    from companies.services import ColdCallService
-
-    result = ColdCallService.mark_company_phone(company_phone=company_phone, user=user)
-    last_call = result.get("call")
-
-    if _is_ajax(request):
-        company_phone.refresh_from_db(fields=["is_cold_call", "cold_marked_at", "cold_marked_by"])
-        return _cold_call_json(
-            entity="company_phone",
-            entity_id=str(company_phone.id),
-            is_cold_call=True,
-            marked_at=company_phone.cold_marked_at,
-            marked_by=str(company_phone.cold_marked_by or ""),
-            can_reset=bool(require_admin(user)),
-            message=f"Отмечено: холодный звонок (номер {company_phone.value}).",
-        )
-
-    messages.success(request, f"Отмечено: холодный звонок (номер {company_phone.value}).")
-    meta = {"company_phone_id": str(company_phone.id)}
-    if last_call:
-        meta["call_id"] = str(last_call.id)
-    log_event(
-        actor=user,
-        verb=ActivityEvent.Verb.UPDATE,
-        entity_type="company_phone",
-        entity_id=str(company_phone.id),
-        company_id=company.id,
-        message=f"Отмечено: холодный звонок (номер {company_phone.value})",
-        meta=meta,
+    phone_val = company_phone.value
+    cfg = _CCConfig(
+        **{
+            **_cc_company_phone_cfg().__dict__,
+            "mark_fn": ColdCallService.mark_company_phone,
+            "success_mark_msg": f"Отмечено: холодный звонок (номер {phone_val}).",
+            "log_mark_msg": f"Отмечено: холодный звонок (номер {phone_val})",
+        }
     )
-    return redirect("company_detail", company_id=company.id)
+    return _cc_toggle_impl(
+        request=request,
+        entity=company_phone,
+        company=company,
+        user=request.user,
+        cfg=cfg,
+        already_redirect_target=("company_detail", {"company_id": company.id}),
+    )
 
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:cold_call:reset")
 def company_phone_cold_call_reset(request: HttpRequest, company_phone_id) -> HttpResponse:
-    """
-    Откатить отметку холодного звонка для конкретного дополнительного номера телефона компании.
-    Доступно только администраторам.
-    """
+    """Откат отметки холодного звонка для доп. номера компании (admin only)."""
     if request.method != "POST":
         return redirect("dashboard")
-
-    user: User = request.user
-    if not require_admin(user):
-        if _is_ajax(request):
-            return JsonResponse(
-                {
-                    "ok": False,
-                    "error": "Только администратор может откатить отметку холодного звонка.",
-                },
-                status=403,
-            )
-        messages.error(request, "Только администратор может откатить отметку холодного звонка.")
+    guard = _cc_admin_guard(request)
+    if guard is not None:
+        return guard
+    if not require_admin(request.user):
         return redirect("dashboard")
+    from companies.services import ColdCallService
 
     company_phone = get_object_or_404(
         CompanyPhone.objects.select_related("company"), id=company_phone_id
     )
     company = company_phone.company
-
-    if not company_phone.is_cold_call and not company_phone.cold_marked_at:
-        if _is_ajax(request):
-            return _cold_call_json(
-                entity="company_phone",
-                entity_id=str(company_phone.id),
-                is_cold_call=False,
-                marked_at=company_phone.cold_marked_at,
-                marked_by=str(company_phone.cold_marked_by or ""),
-                can_reset=True,
-                message="Этот номер не отмечен как холодный.",
-            )
-        messages.info(request, "Этот номер не отмечен как холодный.")
-        return redirect("company_detail", company_id=company.id)
-
-    from companies.services import ColdCallService
-
-    ColdCallService.reset_company_phone(company_phone=company_phone, user=user)
-
-    if _is_ajax(request):
-        return _cold_call_json(
-            entity="company_phone",
-            entity_id=str(company_phone.id),
-            is_cold_call=False,
-            marked_at=None,
-            marked_by="",
-            can_reset=True,
-            message=f"Отметка холодного звонка отменена (номер {company_phone.value}).",
-        )
-
-    messages.success(request, f"Отметка холодного звонка отменена (номер {company_phone.value}).")
-    log_event(
-        actor=user,
-        verb=ActivityEvent.Verb.UPDATE,
-        entity_type="company_phone",
-        entity_id=str(company_phone.id),
-        company_id=company.id,
-        message=f"Откат: холодный звонок (номер {company_phone.value})",
+    phone_val = company_phone.value
+    cfg = _CCConfig(
+        **{
+            **_cc_company_phone_cfg().__dict__,
+            "reset_fn": ColdCallService.reset_company_phone,
+            "success_reset_msg": f"Отметка холодного звонка отменена (номер {phone_val}).",
+            "log_reset_msg": f"Откат: холодный звонок (номер {phone_val})",
+        }
     )
-    return redirect("company_detail", company_id=company.id)
+    return _cc_reset_impl(
+        request=request,
+        entity=company_phone,
+        company=company,
+        user=request.user,
+        cfg=cfg,
+        already_redirect_target=("company_detail", {"company_id": company.id}),
+    )
