@@ -1,5 +1,90 @@
 # Текущий спринт
 
+## [2026-04-22] — W2.1.4.3 COMPLETED — Messenger + mail codified
+
+**Status**: ✅ 19 endpoints (14 settings_messenger + 5 settings_mail) теперь `@policy_required`-decorated. Inline require_admin() preserved в each. Test baseline 1257 → 1278. Zero leftover disposable fixtures.
+
+### Pre-work (`963fd3d9`)
+
+- **19 new PolicyResource** entries (14 messenger + 5 mail).
+- Namespace: `ui:settings:messenger:*` + `ui:settings:mail:*` для consistency с blanket admin-only pattern (W2.1.4.1 engine enhancement).
+- **Mail namespace decision**: `ui:settings:mail:*` вместо reuse existing `ui:mail:smtp_settings` / `ui:mail:settings:update`. Существующие `ui:mail:*` resources остаются для legacy compat (explicit engine rules). Clear separation: `ui:mail:*` = mail-app user-facing, `ui:settings:mail:*` = admin-settings.
+- Policy regression: 42/42 pass.
+
+### Endpoints codified (19)
+
+**Messenger (14)** — 7 commits:
+
+| # | Commit | Scope | Resources |
+|---|--------|-------|-----------|
+| 1 | `7bddbecd` | messenger_overview | ui:settings:messenger:overview |
+| 2-3 | `8c6a8582` | source_choose + inbox_ready | ui:settings:messenger:inbox:{source_choose, ready} |
+| 4-5 | `67b1f85a` | health + analytics | ui:settings:messenger:{health, analytics} |
+| 6 | `1d8232c7` | inbox_edit | ui:settings:messenger:inbox:edit |
+| 7-9 | `d1b30a84` | routing CRUD | ui:settings:messenger:routing:{list, edit, delete} |
+| 10-12 | `5b605c54` | canned CRUD | ui:settings:messenger:canned:{list, edit, delete} |
+| 13-14 | `941ba736` | campaigns + automation | ui:settings:messenger:{campaigns, automation} |
+
+**Mail (5)** — 1 commit (single file):
+
+| # | Commit | Scope | Resources |
+|---|--------|-------|-----------|
+| 15-19 | `8e67f587` | all 5 settings_mail endpoints | ui:settings:mail:{setup, save_password, test_send, save_config, toggle_enabled} |
+
+### Defense-in-depth preservation
+
+- Inline `require_admin()` preserved во всех 19 endpoints (source-level verified в `test_defense_in_depth_messenger` + `test_defense_in_depth_mail`).
+- Decorator = primary gate (policy engine + audit trail).
+- Inline = fallback для observe_only mode.
+- `policy.decorators.policy_required` import добавлен в `settings_messenger.py` и `settings_mail.py`.
+
+### Disposable fixture discipline
+
+Все destructive endpoint tests использовали disposable patterns:
+- `test_messenger_routing_delete` — disposable Inbox + RoutingRule per test.
+- `test_messenger_canned_delete` — disposable CannedResponse per test.
+- Post-session leftover count: **all 0** (users, Inbox, RoutingRule, CannedResponse с `disp_` prefix).
+
+### Verification
+
+- ✅ **Tests: 1257 → 1278** (+21 новых в `tests_w2_1_4_3_codification.py`).
+- ✅ Policy regression: 42/42.
+- ✅ CI green на `4f639e8c`.
+- ✅ Staging deploy: все 6 steps + `DEPLOY FULLY COMPLETED` marker.
+- ✅ Containers fresh (52 sec после deploy).
+- ✅ Staging smoke: 6/6 green.
+- ✅ qa_manager sanity:
+  - `GET /` → 200 ✅
+  - `GET /admin/messenger/` → 403 ✅
+  - `GET /admin/messenger/routing/` → 403 ✅
+  - `GET /admin/messenger/canned-responses/` → 403 ✅
+  - `GET /admin/mail/setup/` → 403 ✅
+- ✅ Leftover disposable fixtures: **all 0**.
+
+### Commits (10)
+
+1. `963fd3d9` — prework (19 resources + mail namespace decision)
+2. `7bddbecd` — messenger_overview (#1)
+3. `8c6a8582` — source_choose + inbox_ready (#2-3)
+4. `67b1f85a` — health + analytics (#4-5)
+5. `1d8232c7` — inbox_edit (#6)
+6. `d1b30a84` — routing CRUD (#7-9)
+7. `5b605c54` — canned CRUD (#10-12)
+8. `941ba736` — campaigns + automation (#13-14)
+9. `8e67f587` — all 5 mail endpoints (#15-19)
+10. `4f639e8c` — tests_w2_1_4_3 (21 tests)
+
+### Pending
+
+- **W2.1.4.4**: integrations + mobile apps + 4 complex (14 endpoints, ~2-2.5h). Scope includes:
+  - settings_access + settings_access_role (bootstrap-safety — superuser bypass уже работает через engine).
+  - settings_calls_stats + settings_calls_manager_detail — role-mixed: allow [MANAGER/SALES_HEAD/BRANCH_DIRECTOR/GROUP_MANAGER/ADMIN], deny TENDERIST.
+- **W2.1.5**: inline `enforce()` → `@policy_required` migration (57 locations).
+- **W2.3**: CSP strict mode.
+- **W2.7**: block admin password на JWT.
+
+---
+
 ## [2026-04-22] — W2.1.4.2 COMPLETED — Dictionaries + audit logs codified
 
 **Status**: ✅ 18 endpoints из settings_core.py теперь `@policy_required`-decorated. Inline require_admin() preserved в each. Test baseline 1237 → 1257. Zero leftover disposable fixtures.
