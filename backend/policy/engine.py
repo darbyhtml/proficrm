@@ -411,18 +411,29 @@ def _log_decision(
     """
     Логируем решение в audit (чтобы видеть расхождения и понимать реальное использование).
 
-    ВАЖНО: по умолчанию ВЫКЛЮЧЕНО через settings.POLICY_DECISION_LOGGING_ENABLED.
-    Без флага эта функция пишет ActivityEvent на каждый HTTP-запрос через @policy_required,
-    что создаёт 150K+ записей в день при 50 пользователях (заполнили audit_activityevent
-    на 4 GB — 95% всей БД — за полгода, см. docs/runbooks/04-god-nodes-n1-analysis.md).
+    Q17 decision 2026-04-22 (W2.1.3a): **DENY-ONLY logging**.
+    - allowed=True decisions пропускаются (early return) — 99%+ трафика, low signal.
+    - allowed=False (denies) логируются — actionable для debugging user workflows.
+    - Retention: 14-day TTL через Celery beat task `policy.purge_old_events`.
 
-    Включать флаг ТОЛЬКО на короткий период для целенаправленного аудита policy-решений.
+    Historical context:
+    - Релиз 0 (2026-04-20) полностью disabled logging из-за 145K events/day на 1 user
+      staging (projected 5-7M/day на 50-user prod — DB bloat).
+    - W2.1.3a re-enabled с deny-only filter — volume reduces 99%+ (estimated 5-50K
+      denies/day на prod).
+
+    Flag `POLICY_DECISION_LOGGING_ENABLED` по-прежнему required для enable (default True
+    после W2.1.3a, env var override возможен).
     """
     try:
         from django.conf import settings as django_settings
 
-        # Релиз 0 (2026-04-20): выключаем шумный policy decision logging
-        if not getattr(django_settings, "POLICY_DECISION_LOGGING_ENABLED", False):
+        # Master switch (default on по умолчанию после W2.1.3a)
+        if not getattr(django_settings, "POLICY_DECISION_LOGGING_ENABLED", True):
+            return
+
+        # Q17 deny-only: skip successful allows (99%+ of traffic, low signal)
+        if decision.allowed:
             return
 
         from audit.models import ActivityEvent
@@ -433,10 +444,10 @@ def _log_decision(
             verb=ActivityEvent.Verb.UPDATE,
             entity_type="policy",
             entity_id=f"{decision.resource_type}:{decision.resource}",
-            message="Policy decision",
+            message="Policy decision (denied)",
             meta={
                 "mode": decision.mode,
-                "allowed": decision.allowed,
+                "allowed": decision.allowed,  # always False после Q17 filter
                 "matched_rule_id": decision.matched_rule_id,
                 "matched_effect": decision.matched_effect,
                 "default_allowed": decision.default_allowed,

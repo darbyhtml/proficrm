@@ -455,11 +455,22 @@ AUTH_USER_MODEL = "accounts.User"
 # Messenger feature flag и настройки live-chat / widget
 MESSENGER_ENABLED = os.getenv("MESSENGER_ENABLED", "0") == "1"
 
-# Policy engine: логировать каждое решение policy (enforce / deny / allow) в audit_activityevent.
-# По умолчанию ВЫКЛ — генерирует огромный объём записей (150K/день на 50 пользователей).
-# Включать только на короткий период для аудита. Запись идёт в audit_activityevent.entity_type='policy'.
-# См. docs/runbooks/10-release-0-night-hotfix.md и 04-god-nodes-n1-analysis.md.
-POLICY_DECISION_LOGGING_ENABLED = os.getenv("POLICY_DECISION_LOGGING_ENABLED", "0") == "1"
+# Policy engine: логировать policy decisions в audit_activityevent (entity_type='policy').
+#
+# W2.1.3a (Q17, 2026-04-22): deny-only logging — `_log_decision()` пропускает allowed=True
+# decisions (99%+ трафика, low signal). Логируются только denies (actionable).
+# Retention: 14-day TTL через Celery beat task `policy.purge_old_events`.
+# Default: ON (переход от "disabled Release 0" к "deny-only" после Q17 resolution).
+#
+# Volume estimate после фильтра: 5-50K denies/day на 50-user prod
+# (vs 5-7M/day всех decisions без фильтра — projected from staging 145K/day на 1 user).
+#
+# Env var override: POLICY_DECISION_LOGGING_ENABLED=0 полностью отключает даже deny log.
+# Use case для disable: emergency perf issue (если даже deny volume перегружает DB).
+#
+# См. docs/runbooks/10-release-0-night-hotfix.md, 04-god-nodes-n1-analysis.md,
+# docs/open-questions.md Q17.
+POLICY_DECISION_LOGGING_ENABLED = os.getenv("POLICY_DECISION_LOGGING_ENABLED", "1") == "1"
 # Филиал по умолчанию для глобального inbox, когда ни одно правило маршрутизации не сработало (ID филиала).
 MESSENGER_DEFAULT_BRANCH_ID = os.getenv("MESSENGER_DEFAULT_BRANCH_ID", "")
 if MESSENGER_DEFAULT_BRANCH_ID:
@@ -807,6 +818,14 @@ CELERY_BEAT_SCHEDULE = {
     "purge-old-error-logs": {
         "task": "audit.tasks.purge_old_error_logs",
         "schedule": crontab(hour=3, minute=15, day_of_week=0),
+    },
+    # Policy deny events retention (Q17, W2.1.3a 2026-04-22).
+    # Daily 03:15 MSK chunked delete events старше 14 дней.
+    # Использует chunked pattern (10K rows per batch) — не блокирует DB.
+    "purge-old-policy-events": {
+        "task": "policy.purge_old_events",
+        "schedule": crontab(hour=3, minute=15),  # Каждый день
+        "kwargs": {"retention_days": 14},
     },
     "purge-old-notifications": {
         "task": "notifications.tasks.purge_old_notifications",
