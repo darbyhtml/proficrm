@@ -147,10 +147,18 @@ def settings_announcements(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:access")
 def settings_access(request: HttpRequest) -> HttpResponse:
     """
     UI-админка: управление policy (режим observe/enforce + переход к правкам по ролям).
     """
+    # W2.1.4.4: inline (is_superuser or role==ADMIN) check preserved as
+    # defense-in-depth. Decorator = primary gate через policy engine.
+    # Bootstrap safety: superuser bypass в engine.decide() line 337 гарантирует
+    # что даже если кто-то случайно создаст DENY rule на ui:settings:access
+    # для role=admin, superuser users (sdm, perf_check) по-прежнему смогут
+    # enter страницу и fix policy. Non-superuser admin ('admin' на staging)
+    # at lockout risk при таком scenario — документировано в W2.1.4.4 ADR.
     # Критично: управлять политиками может только реальный админ,
     # иначе любая ошибка в policy может дать эскалацию прав.
     user: User = request.user
@@ -349,10 +357,13 @@ def settings_access(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:access:role")
 def settings_access_role(request: HttpRequest, role: str) -> HttpResponse:
     """
     UI-админка: правка allow/deny по ресурсам для конкретной роли.
     """
+    # W2.1.4.4: inline (is_superuser or role==ADMIN) preserved as defense-in-depth.
+    # Bootstrap safety — см. settings_access выше (superuser bypass в engine).
     user: User = request.user
     if not (user.is_superuser or user.role == User.Role.ADMIN):
         messages.error(request, "Доступ запрещён.")
