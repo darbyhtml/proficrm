@@ -60,11 +60,70 @@ class SecureTokenObtainPairView(TokenObtainPairView):
 
             # Если успешно - очищаем счетчики и добавляем is_admin в ответ
             if response.status_code == 200 and username:
+                # W2.6 (2026-04-22): role filter. /api/token/ password-flow
+                # разрешён ТОЛЬКО для admin/superuser. Non-admin пользователи
+                # должны входить по magic link (web) или через
+                # /api/phone/qr/exchange/ (mobile app, не использует password).
+                # Parallel SecureLoginView.post (views.py:187) уже блокирует
+                # non-admin на /login/ — этот fix закрывает parallel JWT path.
+                user = User.objects.filter(username__iexact=username).first()
+                is_admin = bool(
+                    user
+                    and (
+                        user.is_superuser
+                        or (hasattr(user, "role") and user.role == User.Role.ADMIN)
+                    )
+                )
+                if user and not is_admin:
+                    # Audit log: блокировка (не инкрементит lockout counter)
+                    try:
+                        log_event(
+                            actor=user,
+                            verb=ActivityEvent.Verb.UPDATE,
+                            entity_type="security",
+                            entity_id=f"jwt_non_admin_blocked:{user.id}",
+                            message="JWT login заблокирован для non-admin (W2.6)",
+                            meta={
+                                "ip": ip,
+                                "username": username,
+                                "role": getattr(user, "role", ""),
+                            },
+                        )
+                    except Exception:
+                        logger.exception(
+                            "SecureTokenObtainPairView: log_event failed для jwt_non_admin_blocked"
+                        )
+                    # Blacklist refresh токен, если SimpleJWT его успел создать
+                    # (super().post() вернул 200 → токены уже есть в response.data).
+                    # Таким образом non-admin не сможет использовать issued
+                    # токены даже если перехватит response между строк.
+                    try:
+                        from rest_framework_simplejwt.tokens import RefreshToken
+
+                        raw_refresh = response.data.get("refresh")
+                        if raw_refresh:
+                            RefreshToken(raw_refresh).blacklist()
+                    except Exception:
+                        logger.warning(
+                            "SecureTokenObtainPairView: не удалось blacklist refresh для user_id=%s",
+                            user.id,
+                            exc_info=True,
+                        )
+                    return Response(
+                        {
+                            "detail": (
+                                "Вход по логину и паролю через JWT доступен только для "
+                                "администраторов. Остальные пользователи должны войти по "
+                                "одноразовой ссылке (magic link), полученной от администратора."
+                            )
+                        },
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
                 clear_login_attempts(username)
 
                 # Логируем успешный вход и добавляем is_admin в ответ
                 try:
-                    user = User.objects.filter(username__iexact=username).first()
                     if user:
                         log_event(
                             actor=user,
@@ -76,10 +135,6 @@ class SecureTokenObtainPairView(TokenObtainPairView):
                         )
 
                         # Добавляем is_admin в ответ
-                        is_admin = bool(
-                            user.is_superuser
-                            or (hasattr(user, "role") and user.role == User.Role.ADMIN)
-                        )
                         response.data["is_admin"] = is_admin
                 except Exception:
                     pass
