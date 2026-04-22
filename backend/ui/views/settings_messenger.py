@@ -153,11 +153,13 @@ def settings_messenger_inbox_ready(request: HttpRequest, inbox_id: int) -> HttpR
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:messenger:health")
 def settings_messenger_health(request: HttpRequest) -> HttpResponse:
     """
     Страница диагностики Messenger: флаг, Redis, кол-во inbox.
     Доступна только админу. Не требует MESSENGER_ENABLED (чтобы проверить состояние при выключенном модуле).
     """
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -208,10 +210,12 @@ def settings_messenger_health(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:messenger:analytics")
 def settings_messenger_analytics(request: HttpRequest) -> HttpResponse:
     """
     Аналитика Messenger (admin only): простые метрики по диалогам.
     """
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
