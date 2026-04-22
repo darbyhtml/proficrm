@@ -1882,8 +1882,17 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:tasks:comment:add")
 def task_add_comment(request: HttpRequest, task_id) -> HttpResponse:
-    """Добавление комментария к задаче (только POST/AJAX)."""
+    """Добавление комментария к задаче (только POST/AJAX).
+
+    W2.1.3b: @policy_required добавлен как outer layer. Inline checks
+    остаются as defense-in-depth:
+    - `visible_tasks_qs(user).filter(id=task_id).first()` — F3 IDOR-fix.
+    - `_can_manage_task_status_ui(user, task) or _can_edit_task_ui(user, task)` — edit check.
+
+    Both layers must pass для commenting.
+    """
     if request.method != "POST":
         return JsonResponse({"error": "Метод не поддерживается."}, status=405)
 
