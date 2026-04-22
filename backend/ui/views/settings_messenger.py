@@ -839,10 +839,12 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:messenger:routing:list")
 def settings_messenger_routing_list(request: HttpRequest) -> HttpResponse:
     """
     Список правил маршрутизации.
     """
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -865,10 +867,12 @@ def settings_messenger_routing_list(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:messenger:routing:edit")
 def settings_messenger_routing_edit(request: HttpRequest, rule_id: int = None) -> HttpResponse:
     """
     Создание/редактирование правила маршрутизации.
     """
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -956,10 +960,12 @@ def settings_messenger_routing_edit(request: HttpRequest, rule_id: int = None) -
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:messenger:routing:delete")
 def settings_messenger_routing_delete(request: HttpRequest, rule_id: int) -> HttpResponse:
     """
     Удаление правила маршрутизации.
     """
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
