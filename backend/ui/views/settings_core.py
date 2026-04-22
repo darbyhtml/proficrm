@@ -1338,7 +1338,9 @@ def settings_company_sphere_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:dicts:contract_type:create")
 def settings_contract_type_create(request: HttpRequest) -> HttpResponse:
+    # W2.1.4.2: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -1494,8 +1496,10 @@ def settings_company_sphere_delete(request: HttpRequest, sphere_id: int) -> Http
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:dicts:contract_type:edit")
 def settings_contract_type_edit(request: HttpRequest, contract_type_id: int) -> HttpResponse:
     """Редактирование вида договора через модалку (AJAX)"""
+    # W2.1.4.2: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
     contract_type = get_object_or_404(ContractType, id=contract_type_id)
@@ -1524,8 +1528,10 @@ def settings_contract_type_edit(request: HttpRequest, contract_type_id: int) -> 
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:dicts:contract_type:delete")
 def settings_contract_type_delete(request: HttpRequest, contract_type_id: int) -> HttpResponse:
     """Удаление вида договора"""
+    # W2.1.4.2: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
     if request.method != "POST":
