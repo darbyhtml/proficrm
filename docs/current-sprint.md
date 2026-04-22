@@ -1,5 +1,93 @@
 # Текущий спринт
 
+## 🎯 [2026-04-22] — W2.1.4 MILESTONE — 64/64 settings endpoints codified
+
+W2.1.4 wave **complete across 4 sub-sessions**:
+
+| Sub-session | Scope | Endpoints | Commits |
+|-------------|-------|-----------|---------|
+| W2.1.4.1 | user-mgmt + branches + general | 13 | 10 |
+| W2.1.4.2 | dictionaries + audit logs | 18 | 10 |
+| W2.1.4.3 | messenger + mail | 19 | 10 |
+| W2.1.4.4 | integrations + mobile + complex | 14 | 7 |
+| **Total** | **All settings** | **64** | **37** |
+
+Test baseline: 1221 → **1298 tests passing** (+77 new codification tests across 4 suites).
+Defense-in-depth: inline `require_admin()` preserved в all 60 admin-only + 2 bootstrap endpoints.
+Role-mixed: 2 endpoints use explicit PolicyRule seeds (10 rules в migration 0004).
+
+---
+
+## [2026-04-22] — W2.1.4.4 COMPLETED — Integrations + mobile apps + 4 complex
+
+**Status**: ✅ Final 14 endpoints codified. Completes W2.1.4 wave.
+
+### Pre-work (`0bbc6711`)
+
+- **14 new PolicyResource** entries registered.
+- **Migration `0004_w2144_call_stats_rules`**: seeds 10 PolicyRule records (5 roles × 2 resources). Reversible.
+- **Admin inventory**: 3 role=admin, 2 superuser (sdm, perf_check), 1 non-superuser (`admin`) at documented lockout risk.
+
+### Endpoints codified (14)
+
+**Integrations (7 admin-only)** — `08fd02e6`:
+- settings_import, settings_import_tasks
+- settings_company_columns, settings_security
+- settings_mobile_devices, settings_mobile_overview, settings_mobile_device_detail
+
+**Mobile apps (3 admin-only)** — `ee4a7c17`:
+- settings_mobile_apps, settings_mobile_apps_upload, settings_mobile_apps_toggle
+
+**Bootstrap-safety (2)** — `492d6e0b`:
+- settings_access, settings_access_role
+- Superuser bypass verified: DENY rule на role=admin → sdm 200 (bypass), admin 403 (documented risk), post-cleanup admin 200.
+
+**Role-mixed (2)** — `b82d9b9f`:
+- settings_calls_stats, settings_calls_manager_detail
+- Allow: manager/sales_head/branch_director/**group_manager** (added per user decision)/admin via explicit PolicyRule seeds.
+- Deny: tenderist via blanket `ui:settings:*` admin-only default.
+- Inline role check expanded — added `GROUP_MANAGER` к allowlist.
+
+### Verification
+
+- ✅ **Tests: 1278 → 1298** (+20 новых в `tests_w2_1_4_4_codification.py`).
+- ✅ Migration `policy.0004_w2144_call_stats_rules` applied; 10 seeds present.
+- ✅ Multi-role matrix (5 roles allowed + 1 denied) verified via disposable users.
+- ✅ Bootstrap safety: superuser bypass confirmed even при DENY rule.
+- ✅ CI green на `4222088c`.
+- ✅ Staging deploy: все 6 steps + `DEPLOY FULLY COMPLETED`.
+- ✅ Containers fresh (51 sec).
+- ✅ Staging smoke: 6/6 green.
+- ✅ qa_manager sanity:
+  - `GET /` → 200 ✅
+  - `GET /admin/calls/stats/` → **200** ✅ (new access via PolicyRule seeds)
+  - `GET /admin/import/` → 403 ✅
+  - `GET /admin/access/` → 403 ✅
+  - `GET /admin/mobile-apps/` → 403 ✅
+- ✅ Zero leftover disposable fixtures (users/CompanyStatus/CompanySphere/ContractType/TaskType/Inbox/RoutingRule/CannedResponse/ErrorLog).
+
+### Commits (7)
+
+1. `0bbc6711` — prework (14 resources + migration 0004)
+2. `08fd02e6` — 7 integrations (#1-7)
+3. `ee4a7c17` — 3 mobile apps (#8-10)
+4. `492d6e0b` — bootstrap-safety (#11-12)
+5. `b82d9b9f` — role-mixed calls + GROUP_MANAGER expansion (#13-14)
+6. `8978ee84` — tests + fix importlib module access
+7. `4222088c` — black fix
+
+### Documented risks
+
+**Non-superuser admin lockout**: user `admin` на staging (role=admin, is_superuser=False) может быть locked из `ui:settings:access` если случайно создан DENY rule на role=admin. Safety net: superuser users (sdm, perf_check) могут зайти и remove bad rule через тот же endpoint. Recommendation для prod: promote critical admin users до is_superuser=True OR avoid creating DENY rules на ui:settings:access.
+
+### Pending
+
+- **W2.1.5**: inline `enforce()` → `@policy_required` migration (57 locations, ~3-4h). Also handles embedded view_as toggle в settings_users (W2.1.4.1 nuance).
+- **W2.3**: CSP strict mode.
+- **W2.7**: block admin password на JWT (post-W2.3).
+
+---
+
 ## [2026-04-22] — W2.1.4.3 COMPLETED — Messenger + mail codified
 
 **Status**: ✅ 19 endpoints (14 settings_messenger + 5 settings_mail) теперь `@policy_required`-decorated. Inline require_admin() preserved в each. Test baseline 1257 → 1278. Zero leftover disposable fixtures.
