@@ -344,6 +344,91 @@ RESOURCES: tuple[PolicyResource, ...] = (
         "action",
         "Settings: детали ошибки (AJAX)",
     ),
+    # ---- W2.1.4.3: settings messenger + mail (19 resources) ----
+    # Messenger admin (14)
+    PolicyResource("ui:settings:messenger:overview", "page", "Settings: messenger обзор"),
+    PolicyResource(
+        "ui:settings:messenger:inbox:source_choose",
+        "action",
+        "Settings: messenger выбор источника inbox",
+    ),
+    PolicyResource(
+        "ui:settings:messenger:inbox:ready",
+        "action",
+        "Settings: messenger готовность inbox",
+    ),
+    PolicyResource("ui:settings:messenger:health", "page", "Settings: messenger диагностика"),
+    PolicyResource("ui:settings:messenger:analytics", "page", "Settings: messenger аналитика"),
+    PolicyResource(
+        "ui:settings:messenger:inbox:edit",
+        "action",
+        "Settings: messenger редактирование inbox",
+        sensitive=True,
+    ),
+    PolicyResource(
+        "ui:settings:messenger:routing:list",
+        "page",
+        "Settings: messenger маршрутизация (список)",
+    ),
+    PolicyResource(
+        "ui:settings:messenger:routing:edit",
+        "action",
+        "Settings: messenger маршрутизация (редактировать)",
+    ),
+    PolicyResource(
+        "ui:settings:messenger:routing:delete",
+        "action",
+        "Settings: messenger маршрутизация (удалить)",
+        sensitive=True,
+    ),
+    PolicyResource(
+        "ui:settings:messenger:canned:list",
+        "page",
+        "Settings: messenger шаблоны (список)",
+    ),
+    PolicyResource(
+        "ui:settings:messenger:canned:edit",
+        "action",
+        "Settings: messenger шаблоны (редактировать)",
+    ),
+    PolicyResource(
+        "ui:settings:messenger:canned:delete",
+        "action",
+        "Settings: messenger шаблоны (удалить)",
+        sensitive=True,
+    ),
+    PolicyResource("ui:settings:messenger:campaigns", "page", "Settings: messenger кампании"),
+    PolicyResource("ui:settings:messenger:automation", "page", "Settings: messenger автоматизация"),
+    # Mail (SMTP) admin (5).
+    # Namespace decision: use ui:settings:mail:* для consistency с blanket
+    # ui:settings:* → admin-only default pattern. Existing ui:mail:smtp_settings
+    # + ui:mail:settings:update остаются registered для legacy compat — они
+    # имеют explicit admin-only rule в engine (line 251-252) но не привязаны
+    # к W2.1.4.3 codification.
+    PolicyResource("ui:settings:mail:setup", "page", "Settings: почта SMTP (страница)"),
+    PolicyResource(
+        "ui:settings:mail:save_password",
+        "action",
+        "Settings: почта SMTP (сохранить пароль)",
+        sensitive=True,
+    ),
+    PolicyResource(
+        "ui:settings:mail:test_send",
+        "action",
+        "Settings: почта SMTP (test send)",
+    ),
+    PolicyResource(
+        "ui:settings:mail:save_config",
+        "action",
+        "Settings: почта SMTP (сохранить конфиг)",
+        sensitive=True,
+    ),
+    PolicyResource(
+        "ui:settings:mail:toggle_enabled",
+        "action",
+        "Settings: почта (переключить массовую отправку)",
+        sensitive=True,
+    ),
     # ---- DRF API actions ----
     PolicyResource("api:companies:list", "action", "API: компании (list)"),
     PolicyResource("api:companies:retrieve", "action", "API: компании (retrieve)"),
