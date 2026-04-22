@@ -443,6 +443,7 @@ def settings_mobile_device_detail(request: HttpRequest, pk) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:calls:stats")
 def settings_calls_stats(request: HttpRequest) -> HttpResponse:
     """
     Статистика звонков по менеджерам за день/месяц.
@@ -451,12 +452,24 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
     - Админ/суперпользователь: видит всех менеджеров
     - Руководитель отдела (SALES_HEAD): видит менеджеров своего филиала
     - Директор филиала (BRANCH_DIRECTOR): видит менеджеров своего филиала
+    - Управляющий группой компаний (GROUP_MANAGER): видит менеджеров своего филиала
     - Менеджер (MANAGER): видит только свои звонки
     """
-    # Разрешаем доступ менеджерам, руководителям и админам
+    # W2.1.4.4: role-mixed endpoint. Decorator resolves через explicit
+    # PolicyRule seeds (migration 0004_w2144_call_stats_rules) ALLOW для
+    # 5 ролей: manager, sales_head, branch_director, group_manager, admin.
+    # TENDERIST denied через blanket ui:settings:* default.
+    # Inline role check preserved as defense-in-depth + expanded с GROUP_MANAGER
+    # per user decision.
     if (
         request.user.role
-        not in [User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR, User.Role.ADMIN]
+        not in [
+            User.Role.MANAGER,
+            User.Role.SALES_HEAD,
+            User.Role.BRANCH_DIRECTOR,
+            User.Role.GROUP_MANAGER,
+            User.Role.ADMIN,
+        ]
         and not request.user.is_superuser
     ):
         messages.error(request, "Доступ запрещён.")
@@ -744,14 +757,22 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:calls:manager_detail")
 def settings_calls_manager_detail(request: HttpRequest, user_id: int) -> HttpResponse:
     """
     Детальный список звонков конкретного менеджера за период (drill-down из статистики).
     """
-    # Разрешаем доступ менеджерам, руководителям и админам
+    # W2.1.4.4: role-mixed endpoint (см. settings_calls_stats выше).
+    # Inline check + GROUP_MANAGER expansion per user decision.
     if (
         request.user.role
-        not in [User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR, User.Role.ADMIN]
+        not in [
+            User.Role.MANAGER,
+            User.Role.SALES_HEAD,
+            User.Role.BRANCH_DIRECTOR,
+            User.Role.GROUP_MANAGER,
+            User.Role.ADMIN,
+        ]
         and not request.user.is_superuser
     ):
         messages.error(request, "Доступ запрещён.")
