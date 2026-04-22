@@ -494,3 +494,148 @@ Risk: script-src-attr violations при admin interactions с этими
 - Temp user `browser_2b_1776882094247040907` **DELETED** (uid=67, totp=1).
 - Orphan check: 0 remaining `browser_2b_*` users, 0 TOTP devices.
 - Post-fix CSP violations (10-min window, 147 HTTP requests): **0**.
+
+---
+
+## Phase 2c — Extended HIGH priority coverage — 2026-04-22 ~18:35–19:15 UTC
+
+### Rationale
+
+Staging не имеет других пользователей → natural "48h monitoring" window
+не даёт additional data. Вместо calendar wait — proactive Browser MCP
+tour focused на pages с highest expected handler count per W2.3.0 grep.
+
+### Method
+
+Browser MCP (Playwright) с temporary admin + preflight-created
+disposable inbox. Для каждой priority template: click every
+`[onclick]` element и dispatch change на `[onchange]` selects (без
+фактической commit destructive actions).
+
+### Priority pages visited
+
+| Template | Grep handlers | Fired count | Violations reported |
+|----------|--------------:|------------:|--------------------:|
+| `ui/mail/campaign_detail.html` | 14 | 4+ | 2 (script-src-attr) |
+| `ui/settings/user_form.html` | 5 | 4 (after magic link gen) | 1 |
+| `ui/settings/messenger_inbox_form.html` | 5 | 3 | 1 |
+| `ui/settings/error_log.html` | 5 | 20 (10 rows × 2 btns) | 1 |
+| **Total** | **29** | **31+** | **5 unique reports** |
+
+**Note**: browsers throttle CSP report submissions per page — 5 reports ≠ 5
+violation events. Actual violation count = every `[onclick]` fired above.
+5 reports — это 5 unique (page, directive) tuples.
+
+Secondary visits: `/admin/dicts/`, `/admin/messenger/automation/`,
+`/mail/campaigns/` — 0 violations (no inline handlers on those pages
+или not triggered by passive viewing).
+
+### Decision: Scenario B — extract all 4 files
+
+Rationale: W2.3.0 grep inventory полностью enumerated these. 29 handlers
+известны точно — нет смысла defer к W9 если можем закрыть сейчас.
+Остаётся только ~37 handlers в tail templates (500/404, analytics_user,
+campaign_row partials и т.п.) — still defer к W9.
+
+### Extraction — 4 commits
+
+| # | File | Handlers | JS module (LOC) | Commit |
+|---|------|---------:|----------------:|:------:|
+| 1 | `settings/error_log.html` | 5 onclick | `pages/error_log.js` (156) | `b9edd3f2` |
+| 2 | `settings/messenger_inbox_form.html` | 3 onclick + 2 onsubmit | `pages/messenger_inbox_form.js` (51) | `f9e636bf` |
+| 3 | `settings/user_form.html` | 5 onclick | `pages/user_form.js` (53) | `aa954506` |
+| 4 | `mail/campaign_detail.html` | 3 onclick + 5 onsubmit + 5 onchange + 1 stopPropagation | `pages/mail_campaign_detail.js` (101) | `9bfa7e25` |
+| **Total** | **4 templates** | **29 handlers** | **361 LOC** | |
+
+### Pattern applied
+
+- `onclick="fn()"` → `data-action="..."` + delegated click listener.
+- `onsubmit="return confirm('<msg>');"` → `data-confirm="<msg>"` + delegated submit listener.
+- `onchange="..."` → `data-action="..."` + delegated change listener.
+- `onclick="event.stopPropagation()"` → `data-stop-propagation` + handler in delegated click listener.
+
+Functions declared в inline `<script nonce>` (CSP-compliant) остаются на
+месте т.к. используют Django template variables. Delegated listeners
+routing только через `window.*` calls — keeps template logic intact.
+
+### Re-tour verification (post-fix, fresh admin session)
+
+Action-by-action:
+- `/admin/error-log/` — `data-action="show-error-details"` click → modal opens ✅ → `close-error-details` click → hides ✅.
+- `/admin/messenger/inboxes/1/` — `data-action="copy-code"` click → native `alert('Код скопирован')` fires (window.copyCode executed) ✅.
+- `/admin/users/68/edit/` (после magic link regen) — `switch-access-key-tab` "link" → shows link content, hides token ✅; back to "token" ✅.
+- `/mail/campaigns/<id>/` — `open-generate-modal` → modal visible ✅; `close-generate-modal` → hidden ✅.
+
+**CSP violation count post-fix (10-min window)**: **0** (all directives).
+
+### Phase 2 total (2a + 2b + 2c)
+
+| Phase | Fix | Handlers/violations eliminated |
+|-------|-----|-------------------------------:|
+| 2a | `v2_modal.html::runScripts()` nonce + meta tag | 3 script-src-elem + 2 script-src-attr collateral |
+| 2b | login.html (2) + mail/campaigns.html (3) | 5 (login tab + campaigns filter) |
+| 2c | error_log (5) + messenger_inbox_form (5) + user_form (5) + campaign_detail (14) | 29 |
+| **Total** | | **~39 CSP violation sources eliminated** |
+
+### Remaining deferred (W9 scope)
+
+~37 handlers в rarely-visited templates:
+
+| Template | Handlers |
+|----------|---------:|
+| `ui/company_list_rows.html` | 3 |
+| `ui/analytics_user.html` | 3 |
+| `ui/settings/messenger_automation.html` | 2 |
+| `ui/preferences.html` | 2 |
+| `ui/partials/company_detail_notes_panel_modern.html` | 2 |
+| `ui/mail/_campaign_row.html` | 2 |
+| `ui/_v2/task_edit_partial.html` | 2 |
+| `500.html` | 2 |
+| `ui/settings/messenger_routing_list.html` | 1 |
+| `ui/settings/messenger_inbox_ready.html` | 1 |
+| `ui/settings/messenger_canned_list.html` | 1 |
+| `ui/settings/messenger_campaigns.html` | 1 |
+| `ui/settings/activity.html` | 1 |
+| `ui/mail/admin.html` | 1 |
+| `ui/base.html` | 1 |
+| `ui/_v2/task_view_partial.html` | 1 |
+| `ui/_v2/task_create_partial.html` | 1 |
+| `404.html` | 1 |
+| **Sum** | **~37** |
+
+Risk assessment: **LOW**. Most are partials embedded в уже-touched
+pages (task_*_partial → via company detail), error pages (404/500),
+или rarely-visited admin subpages. Strict CSP flip surfaces any
+triggered violation via report-only shadow (kept 7d post-flip) →
+iterative fix if encountered.
+
+### Phase 3 readiness verdict
+
+✅ **READY for immediate flip** (пропуск 48h calendar wait).
+
+Justification:
+- All observed violations eliminated (8 unique sources fixed).
+- Priority 1-4 templates (29 handlers) proactively extracted без reactive
+  wait for user to break them.
+- Report-only policy сохраняется 7d post-flip — safety net для deferred
+  ~37 handlers в tail templates.
+- Staging has no other users → 48h wait provides zero additional data;
+  proactive tour уже delivered максимальное coverage.
+
+Phase 3 flip checklist:
+- [x] 2a deployed + verified (0 script-src-elem from modal flow).
+- [x] 2b deployed + verified (0 script-src-attr from login + campaigns).
+- [x] 2c deployed + verified (0 violations after 4-template extraction).
+- [x] Proactive admin-page tour completed.
+- [ ] Flip `Content-Security-Policy` (current `-Report-Only`) — ready when user approves.
+- [ ] Keep report-only в parallel 7 days for regression detection.
+
+### Session artifacts (Phase 2c)
+
+- Code: 4 commits (`b9edd3f2`, `f9e636bf`, `aa954506`, `9bfa7e25`) — 4 templates + 4 new JS files, ~379 insertions net.
+- Tests: 1320 passing (CI green на all 4 commits).
+- Smoke: 6/6 post-deploy.
+- Temp admins: `browser_2c_1776883276520479275` (uid=68, totp=1) + `browser_2cv_1776884915765490349` (uid=69, totp=1) **DELETED**.
+- Disposable inbox: `browser_2c_disposable` (id=1) **DELETED**.
+- Orphan check: 0 remaining `browser_2c*` users, 0 inboxes, 0 TOTP devices.
+- Post-fix violations (10-min re-tour window): **0**.
