@@ -2381,8 +2381,16 @@ def _v2_load_task_for_user(user: User, task_id) -> Task:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:tasks:detail")
 def task_view_v2_partial(request: HttpRequest, task_id) -> HttpResponse:
-    """v2 partial endpoint: просмотр задачи в модалке (только GET)."""
+    """v2 partial endpoint: просмотр задачи в модалке (только GET).
+
+    W2.1.3b: @policy_required(ui:tasks:detail) added — same resource as
+    `task_view` (existing). Inline `_v2_load_task_for_user()` с
+    `raise PermissionDenied()` остаётся as defense-in-depth — это
+    role-based visibility (admin/group_manager → any, manager →
+    assigned/created/responsible, branch_director/sales_head → branch scope).
+    """
     user: User = request.user
     task = _v2_load_task_for_user(user, task_id)
 
