@@ -1318,7 +1318,9 @@ def settings_company_status_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:dicts:company_sphere:create")
 def settings_company_sphere_create(request: HttpRequest) -> HttpResponse:
+    # W2.1.4.2: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -1421,8 +1423,10 @@ def settings_company_status_delete(request: HttpRequest, status_id: int) -> Http
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:dicts:company_sphere:edit")
 def settings_company_sphere_edit(request: HttpRequest, sphere_id: int) -> HttpResponse:
     """Редактирование сферы компании через модалку (AJAX)"""
+    # W2.1.4.2: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
     sphere = get_object_or_404(CompanySphere, id=sphere_id)
@@ -1449,8 +1453,10 @@ def settings_company_sphere_edit(request: HttpRequest, sphere_id: int) -> HttpRe
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:dicts:company_sphere:delete")
 def settings_company_sphere_delete(request: HttpRequest, sphere_id: int) -> HttpResponse:
     """Удаление сферы компании (с возможностью слияния)"""
+    # W2.1.4.2: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
 
