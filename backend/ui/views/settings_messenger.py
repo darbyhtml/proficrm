@@ -983,10 +983,12 @@ def settings_messenger_routing_delete(request: HttpRequest, rule_id: int) -> Htt
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:messenger:canned:list")
 def settings_messenger_canned_list(request: HttpRequest) -> HttpResponse:
     """
     Список шаблонных ответов.
     """
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -1007,10 +1009,12 @@ def settings_messenger_canned_list(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:messenger:canned:edit")
 def settings_messenger_canned_edit(request: HttpRequest, response_id: int = None) -> HttpResponse:
     """
     Создание/редактирование шаблонного ответа.
     """
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -1069,10 +1073,12 @@ def settings_messenger_canned_edit(request: HttpRequest, response_id: int = None
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:messenger:canned:delete")
 def settings_messenger_canned_delete(request: HttpRequest, response_id: int) -> HttpResponse:
     """
     Удаление шаблонного ответа.
     """
+    # W2.1.4.3: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
