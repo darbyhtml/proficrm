@@ -13,19 +13,21 @@
     <div class="w-full max-w-md bg-white border border-brand-soft rounded-2xl shadow-sm overflow-hidden">
       <!-- Вкладки -->
       <div class="flex border-b border-brand-soft">
-        <button 
+        <button
           type="button"
           id="tab-access-key"
           class="flex-1 px-4 py-3 text-sm font-medium text-center transition-colors bg-brand-teal text-white"
-          onclick="switchTab('access-key')"
+          data-action="switch-tab"
+          data-tab="access-key"
         >
           По ключу доступа
         </button>
-        <button 
+        <button
           type="button"
           id="tab-password"
           class="flex-1 px-4 py-3 text-sm font-medium text-center transition-colors text-brand-dark/60 hover:text-brand-dark hover:bg-brand-soft/20"
-          onclick="switchTab('password')"
+          data-action="switch-tab"
+          data-tab="password"
         >
           По логину и паролю
         </button>
@@ -85,48 +87,7 @@
       </div>
     </div>
 
-    <script nonce="{{ csp_nonce }}">
-      function switchTab(tab) {
-        const accessKeyTab = document.getElementById('tab-access-key');
-        const passwordTab = document.getElementById('tab-password');
-        const accessKeyForm = document.getElementById('form-access-key');
-        const passwordForm = document.getElementById('form-password');
-        const description = document.getElementById('login-description');
-
-        if (tab === 'access-key') {
-          // Активируем вкладку "По ключу доступа"
-          accessKeyTab.classList.remove('text-brand-dark/60', 'hover:text-brand-dark', 'hover:bg-brand-soft/20');
-          accessKeyTab.classList.add('bg-brand-teal', 'text-white');
-          passwordTab.classList.remove('bg-brand-teal', 'text-white');
-          passwordTab.classList.add('text-brand-dark/60', 'hover:text-brand-dark', 'hover:bg-brand-soft/20');
-          
-          accessKeyForm.classList.remove('hidden');
-          passwordForm.classList.add('hidden');
-          description.textContent = 'Вставьте ключ доступа, полученный от администратора';
-          
-          // Фокус на поле ключа
-          const accessKeyInput = accessKeyForm.querySelector('input[name="access_key"]');
-          if (accessKeyInput) {
-            accessKeyInput.focus();
-          }
-        } else {
-          // Активируем вкладку "По логину и паролю"
-          passwordTab.classList.remove('text-brand-dark/60', 'hover:text-brand-dark', 'hover:bg-brand-soft/20');
-          passwordTab.classList.add('bg-brand-teal', 'text-white');
-          accessKeyTab.classList.remove('bg-brand-teal', 'text-white');
-          accessKeyTab.classList.add('text-brand-dark/60', 'hover:text-brand-dark', 'hover:bg-brand-soft/20');
-          
-          passwordForm.classList.remove('hidden');
-          accessKeyForm.classList.add('hidden');
-          description.textContent = 'Вход по логину и паролю (только для администраторов)';
-          
-          // Фокус на поле логина
-          const usernameInput = passwordForm.querySelector('input[name="username"]');
-          if (usernameInput) {
-            usernameInput.focus();
-          }
-        }
-      }
-    </script>
+    {# W2.3 Phase 2b: switchTab() извлечён в pages/login.js; inline on*= удалены. #}
+    <script src="{% static 'ui/js/pages/login.js' %}" nonce="{{ csp_nonce }}"></script>
   </body>
 </html>
