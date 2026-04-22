@@ -398,3 +398,99 @@ handlers, ~1.5h). Priority 3-5 defer к W9. Rationale:
 - Orphan check: 0 remaining `browser_tour_*` users, 0 TOTP devices.
 - No code changes (read-only tour + audit doc update).
 - 2 violations fully classified; grep inventory cross-validated.
+
+---
+
+## Phase 2b — Handler extraction (2 files, 5 handlers) — 2026-04-22 ~18:10–18:30 UTC
+
+### Scope
+
+Priority 1-2 handlers из W2.3 Phase 2a findings извлечены в external JS
+модули с delegated listeners (W1.3 pattern). Priority 3-5 (campaign_detail
++ settings forms + tail ~61 handlers) — defer к W9 UX redesign.
+
+### Files modified
+
+| Файл | Было | Стало |
+|------|------|-------|
+| `backend/templates/registration/login.html` | 2 inline `onclick="switchTab(...)"` + inline `<script nonce>` блок с `function switchTab` | `data-action="switch-tab"` data-tab атрибут + `<script src="pages/login.js" nonce>` |
+| `backend/templates/ui/mail/campaigns.html` | 2× `onchange="this.form.submit()"` на filter selects + `onclick="window.__refreshQuota..."` | `data-action="filter-submit"` / `data-action="quota-refresh"` атрибуты + `<script src="pages/mail_campaigns.js" nonce>` |
+
+### JS modules created
+
+| Файл | LOC | Exports | Delegated patterns |
+|------|----:|---------|--------------------|
+| `backend/static/ui/js/pages/login.js` | 92 | IIFE, no globals | `click` → `[data-action="switch-tab"]` → `switchTab(data-tab)` |
+| `backend/static/ui/js/pages/mail_campaigns.js` | 37 | IIFE, no globals | `change` → `[data-action="filter-submit"]` → `form.submit()`; `click` → `[data-action="quota-refresh"]` → `window.__refreshQuota(true)` |
+
+Zero behavior change — логика `switchTab` (focus + classes + description
+text) + filter auto-submit + quota manual refresh идентичны до/после.
+
+### Commits
+
+- `19703f94` — `fix(csp): W2.3 Phase 2b extract login.html inline handlers`
+- `7da6c835` — `fix(csp): W2.3 Phase 2b extract mail/campaigns.html inline handlers`
+
+### Browser MCP re-verification
+
+Tool: Playwright Browser MCP. Temp admin `browser_2b_1776882094247040907`
+(user_id=67, device_id=3) — создан, использован, удалён. 0 orphans.
+
+**Действия в браузере**:
+1. `/login/` — переключение табов: access-key → password → access-key → password. Тумба работает визуально (form/description/focus меняются).
+2. Password login submit → `/accounts/2fa/verify/` → TOTP submit → `/` (dashboard).
+3. `/mail/campaigns/` — `select[name="branch"]` dispatch `change` event → URL изменился на `?branch=1` (delegated submit сработал).
+4. `/` + `/tasks/` + повторный визит `/mail/campaigns/` — routine navigation.
+
+**HTTP traffic**: 147 запросов за 10-min post-deploy window (реальный
+workflow, не idle).
+
+**Result**:
+
+| Metric | Pre-2b (tour) | Post-2b (verify) |
+|--------|--------------:|-----------------:|
+| script-src-elem violations | 0 | **0** |
+| script-src-attr violations | 2 | **0** |
+| Total CSP violations | 2 | **0** |
+
+### Phase 2 total accounting
+
+| Phase | Fix | Violations eliminated |
+|-------|-----|----------------------:|
+| 2a | `v2_modal.html::runScripts()` nonce propagation + meta tag | 3 script-src-elem (modal-driven) + 2 collateral script-src-attr |
+| 2b | Extract `login.html` (2) + `campaigns.html` (3) | 2 script-src-attr (login tab + campaigns filter) |
+| **Total** | | **7 unique CSP violations eliminated** |
+
+Deferred к W9 UX redesign: **61 grep-listed inline handlers** в 9
+templates (campaign_detail 14, user_form 5, messenger_inbox_form 5,
+error_log 5, users 4, company_list_rows 3, analytics_user 3,
+messenger_automation 2, preferences 2 + остальные partials/500/404).
+Risk: script-src-attr violations при admin interactions с этими
+страницами в Phase 3 strict enforce. Mitigation: report-only policy
+сохраняется 7 дней после flip для обнаружения — iterative fix.
+
+### Phase 3 readiness — UPDATED
+
+- ✅ runScripts nonce propagation (2a).
+- ✅ Main user paths (`/`, `/tasks/`, `/companies/`, `/mail/campaigns/`,
+  login flow): clean после 2b.
+- ✅ Public endpoint `/login/` clean — tab switcher работает.
+- ⏳ Admin pages с static handlers: defer к iterative / W9.
+- ✅ 48h monitoring window активен (started 17:05 UTC 2026-04-22).
+- **Earliest Phase 3 flip: 2026-04-24 ~17:05 UTC**.
+
+**Phase 3 gate checklist**:
+- [x] 2a deployed + verified (0 script-src-elem).
+- [x] 2b deployed + verified (0 script-src-attr на main paths).
+- [ ] 48h monitoring in report-only — no new unexpected sources.
+- [ ] Pre-flip final Browser MCP tour (admin pages + quick priority 3 spot-checks).
+- [ ] Feature-flag guard для rollback (Content-Security-Policy vs -Report-Only switch via django-waffle).
+
+### Session artifacts (Phase 2b)
+
+- Code: `19703f94` + `7da6c835` (login.html, campaigns.html, +2 new JS files, 143 lines net).
+- Tests: 1320 passing (CI green на both commits).
+- Smoke: 6/6 pre+post deploy.
+- Temp user `browser_2b_1776882094247040907` **DELETED** (uid=67, totp=1).
+- Orphan check: 0 remaining `browser_2b_*` users, 0 TOTP devices.
+- Post-fix CSP violations (10-min window, 147 HTTP requests): **0**.
