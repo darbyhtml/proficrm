@@ -264,3 +264,137 @@ Alternative: script-src-attr may reappear на future retest когда admin vi
 - Code changes: `d02f8230` (base.html + v2_modal.html — 18 lines net).
 - Baseline preserved: 1320 tests OK, smoke 6/6.
 - CSP monitoring continues.
+
+---
+
+## Extended admin tour — 2026-04-22, ~17:56–18:03 UTC
+
+### Методика
+
+Browser MCP (Playwright) прошёлся по **22 admin/settings URL** с временным
+admin-юзером (`browser_tour_1776879969215055742`, user_id=66, 2FA
+verified). После тура юзер + AdminTOTPDevice удалены (`DELETED user_id=66
+username=browser_tour_1776879969215055742 totp_devices=1`, 0 orphans).
+
+### Посещённые URL (22)
+
+`/`, `/analytics/`, `/companies/`, `/settings/`, `/settings/users/`
+(404 — reroute), `/admin/`, `/admin/access/`, `/admin/activity/`,
+`/admin/announcements/`, `/admin/branches/`, `/admin/calls/stats/`,
+`/admin/company-columns/`, `/admin/dicts/`, `/admin/error-log/`,
+`/admin/import/`, `/admin/mail/setup/`, `/admin/messenger/`,
+`/admin/messenger/automation/`, `/admin/messenger/campaigns/`,
+`/admin/mobile/overview/`, `/admin/security/`, `/admin/users/`,
+`/admin/users/new/`, `/mail/campaigns/`, `/mail/campaigns/<id>/`.
+
+Каждая страница: `browser_navigate` → wait 4-5s → следующая (reasonable idle
+per page для CSP reports).
+
+### Результат: **2 violations на 22 страницах**
+
+| # | Time UTC | Document | Directive | Line |
+|---|----------|----------|-----------|------|
+| 1 | 17:48:23 | `/login/` | script-src-attr | 29 |
+| 2 | 17:57:10 | `/mail/campaigns/` | script-src-attr | 429 |
+
+**0 violations script-src-elem** (runScripts fix holds после модал-
+интеракций в campaign detail).
+
+### Root cause confirmed via grep
+
+**`/login/:29`** → `backend/templates/registration/login.html` lines 20, 28:
+```html
+<button ... onclick="switchTab('access-key')">
+<button ... onclick="switchTab('password')">
+```
+
+**`/mail/campaigns/:429`** → `backend/templates/ui/mail/campaigns.html`:
+```html
+line 101: <button ... onclick="window.__refreshQuota && window.__refreshQuota(true)">
+line 162: <select name="branch" ... onchange="this.form.submit()">
+line 170: <select name="manager" ... onchange="this.form.submit()">
+```
+
+Один из трёх триггернул violation (мы не знаем точно какой — browser
+line-number ≠ template line). Но источник локализован в одном файле.
+
+### Коррекция W2.3.0 grep inventory vs tour реальности
+
+| Template | Grep handlers | Страница посещалась | Triggered violation |
+|----------|--------------:|:-------------------:|:-------------------:|
+| `mail/campaign_detail.html` | 14 | ✅ (navigated) | ❌ (no interaction) |
+| `settings/user_form.html` | 5 | ✅ (via /admin/users/new/) | ❌ (no form interaction) |
+| `settings/messenger_inbox_form.html` | 5 | ❌ | — |
+| `settings/error_log.html` | 5 | ✅ | ❌ (no filter interaction) |
+| `settings/users.html` | 4 | ✅ | ❌ (no row action) |
+| `mail/campaigns.html` | 3 | ✅ | ✅ (line 429) |
+| `company_list_rows.html` | 3 | ✅ (modal) | ❌ |
+| `analytics_user.html` | 3 | ❌ (/analytics/ only) | — |
+| `settings/messenger_automation.html` | 2 | ✅ | ❌ |
+| `preferences.html` | 2 | ❌ | — |
+| `registration/login.html` | 2 | ✅ (forced) | ✅ (line 29) |
+
+**Ключевое наблюдение**: `script-src-attr` violation возникает
+**только при реальной interaction** (click, change, focus), не при page
+load. Passive tour не покрывает все handler-bearing templates — нужен
+либо active admin user flow, либо proactive extraction.
+
+### Phase 2b scope classification
+
+**Verdict: SMALL/MEDIUM** — ~66 inline handlers в 11 файлах, полностью
+enumerated через grep. Итеративный подход (fix only when reported) может
+пропустить handlers в rarely-used pages → риск breaking strict CSP при
+деплое.
+
+**Priority ordering** (по observed + static risk):
+
+1. **CRITICAL — `login.html` (2 handlers)**: blocks strict CSP (password
+   login broken — confirmed during our own login).
+2. **HIGH — `mail/campaigns.html` (3 handlers)**: main feature, actively
+   triggered violation in tour.
+3. **HIGH — `mail/campaign_detail.html` (14 handlers)**: highest handler
+   count, high-traffic page.
+4. **MEDIUM — settings forms (user_form, messenger_inbox_form, 10
+   handlers)**: admin CRUD (rare but breaks when used).
+5. **LOW — tail** (error_log, users, messenger_automation, preferences,
+   company_list_rows, analytics_user, campaign_row, task_view/edit/create
+   partials, base.html, 404/500 — ~30 handlers): defer к W9 UX.
+
+### Recommended Phase 2b plan
+
+**Option A (minimal, ~1.5h)**: fix priority 1-2 only (`login.html` +
+`mail/campaigns.html`, 5 handlers). Unblocks Phase 3 switch для user
+login flow + main mail page. Остальное — iterative.
+
+**Option B (thorough, ~3-5h)**: extract priority 1-5 (66 handlers,
+11 templates) proactively. Pattern: `onXXX="handler()"` → `data-action`
++ delegated listener на document or scoped root. Aligns с W9 UX naturally
+(redesign will rewrite these files anyway).
+
+**Recommendation**: **Option A for Phase 2b** (priority 1-2 only, 5
+handlers, ~1.5h). Priority 3-5 defer к W9. Rationale:
+- Priority 1-2 blocks observable user paths (login + mail).
+- Priority 3-5 requires admin user actions, which are rare and flagged
+  by report-only mode if triggered.
+- Strict CSP switch (Phase 3) can proceed safely после Option A:
+  report-only continues collecting data from admin pages, admin can
+  self-report breakage.
+
+### Phase 3 readiness
+
+- ✅ runScripts nonce propagation verified.
+- ✅ Main user paths (`/`, `/tasks/`, `/companies/`, `/mail/campaigns/`
+  after Option A fix, modal flows): clean.
+- ⚠️ Login page `switchTab` needs fix before flip (otherwise password
+  login visually broken).
+- ⏳ Admin pages с static handlers: defer к iterative / W9.
+- Suggested Phase 3 gate: Option A deployed → 24h clean monitoring → flip
+  enforce → keep report-only 7 days as safety net.
+
+### Session artifacts (tour)
+
+- Temp user: `browser_tour_1776879969215055742` (id=66) **DELETED** post-tour.
+- TOTP device: 1 linked device **DELETED** (cascaded with user).
+- Orphan check: 0 remaining `browser_tour_*` users, 0 TOTP devices.
+- No code changes (read-only tour + audit doc update).
+- 2 violations fully classified; grep inventory cross-validated.
