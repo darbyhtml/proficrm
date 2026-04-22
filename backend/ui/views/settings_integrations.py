@@ -27,6 +27,7 @@ from ui.views._base import (
     messages,
     models,
     os,
+    policy_required,
     redirect,
     render,
     require_admin,
@@ -43,7 +44,9 @@ logger = logging.getLogger(__name__)
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:data:import_companies")
 def settings_import(request: HttpRequest) -> HttpResponse:
+    # W2.1.4.4: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -100,7 +103,9 @@ def settings_import(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:data:import_tasks")
 def settings_import_tasks(request: HttpRequest) -> HttpResponse:
+    # W2.1.4.4: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -168,7 +173,9 @@ def settings_import_tasks(request: HttpRequest) -> HttpResponse:
 
 # UI settings (admin only)
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:company_columns")
 def settings_company_columns(request: HttpRequest) -> HttpResponse:
+    # W2.1.4.4: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -188,7 +195,9 @@ def settings_company_columns(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:security")
 def settings_security(request: HttpRequest) -> HttpResponse:
+    # W2.1.4.4: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -231,12 +240,14 @@ def settings_security(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:mobile_devices:list")
 def settings_mobile_devices(request: HttpRequest) -> HttpResponse:
     """
     Админский список устройств мобильного приложения.
     Только чтение, без действий. Используется для раздела
     «Настройки → Мобильное приложение».
     """
+    # W2.1.4.4: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -288,11 +299,13 @@ def settings_mobile_devices(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:mobile_devices:overview")
 def settings_mobile_overview(request: HttpRequest) -> HttpResponse:
     """
     Overview dashboard для мобильных устройств: карточки с метриками,
     проблемы за сутки, алерты.
     """
+    # W2.1.4.4: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -395,12 +408,14 @@ def settings_mobile_overview(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:mobile_devices:detail")
 def settings_mobile_device_detail(request: HttpRequest, pk) -> HttpResponse:
     """
     Детали конкретного устройства мобильного приложения:
     последние heartbeat/telemetry и бандлы логов.
     Только для админов.
     """
+    # W2.1.4.4: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
