@@ -1277,7 +1277,9 @@ def settings_user_delete(request: HttpRequest, user_id: int) -> JsonResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:settings:dicts")
 def settings_dicts(request: HttpRequest) -> HttpResponse:
+    # W2.1.4.2: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
