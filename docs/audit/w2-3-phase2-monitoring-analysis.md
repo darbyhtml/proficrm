@@ -204,9 +204,63 @@ Recommendation: **defer** — align с iterative rollout pattern.
 
 ---
 
+## Sub-session 2a — Post-retest results (2026-04-22, ~17:05–17:25 UTC)
+
+### Fix deployed (`d02f8230`)
+
+- `backend/templates/ui/base.html`: `<meta name="csp-nonce" content="{{ request.csp_nonce }}">` добавлен в `<head>`.
+- `backend/templates/ui/_v2/v2_modal.html::runScripts()`: reads meta → `setAttribute('nonce', value)` на clone + preserves type/src attrs.
+
+### Retest session
+
+- **Duration**: 5-10 min active browsing (17:05–17:25 UTC).
+- **Container state**: fresh, up 20 min от deploy time.
+- **HTTP activity**: 344 requests recorded в web container logs (last 30m) — active user session, не idle check.
+- **Pages exercised**: dashboard + companies list + tasks + multiple modals (per user report).
+
+### Violation comparison
+
+| Directive | Pre-fix (initial monitoring) | Post-fix (2a retest) | Delta |
+|-----------|------------------------------|----------------------|-------|
+| script-src-elem | 3 | **0** | **−3** ✅ (target met) |
+| script-src-attr | 2 | **0** | **−2** ✅ (bonus) |
+| **Total** | **5** | **0** | **−5** |
+
+### Analysis
+
+**script-src-elem elimination** — expected primary outcome. Meta-tag-based nonce propagation works: runScripts() clones получают nonce attribute, strict CSP matches inline modal scripts.
+
+**script-src-attr elimination** — unexpected but welcome. Hypothesis: original 2 violations related к same modal flow:
+- When `runScripts()` был blocked (script-src-elem), the would-be attached event handlers never ran → browser reported attribute-level violation on later interaction.
+- После fix, cloned scripts execute normally, attaching handlers через addEventListener (which is CSP-compliant) → script-src-attr не triggers.
+
+Alternative: script-src-attr may reappear на future retest когда admin visits pages с raw `onclick=` attributes в static HTML (e.g., `mail/campaign_detail.html` 14 handlers). Current retest didn't посетить those admin pages.
+
+### Verdict: **SUCCESS**
+
+- **Primary goal met**: all 3 runScripts-related violations eliminated.
+- **Secondary bonus**: script-src-attr also dropped to 0 in retest window.
+- **Single-point fix** без regressions в modal functionality (user completed 344 requests without errors).
+
+### Remaining Phase 2 work
+
+**Sub-session 2b — script-src-attr re-investigation**:
+- Current retest session showed 0 violations, но тест не покрыл admin pages с известными handlers.
+- Recommend: admin visits mail/campaign_detail.html + settings/* pages → collect new violation data → targeted fix.
+- Alternative: defer proactive cleanup к W9 UX redesign (aligns naturally).
+
+**Sub-session 2c (optional)**: proactive extraction of 60+ grep-listed handlers — defer к W9.
+
+**Phase 3 — strict enforce switch**:
+- Required: 48h clean monitoring + admin pages cleanup либо scope limitation.
+- Current monitoring window (20 min) too short для confidence.
+- Next check milestone: 24h window → review violation rate.
+
+---
+
 ## Session artifacts
 
-- Docs only: this file.
-- Zero code changes.
+- Docs only: this file (updated 2026-04-22 17:25 UTC с post-retest results).
+- Code changes: `d02f8230` (base.html + v2_modal.html — 18 lines net).
 - Baseline preserved: 1320 tests OK, smoke 6/6.
-- CSP monitoring continues — new violations as user browses further.
+- CSP monitoring continues.
