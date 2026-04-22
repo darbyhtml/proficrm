@@ -1704,8 +1704,10 @@ def settings_error_log(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:error_log:resolve")
 def settings_error_log_resolve(request: HttpRequest, error_id) -> HttpResponse:
     """Отметить ошибку как исправленную."""
+    # W2.1.4.2: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -1728,8 +1730,10 @@ def settings_error_log_resolve(request: HttpRequest, error_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:error_log:unresolve")
 def settings_error_log_unresolve(request: HttpRequest, error_id) -> HttpResponse:
     """Снять отметку об исправлении ошибки."""
+    # W2.1.4.2: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
@@ -1747,8 +1751,10 @@ def settings_error_log_unresolve(request: HttpRequest, error_id) -> HttpResponse
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:error_log:details")
 def settings_error_log_details(request: HttpRequest, error_id) -> JsonResponse:
     """AJAX endpoint для получения деталей ошибки."""
+    # W2.1.4.2: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         return JsonResponse({"error": "Доступ запрещён."}, status=403)
 
