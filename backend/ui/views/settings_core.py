@@ -1125,10 +1125,12 @@ def settings_user_logout(request: HttpRequest, user_id: int) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:users:form")
 def settings_user_form_ajax(request: HttpRequest, user_id: int) -> JsonResponse:
     """
     AJAX endpoint для получения формы редактирования пользователя (для модалки).
     """
+    # W2.1.4.1: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
 
@@ -1168,10 +1170,12 @@ def settings_user_form_ajax(request: HttpRequest, user_id: int) -> JsonResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:users:update")
 def settings_user_update_ajax(request: HttpRequest, user_id: int) -> JsonResponse:
     """
     AJAX endpoint для сохранения изменений пользователя (для модалки).
     """
+    # W2.1.4.1: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
 
@@ -1223,8 +1227,10 @@ def settings_user_update_ajax(request: HttpRequest, user_id: int) -> JsonRespons
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:settings:users:delete")
 def settings_user_delete(request: HttpRequest, user_id: int) -> JsonResponse:
     """AJAX: полное удаление пользователя. Компании остаются (responsible → NULL)."""
+    # W2.1.4.1: inline require_admin() preserved as defense-in-depth.
     if not require_admin(request.user):
         return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
 
