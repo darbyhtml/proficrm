@@ -1,5 +1,76 @@
 # Текущий спринт
 
+## [2026-04-22] — W2.6 COMPLETED — Non-admin password path disabled
+
+**Status**: ✅ `/api/token/` JWT role filter active. 17 non-admin usable passwords set unusable. Magic link = единственный auth path для non-admin. Mobile QR auth не затронута.
+
+### Delivered
+
+**Step 0 — Mobile QR auth discovery**:
+- Endpoint: `/api/phone/qr/exchange/` (phonebridge/api.py:822)
+- Auth mechanism: `RefreshToken.for_user(qr_token.user)` direct — **НЕ через `/api/token/`** password flow.
+- Affects W2.6 scope: **NO**. Orthogonal. Android app workflow preserved.
+- Documented в `docs/audit/auth-flow-current-state.md` (section "Mobile QR auth").
+
+**Step 1 — JWT role filter (`ab89c287`)**:
+- `SecureTokenObtainPairView.post`: после super().post() 200 → check is_admin. Non-admin → 403 + audit log `jwt_non_admin_blocked:<user_id>` + blacklist issued refresh token.
+- 13 новых tests (`accounts/tests_w2_6_jwt.py`): admin/superuser happy paths, 5 non-admin roles блокируются, invalid pw 401, no lockout counter, audit log created, blacklist verified, admin refresh flow preserved.
+- 112/112 accounts tests pass.
+
+**Step 2 — Staging deploy + external curl**:
+- CI зелёный (1208 + 13 = 1221 tests). Deploy workflow все 6 markers + `=== DEPLOY FULLY COMPLETED ===`.
+- External curl с моей ip:
+  - `POST /api/token/ {qa_manager, valid_pw}` → **403** `{"detail":"... доступен только для администраторов ..."}`
+  - `POST /api/token/ {qa_manager, wrong_pw}` → **401** `{"detail":"Неверные учетные данные."}`
+
+**Step 3 — Password cleanup (`57cbccfa`)**:
+- Management command `accounts/management/commands/disable_non_admin_passwords.py` с `--dry-run` / `--confirm`.
+- Dry-run на staging: confirmed 17 users (10 MANAGER + 3 BRANCH_DIRECTOR + 2 SALES_HEAD + 2 GROUP_MANAGER).
+- Applied: 17/17 `set_unusable_password()`. Verified: 0 non-admin usable + 3 admin preserved.
+
+**Step 4 — qa_manager E2E verification**:
+- **Magic link login**: fresh token → `GET /auth/magic/<token>/` → 302 to `/` → session cookie → `GET /` → 200 with "Выйти" (logged in) → `GET /companies/` → 200. ✅
+- **Web password login** (qa_manager): unusable password → `authenticate()` fails → error "Неверный логин или пароль" (defense-in-depth layer 1). ✅
+- **JWT password login** (qa_manager): 401 "Неверные учетные данные" (authenticate fails before role-filter). ✅
+
+### Security layers (defense-in-depth)
+
+| Path | Non-admin protection |
+|------|----------------------|
+| `/login/` web password | (1) authenticate() fails (unusable) OR (2) view-level role check `views.py:187` |
+| `/api/token/` JWT password | (1) authenticate() fails (unusable) OR (2) JWT role check `jwt_views.py:60+` + blacklist issued tokens |
+| `/auth/magic/<t>/` | ✅ Primary path — single-use 24h TTL, admin-generated |
+| `/api/phone/qr/exchange/` | ✅ Separate flow — 5min TTL, `RefreshToken.for_user()` direct |
+
+### Commits (3)
+
+- `ab89c287` — feat(auth): W2.6 block non-admin JWT login (role filter)
+- `57cbccfa` — chore(auth): W2.6 management command disable_non_admin_passwords
+- `890a2619` — audit: mobile QR auth flow documented for W2.6 scope decision
+
+### Quality
+
+- CI: green.
+- Staging smoke: **6/6** ✅
+- Tests: **1208 → 1221 passing** (+13 new in tests_w2_6_jwt.py).
+- Accounts regression: 112/112 pass.
+
+### W9 prod rollout plan (for future session)
+
+1. Deploy JWT role filter commit to prod tag.
+2. `python manage.py disable_non_admin_passwords --dry-run` — verify count ≤ 17 + role breakdown matches staging.
+3. `--confirm` to apply.
+4. Smoke test prod: admin login works (web + JWT), non-admin 403 on JWT, magic link workflow intact.
+
+### Pending
+
+- Android app finalization: current auth flow uses magic link session → `/mobile-app/` → QR → `/api/phone/qr/exchange/`. When ready for managers в production, consider stricter policy rule на `phone:qr:exchange`.
+- **W2.1.4**: Group A `settings_*` codification (64 endpoints, 4-6h).
+- **W2.1.5**: inline `enforce()` → `@policy_required` migration (57 locations, primarily mailer).
+- **W2.3**: CSP strict mode.
+
+---
+
 ## [2026-04-22] — W2.2 COMPLETED — TOTP 2FA enforcement ACTIVE + deploy workflow fixed
 
 **Status**: ✅ Soft-mandatory 2FA live на staging. Admin users без verified session → redirect `/accounts/2fa/verify/`. Non-admin users не затронуты.
