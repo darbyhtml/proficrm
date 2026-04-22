@@ -1,5 +1,46 @@
 # Текущий спринт
 
+## 🎯 [2026-04-22] — W2 WAVE COMPLETE — Security hardening delivered
+
+All W2 security items delivered end-to-end:
+
+| Item | Scope | Outcome |
+|------|-------|---------|
+| W2.1 | Policy engine codification | 110 endpoints with `@policy_required` decorator. |
+| W2.2 | TOTP 2FA mandatory для admins | ACTIVE. `AdminTOTPDevice` + middleware enforce. |
+| W2.3 | CSP strict mode | **FLIPPED** 2026-04-22 19:25 UTC. `script-src` без `'unsafe-inline'`. ~39 violation sources eliminated. |
+| W2.6 | Non-admin password login disabled | Magic link only для MANAGER/TENDERIST etc. |
+| W2.7 | Admin JWT password login disabled | /api/token/ requires magic link. |
+
+**Test baseline**: 1164 → 1320 (+156 new tests).
+**Coverage**: 51% → (CI verifies 50% floor; current 51-53%).
+
+### W2.3 breakdown (completed today)
+
+| Phase | Effort | Commits |
+|-------|--------|---------|
+| Phase 1 — CSP infrastructure (nonce + report endpoint + shadow) | 1h | `15f4a543` |
+| Phase 2a — Modal runScripts() nonce propagation | 30min | `d02f8230` |
+| Phase 2b — login.html + mail/campaigns.html extraction (5 handlers) | 1.5h | `19703f94`, `7da6c835` |
+| Phase 2c — 4 HIGH priority templates extraction (29 handlers) | 1.5h | `b9edd3f2`, `f9e636bf`, `aa954506`, `9bfa7e25` |
+| Phase 3 — Flip enforce к strict | 45min | `3d49ef5d` |
+| **Total W2.3** | **~5h** | 13 commits (code + audit) |
+
+Deferred к W9: ~37 rarely-visited tail handlers + 673 inline `style=""` (style-src 'unsafe-inline' preserved).
+
+Post-flip monitoring: 7-day vigilance window (started 2026-04-22 19:25 UTC).
+Safety net: shadow report-only policy logs violations если tail handler triggered.
+
+### Pre-W9 blockers still pending
+
+- **nkv Android migration** (HIGH severity) — Непеаниди Ксения (manager) sole prod /api/token/ consumer; mobile app needs magic link support перед prod deploy W2.7.
+
+### Next wave
+
+TBD — см. `docs/plan/00_MASTER_PLAN.md` (W3 candidate).
+
+---
+
 ## 🎯 [2026-04-22] — W2 CODIFICATION MILESTONE — 110 endpoints routed through policy engine
 
 All CRM access points now have `@policy_required` decorator audit layer:
