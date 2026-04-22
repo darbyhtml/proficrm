@@ -32,7 +32,13 @@ jobs:
       - name: Deploy + smoke + auto-rollback
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no root@5.181.254.172 bash -s << 'REMOTE'
-            set -eo pipefail
+            # set -euxo pipefail:
+            #   -e: exit on command error
+            #   -u: error on undefined var
+            #   -x: trace each command (visible в GitHub Actions log)
+            #   -o pipefail: pipe failures propagate
+            # Previously just `-eo pipefail` — silent partial exits possible.
+            set -euxo pipefail
             cd /opt/proficrm-staging
 
             # ------------------------------------------------------------
@@ -92,8 +98,13 @@ jobs:
             # [3/6] Migrate
             # ------------------------------------------------------------
             echo "=== [3/6] Migrate ==="
+            # -T: disable pseudo-TTY, preserves parent bash heredoc stdin.
+            # </dev/null: explicit no-stdin (belt-and-suspenders).
+            # Без этих flag docker compose run consumed heredoc stdin, что
+            # вызывало silent exit после migrate — steps 4-6 never ran,
+            # container не recreated. Discovered 2026-04-22 post-W2.2 2FA deploy.
             docker compose -f docker-compose.staging.yml -p proficrm-staging \
-              run --rm web python manage.py migrate --noinput \
+              run --rm -T web python manage.py migrate --noinput </dev/null \
               || rollback "migrate failed"
 
             # ------------------------------------------------------------
@@ -123,6 +134,11 @@ jobs:
 
             echo ""
             echo "=== Deploy staging УСПЕШНО завершён: $HEAD_AFTER ==="
+            # Explicit completion marker — если этот string не в deploy log,
+            # значит heredoc exit'нул раньше завершения. GitHub Actions может
+            # report "success" misleadingly (как было 2026-04-22 с 2FA deploy).
+            # grep-check этого маркера в любой observation/alerting.
+            echo "=== DEPLOY FULLY COMPLETED ==="
           REMOTE
 
       - name: Notify on failure
