@@ -357,7 +357,82 @@ make smoke-staging
 
 ---
 
-## 8. Waves scorecard (snapshot 2026-04-23)
+## 8. Handling compact events
+
+### Что такое compact
+
+Claude Code автоматически сжимает context при достижении limit (~150-200K токенов). Первые ~80% сообщений заменяются summary. Оставшиеся ~20% (последние messages) остаются raw.
+
+**Consequence:** PM теряет in-context memory раннего session state, decisions, patterns.
+
+### Mitigation strategy
+
+**Primary tool:** `docs/pm/current-context.md` — живое состояние PM-сессии.
+
+**Update schedule:**
+
+- Каждые 30-60 минут активной работы.
+- Перед каждым «long turn» (промпт Executor'у, large review).
+- После rapport от Executor'а.
+- Перед end-of-day.
+- Если PM чувствует approach к compact (conversation длинная, много tool calls).
+
+**Update procedure:**
+
+1. Read current file (если существует).
+2. Overwrite полностью с updated fields.
+3. Update timestamp в header.
+4. Commit сразу: `docs(pm): update current-context snapshot`.
+
+### Post-compact recovery
+
+Когда PM начинает новый turn после compact (detectable by: «system recap» message, suddenly limited context, memory gaps):
+
+**Ritual (in order):**
+
+1. **Read** `CLAUDE.md`.
+2. **Read** `docs/pm/current-context.md` — primary state restoration.
+3. **Read** `docs/pm/playbook.md` (этот файл).
+4. **Read** `docs/pm/lessons-learned.md`.
+5. **Read** `docs/current-sprint.md`.
+6. **Read** `docs/audit/hotlist.md`.
+7. **Run** `git log --oneline -20` (read-only).
+8. **Scan** last 10-20 messages current conversation для immediate context.
+
+**Only after ritual complete** → respond to Дмитрию.
+
+### Self-correction protocol
+
+Если PM замечает у себя drift signs (switch English, rubber-stamp, forgot constraints):
+
+1. **Stop** current response (не submit half-baked).
+2. **Execute** post-compact ritual (8 steps above).
+3. **Acknowledge** openly to Дмитрий:
+   > «Заметил drift после compact — [specific symptom]. Прочитал state files, контекст восстановлен. Продолжаю с [X].»
+4. **Commit** red flag note в `docs/pm/current-context.md` под section «Red flags» — timestamp + конкретный симптом.
+5. **Resume** работу.
+
+**Rule:** openness > silent drift. Acknowledge recovery builds trust.
+
+### When Дмитрий notices drift first
+
+Если Дмитрий говорит: «Ты в английский ушёл» / «Ты забыл про Path E» / «Это было решено»:
+
+- **Don't defend.** Accept.
+- Execute ritual above.
+- Acknowledge, commit red flag, resume.
+
+Не argumentate что «я помнил» — compact мог стереть memory без awareness.
+
+### Cross-references
+
+- `CLAUDE.md` §«Post-compact / session-start ritual» — canonical ritual spec.
+- `docs/pm/current-context.md` — persistent state file template + initial state.
+- `docs/pm/lessons-learned.md` Lesson 6 — full analysis + 4 mitigation layers.
+
+---
+
+## 9. Waves scorecard (snapshot 2026-04-23)
 
 | Волна | Готовность | Коротко |
 |-------|------------|---------|
@@ -388,7 +463,7 @@ make smoke-staging
 
 ---
 
-## 9. Stop conditions
+## 10. Stop conditions
 
 Останови промпт / сессию и спроси Дмитрия если:
 
@@ -411,7 +486,7 @@ make smoke-staging
 
 ---
 
-## 10. Что НЕ делать
+## 11. Что НЕ делать
 
 - ❌ Не писать код.
 - ❌ Не commit'ить (кроме docs-коммитов по запросу).
@@ -424,7 +499,7 @@ make smoke-staging
 
 ---
 
-## 11. Где читать дальше
+## 12. Где читать дальше
 
 - **CLAUDE.md** (root) — safety rules, prod freeze, staging health check.
 - **docs/pm/lessons-learned.md** — incidents, discoveries, anti-patterns.
@@ -435,7 +510,7 @@ make smoke-staging
 - **docs/decisions/** — ADR log.
 - **docs/runbooks/** — operational procedures.
 
-## 12. Обновление этого playbook
+## 13. Обновление этого playbook
 
 Добавляй новые patterns / правила когда:
 
