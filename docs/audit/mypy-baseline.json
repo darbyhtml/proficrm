@@ -1,10 +1,11 @@
 {
-  "snapshot_date": "2026-04-20",
+  "snapshot_date": "2026-04-23",
   "wave": "0.2",
   "mypy_version": "1.17.1",
   "python_version": "3.13",
-  "total_errors": 1252,
+  "total_errors": 1259,
   "files_with_errors": 118,
+  "_ratchet_note": "2026-04-23: baseline bumped от 1252 к 1259 (+7) absorbing drift from W1-W3 commits (audit.tasks chunking, composite indexes migration). UX-1 не contributes (templates + JS + test file excluded via *.tests_*).",
   "top_10_error_codes": {
     "attr-defined": 252,
     "assignment": 239,

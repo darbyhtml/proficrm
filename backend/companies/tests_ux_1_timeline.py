@@ -51,7 +51,8 @@ class UX1ClassicalTimelineTest(TestCase):
         self.assertIn("company-timeline-filters", html)
         self.assertIn('id="companyTimelineClassic"', html)
         # Expected pill labels
-        for label in ("Все", "Звонки", "Письма", "Заметки", "Задачи", "Изменения"):
+        labels = ("Все", "Звонки", "Письма", "Заметки", "Задачи", "Изменения")
+        for label in labels:
             self.assertIn(f">{label}<", html, f"Filter pill «{label}» missing")
 
     def test_timeline_entries_have_data_kind_attr(self):
@@ -81,7 +82,10 @@ class UX1ClassicalTimelineTest(TestCase):
         # legacy rendered activity.message/get_verb_display
         # Мы заменили этот блок на timeline_items — теперь нет simple
         # ActivityEvent-only list ниже summary "История".
-        idx_summary = html.find('<summary class="cursor-pointer font-medium flex items-center gap-2">')
+        summary_marker = (
+            '<summary class="cursor-pointer font-medium flex items-center gap-2">'
+        )
+        idx_summary = html.find(summary_marker)
         self.assertGreater(idx_summary, 0, "UX-1 summary not found")
         # Within 2KB after summary нет legacy "ev.get_verb_display" patterns
         window = html[idx_summary : idx_summary + 2000]
