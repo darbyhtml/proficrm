@@ -50,11 +50,65 @@ verification).
 
 ---
 
-## 🟡 HOTLIST NEW (W10.2-early prerequisite): staging pg_dump cron setup
+## ✅ CLOSED 2026-04-24 10:50 UTC — staging pg_dump cron setup
 
 **Severity**: MEDIUM (safety net gap перед WAL-G rollout).
 **Created**: 2026-04-24 (discovered Executor Step 0 audit, pivot B chosen).
-**Status**: OPEN — mini-session запланирован before resume W10.2-early.
+**Closed**: 2026-04-24 10:50 UTC (mini-session complete, ~17 min).
+
+### Результат закрытия
+
+- `scripts/backup_postgres_staging.sh` создан (43 LOC), коммит `4da1c4e7`, пушен в `claude/recursing-elgamal-c31a17`.
+- `/etc/cron.d/proficrm-staging-backup` настроен на VPS стейджинга — ежедневно 03:30 UTC, root:root, 644 permissions.
+- Первый ручной запуск: 59 секунд.
+- Дамп: 201 МБ сжат, 1.54 ГБ несжат, 90 таблиц с COPY, валидный заголовок PostgreSQL 16.11.
+- Smoke-тест: 6/6 зелёных.
+- Retention: 7 дней (удаление через `find ... -mtime +7 -delete`).
+
+### Follow-up (не блокирует resume W10.2-early)
+
+Крон-запись на VPS не в репо — пересборка VPS потеряет её. Новый пункт хотлиста ниже: «кроны стейджинга в репо».
+
+---
+
+## 🟡 HOTLIST NEW (W10.2-early follow-up): кроны стейджинга не синхронизированы с репо
+
+**Severity**: LOW-MEDIUM (риск при пересборке VPS, не блокирует текущую работу).
+**Created**: 2026-04-24 (обнаружено в рапорте мини-сессии pg_dump).
+**Status**: OPEN — отложенная задача.
+
+### Контекст
+
+`/etc/cron.d/proficrm-staging-backup` создан напрямую на VPS стейджинга через SSH. Файл не в репо. Если VPS пересоберут / мигрируют — крон исчезнет, защитный слой отвалится молча.
+
+Та же проблема может существовать для других кронов на VPS стейджинга и прода (например, `health_alert.sh` cron упомянутый в CLAUDE.md для прода).
+
+### Scope follow-up сессии
+
+1. Аудит всех текущих кронов на VPS стейджинга + VPS прода.
+2. Создать в репо директорию `deploy/cron/` с файлами:
+   - `deploy/cron/staging-backup.cron`
+   - `deploy/cron/staging-health-alert.cron` (если есть)
+   - `deploy/cron/prod-*.cron` (read-only копия, не для автоматической установки)
+3. Runbook `docs/runbooks/cron-sync.md` — процедура установки / проверки.
+4. Опционально: скрипт `scripts/verify_cron.sh` сверяющий VPS с `deploy/cron/*.cron`.
+
+### Time estimate
+
+1-2 часа (аудит + скопировать + документация).
+
+### Когда делать
+
+После W10.2-early WAL-G setup. Не блокер.
+
+### References
+
+- Мини-сессия pg_dump crontab: коммит `4da1c4e7` (скрипт в репо, крон только на VPS).
+- CLAUDE.md упоминает `health_alert.sh` на прод VPS как неавтоматизированный.
+
+---
+
+## 🟡 HOTLIST NEW (W10 infrastructure): MinIO setup + WAL-G migration from R2
 
 ### Контекст
 

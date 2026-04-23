@@ -2,95 +2,128 @@
 
 _Живое состояние текущей PM-сессии. PM обновляет этот файл перед предсказуемым compact или каждые 30-60 минут активной работы. После compact — читается ПЕРВЫМ для восстановления контекста._
 
-**Last updated:** 2026-04-24 10:25 UTC (PM).
+**Last updated:** 2026-04-24 10:55 UTC (PM).
 
 ---
 
 ## 🎯 Current session goal
 
-**Pivot B confirmed Дмитрием.** Staging `pg_dump` mini-session сначала (15-30 min) — даст safety net. Потом resume W10.2-early с Step 1 после delivery R2 credentials. PM сейчас пишет mini-промпт.
+Мини-сессия «стейджинг pg_dump крон» закрыта — 🟢 win. Защитный слой восстановлен. Следующее: дождаться доставки ключей Cloudflare R2 от Дмитрия → возобновить W10.2-early с Шага 1 (установка WAL-G).
 
 ## 📋 Active constraints
 
-- Path E: **ACTIVE** (prod freeze до W9).
-- Executor mode: staging-only.
-- Current wave focus: staging `pg_dump` cron (prerequisite для W10.2-early).
-- ADR assumption error fixed в `2026-04-24-wal-g-r2-bridge-to-minio.md` §Consequences (corrected 10:25 UTC).
+- Path E: **ACTIVE** (заморозка прода до W9).
+- Режим исполнителя: только стейджинг.
+- Текущий фокус волны: W10 инфраструктура — W10.2-early ждёт ключей R2.
+- Координация ветки с исполнителем — **работает** (текущий рапорт подтвердил `claude/recursing-elgamal-c31a17` + все PM-коммиты видимы).
 
 ## 🔄 Last decision made
 
-**Timestamp:** 2026-04-24 10:20 UTC.
-**Decision:** Pivot B — сначала staging `pg_dump` mini-session, потом W10.2-early.
-**Reasoning:** safety net перед WAL-G rollout обязателен (Pattern 3 defense-in-depth). Executor Step 0 audit (10:10 UTC) обнаружил gap, моя рекомендация B принята Дмитрием.
-**Owner:** Дмитрий approved. PM executes.
+**Timestamp:** 2026-04-24 10:55 UTC.
+**Decision:** принимаю рапорт мини-сессии как закрытый. Ключи R2 запрошены у Дмитрия.
+**Reasoning:** все критерии закрытия пункта хотлиста выполнены: скрипт создан и закоммичен (`4da1c4e7`), крон настроен на VPS, первый ручной запуск прошёл за 59 секунд, дамп валиден (90 CREATE TABLE, 90 COPY, sane header), размер 201 МБ ≥ порога 200 МБ, smoke-тест 6/6 зелёных.
+**Owner:** PM подтверждает, Дмитрий принимает решение по ключам R2.
 
 ## ⏭️ Next expected action
 
-1. ✅ Update current-context.md (этот файл).
-2. ✅ Fix ADR §Consequences про defense-in-depth.
-3. ✅ Add hotlist item «staging pg_dump cron».
-4. ✅ Commit три файла.
-5. ⏭️ Написать mini-промпт «staging pg_dump cron setup» для Executor.
-6. ⏭️ Передать Дмитрию с confirmation request о worktree coordination.
-7. ⏭️ После rapport mini-session → close hotlist item → deliver R2 creds → resume W10.2-early промпт.
+1. ✅ Обновить `docs/pm/current-context.md` (этот файл).
+2. ✅ Закрыть пункт хотлиста «staging pg_dump cron setup» → ✅ CLOSED.
+3. ✅ Добавить follow-up пункт «кроны не в репо» (средняя важность).
+4. ✅ Обновить ADR §Consequences — пометка «defense-in-depth restored for staging».
+5. ✅ Коммит трёх файлов.
+6. ⏭️ Ответ Дмитрию — сводка + запрос ключей R2.
+7. ⏭️ После доставки ключей → возобновление W10.2-early Шаг 1 (промпт уже был написан, можно переиспользовать с минорной правкой «branch check начинается с `4da1c4e7`»).
 
 ## ❓ Pending questions to Дмитрий
 
-- [ ] **Executor worktree coordination:** Executor не видел ADR commit `32e9121b` в rapport (Step 0 `ls docs/decisions/` показал только 2 файла 2026-04-21). Откуда Executor checkout'ит код? Варианты:
-  - На main branch без pull → нужно `git fetch && git checkout claude/recursing-elgamal-c31a17`.
-  - В отдельном worktree → нужно синхронизация.
-  - Работает напрямую на staging server clone → нужно `git pull origin claude/recursing-elgamal-c31a17`.
-  Mini-промпт включает explicit `git status` + branch check в Step 0.
-- [ ] **R2 credentials delivery** — отложено до после mini-session completion. Не вставлять в mini-промпт (не relevant для pg_dump).
+- [ ] **Ключи Cloudflare R2** для `.env.staging`:
+  - `R2_ACCESS_KEY_ID`
+  - `R2_SECRET_ACCESS_KEY`
+  - `R2_ENDPOINT` (вида `https://<account-id>.r2.cloudflarestorage.com`)
+  - `R2_BUCKET_NAME` (предлагалось `proficrm-walg-staging`)
+- [ ] **Создать бакет** в Cloudflare панели (вручную или через mc/awscli) заранее.
+- [ ] Одобрение ~2 минут простоя стейджинг-БД на Шаге 2 W10.2-early (рестарт Postgres для `archive_mode=on`).
 
 ## 📊 Last Executor rapport summary
 
-**Session:** W10.2-early WAL-G setup, Step 0 audit.
-**Received:** 2026-04-24 10:10 UTC.
-**Status:** 🔴 BLOCKED (proper stop).
-**Classification:** **win** (audit-first discipline, zero mutations, critical gap surfaced).
-**Key finding:** staging pg_dump fallback отсутствует. PM ADR assumption error — fixed.
+**Session:** стейджинг pg_dump крон (мини-сессия, prerequisite для W10.2-early).
+**Received:** 2026-04-24 10:50 UTC.
+**Status:** 🟢 **COMPLETE**.
+**Classification:** **win** — чёткая работа по промпту, под бюджет (17 минут из 15-30), дисциплина аудита.
 
-Next expected Executor rapport: staging pg_dump mini-session (15-30 min).
+### Метрики верификации
+
+| Метрика | Значение | Статус |
+|---------|----------|:------:|
+| Длительность первого ручного запуска | 59 секунд | ✅ |
+| Сжатый размер | 201 МБ | ✅ (чуть выше порога 200 МБ) |
+| Несжатый размер | 1.54 ГБ | ✅ |
+| Коэффициент сжатия | 87% | ⚠️ аномально высокий, объяснение разумное |
+| Валидный заголовок дампа | PostgreSQL 16.11 + SET + \restrict | ✅ |
+| Количество CREATE TABLE | 90 | ✅ (ожидалось ~70) |
+| Количество COPY | 90 | ✅ |
+| Sample-строки `audit_activityevent` | 3 строки, самая старая 2025-12-25 | ✅ |
+| Свободное место на `/` после | 23 ГБ | ✅ |
+| Smoke-тест | 6/6 | ✅ |
+| Крон активен на VPS | `systemctl is-active cron` | ✅ |
+
+### Объяснение высокого сжатия (от исполнителя)
+
+«96% таблицы `audit_activityevent` — это policy events (1.85M строк) с очень повторяющейся структурой меты `{"request_id": "<hash>"}`. gzip на такой повторяющейся SQL COPY data достигает экстремального сжатия.»
+
+Это разумное объяснение. Данные все на месте (90 таблиц, 90 COPY, sample валиден). Сжатие — следствие характера данных, не обрезка содержимого.
 
 ## 🚨 Red flags (if any)
 
-- **RESOLVED 2026-04-24 10:25 UTC:** ADR §Consequences (positive) содержал неточное утверждение про staging pg_dump fallback. Fixed в этом commit'е (correction note добавлен в ADR с timestamp).
+**Ни одного блокирующего флага.** Мелкие наблюдения:
+
+- **201 МБ — 1 МБ выше порога.** Если в будущем данные станут ещё более повторяющимися (например, много однообразных задач), сжатие может дать дамп ниже 200 МБ, что триггерит stop condition. Порог имеет смысл скорректировать когда рост/разнообразие стейджинг-данных изменится. Не действую сейчас — за пределами scope.
+- **Крон `/etc/cron.d/proficrm-staging-backup` только на VPS, не в репо.** При пересборке VPS крон потеряется. Это follow-up задача (новый пункт хотлиста ниже).
 
 ## 📝 Running notes
 
-### Pivot rationale
+### Что закрыто сегодня
 
-Executor обнаружил gap через audit-first — это exactly то, что Pattern 1 предотвращает. Если бы PM + Executor сразу начали WAL-G без audit, archive_command hang или disk fill сломал бы staging без возможности rollback через pg_dump.
+1. Аудит исполнителя (W10.2-early Шаг 0) → обнаружен gap в защитном слое стейджинга.
+2. Pivot B выбран Дмитрием.
+3. ADR правлен (§Consequences, correction block).
+4. Мини-сессия pg_dump выполнена (~17 минут).
+5. Защитный слой восстановлен — ежедневный бэкап 03:30 UTC, retention 7 дней.
 
-Mini-session scope: minimal (copy existing prod script с substituted paths + cron + verify). ~15-30 min Executor time.
+### Следующая сессия (W10.2-early resume)
 
-### Что НЕ в scope mini-session
+Промпт исполнителю готов с прошлой передачи. Минорная правка перед re-use: в Шаге 0 branch check ожидать коммит `4da1c4e7` в топе 5 (вместо `e092815f`).
 
-- WAL-G setup.
-- R2 configuration.
-- PostgreSQL archive_command changes.
-- Удалять или модифицировать prod cron.
-- Prod side anything.
+### Таймлайн сессии (для отчётности)
 
-### Learning candidate (не commit'ю сейчас)
+| Время (UTC) | Событие |
+|-------------|---------|
+| 09:05 | Запрос Дмитрия «W10.1 WAL-G» |
+| 09:10 | PM аудит обнаружил scope mismatch |
+| 09:15 | PM представил 3 варианта |
+| 09:30 | Дмитрий выбрал B (Cloudflare R2) |
+| 09:35 | PM создал ADR + обновил хотлист + current-context |
+| 10:05 | Передан промпт W10.2-early |
+| 10:10 | Рапорт 🔴 BLOCKED Шаг 0 — gap защитного слоя |
+| 10:20 | Дмитрий выбрал pivot B (мини-сессия pg_dump) |
+| 10:25 | PM исправил ADR + добавил пункт хотлиста |
+| 10:30 | Дмитрий дал feedback по языку |
+| 10:40 | CLAUDE.md правлен + Lesson 8 + AP-8 добавлены |
+| 10:45 | Передан промпт мини-сессии |
+| 10:50 | Рапорт 🟢 COMPLETE |
+| 10:55 | PM закрывает артефакты, ждёт ключей R2 |
 
-**Lesson 8 candidate:** «ADR claims must be verified against actual state, not planned state».
+### Follow-up (не в текущем scope)
 
-Ситуация:
-- PM писал ADR §Consequences utверждая defense-in-depth через pg_dump.
-- Предполагал identity prod ↔ staging config.
-- Executor audit обнаружил что это не true.
-
-Lesson для future: перед writing ADR §Consequences — audit actual cross-environment state, не assume parity.
-
-Буду commit'ить после pivot completion (когда есть full data point).
+- Кроны стейджинга в репо (новый пункт хотлиста).
+- Мониторинг первого крон-запуска 2026-04-25 03:30 UTC (напомнить PM утром).
+- Оценка роста размера бэкапа через 30 дней (когда стейджинг накопит больше non-policy данных).
 
 ### Update triggers (reminder)
 
 - Перед каждой передачей Дмитрию.
 - Каждые 30-60 минут активной работы.
-- После получения Executor rapport.
-- После принятия decision.
-- Перед long-running операцией.
-- Когда conversation приближается к compact limit.
+- После получения рапорта исполнителя.
+- После принятия решения.
+- Перед длительной операцией.
+- При приближении к компактификации контекста.

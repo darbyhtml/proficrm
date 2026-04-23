@@ -110,6 +110,16 @@ Pre-W9 prod deploy rehearsal требует **solid backup strategy**. 333+ ко
 > **⚠️ Correction 2026-04-24 10:25 UTC:** исходная версия ADR утверждала, что `scripts/backup_postgres.sh` daily pg_dump остаётся как fallback для staging — defense-in-depth (Pattern 3). Executor Step 0 audit (W10.2-early, 2026-04-24 10:10 UTC) обнаружил, что cron настроен **только для prod-директории, не для staging**. Для staging defense-in-depth **отсутствовал** до pivot session. Lesson для PM: ADR claims должны быть verified через audit actual state, не assumed cross-environment parity.
 >
 > **Резолюция:** Дмитрий выбрал pivot B — mini-session «staging pg_dump cron setup» (15-30 min) выполняется перед resume W10.2-early. После mini-session defense-in-depth restore'ен на staging. Hotlist item: `docs/audit/hotlist.md` → «staging pg_dump cron».
+>
+> **✅ Update 2026-04-24 10:55 UTC — defense-in-depth restored for staging:**
+>
+> - `scripts/backup_postgres_staging.sh` создан (коммит `4da1c4e7`).
+> - `/etc/cron.d/proficrm-staging-backup` активен на VPS стейджинга, ежедневно 03:30 UTC, retention 7 дней.
+> - Первый ручной запуск прошёл за 59 секунд, дамп 201 МБ сжат / 1.54 ГБ несжат, 90 таблиц, валидный заголовок.
+> - Smoke-тест 6/6 зелёных после настройки.
+> - Пункт хотлиста «staging pg_dump cron setup» закрыт.
+>
+> Теперь защитный слой на стейджинге есть: при любой проблеме с WAL-G `archive_command` откат через последний ежедневный pg_dump возможен (RPO до 24 часов). Это удовлетворяет Pattern 3 (defense-in-depth) из playbook §7.
 
 ### Negative
 
