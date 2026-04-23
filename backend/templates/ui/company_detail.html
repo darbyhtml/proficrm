@@ -3029,9 +3029,11 @@
     </script>
 
     {% if view_can_view_activity %}
-      {# UX-1 (2026-04-23): Classical "История действий" теперь renders unified
-         timeline (build_company_timeline — 7 sources) с filter pills вместо
-         простого ActivityEvent list. Modern mode уже использует тот же partial. #}
+      {% comment %}
+        UX-1 (2026-04-23): Classical "История действий" теперь renders unified
+        timeline (build_company_timeline — 7 sources) с filter pills вместо
+        простого ActivityEvent list. Modern mode уже использует тот же partial.
+      {% endcomment %}
       <details class="card card-pad" open>
         <summary class="cursor-pointer font-medium flex items-center gap-2">
           <span>История</span>
