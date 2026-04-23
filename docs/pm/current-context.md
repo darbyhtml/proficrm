@@ -2,99 +2,89 @@
 
 _Живое состояние текущей PM-сессии. PM обновляет этот файл перед предсказуемым compact или каждые 30-60 минут активной работы. После compact — читается ПЕРВЫМ для восстановления контекста._
 
-**Last updated:** 2026-04-24 10:15 UTC (PM).
+**Last updated:** 2026-04-24 10:25 UTC (PM).
 
 ---
 
 ## 🎯 Current session goal
 
-Review Executor rapport по W10.2-early — **🔴 BLOCKED на Step 0, proper stop**. Executor выполнил audit-only (zero mutations), обнаружил 2 blockers и 1 critical safety gap. Pivot decision pending от Дмитрия.
+**Pivot B confirmed Дмитрием.** Staging `pg_dump` mini-session сначала (15-30 min) — даст safety net. Потом resume W10.2-early с Step 1 после delivery R2 credentials. PM сейчас пишет mini-промпт.
 
 ## 📋 Active constraints
 
 - Path E: **ACTIVE** (prod freeze до W9).
 - Executor mode: staging-only.
-- Current wave focus: W10 infrastructure — W10.2-early **blocked**.
-- **🔴 NEW DISCOVERY:** staging не имеет `pg_dump` fallback (cron только prod `/opt/proficrm`). Это **противоречит** утверждению ADR §Consequences (positive) о defense-in-depth. Safety net на staging **отсутствует**.
+- Current wave focus: staging `pg_dump` cron (prerequisite для W10.2-early).
+- ADR assumption error fixed в `2026-04-24-wal-g-r2-bridge-to-minio.md` §Consequences (corrected 10:25 UTC).
 
 ## 🔄 Last decision made
 
-**Timestamp:** 2026-04-24 09:30 UTC.
-**Decision:** Option B (R2 bridge), scope rename W10.2-early. ADR + hotlist + промпт написаны и commit'нуты (`32e9121b`).
-**New pending decision:** pivot strategy после BLOCKED rapport — A / B / A+B (см. §Next expected action).
-**Owner:** Дмитрий.
+**Timestamp:** 2026-04-24 10:20 UTC.
+**Decision:** Pivot B — сначала staging `pg_dump` mini-session, потом W10.2-early.
+**Reasoning:** safety net перед WAL-G rollout обязателен (Pattern 3 defense-in-depth). Executor Step 0 audit (10:10 UTC) обнаружил gap, моя рекомендация B принята Дмитрием.
+**Owner:** Дмитрий approved. PM executes.
 
 ## ⏭️ Next expected action
 
-Получить decision Дмитрия:
-
-- **A:** Доставить R2 credentials → resume W10.2-early с Step 1. Риск: WAL-G сломает staging writes без pg_dump safety net.
-- **B:** Pivot — сначала staging pg_dump mini-session (~15 min setup), потом W10.2-early unblock. Recommended.
-- **A+B:** Параллельно — быстрый staging pg_dump + delivery R2 creds в одной coordinated передаче.
-
-После decision PM:
-
-1. Update ADR `2026-04-24-wal-g-r2-bridge-to-minio.md` — исправить §Consequences (positive) про defense-in-depth.
-2. Update hotlist — add «staging pg_dump cron missing» как closed (если pg_dump session пройдёт) или open item.
-3. Если B или A+B — написать mini-промпт «staging pg_dump cron setup» для Executor.
-4. Resume W10.2-early промпт после unblock.
+1. ✅ Update current-context.md (этот файл).
+2. ✅ Fix ADR §Consequences про defense-in-depth.
+3. ✅ Add hotlist item «staging pg_dump cron».
+4. ✅ Commit три файла.
+5. ⏭️ Написать mini-промпт «staging pg_dump cron setup» для Executor.
+6. ⏭️ Передать Дмитрию с confirmation request о worktree coordination.
+7. ⏭️ После rapport mini-session → close hotlist item → deliver R2 creds → resume W10.2-early промпт.
 
 ## ❓ Pending questions to Дмитрий
 
-- [ ] **Pivot decision A / B / A+B.**
-- [ ] **ADR visibility check:** Executor rapport цитирует `ls docs/decisions/` → 2 файла (2026-04-21-*), хотя я закоммитил ADR в `32e9121b`. Подозрение: Executor работает в другом worktree / на main без pull / прямо на staging server path. Нужно уточнить у Дмитрия — Executor-сессия откуда checkout'ит код? Нужно ли ему `git fetch && git checkout claude/recursing-elgamal-c31a17` или cherry-pick моих commits?
+- [ ] **Executor worktree coordination:** Executor не видел ADR commit `32e9121b` в rapport (Step 0 `ls docs/decisions/` показал только 2 файла 2026-04-21). Откуда Executor checkout'ит код? Варианты:
+  - На main branch без pull → нужно `git fetch && git checkout claude/recursing-elgamal-c31a17`.
+  - В отдельном worktree → нужно синхронизация.
+  - Работает напрямую на staging server clone → нужно `git pull origin claude/recursing-elgamal-c31a17`.
+  Mini-промпт включает explicit `git status` + branch check в Step 0.
+- [ ] **R2 credentials delivery** — отложено до после mini-session completion. Не вставлять в mini-промпт (не relevant для pg_dump).
 
 ## 📊 Last Executor rapport summary
 
-**Session:** W10.2-early WAL-G setup, Step 0 baseline + audit only.
-**Received:** 2026-04-24 10:10 UTC (~8 минут после начала, под budget 30 min).
-**Status:** 🔴 **BLOCKED** — proper stop at Step 0 per spec.
-**Classification:** **win** (audit-first discipline exemplary, zero mutations, все stop conditions корректно triggered, detailed rapport с actionable findings).
+**Session:** W10.2-early WAL-G setup, Step 0 audit.
+**Received:** 2026-04-24 10:10 UTC.
+**Status:** 🔴 BLOCKED (proper stop).
+**Classification:** **win** (audit-first discipline, zero mutations, critical gap surfaced).
+**Key finding:** staging pg_dump fallback отсутствует. PM ADR assumption error — fixed.
 
-### Key findings
-
-**Blockers (spec-defined):**
-
-1. R2 credentials не delivered в `.env.staging` (symlink → `.env`). Step 0 grep → `0 matches`.
-2. ADR not visible в Executor checkout (см. pending question #2 о worktree coordination).
-
-**Positive (clean slate для setup когда unblocked):**
-
-- WAL-G binary not installed (expected).
-- `archive_mode = off`, `archive_command = (disabled)` — no conflicting prior setup.
-- `wal_level = replica` уже стоит (archive_mode=on restart нужен, wal_level — нет).
-- `/etc/wal-g/` отсутствует.
-- Staging DB 5.3 GB, `/` 79 GB total, 23 GB free.
-
-**🔴 Critical surfaced risk (NEW):**
-
-- **Staging не имеет pg_dump fallback.** `scripts/backup_postgres.sh` cron настроен только для prod `/opt/proficrm`, не для `/opt/proficrm-staging`. Если WAL-G setup сломает staging (archive_command hangs, disk fills) — **no rollback backup**.
-- Это **противоречит** моему ADR §Consequences (positive) где я написал «daily pg_dump остаётся как fallback — defense-in-depth (Pattern 3)». **Для staging defense-in-depth отсутствует.**
-
-**Secondary risks:**
-
-- 23 GB free на `/` — acceptable initial, но 4-6 weeks WAL backlog может съесть до 15 GB. Monitor нужен.
-- archive_mode=on requires restart — breaking action на staging. Координация нужна.
+Next expected Executor rapport: staging pg_dump mini-session (15-30 min).
 
 ## 🚨 Red flags (if any)
 
-- **2026-04-24 10:15 UTC:** ADR §Consequences (positive) содержит **неточное** утверждение про defense-in-depth на staging. Это ошибка PM в ADR при writing. Нужен update ADR после pivot decision.
+- **RESOLVED 2026-04-24 10:25 UTC:** ADR §Consequences (positive) содержал неточное утверждение про staging pg_dump fallback. Fixed в этом commit'е (correction note добавлен в ADR с timestamp).
 
 ## 📝 Running notes
 
-### Почему это BLOCKED — это win, не issue
+### Pivot rationale
 
-Executor правильно выполнил audit-first, правильно остановился на R2 creds missing (spec-defined stop condition), и правильно surfaced missing staging pg_dump fallback — **не указано в моём промпте**. Это именно behavior который Pattern 1 validate.
+Executor обнаружил gap через audit-first — это exactly то, что Pattern 1 предотвращает. Если бы PM + Executor сразу начали WAL-G без audit, archive_command hang или disk fill сломал бы staging без возможности rollback через pg_dump.
 
-Сравнение с Test 4 (Critical review):
-- Test 4 был short rapport ("W10.1 WAL-G COMPLETE") — 8 follow-up questions.
-- Этот rapport был detailed — findings, risks, time actual, что НЕ сделано. Не требует follow-up — всё уже в rapport.
+Mini-session scope: minimal (copy existing prod script с substituted paths + cron + verify). ~15-30 min Executor time.
 
-### Защита от recurrence
+### Что НЕ в scope mini-session
 
-ADR должен быть переписан чтобы §Consequences (positive) отражало actual state, не planned state. Lesson: ADR assumptions должны быть verified через audit перед writing.
+- WAL-G setup.
+- R2 configuration.
+- PostgreSQL archive_command changes.
+- Удалять или модифицировать prod cron.
+- Prod side anything.
 
-Возможно новый entry в `docs/pm/lessons-learned.md` — «Lesson 8: ADR claims must be verified against actual state» — после pivot completion.
+### Learning candidate (не commit'ю сейчас)
+
+**Lesson 8 candidate:** «ADR claims must be verified against actual state, not planned state».
+
+Ситуация:
+- PM писал ADR §Consequences utверждая defense-in-depth через pg_dump.
+- Предполагал identity prod ↔ staging config.
+- Executor audit обнаружил что это не true.
+
+Lesson для future: перед writing ADR §Consequences — audit actual cross-environment state, не assume parity.
+
+Буду commit'ить после pivot completion (когда есть full data point).
 
 ### Update triggers (reminder)
 

@@ -106,7 +106,10 @@ Pre-W9 prod deploy rehearsal требует **solid backup strategy**. 333+ ко
 - PITR capability на staging в день decision (2026-04-24).
 - Pre-W9 deploy rehearsal unblocked (backup strategy silver-tier, RPO ≈ 1 минута).
 - Bronze → silver transition без waiting на MinIO.
-- `scripts/backup_postgres.sh` daily pg_dump остаётся как fallback — defense-in-depth (Pattern 3 playbook §7).
+
+> **⚠️ Correction 2026-04-24 10:25 UTC:** исходная версия ADR утверждала, что `scripts/backup_postgres.sh` daily pg_dump остаётся как fallback для staging — defense-in-depth (Pattern 3). Executor Step 0 audit (W10.2-early, 2026-04-24 10:10 UTC) обнаружил, что cron настроен **только для prod-директории, не для staging**. Для staging defense-in-depth **отсутствовал** до pivot session. Lesson для PM: ADR claims должны быть verified через audit actual state, не assumed cross-environment parity.
+>
+> **Резолюция:** Дмитрий выбрал pivot B — mini-session «staging pg_dump cron setup» (15-30 min) выполняется перед resume W10.2-early. После mini-session defense-in-depth restore'ен на staging. Hotlist item: `docs/audit/hotlist.md` → «staging pg_dump cron».
 
 ### Negative
 

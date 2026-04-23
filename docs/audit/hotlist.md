@@ -50,6 +50,54 @@ verification).
 
 ---
 
+## 🟡 HOTLIST NEW (W10.2-early prerequisite): staging pg_dump cron setup
+
+**Severity**: MEDIUM (safety net gap перед WAL-G rollout).
+**Created**: 2026-04-24 (discovered Executor Step 0 audit, pivot B chosen).
+**Status**: OPEN — mini-session запланирован before resume W10.2-early.
+
+### Контекст
+
+`scripts/backup_postgres.sh` + cron настроены только для prod-директории. Staging (`/opt/proficrm-staging/`) не имеет эквивалентного daily backup — защищенная часть только через weekly external Postgres snapshot (если есть).
+
+При WAL-G rollout риск: если `archive_command` hang или disk fill — на staging нет pg_dump fallback для отката. Эта gap была incorrectly охарактеризована в ADR `2026-04-24-wal-g-r2-bridge-to-minio.md` §Consequences (positive) — fix: correction note добавлена 2026-04-24 10:25 UTC.
+
+### Scope mini-session
+
+- Copy `scripts/backup_postgres.sh` → `scripts/backup_postgres_staging.sh` с adjusted:
+  - `PROFICRM_BACKUP_DIR=/opt/proficrm-staging/backups`.
+  - `COMPOSE="docker compose -f docker-compose.staging.yml -p proficrm-staging"`.
+  - `POSTGRES_USER=crm_staging`, `POSTGRES_DB=crm_staging`.
+  - `BACKUP_RETENTION_DAYS=7` (staging меньше retention чем prod).
+- Cron entry `/etc/cron.d/proficrm-staging-backup` — daily 03:30 MSK.
+- Первый manual run + verify файл создаётся + `pg_restore --list` показывает sane structure.
+- `make smoke-staging` после — 6/6 green (не должно ничего ломать).
+
+### Time estimate
+
+15-30 минут.
+
+### Stop conditions
+
+- Baseline red.
+- Staging DB unreachable.
+- Disk space на staging `/` < 10 GB (backup ~1-2 GB + retention).
+- Existing staging backup cron detected (conflict).
+
+### References
+
+- ADR: `docs/decisions/2026-04-24-wal-g-r2-bridge-to-minio.md` §Consequences (corrected 2026-04-24).
+- Executor rapport W10.2-early Step 0 BLOCKED — see PM session notes 2026-04-24 10:10-10:25 UTC.
+
+### Closure criteria
+
+- Skript committed.
+- Cron active + verified первым run.
+- pg_dump файл existed + gzipped + size ≥ 500 MB (staging DB 5.3 GB compressed).
+- После closure — ADR §Consequences (positive) можно pre-mark «defense-in-depth restored for staging».
+
+---
+
 ## 🟡 HOTLIST NEW (W10 infrastructure): MinIO setup + WAL-G migration from R2
 
 **Severity**: MEDIUM (не блокирует W9, но даёт double work).
