@@ -2,92 +2,83 @@
 
 _Живое состояние текущей PM-сессии. PM обновляет этот файл перед предсказуемым compact или каждые 30-60 минут активной работы. После compact — читается ПЕРВЫМ для восстановления контекста._
 
-**Last updated:** 2026-04-24 12:55 UTC (PM).
+**Last updated:** 2026-04-24 13:00 UTC (PM).
 
 ---
 
 ## 🎯 Current session goal
 
-W10.2-early Шаги 2-3a ✅ завершены бесшумно. Исполнитель на 🟡 PAUSE перед Шагом 3b — ждёт одобрения Дмитрия на 2 рестарта Postgres стейджинга (~1-2 мин суммарного простоя). После OK — идут Шаги 3b-7 автоматически.
+W10.2-early — Дмитрий одобрил рестарт (2026-04-24 13:00 UTC). Исполнитель отрабатывает Шаги 3b-7 бесшумно: рестарт Postgres → archive_command → full backup → restore drill → runbook. Ожидаемо ~3-4 часа до финального рапорта.
 
 ## 📋 Active constraints
 
 - Path E: **ACTIVE**.
-- R2 bucket + creds: ✅ готовы.
-- WAL-G v3.0.8 установлен в `/usr/local/bin/wal-g` (v3.0.3 asset отсутствует на GitHub, взят новее — совместимый). Connectivity к R2 подтверждён `wal-g st ls` (пустой бакет).
-- `/etc/wal-g/walg.env` создан, пермишены 600, секреты не утекли.
-- Коммит `9b3e956a` (`feat(backup): WAL-G mounts для db container`) в `claude/recursing-elgamal-c31a17` — добавлены 2 read-only монта в сервис `db`:
-  - `/usr/local/bin/wal-g:/usr/local/bin/wal-g:ro`
-  - `/etc/wal-g:/etc/wal-g:ro`
-- Защитный слой pg_dump работает.
+- Все prerequisites выполнены: WAL-G v3.0.8 установлен, `/etc/wal-g/walg.env` с R2-креденшалами, bucket доступен, коммит `9b3e956a` готов к pull на VPS.
+- Защитный слой pg_dump работает — если Шаг 3b сломает что-то, есть safety net.
+- Dmitry ok на 1-2 мин простоя стейджинга + ожидаемый Kuma alert.
 
 ## 🔄 Last decision made
 
-**Timestamp:** 2026-04-24 12:55 UTC.
-**Decision pending:** Дмитрий одобряет 2 рестарта Postgres стейджинга (breaking action, ~1-2 мин downtime + Kuma Telegram alert ожидаемый, не инцидент).
-**Reasoning:** `archive_mode=on` нельзя активировать без рестарта Postgres. Compose config change тоже требует `up -d` (пересоздание контейнера).
-**Owner:** Дмитрий (ok/подожди).
+**Timestamp:** 2026-04-24 13:00 UTC.
+**Decision:** Дмитрий greenlight на breaking action Шага 3b. Исполнитель продолжает 3b-7 бесшумно.
+**Reasoning:** стейджинг не prod, пользователи — тестеры, Telegram alert документирован как ожидаемый.
+**Owner:** Дмитрий approved, PM передаёт исполнителю.
 
 ## ⏭️ Next expected action
 
 1. ✅ Обновить `docs/pm/current-context.md`.
 2. ✅ Коммит.
-3. ⏭️ Короткий брифинг Дмитрию + запрос «ok/подожди».
-4. ⏭️ Передать исполнителю ответ Дмитрия.
-5. ⏭️ Исполнитель отработает Шаги 3b-7 бесшумно (~3-4 часа, из которых ~2 часа restore drill).
-6. ⏭️ Финальный рапорт → review + classification + closure.
+3. ⏭️ Передать исполнителю короткое «ok рестартуй, продолжай до финала».
+4. ⏭️ **Ожидание ~3-4 часа** — исполнитель не возвращается до финального рапорта или stop condition.
+5. ⏭️ При получении рапорта — review restore drill + classification + closure.
 
 ## ❓ Pending questions to Дмитрий
 
-- [ ] **OK на 2 рестарта Postgres стейджинга?**
-  - Downtime: ≈1-2 минуты суммарно.
-  - Telegram `[CRM Staging] [🔴 Down]` → через ~1-2 мин `[✅ Up]` — ожидаемое, не инцидент.
-  - Rollback если что-то пойдёт не так: `git revert 9b3e956a && docker compose up -d db`.
-  - Подходящее ли время (рабочий день в РФ)?
+Нет. Сессия на автопилоте до финального рапорта.
 
 ## 📊 Last Executor rapport summary
 
-**Session:** W10.2-early Шаги 2-3a.
+**Session:** W10.2-early Шаги 2-3a → PAUSE перед 3b.
 **Received:** 2026-04-24 12:50 UTC.
-**Status:** 🟡 PAUSE — ожидает greenlight перед breaking Шагом 3b.
-**Classification:** win — под бюджет (~15 мин на Шаги 2-3a), чистая security discipline, адекватный fallback на отсутствующий v3.0.3 asset.
+**Status:** 🟡 PAUSE → 🟢 UNBLOCKED (ok от Дмитрия 13:00 UTC).
+**Classification:** win.
 
-### Ключевые факты
-
-- WAL-G v3.0.8 установлен на хосте и доступен в контейнере через bind mount.
-- `wal-g st ls` → empty bucket listing (R2 доступен, auth работает).
-- `docker-compose.staging.yml` изменён (+4 строки), закоммичен `9b3e956a`, запушен.
-
-### Шаг 3b — план после OK
-
-1. `git pull` на стейджинг-хосте (берёт `9b3e956a`).
-2. Рестарт №1: `docker compose up -d db` (пересоздание контейнера с новыми mounts, ~30 с).
-3. `ALTER SYSTEM SET archive_mode / archive_command / archive_timeout / wal_level`.
-4. Рестарт №2: `docker compose restart db` (для применения archive_mode=on, ~30 с).
-5. Через 90 с — проверка `pg_stat_archiver.archived_count > 0`.
-6. Если зелёно → Шаги 4-7 бесшумно.
+Следующий рапорт: финальный end-to-end через ~3-4 часа (~16:00-17:00 UTC).
 
 ## 🚨 Red flags (if any)
 
-Нет. Rapport чист, план Шага 3b детален, rollback-path документирован.
+Нет.
 
 ## 📝 Running notes
 
-### Отклонение от промпта: WAL-G v3.0.8 вместо v3.0.3
+### Ожидаемые ключевые моменты Шагов 3b-7
 
-v3.0.3 asset не найден на GitHub (возможно удалён/переименован). Исполнитель взял v3.0.8 (latest, 2026-01-21). Это минорное отклонение, совместимость проверена на обоих средах (хост + контейнер). Приемлемо.
+- **~13:01 UTC:** `git pull` на VPS → `docker compose up -d db` (рестарт №1, ~30 с).
+- **~13:02 UTC:** `ALTER SYSTEM` + `docker compose restart db` (рестарт №2, ~30 с).
+- **~13:03 UTC:** Kuma вернёт зелёный статус. В Telegram прилетит сначала 🔴 Down, потом ✅ Up.
+- **~13:05 UTC:** проверка `pg_stat_archiver.archived_count > 0`.
+- **~13:10 UTC:** начало Шага 4 — `wal-g backup-push` (full backup первого base, ожидаемое время ~5-15 мин для ~1.5 ГБ compressed).
+- **~13:25 UTC:** monitor 1 час archive push (`archived_count >= 60`).
+- **~14:25 UTC:** начало Шага 5 — restore drill (самый длинный, ~2 часа).
+- **~16:30 UTC:** Шаг 6 runbook + retention cron.
+- **~17:00 UTC:** Шаг 7 smoke + финальный рапорт.
 
-### После Шага 7 closure — что делаю
+### Stop conditions (активны на протяжении всех Шагов)
 
-1. Review финального рапорта с фокусом на restore drill (Lesson 7: «CI green ≠ feature works» — здесь restore drill = primary acceptance criterion).
-2. Classify: win / partial / blocked.
-3. Update хотлиста: закрыть пункт W10.2-early pending.
-4. Update ADR `2026-04-24-wal-g-r2-bridge-to-minio.md` §Consequences → «WAL-G PITR active on staging since 2026-04-24».
-5. Написать **Lesson 9, 10, 11** в `docs/pm/lessons-learned.md`:
-   - L9: explicit safe channel для секретов (incident с токеном в чате).
-   - L10: cloud service activation ≠ credentials (R2 error 10042).
-   - L11: Cloudflare API не даёт permanent S3-tokens через /user/tokens (error 9109) — планировать dashboard step.
-6. Предложить Дмитрию revoke `CF_API_TOKEN` (его роль выполнена; WAL-G использует R2 S3 creds с узким scope).
+- `archived_count = 0` через 2 минуты после рестарта — stop.
+- `failed_count > 0` — stop.
+- Restore drill fails — stop, НЕ объявлять успех.
+- Smoke red после Шага 3b — stop, rollback через `git revert 9b3e956a`.
+
+### Post-closure план
+
+После финального рапорта:
+
+1. Review restore drill (primary acceptance criterion, Lesson 7).
+2. Classify сессии.
+3. Update ADR + хотлист.
+4. Написать Lessons 9, 10, 11 в `docs/pm/lessons-learned.md`.
+5. Предложить Дмитрию revoke `CF_API_TOKEN`.
 
 ### Update triggers (reminder)
 
