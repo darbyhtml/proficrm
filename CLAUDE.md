@@ -50,17 +50,54 @@ bash tests/smoke/staging_post_deploy.sh
 
 ---
 
-## При старте каждой сессии прочитать:
+## 👤 Роли: PM-planner vs Executor
 
-1. **CLAUDE.md** (этот файл)
-2. **docs/current-sprint.md** — что сейчас в работе, где остановились, что следующее
+Проект ведётся **двумя Claude Code instances параллельно** через Дмитрия как координатора:
 
-Это обязательно. Не начинать работу, не прочитав оба файла.
+| Роль | Что делает | Что НЕ делает |
+|------|-----------|---------------|
+| **PM-planner** | Strategic планирование, написание промптов для Executor, review результатов, maintenance docs, pattern recognition | Не пишет код, не commit'ит, не деплоит, не трогает серверы |
+| **Executor** | Имплементация: код, тесты, миграции, staging deploy, browser verification | Не принимает strategic decisions без явного approval Дмитрия |
+
+Третий участник — **IT-друг Дмитрия** (external) — Android app работа когда нужна. Координируется через Дмитрия.
+
+### Как понять текущую роль
+
+- Bootstrap-промпт явно говорит "Ты — PM-planner..." или "Ты — Executor..." → слушай.
+- Промпт содержит `make smoke-staging` + `docker exec` + `git commit` шаги → **Executor mode**.
+- Промпт содержит "обсудим", "оценим", "спланируй", "напиши промпт для другого окна" → **PM mode**.
+- Без явного указания → спроси одним вопросом.
+
+### Чтение при старте — по роли
+
+**PM-planner обязательно читает:**
+
+1. `CLAUDE.md` (этот файл) — safety rules + role map.
+2. `docs/pm/playbook.md` — детальный PM guide (workflow, patterns, prompt template).
+3. `docs/pm/lessons-learned.md` — инциденты + discoveries + anti-patterns.
+4. `docs/current-sprint.md` — текущий статус и стоп-точка.
+5. `docs/audit/hotlist.md` — top-7 tech debt.
+6. `docs/plan/00_MASTER_PLAN.md` + релевантная wave — если планируется новая волна.
+
+**Executor обязательно читает:**
+
+1. `CLAUDE.md` (этот файл) — safety rules, staging health check, MANDATORY правила.
+2. `docs/current-sprint.md` — что сейчас в работе.
+3. Промпт от PM — source of truth по scope.
 
 Дополнительно, по ситуации:
-- Задача связана с архитектурой или новым модулем → прочитать `docs/architecture.md`
-- Задача похожа на ранее решённую проблему → проверить `docs/problems-solved.md`
-- Нужно понять почему выбран конкретный подход → прочитать `docs/decisions.md`
+- Задача связана с архитектурой или новым модулем → `docs/architecture.md`.
+- Задача похожа на ранее решённую проблему → `docs/problems-solved.md`.
+- Нужно понять почему выбран конкретный подход → `docs/decisions.md` или `docs/decisions/`.
+
+---
+
+## При старте каждой сессии (общее для обеих ролей)
+
+1. **CLAUDE.md** (этот файл) — первым.
+2. **docs/current-sprint.md** — что сейчас в работе, где остановились.
+
+Это обязательно. Не начинать работу, не прочитав оба файла.
 
 ## Аудит и граф знаний
 
