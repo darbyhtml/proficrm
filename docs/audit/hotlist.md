@@ -50,6 +50,57 @@ verification).
 
 ---
 
+## 🟡 HOTLIST NEW (W10 infrastructure): MinIO setup + WAL-G migration from R2
+
+**Severity**: MEDIUM (не блокирует W9, но даёт double work).
+**Created**: 2026-04-24 (W10.2-early WAL-G session).
+**Status**: OPEN — запланировано в future W10.1 proper session.
+
+### Контекст
+
+W10.2-early (2026-04-24) развернул WAL-G PITR с Cloudflare R2 как временным S3-совместимым backend. Это отложило master plan 10.1 MinIO на будущую сессию.
+
+ADR: `docs/decisions/2026-04-24-wal-g-r2-bridge-to-minio.md`.
+
+### Что нужно сделать в future W10.1 proper session
+
+1. **Deploy MinIO** per master plan §10.1 (`docs/plan/11_wave_10_infra.md`):
+   - 5 buckets: media-prod, media-staging, walg-prod, walg-staging, glitchtip-backup.
+   - 2 IAM users: `django-media`, `walg`.
+   - TLS через Certbot, `s3.groupprofi.ru` endpoint.
+   - Versioning + lifecycle на media-buckets.
+   - nginx reverse-proxy.
+
+2. **WAL-G migration R2 → MinIO** (≈2-3h active + 7 days parallel monitoring):
+   - New env-file `/etc/wal-g/walg-minio.env`.
+   - Parallel run 7 days (R2 продолжает archive, MinIO получает новые backups).
+   - Fresh full base backup на MinIO.
+   - Cut-over archive_command.
+   - Verify 24h `pg_stat_archiver` growth в MinIO bucket.
+   - R2 decommission после 30 days retention window.
+   - Rename runbook `docs/runbooks/2026-04-24-wal-g-pitr.md` → `wal-g-pitr.md`.
+   - Update ADR Status: Superseded.
+
+### Timing
+
+**Когда:** после W10.5 Prometheus stack (требует MinIO Prometheus endpoint для metrics) ИЛИ когда Дмитрий принимает решение о secondary VPS для MinIO (рекомендация master plan).
+
+**Blocks:** W10.3 Media migration (тоже требует MinIO), W10.6 GlitchTip backup bucket.
+
+### Cost estimate
+
+- MinIO setup: 5-7h (master plan §10.1).
+- WAL-G migration: 2-3h active + 7 days parallel monitoring.
+- Total: ~8-10h активной работы + 1 неделя observation.
+
+### References
+
+- Decision rationale: `docs/decisions/2026-04-24-wal-g-r2-bridge-to-minio.md`.
+- Master plan §10.1: `docs/plan/11_wave_10_infra.md` lines 43-177.
+- W10.2-early runbook (будет создан Executor'ом): `docs/runbooks/2026-04-24-wal-g-pitr.md`.
+
+---
+
 ## 🔴 HOTLIST NEW (W2 security wave): nkv Android migration — pre-W9 blocker
 
 **Severity**: HIGH (blocks W9 prod deploy of W2.6+W2.7 changes).
