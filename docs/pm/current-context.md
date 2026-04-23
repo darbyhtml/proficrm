@@ -2,117 +2,139 @@
 
 _Живое состояние текущей PM-сессии. PM обновляет этот файл перед предсказуемым compact или каждые 30-60 минут активной работы. После compact — читается ПЕРВЫМ для восстановления контекста._
 
-**Last updated:** 2026-04-24 14:05 UTC (PM).
+**Last updated:** 2026-04-24 15:20 UTC (PM).
 
 ---
 
 ## 🎯 Current session goal
 
-W10.2-early 🔴 **BLOCKED критично**: archive_command активен, но **R2 bucket пустой**, WAL-G не загружает ни WAL archives ни base backups. Причина — permission denied на директории `/var/lib/postgresql/data/pg_wal/walg_data/walg_archive_status/` (root-owned вместо postgres-owned). Требуется fix permissions + retry.
+W10.2-early 🔴 **STILL BLOCKED после fix-сессии**. Исполнитель fix'нул permissions (chown успешно), но натолкнулся на более глубокий архитектурный блокер: wal-g **внутри контейнера** не может установить соединение с Cloudflare R2 (IPv6 resolver hang + HTTP/2 connection failure). Plus wrapper-скрипт теряет `%p` параметр (передаёт пустую строку в `wal-push`). Исполнитель готовит рапорт.
 
 ## 📋 Active constraints
 
 - Path E: **ACTIVE**.
-- Staging API работает (HTTP 200), все 7 контейнеров healthy.
-- Защитный слой pg_dump активен — данные не потеряются если потребуется rollback archive_mode.
-- `pg_stat_archiver` показывает `archived_count=31, failed_count=0` — **ложная информация** (postgres увеличивает счётчик когда `archive_command` вернул exit 0, но на самом деле WAL не в R2).
-- R2 bucket `proficrm-walg-staging` **пустой** — проверено `wal-g st ls` с префиксами `basebackups_005/` и `wal_005/`.
+- Staging API работает (HTTP 200), 7/7 контейнеров healthy.
+- Защитный слой pg_dump активен.
+- R2 bucket `proficrm-walg-staging` всё ещё пустой (не изменился).
+- `archive_mode = on`, `archive_command = /etc/wal-g/archive-command.sh %p`, `archive_timeout = 1min`.
 
 ## 🔄 Last decision made
 
-**Timestamp:** 2026-04-24 14:05 UTC.
-**Decision:** mini-fix сессия — chown директорий, retry backup-push, verify R2. После успеха — resume оригинальный план с Шага 4b.
-**Reasoning:** проблема простая (permissions), fix локальный, pg_dump safety net активен, не требуется rollback archive_command.
-**Owner:** PM даёт mini-промпт, Дмитрий copy-paste в **новое** окно исполнителя.
+**Timestamp:** 2026-04-24 15:20 UTC.
+**Decision:** ждать рапорт исполнителя, потом решать rollback vs fix in place.
+**Reasoning:** исполнитель сам пишет «let me clean up then produce honest rapport» — пусть закончит cleanup, даст полную картину. Я как PM даю брифинг Дмитрию с моими findings, Дмитрий решит стратегию.
+**Owner:** Дмитрий (decision), исполнитель (rapport), PM (analysis + options).
 
 ## ⏭️ Next expected action
 
 1. ✅ Обновить `docs/pm/current-context.md`.
 2. ✅ Коммит.
-3. ⏭️ Передать Дмитрию mini-промпт «fix permissions + retry backup-push».
-4. ⏭️ Ждать рапорт fix-сессии.
-5. ⏭️ После успеха — resume main промпт с Шага 4b.
+3. ⏭️ Брифинг Дмитрию — что я нашёл на VPS, options на решение.
+4. ⏭️ Ждать рапорт исполнителя.
+5. ⏭️ После рапорта — финальное решение с Дмитрием: rollback до baseline (archive_mode=off, только pg_dump) **vs** deep-dive thinking session для architecture fix.
 
 ## ❓ Pending questions to Дмитрий
 
-- [ ] Запустить fix-сессию исполнителя с mini-промптом (ниже в брифинге).
+- [ ] После рапорта исполнителя — какую стратегию выбираем:
+  - **A:** Immediate rollback archive_command → `/bin/true` (trivial no-op), archive_mode остаётся on. Staging стабилен, pg_dump продолжает быть safety net. W10.2-early закрыть как «PARTIAL, blocked на container networking, retry после архитектурного review».
+  - **B:** Pivot architecture — wal-g запускается с хоста (не из контейнера), archive_command пишет WAL в shared spool dir, host cron push'ит. Обходит container networking issues.
+  - **C:** Deep-dive в container networking — разобрать HTTP/2 / IPv6 block, fix в docker-compose или walg.env.
 
-## 📊 Diagnostic findings (PM side, 14:00-14:05 UTC)
+## 📊 Diagnostic findings (PM side, 15:10-15:20 UTC)
 
-### Состояние процесса
+### Состояние postgres за последний час
 
-- wal-g backup-push **завершился** (PID 2328740 больше не в ps).
-- Результат upload в R2: **ничего** (bucket root + подпрефиксы пусты).
+**🔴 Postgres нестабилен — 3 recovery цикла за 15 минут:**
 
-### Логи db-контейнера (последние 80 строк)
+- `14:57:12` — all server processes terminated, automatic recovery.
+- `15:02:21` — PID 11749 **exit code 124 (timeout)**, terminated + recovery.
+- `15:11:39` — PID 11776 terminated by signal 15 (SIGTERM), recovery.
 
+Exit 124 = timeout. Скорее всего `archive_command` висит дольше чем `archive_timeout` (1 минута), постgres убивает процесс. Постоянный цикл: archive попытка → timeout → kill → recovery → новая попытка.
+
+Каждый recovery — несколько секунд простоя. Staging **выглядит** healthy снаружи (HTTP 200), но db-контейнер внутри страдает.
+
+### Wrapper script bug
+
+`/etc/wal-g/archive-command.sh`:
+
+```bash
+#!/bin/bash
+# W10.2-early: archive_command wrapper.
+# Loads R2 creds from walg.env и invokes wal-g wal-push.
+# envdir was not installed в postgres:16 Debian image — so we source env manually.
+
+set -e
+set -a
+. /etc/wal-g/walg.env
+set +a
+exec /usr/local/bin/wal-g wal-push ""
 ```
-ERROR: unmark wal-g status for file failed due following error 
-       remove /var/lib/postgresql/data/pg_wal/walg_data/walg_archive_status: 
-       permission denied
-```
 
-Повторяется **каждую минуту** (при каждом `archive_command`).
+**Bug:** `wal-push ""` — передаёт **пустую строку** вместо аргумента `%p`. Postgres вызывает `/etc/wal-g/archive-command.sh /path/to/WAL_FILE`, script получает путь как `$1`, но передаёт в wal-g empty. WAL-G получает пустое имя файла и... непонятно что делает, но явно не архивирует правильно.
 
-### Permissions check
+**Правильная последняя строка:** `exec /usr/local/bin/wal-g wal-push "$1"`.
 
-```
-drwxr-xr-x 3 root     root     4096 Apr 23 12:51 walg_data    ← root:root (wrong)
-drwx------ 4 postgres postgres 4096 Apr 23 14:03 pg_wal       ← postgres:postgres (correct)
-drwxr-xr-x 2 root     root     4096 Apr 23 12:51 walg_archive_status  ← root:root (wrong)
-```
+### HTTP/2 / IPv6 issue (исполнитель diagnostic)
 
-**Root cause:** при первом запуске `wal-g backup-push` через `docker compose exec db` исполнитель работал как `root` (default для `docker exec`), wal-g создал директории `walg_data/` + `walg_archive_status/` как `root:root`. PostgreSQL запущен как `postgres` (UID 999) — не может писать в root-owned директории. Все последующие `archive_command` попытки fail silently.
+Из сообщений исполнителя перед cleanup:
+
+- Wal-g на хосте работает (может подключиться к R2).
+- Wal-g внутри контейнера fails — Go resolver пробует IPv6 first, hangs.
+- С force IPv4 — затем HTTP/2 connection failure.
+
+Это означает разница в network setup между хостом и Docker-контейнером. Возможные причины:
+- Docker network не поддерживает IPv6.
+- MTU / packet size issue с HTTP/2 через Docker bridge.
+- Cloudflare R2 endpoint использует HTTP/2 только, и прокси внутри Docker ломает handshake.
 
 ### R2 bucket state
 
+- Пустой. Ни WAL, ни backup.
 - `wal-g st ls basebackups_005/` → empty.
 - `wal-g st ls wal_005/` → empty.
-- bucket полностью пустой.
+
+### WAL files on disk
+
+- 5 WAL файлов в `pg_wal/` (не накопилось много — очищается checkpoint'ом).
+- Disk: 24 ГБ свободно на `/` (было 23 ранее, небольшое сжатие нормально).
 
 ### Что НЕ пострадало
 
-- Staging API — HTTP 200, работает.
-- Контейнеры все healthy.
-- Данные БД — целы.
-- pg_dump cron safety net — активен.
+- Staging API HTTP 200 ✅.
+- Все 7 контейнеров healthy ✅.
+- Данные БД целы (recovery automatic без data loss) ✅.
+- pg_dump cron работает ✅.
 
 ## 🚨 Red flags (if any)
 
-### 🔴 Ложный положительный `pg_stat_archiver.archived_count`
+### 🔴 Critical: postgres crash loop
 
-Postgres считает archive_command успешным если exit code = 0. WAL-G видимо возвращает 0 даже когда не может записать local status file (или upload в R2 не происходит, но по другим причинам wal-g не сигнализирует failure).
+3 recovery цикла за 15 минут — **каждую archive_command попытку**. Это продолжается и сейчас. Накопится ли проблема? Вероятно нет (каждый recovery быстрый, данные в order), но это **не нормальное состояние**. Чем дольше ждать, тем больше WAL потеряется / потребуется fresh checkpoint.
 
-Это значит **нельзя доверять `archived_count` как proof что WAL в R2**. Нужна cross-проверка через `wal-g st ls` или `wal-g backup-list`.
+**Immediate mitigation option:** ALTER SYSTEM SET archive_command = '/bin/true'; SELECT pg_reload_conf(); — это не требует restart, немедленно останавливает failing archive_command loop. Stable state до решения стратегии.
 
-### 🟡 Lesson candidate (Lesson 12)
+Но я сам этого **не делаю** (role boundary: не трогаю staging config). Исполнитель или Дмитрий — да.
 
-«Never trust pg_stat_archiver alone — always verify R2 bucket listing before объявлять success». Добавить после closure.
+### 🟡 Lesson candidates (добавить после closure)
+
+- **Lesson 12:** Never trust pg_stat_archiver alone — always verify R2 bucket listing before объявлять success.
+- **Lesson 13:** Container networking ≠ host networking. Для cloud storage через Docker тестировать connectivity до архитектурного commit.
+- **Lesson 14:** Wrapper scripts для archive_command — обязательный тест с реальным `%p` параметром до activation archive_mode.
 
 ## 📝 Running notes
 
-### Fix plan (для mini-промпта)
+### После рапорта исполнителя — моя рекомендация
 
-1. Fix permissions:
-   ```bash
-   docker compose exec db chown -R postgres:postgres /var/lib/postgresql/data/pg_wal/walg_data/
-   ```
-2. Verify логи — errors должны исчезнуть в течение 1-2 минут (next archive_command attempt).
-3. Clear any partial state (check что нет stale lock файлов).
-4. Retry backup-push как `postgres` user:
-   ```bash
-   docker compose exec -u postgres -T db bash -c "set -a; . /etc/wal-g/walg.env; set +a; /usr/local/bin/wal-g backup-push /var/lib/postgresql/data"
-   ```
-   Ключевое отличие: `-u postgres` вместо default root.
-5. Verify:
-   - `wal-g backup-list --pretty` → должен показать 1 backup.
-   - `wal-g st ls basebackups_005/` → не empty.
-   - Логи db — 0 `ERROR: unmark wal-g status` за последние 2 минуты.
-   - `pg_stat_archiver.archived_count` продолжает расти (теперь с реальным upload).
+Думаю **Option A с архитектурным follow-up** — правильный путь:
 
-### После fix — resume оригинальный план
+1. Исполнитель сделает `ALTER SYSTEM SET archive_command = '/bin/true'; pg_reload_conf();` — останавливает crash loop.
+2. Staging возвращается в стабильное состояние (archive_mode=on но no-op archive).
+3. W10.2-early закрывается как **PARTIAL (blocked on container networking)**.
+4. Новый hotlist item: «W10.2-early continuation — wal-g container networking fix или host-level architecture».
+5. Новая сессия позже с deep-dive: исследовать HTTP/2/IPv6 block, тестировать wrangler / host-level wal-g / docker-compose network settings.
 
-Шаг 4b (monitor 1 час) → Шаг 5 restore drill (critical) → Шаги 6-7.
+Options B и C требуют new arch decisions — лучше в чистой сессии с правильным research, не в heat-of-moment продолжении failing setup.
 
 ### Update triggers (reminder)
 
