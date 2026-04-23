@@ -1,5 +1,46 @@
 # Текущий спринт
 
+## 🎉 [2026-04-23] — UX AUDIT COMPLETE — 5 of 5 non-W9 items closed
+
+All 5 non-W9 items from `docs/ux/ux-audit-2026-04-23.md` delivered в single day across 4 sessions. Key lesson reinforced 4×: **audit existing infrastructure before planning new code**.
+
+| # | Item | Session | Net footprint |
+|---|------|---------|---------------|
+| 1 | Bulk select companies | UX-3 | **1 LOC** context fix (full feature existed) |
+| 2 | Global search Ctrl+K | UX-2 | 360 LOC (endpoint + modal + styles) — partial reuse |
+| 3 | Unified timeline | UX-1 | 212 LOC (template + JS filter pills) — infra existed |
+| 4 | Quick-add dropdown | UX-4 | ~200 LOC (header + JS + v2_modal wire) |
+| 5 | Call entries в history | UX-1 | bundled (phone icons на timeline items) |
+
+**Total estimated**: 11-15h across 4 sessions. Actual: ~10h with substantial existing infra reuse.
+
+### Deferred к W9 UX wave
+
+- #6 pipeline kanban — product decision pending (0 deals в prod).
+- #7 calendar view for tasks.
+- #8 email threading (requires IMAP integration — W12 scope).
+- style-src 'unsafe-inline' cleanup (673 inline style attrs).
+
+### Commits trail
+
+```
+cea879ee 8b32fd08 12888d26 80220547 c8d7478d — UX-1 unified timeline
+bfbdb8eb 7afd4345 — UX-3 bulk companies
+11927c40 a5d293ea 7c1af837 — UX-4 quick-add
+ee5cc1cc f2acb3fd — UX-2 global search
+```
+
+Full audit doc: `docs/ux/ux-audit-2026-04-23.md`.
+
+### Next wave
+
+Remaining plan items — per `docs/plan/00_MASTER_PLAN.md`:
+- **W3** continuation (Company lifecycle hardening per master plan).
+- OR **W10** observability (Prometheus/Grafana/Loki gaps).
+- Pre-W9 blocker still pending: **nkv Android migration** (coordination task with user).
+
+---
+
 ## ✅ [2026-04-23] — W3.2 — Audit tasks chunking + composite indexes (hotlist #6-7)
 
 Hotlist items #6 и #7 закрыты одной сессией.
