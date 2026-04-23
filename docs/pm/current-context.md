@@ -2,82 +2,88 @@
 
 _Живое состояние текущей PM-сессии. PM обновляет этот файл перед предсказуемым compact или каждые 30-60 минут активной работы. После compact — читается ПЕРВЫМ для восстановления контекста._
 
-**Last updated:** 2026-04-24 11:20 UTC (PM).
+**Last updated:** 2026-04-24 11:35 UTC (PM).
 
 ---
 
 ## 🎯 Current session goal
 
-Возобновление W10.2-early — ключи Cloudflare (`CF_API_TOKEN`, `CF_ACCOUNT_ID`) доставлены на `/opt/proficrm-staging/.env`. Исполнитель в расширенной сессии: создаёт бакет R2 + S3-совместимые R2-креды через Cloudflare API, записывает в `.env`, потом ставит WAL-G + PITR end-to-end с обязательным restore drill.
+W10.2-early 🔴 BLOCKED на Шаге 1a — Cloudflare R2 сервис не активирован на аккаунте (ошибка 10042). One-time dashboard-активация требуется от Дмитрия. После активации сессия возобновляется с тем же `CF_API_TOKEN` без новых креденшалов.
 
 ## 📋 Active constraints
 
 - Path E: **ACTIVE**.
 - Режим исполнителя: только стейджинг.
-- Ключи `CF_API_TOKEN` + `CF_ACCOUNT_ID` на `/opt/proficrm-staging/.env` (пермишены 600).
-- Защитный слой (pg_dump ежедневно 03:30 UTC) работает — закоммичено `1e0af81b`.
+- Ключи `CF_API_TOKEN` + `CF_ACCOUNT_ID` на `/opt/proficrm-staging/.env` (пермишены 600). Оба валидны (`/user/tokens/verify` вернул `active`, длины 32 и 53 корректны).
+- Защитный слой (pg_dump ежедневно 03:30 UTC) работает, вчерашний дамп 201 МБ в `/opt/proficrm-staging/backups/`.
+- Disk `/` на стейджинг VPS: 23 ГБ свободно, достаточно для WAL-G setup.
 
 ## 🔄 Last decision made
 
-**Timestamp:** 2026-04-24 11:15 UTC.
-**Decision:** продолжить W10.2-early расширенной сессией — R2 setup через Cloudflare API + WAL-G install + restore drill в одной передаче.
-**Reasoning:** ключи Cloudflare на VPS, исполнитель может автоматически создать бакет и S3-совместимые креды через API. Если Cloudflare API не поддерживает permanent S3-compatible credentials — stop condition на шаге 1, Дмитрий создаст в дашборде вручную (5 минут).
-**Owner:** Дмитрий одобрил, PM пишет промпт.
+**Timestamp:** 2026-04-24 11:30 UTC.
+**Decision:** ждать активации R2 от Дмитрия через дашборд. После его «R2 enabled» — исполнитель возобновляет сессию с Шага 1a без новых действий PM.
+**Reasoning:** Cloudflare намеренно не экспонирует R2 activation через публичный API (legal ToS acceptance). Нет способа автоматизировать. CF_API_TOKEN остаётся валиден и нужен — revoke нельзя до завершения W10.2-early.
+**Owner:** Дмитрий (ручное действие в дашборде).
 
 ## ⏭️ Next expected action
 
 1. ✅ Обновить `docs/pm/current-context.md` (этот файл).
 2. ✅ Коммит.
-3. ⏭️ Написать расширенный промпт — 8 шагов, 5-7 часов, с security-дисциплиной (никаких литералов секретов в логи).
-4. ⏭️ Передать Дмитрию для copy-paste исполнителю.
-5. ⏭️ После рапорта (через 5-7 часов) — review restore drill доказательства + классификация.
+3. ⏭️ Ждать сообщения «R2 enabled» от Дмитрия.
+4. ⏭️ Передать исполнителю короткое сообщение «resume от Шага 1a» (не новый промпт, просто продолжение).
+5. ⏭️ Исполнитель отработает Шаги 1a-7 (~5-7 часов).
+6. ⏭️ После финального рапорта — review restore drill + классификация.
 
 ## ❓ Pending questions to Дмитрий
 
-Нет открытых вопросов. Ключи на месте, промпт готовится.
+- [ ] **Активировать R2** в Cloudflare дашборде:
+  1. [dash.cloudflare.com](https://dash.cloudflare.com) → левое меню → **R2 Object Storage**.
+  2. Click **«Purchase R2 Plan»** / **«Enable R2»** (UI может варьироваться).
+  3. Accept Terms of Service.
+  4. Free tier даётся по умолчанию: 10 ГБ storage + 10M Class A ops + 1M Class B ops/месяц. Для стейджинга (~2-5 ГБ) payment method не нужен.
+  5. Ответить PM «R2 enabled».
 
 ## 📊 Last Executor rapport summary
 
-**Session:** мини-сессия pg_dump (staging safety net).
-**Received:** 2026-04-24 10:50 UTC.
-**Status:** 🟢 COMPLETE (~17 мин под бюджет 15-30).
-**Classification:** win — защитный слой восстановлен.
+**Session:** W10.2-early Шаг 1a — попытка создать R2 bucket.
+**Received:** 2026-04-24 11:30 UTC.
+**Status:** 🔴 BLOCKED (proper stop).
+**Classification:** **win** — audit discipline exemplary, zero mutations, 10 минут под бюджет.
 
-Следующий ожидаемый рапорт: W10.2-early WAL-G setup end-to-end, через 5-7 часов после старта.
+### Key finding
+
+Cloudflare API ответил ошибкой 10042: «Please enable R2 through the Cloudflare Dashboard». CF_API_TOKEN валиден, но R2 как **сервис** не активирован на аккаунте. Это **one-time onboarding action** — нельзя автоматизировать через публичный API (дизайн-решение Cloudflare из-за Terms of Service).
+
+### Positive
+
+- Branch check: ✅ коммит `7ced0bb1` в топе.
+- Security дисциплина: 0 утечек литералов, только length-проверки (`CF_ACCOUNT_ID length: 32`).
+- CF credentials валидны (verify API returned `active`).
+- Smoke: 6/6 зелёных.
+- Disk: 23 ГБ free.
+- Zero mutations — ничего не установлено, не записано, не закоммичено.
+
+### Impact
+
+Задержка ~1-2 минуты на ручное действие Дмитрия. После активации сессия resume'ится без изменений в плане. Оставшиеся шаги (Context7 research → R2 API token creation → WAL-G install → archive_command → base backup → restore drill → runbook) выполняются как в оригинальном промпте.
 
 ## 🚨 Red flags (if any)
 
-### Security incident (resolved): токен Cloudflare в чате
-
-**2026-04-24 11:00-11:15 UTC.** Дмитрий послал CF API-токен прямо в чат (`cfut_...`). PM остановил работу, flag-нул риск (транскрипты, логи Anthropic, риск коммита в публичный репо), рекомендовал немедленный revoke. Токен отозван. Новый токен создан Дмитрием и положен напрямую в `/opt/proficrm-staging/.env` через SSH.
-
-**Lesson candidate (Lesson 9):** PM failure — в предыдущем сообщении следовало ЯВНО указать «передай токен исполнителю ТОЛЬКО через SSH `.env` на VPS, не в чат». Вместо этого был мягкий вариант «передай мне или исполнителю». Упущение. Добавить в lessons-learned после W10.2-early closure.
+Нет. Это ожидаемый тип blocker (внешняя system activation), обработан правильно.
 
 ## 📝 Running notes
 
-### Что должен сделать исполнитель в расширенной сессии
+### Lesson candidate (Lesson 10)
 
-**Фаза R2 setup (30-60 минут):**
+**Cloud service activation ≠ credentials.** В будущих сессиях с новым облачным сервисом (R2, AWS S3 bucket, Backblaze B2, MinIO, etc.) — включать в Шаг 0 явный pre-check «service activated on account?» ДО credentials check. Активация часто требует ручного ToS acceptance и не автоматизируется.
 
-- Шаг 0: branch check (`1e0af81b` в топе), baseline, проверка что CF_API_TOKEN + CF_ACCOUNT_ID читаются из `.env`.
-- Шаг 1: создать бакет `proficrm-walg-staging` через Cloudflare API. Создать R2 API Token (S3-совместимые `access_key_id` + `secret_access_key`) либо через Cloudflare API (если endpoint поддерживает), либо stop + Дмитрий делает через дашборд. Записать в `.env`: `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT`, `R2_BUCKET_NAME`.
+Добавить в `docs/pm/lessons-learned.md` после W10.2-early closure (вместе с Lesson 9 про secrets в chat).
 
-**Фаза WAL-G (4-6 часов, прежний scope):**
+### Когда R2 enabled — как resume
 
-- Шаг 2: установка WAL-G binary + `/etc/wal-g/walg.env`.
-- Шаг 3: `archive_mode=on`, `archive_command`, перезапуск Postgres.
-- Шаг 4: первый full base backup + верификация archiving.
-- Шаг 5: restore drill с отдельным контейнером (critical).
-- Шаг 6: runbook + retention cron.
-- Шаг 7: smoke + rapport.
+Короткое сообщение исполнителю (не полный новый промпт):
 
-### Security-дисциплина для исполнителя
-
-- Не echo'ить литералы токенов в терминал / логи.
-- `curl` с `Authorization: Bearer $CF_API_TOKEN` без `-v`, без `--trace`.
-- API response с секретом — сразу перенаправить в `.env` / переменную, не `cat`-ить.
-- Если `set -x` активно — временно `set +x` перед работой с токенами.
-- После завершения W10.2-early: предложить Дмитрию отозвать CF_API_TOKEN (нужен был только для setup, WAL-G пользуется R2 S3 creds, которые намного уже по scope).
+> Resume W10.2-early от Шага 1a. R2 активирован Дмитрием через дашборд. CF_API_TOKEN остался тот же, валиден. Re-try bucket create (`POST /accounts/$CF_ACCOUNT_ID/r2/buckets`), дальше по оригинальному промпту — Context7 research для S3-compatible token API → Шаги 2-7. Stop conditions те же.
 
 ### Update triggers (reminder)
 
