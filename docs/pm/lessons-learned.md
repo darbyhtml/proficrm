@@ -334,25 +334,25 @@ Through Browser MCP or manual:
 
 Собрано из неудачных decisions.
 
-### AP-1: "Rebuild from scratch" без audit
+### AP-1: «Переделывать с нуля» без аудита
 
 **Симптом:** Executor spends 4h building `GlobalSearchService` когда `CompanySearchIndex` mature и нужно только cross-entity wire.
 
 **Prevention:** Pattern 1 — Audit before implement (Lesson 4).
 
-### AP-2: "Prod hotfix" без migration plan
+### AP-2: «Прод-хотфикс» без migration plan
 
 **Симптом:** Quick fix применяется на прод через `docker cp` или manual edit. Later разработчик видит drift между prod и main.
 
 **Prevention:** Path E (Pattern 2). Prod changes **только** через tagged release. Исключения (SEV1) — документируются в `docs/runbooks/YYYY-MM-DD-hotfix-<name>.md`.
 
-### AP-3: "Mass test на shared staging"
+### AP-3: «Массовый тест на общих staging-пользователях»
 
 **Симптом:** Destructive test на `qa_manager` / `sdm` → deleted → 2h recovery.
 
 **Prevention:** Pattern 4 — Disposable fixtures (Lesson 3).
 
-### AP-4: "Missed integration chain"
+### AP-4: «Пропущенная цепочка интеграции»
 
 **Симптом:** Backend service done, API endpoint done, template has `{% include %}`. Но partial не существует → 500 error в UI. CI passes потому что test не рендерит template.
 
@@ -361,19 +361,19 @@ Through Browser MCP or manual:
 - Template rendering tests с `Client.get(url, secure=True, HTTP_HOST=...)`.
 - Grep для `{% include %}` после adding partials: `grep -rn "partials/<new>" backend/templates/`.
 
-### AP-5: "Skip audit step"
+### AP-5: «Пропуск шага аудита»
 
 **Симптом:** Promрт без Step 0. Executor dives straight в implementation. Обнаруживает existing infra через 2h code writing.
 
 **Prevention:** Промпт **всегда** начинается с Step 0 baseline + audit. Строгая дисциплина.
 
-### AP-6: "Panic rapport без verification"
+### AP-6: «Паника в rapport без проверки»
 
 **Симптом:** "Critical Android user affected, W9 delayed by weeks!" → оказывается 30-min coordination.
 
 **Prevention:** Lesson 5 — verify facts before alarming.
 
-### AP-7: "Silent failure"
+### AP-7: «Молчаливый отказ»
 
 **Симптом:** Executor видит red test, не упоминает в rapport, PM пропускает, regression в main.
 
