@@ -2,83 +2,115 @@
 
 _Живое состояние текущей PM-сессии. PM обновляет этот файл перед предсказуемым compact или каждые 30-60 минут активной работы. После compact — читается ПЕРВЫМ для восстановления контекста._
 
-**Last updated:** 2026-04-24 13:00 UTC (PM).
+**Last updated:** 2026-04-24 13:40 UTC (PM).
 
 ---
 
 ## 🎯 Current session goal
 
-W10.2-early — Дмитрий одобрил рестарт (2026-04-24 13:00 UTC). Исполнитель отрабатывает Шаги 3b-7 бесшумно: рестарт Postgres → archive_command → full backup → restore drill → runbook. Ожидаемо ~3-4 часа до финального рапорта.
+W10.2-early — сессия исполнителя упала локально, но `wal-g backup-push` **продолжает работать на VPS** (PID 2328740, запущен 13:22 UTC). PM ждёт завершения процесса, затем передаёт Дмитрию compact resume-сообщение для нового окна.
 
 ## 📋 Active constraints
 
 - Path E: **ACTIVE**.
-- Все prerequisites выполнены: WAL-G v3.0.8 установлен, `/etc/wal-g/walg.env` с R2-креденшалами, bucket доступен, коммит `9b3e956a` готов к pull на VPS.
-- Защитный слой pg_dump работает — если Шаг 3b сломает что-то, есть safety net.
-- Dmitry ok на 1-2 мин простоя стейджинга + ожидаемый Kuma alert.
+- Шаг 3b ✅ завершён: 31 WAL archived, 0 failed, smoke 6/6 до падения сессии.
+- `archive_command` активен и работает корректно.
+- Все 7 контейнеров стейджинга healthy.
+- Staging HTTP 200 (curl проверил 13:35 UTC).
+- `wal-g backup-push` процесс живёт независимо от сессии исполнителя (запущен в docker exec, процесс в контейнере).
 
 ## 🔄 Last decision made
 
-**Timestamp:** 2026-04-24 13:00 UTC.
-**Decision:** Дмитрий greenlight на breaking action Шага 3b. Исполнитель продолжает 3b-7 бесшумно.
-**Reasoning:** стейджинг не prod, пользователи — тестеры, Telegram alert документирован как ожидаемый.
-**Owner:** Дмитрий approved, PM передаёт исполнителю.
+**Timestamp:** 2026-04-24 13:40 UTC.
+**Decision:** ждать завершения `wal-g backup-push` (ожидаемо ещё 5-15 минут). НЕ trogать окно исполнителя — fresh process может запустить ещё один backup параллельно.
+**Reasoning:** backup-push идёт внутри db-контейнера через `docker exec`, отвязан от сломанной сессии Claude Code. Процесс завершится самостоятельно, backup появится в R2 по завершении.
+**Owner:** PM (monitoring), Дмитрий (wait).
 
 ## ⏭️ Next expected action
 
 1. ✅ Обновить `docs/pm/current-context.md`.
 2. ✅ Коммит.
-3. ⏭️ Передать исполнителю короткое «ok рестартуй, продолжай до финала».
-4. ⏭️ **Ожидание ~3-4 часа** — исполнитель не возвращается до финального рапорта или stop condition.
-5. ⏭️ При получении рапорта — review restore drill + classification + closure.
+3. ⏭️ Сказать Дмитрию: wait 10-15 минут, потом спроси «проверь wal-g».
+4. ⏭️ При следующем turn — PM проверяет `backup-list --pretty`, если backup в R2 → compact resume-промпт для нового окна исполнителя.
+5. ⏭️ Новый исполнитель продолжит с Шага 4b (monitor 1h archive push) → Шаг 5 restore drill → Шаги 6-7.
 
 ## ❓ Pending questions to Дмитрий
 
-Нет. Сессия на автопилоте до финального рапорта.
+- [ ] Через 10-15 минут вернись с «проверь wal-g» — я сделаю sanity check на VPS, если backup-push завершён — дам resume-промпт.
 
 ## 📊 Last Executor rapport summary
 
-**Session:** W10.2-early Шаги 2-3a → PAUSE перед 3b.
-**Received:** 2026-04-24 12:50 UTC.
-**Status:** 🟡 PAUSE → 🟢 UNBLOCKED (ok от Дмитрия 13:00 UTC).
-**Classification:** win.
+**Session:** W10.2-early Шаги 3b завершены + Шаг 4 начат.
+**Received via screenshot:** 2026-04-24 ~13:35 UTC.
+**Status:** 🟡 SESSION DEAD / 🟢 PROCESS ALIVE.
+**Classification:** technical failure (Claude Code сессия), but operational work continues.
 
-Следующий рапорт: финальный end-to-end через ~3-4 часа (~16:00-17:00 UTC).
+### Что до падения было сделано
+
+- Шаг 3b полный: mounts, ALTER SYSTEM, рестарт №2, verify.
+- 31 WAL archived, 0 failed.
+- Smoke check прошёл.
+- Шаг 4 full base backup начат (wal-g backup-push).
+
+### Findings из SSH diagnostic
+
+- PID 2328740 (`/usr/local/bin/wal-g backup-push`) активен, started 13:22 UTC.
+- backup-list ещё пустой — backup commit'ится только после полной загрузки в R2.
+- Все 7 контейнеров healthy.
+- pg_stat_archiver продолжает recording WAL.
+- Мой envdir в diagnostic (engineering mistake) — не задело staging.
 
 ## 🚨 Red flags (if any)
 
-Нет.
+### Операционный риск: параллельный backup-push
+
+Если Дмитрий пошлёт промпт в сломанное окно или откроет новое с тем же промптом — fresh process не узнает что backup-push уже работает, попытается запустить параллельно. **Это плохо:**
+
+- wal-g может конкурировать за pg_start_backup()/pg_stop_backup() lock.
+- Двойная загрузка в R2 = double egress + потраченные Class A ops.
+- Непредсказуемое состояние backup-list.
+
+**Mitigation:** **wait** до завершения текущего backup-push, потом resume с чистого состояния.
 
 ## 📝 Running notes
 
-### Ожидаемые ключевые моменты Шагов 3b-7
+### Почему процесс wal-g выжил без сессии Claude Code
 
-- **~13:01 UTC:** `git pull` на VPS → `docker compose up -d db` (рестарт №1, ~30 с).
-- **~13:02 UTC:** `ALTER SYSTEM` + `docker compose restart db` (рестарт №2, ~30 с).
-- **~13:03 UTC:** Kuma вернёт зелёный статус. В Telegram прилетит сначала 🔴 Down, потом ✅ Up.
-- **~13:05 UTC:** проверка `pg_stat_archiver.archived_count > 0`.
-- **~13:10 UTC:** начало Шага 4 — `wal-g backup-push` (full backup первого base, ожидаемое время ~5-15 мин для ~1.5 ГБ compressed).
-- **~13:25 UTC:** monitor 1 час archive push (`archived_count >= 60`).
-- **~14:25 UTC:** начало Шага 5 — restore drill (самый длинный, ~2 часа).
-- **~16:30 UTC:** Шаг 6 runbook + retention cron.
-- **~17:00 UTC:** Шаг 7 smoke + финальный рапорт.
+Архитектура:
+- Claude Code (локально) → background bash shell.
+- Background shell → `ssh root@VPS` → `docker compose exec db bash -c "wal-g backup-push"`.
+- **wal-g работает внутри db-контейнера**, не в ssh session.
+- Когда Claude Code сессия упала → ssh отвалился → docker exec tail остался ждать stdout, но сам wal-g процесс в контейнере продолжает работать.
+- Backup завершится, докер exec узнает exit code, только для stdout некому слушать. Это ОК — stdout был для логирования, не для control.
 
-### Stop conditions (активны на протяжении всех Шагов)
+### Ожидаемый финиш wal-g backup-push
 
-- `archived_count = 0` через 2 минуты после рестарта — stop.
-- `failed_count > 0` — stop.
-- Restore drill fails — stop, НЕ объявлять успех.
-- Smoke red после Шага 3b — stop, rollback через `git revert 9b3e956a`.
+Размер стейджинг-БД 5.3 ГБ → после brotli compression ~700 МБ - 1.5 ГБ (compression ratio 87% на pg_dump не применим для base backup — base backup включает raw data files, compression хуже).
 
-### Post-closure план
+Upload до R2 на default speed VPS → можно ожидать 10-30 минут total. 13:22 + 20 мин = 13:42 UTC. Сейчас 13:40 — скоро.
 
-После финального рапорта:
+### После backup завершения
 
-1. Review restore drill (primary acceptance criterion, Lesson 7).
-2. Classify сессии.
-3. Update ADR + хотлист.
-4. Написать Lessons 9, 10, 11 в `docs/pm/lessons-learned.md`.
-5. Предложить Дмитрию revoke `CF_API_TOKEN`.
+Compact resume-промпт для нового окна исполнителя:
+
+> **W10.2-early — RESUME с Шага 4b (новое окно исполнителя).**
+>
+> Session 12:50-13:30 UTC упала локально, но wal-g backup-push завершился успешно на VPS.
+>
+> Шаги 3b + 4a ✅ done:
+> - archive_command active (`envdir /etc/wal-g /usr/local/bin/wal-g wal-push %p`).
+> - First full base backup в R2 bucket proficrm-walg-staging.
+>
+> **НЕ запускай backup-push снова!** Он уже там.
+>
+> Проверь:
+> ```bash
+> ssh -i ~/.ssh/id_proficrm_deploy root@5.181.254.172 'docker compose -f /opt/proficrm-staging/docker-compose.staging.yml -p proficrm-staging exec -T db bash -c "set -a; . /etc/wal-g/walg.env; set +a; /usr/local/bin/wal-g backup-list --pretty"'
+> ```
+>
+> Должен быть 1 backup. Записать в rapport duration + size.
+>
+> Продолжай: monitor 1 час archive push (Шаг 4b) → Шаг 5 restore drill (critical) → Шаги 6-7 как в оригинальном промпте. Security discipline, stop conditions — те же.
 
 ### Update triggers (reminder)
 
