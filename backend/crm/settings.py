@@ -861,20 +861,17 @@ CELERY_BEAT_SCHEDULE = {
         "task": "notifications.tasks.generate_contract_reminders",
         "schedule": crontab(hour=6, minute=30),
     },
-    # Retention: еженедельно в воскресенье 03:00 MSK
     # -----------------------------------------------------------------------
-    # Wave 0.1 audit (2026-04-20) flagged P0 runtime risk:
-    # ActivityEvent.objects.filter(created_at__lt=cutoff).delete() без chunking.
-    # На 9.5M строк — single-transaction DELETE → OOM + lock contention всей БД.
-    # Disabled в beat до Wave 3 rewrite с itertools chunk'ing (по 100k строк).
-    # Функция остаётся импортируемой (tests_retention.py вызывает её напрямую
-    # с маленькими тестовыми наборами). Не удаляю sched entry полностью, а
-    # комментирую — чтобы diff был очевиден при восстановлении в W3.
+    # W3.2 (2026-04-23, hotlist #6): re-enabled после rewrite с chunking.
+    # ActivityEvent purge теперь chunked (10K rows per batch, safety cap
+    # 10K batches) — не блокирует DB при миллионах строк.
+    # Daily 03:00 MSK — за 15 минут до policy purge (03:15), чтобы избежать
+    # concurrent load на ту же таблицу.
     # -----------------------------------------------------------------------
-    # "purge-old-activity-events": {
-    #     "task": "audit.tasks.purge_old_activity_events",
-    #     "schedule": crontab(hour=3, minute=0, day_of_week=0),
-    # },
+    "purge-old-activity-events": {
+        "task": "audit.tasks.purge_old_activity_events",
+        "schedule": crontab(hour=3, minute=0),  # Каждый день
+    },
     "purge-old-error-logs": {
         "task": "audit.tasks.purge_old_error_logs",
         "schedule": crontab(hour=3, minute=15, day_of_week=0),
