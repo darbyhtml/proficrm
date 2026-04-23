@@ -8,6 +8,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pgdata_staging:/var/lib/postgresql/data
+      # W10.2-early (2026-04-24): WAL-G binary + walg.env для archive_command.
+      # /etc/wal-g/walg.env на хосте хранит R2 creds (chmod 600), read-only mount.
+      - /usr/local/bin/wal-g:/usr/local/bin/wal-g:ro
+      - /etc/wal-g:/etc/wal-g:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crm_staging}"]
       interval: 10s
