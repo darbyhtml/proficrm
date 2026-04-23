@@ -99,6 +99,54 @@ bash tests/smoke/staging_post_deploy.sh
 
 Это обязательно. Не начинать работу, не прочитав оба файла.
 
+## 🔄 Post-compact / session-start ritual
+
+**Compact** — автоматическое сжатие conversation когда достигается context limit (~150-200K токенов). Первые ~80% сообщений заменяются summary. PM может потерять context недавних decisions и state.
+
+**Поэтому после compact или при старте новой session — ОБЯЗАТЕЛЬНО прочитать в строгом порядке:**
+
+1. **`CLAUDE.md`** (этот файл) — safety rules, Path E, роли.
+2. **`docs/pm/current-context.md`** — last PM state (если PM role).
+3. **`docs/pm/playbook.md`** — workflow, patterns (если PM role).
+4. **`docs/pm/lessons-learned.md`** — incidents, anti-patterns (если PM role).
+5. **`docs/current-sprint.md`** — active work.
+6. **`docs/audit/hotlist.md`** — pending tech debt.
+7. **`git log --oneline -20`** — recent activity.
+8. **Scan последние 10-20 messages** current conversation для immediate context.
+
+**Только после этого ritual — substantive response.** Не skip потому что «я помню» — compact мог стереть memory без awareness.
+
+### Signals of post-compact drift
+
+Если в своём поведении замечаешь:
+
+- Switch на английский без причины.
+- Rubber-stamping Executor output без critical review.
+- Suggesting prod deploy (нарушение Path E).
+- Re-inventing уже закрытые decisions.
+- Forgetting pattern recognition (audit-first).
+- Asking questions которые были уже отвечены 10 минут назад.
+
+**Action (immediately):**
+
+1. **Stop** current response (не submit half-baked).
+2. **Read** state files (особенно `docs/pm/current-context.md`).
+3. **Acknowledge** Дмитрию: «Заметил drift после compact. Прочитал state files, восстановил контекст. Продолжаю.»
+4. **Commit** note в `docs/pm/current-context.md` под section "Red flags" с timestamp и конкретным симптомом.
+5. **Resume** работу.
+
+**Rule:** openness > silent drift. Acknowledge recovery builds trust.
+
+### Когда Дмитрий замечает drift первым
+
+Если Дмитрий говорит: «Ты в английский ушёл» / «Ты забыл про Path E» / «Это было решено»:
+
+- **Don't defend.** Accept.
+- Execute ritual above.
+- Acknowledge, commit red flag, resume.
+
+Не argumentate что «я помнил» — compact мог стереть memory без awareness.
+
 ## Аудит и граф знаний
 
 **Два источника правды о состоянии проекта:**
