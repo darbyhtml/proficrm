@@ -2,72 +2,92 @@
 
 _Живое состояние текущей PM-сессии. PM обновляет этот файл перед предсказуемым compact или каждые 30-60 минут активной работы. После compact — читается ПЕРВЫМ для восстановления контекста._
 
-**Last updated:** 2026-04-24 12:25 UTC (PM).
+**Last updated:** 2026-04-24 12:55 UTC (PM).
 
 ---
 
 ## 🎯 Current session goal
 
-W10.2-early unblocked: R2 S3 creds доставлены Дмитрием на VPS (2026-04-24 ~12:20 UTC). Исполнитель resume'ится с Шага 2 по оригинальному промпту — WAL-G install → archive_command → full backup → restore drill → runbook. Ожидаемо 4-5 часов.
+W10.2-early Шаги 2-3a ✅ завершены бесшумно. Исполнитель на 🟡 PAUSE перед Шагом 3b — ждёт одобрения Дмитрия на 2 рестарта Postgres стейджинга (~1-2 мин суммарного простоя). После OK — идут Шаги 3b-7 автоматически.
 
 ## 📋 Active constraints
 
 - Path E: **ACTIVE**.
-- R2 bucket `proficrm-walg-staging` ✅ создан (2026-04-24 11:41 UTC).
-- R2 S3 credentials в `/opt/proficrm-staging/.env` (R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_ENDPOINT), пермишены 600.
-- `CF_API_TOKEN` свою роль выполнил (активация + bucket create). После успешного завершения W10.2-early можно revoke.
+- R2 bucket + creds: ✅ готовы.
+- WAL-G v3.0.8 установлен в `/usr/local/bin/wal-g` (v3.0.3 asset отсутствует на GitHub, взят новее — совместимый). Connectivity к R2 подтверждён `wal-g st ls` (пустой бакет).
+- `/etc/wal-g/walg.env` создан, пермишены 600, секреты не утекли.
+- Коммит `9b3e956a` (`feat(backup): WAL-G mounts для db container`) в `claude/recursing-elgamal-c31a17` — добавлены 2 read-only монта в сервис `db`:
+  - `/usr/local/bin/wal-g:/usr/local/bin/wal-g:ro`
+  - `/etc/wal-g:/etc/wal-g:ro`
 - Защитный слой pg_dump работает.
-- Disk 23 ГБ свободно.
 
 ## 🔄 Last decision made
 
-**Timestamp:** 2026-04-24 12:25 UTC.
-**Decision:** передать исполнителю короткое resume от Шага 2. Оригинальный промпт W10.2-early остаётся в силе.
-**Reasoning:** Шаг 1 fully closed (bucket + credentials). Шаги 2-7 идентичны оригинальному плану.
-**Owner:** PM (resume сообщение), Дмитрий (copy-paste).
+**Timestamp:** 2026-04-24 12:55 UTC.
+**Decision pending:** Дмитрий одобряет 2 рестарта Postgres стейджинга (breaking action, ~1-2 мин downtime + Kuma Telegram alert ожидаемый, не инцидент).
+**Reasoning:** `archive_mode=on` нельзя активировать без рестарта Postgres. Compose config change тоже требует `up -d` (пересоздание контейнера).
+**Owner:** Дмитрий (ok/подожди).
 
 ## ⏭️ Next expected action
 
 1. ✅ Обновить `docs/pm/current-context.md`.
 2. ✅ Коммит.
-3. ⏭️ Передать Дмитрию короткое resume-сообщение.
-4. ⏭️ Координация на Шаге 3 (restart Postgres, ~2 минуты простоя стейджинга) — ожидать запрос исполнителя на «ok to restart».
-5. ⏭️ Ждать финальный рапорт W10.2-early через 4-5 часов.
-6. ⏭️ После рапорта — review restore drill proof + classification + закрытие сессии + написание Lessons 9-11 в lessons-learned.md.
+3. ⏭️ Короткий брифинг Дмитрию + запрос «ok/подожди».
+4. ⏭️ Передать исполнителю ответ Дмитрия.
+5. ⏭️ Исполнитель отработает Шаги 3b-7 бесшумно (~3-4 часа, из которых ~2 часа restore drill).
+6. ⏭️ Финальный рапорт → review + classification + closure.
 
 ## ❓ Pending questions to Дмитрий
 
-- [ ] На Шаге 3 исполнитель попросит ok на 2-минутный рестарт Postgres стейджинга. Просто ответь «ok» когда он уточнит.
+- [ ] **OK на 2 рестарта Postgres стейджинга?**
+  - Downtime: ≈1-2 минуты суммарно.
+  - Telegram `[CRM Staging] [🔴 Down]` → через ~1-2 мин `[✅ Up]` — ожидаемое, не инцидент.
+  - Rollback если что-то пойдёт не так: `git revert 9b3e956a && docker compose up -d db`.
+  - Подходящее ли время (рабочий день в РФ)?
 
 ## 📊 Last Executor rapport summary
 
-**Session:** W10.2-early Шаги 1a-1c.
-**Received:** 2026-04-24 12:05 UTC.
-**Status:** 🟡 PARTIAL → UNBLOCKED (R2 S3 creds доставлены 12:20 UTC).
-**Classification:** win.
+**Session:** W10.2-early Шаги 2-3a.
+**Received:** 2026-04-24 12:50 UTC.
+**Status:** 🟡 PAUSE — ожидает greenlight перед breaking Шагом 3b.
+**Classification:** win — под бюджет (~15 мин на Шаги 2-3a), чистая security discipline, адекватный fallback на отсутствующий v3.0.3 asset.
 
-Следующий рапорт: финальный W10.2-early end-to-end через 4-5 часов.
+### Ключевые факты
+
+- WAL-G v3.0.8 установлен на хосте и доступен в контейнере через bind mount.
+- `wal-g st ls` → empty bucket listing (R2 доступен, auth работает).
+- `docker-compose.staging.yml` изменён (+4 строки), закоммичен `9b3e956a`, запушен.
+
+### Шаг 3b — план после OK
+
+1. `git pull` на стейджинг-хосте (берёт `9b3e956a`).
+2. Рестарт №1: `docker compose up -d db` (пересоздание контейнера с новыми mounts, ~30 с).
+3. `ALTER SYSTEM SET archive_mode / archive_command / archive_timeout / wal_level`.
+4. Рестарт №2: `docker compose restart db` (для применения archive_mode=on, ~30 с).
+5. Через 90 с — проверка `pg_stat_archiver.archived_count > 0`.
+6. Если зелёно → Шаги 4-7 бесшумно.
 
 ## 🚨 Red flags (if any)
 
-Нет.
+Нет. Rapport чист, план Шага 3b детален, rollback-path документирован.
 
 ## 📝 Running notes
 
-### Scope оставшейся сессии (Шаги 2-7)
+### Отклонение от промпта: WAL-G v3.0.8 вместо v3.0.3
 
-- **Шаг 2:** WAL-G v3.0.3 binary в `/usr/local/bin/wal-g`. `/etc/wal-g/walg.env` конфиг с R2 creds из `.env.staging`. Test `wal-g st ls` → bucket reachable, empty.
-- **Шаг 3:** `ALTER SYSTEM SET archive_mode/archive_command/archive_timeout/wal_level`. Volume mount `/etc/wal-g` в db-контейнер (изменение `docker-compose.staging.yml`, коммит). Restart db (breaking, ~2 мин). Verify `pg_stat_archiver.archived_count > 0`.
-- **Шаг 4:** `wal-g backup-push /var/lib/postgresql/data`. Verify `wal-g backup-list --pretty`. Monitor 1 час archive push.
-- **Шаг 5:** Mandatory restore drill — отдельный контейнер `db-drill`, wal-g backup-fetch LATEST, recovery.signal + restore_command, row counts match с staging primary.
-- **Шаг 6:** Runbook `docs/runbooks/2026-04-24-wal-g-pitr.md` + cron `/etc/cron.d/proficrm-walg-retention` (weekly full + retention 4 недели).
-- **Шаг 7:** Smoke + rapport с mandatory items.
+v3.0.3 asset не найден на GitHub (возможно удалён/переименован). Исполнитель взял v3.0.8 (latest, 2026-01-21). Это минорное отклонение, совместимость проверена на обоих средах (хост + контейнер). Приемлемо.
 
-### Lessons (добавить после закрытия W10.2-early)
+### После Шага 7 closure — что делаю
 
-1. **Lesson 9** — PM failure указать explicit safe channel для секретов (incident с токеном в чате).
-2. **Lesson 10** — cloud service activation ≠ credentials (R2 error 10042).
-3. **Lesson 11** — Cloudflare API не даёт создавать permanent R2 S3 tokens через publicAPI (error 9109, design limitation). Для новых проектов: планировать 1 dashboard step или Terraform-managed tokens.
+1. Review финального рапорта с фокусом на restore drill (Lesson 7: «CI green ≠ feature works» — здесь restore drill = primary acceptance criterion).
+2. Classify: win / partial / blocked.
+3. Update хотлиста: закрыть пункт W10.2-early pending.
+4. Update ADR `2026-04-24-wal-g-r2-bridge-to-minio.md` §Consequences → «WAL-G PITR active on staging since 2026-04-24».
+5. Написать **Lesson 9, 10, 11** в `docs/pm/lessons-learned.md`:
+   - L9: explicit safe channel для секретов (incident с токеном в чате).
+   - L10: cloud service activation ≠ credentials (R2 error 10042).
+   - L11: Cloudflare API не даёт permanent S3-tokens через /user/tokens (error 9109) — планировать dashboard step.
+6. Предложить Дмитрию revoke `CF_API_TOKEN` (его роль выполнена; WAL-G использует R2 S3 creds с узким scope).
 
 ### Update triggers (reminder)
 
