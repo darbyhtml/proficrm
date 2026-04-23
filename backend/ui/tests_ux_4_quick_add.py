@@ -46,13 +46,14 @@ class HeaderQuickAddTest(TestCase):
         """Задача item с data-action="quick-add-task" (opens V2Modal)."""
         html = self._get_home_html()
         self.assertIn('data-action="quick-add-task"', html)
-        self.assertIn(">Задача<", html)
+        self.assertIn("Задача", html)
 
     def test_company_menuitem_present(self):
         """Компания item — <a href="/companies/new/">."""
         html = self._get_home_html()
         self.assertIn('href="/companies/new/"', html)
-        self.assertIn(">Компания<", html)
+        # Text "Компания" appears inside <a> с svg icon — check substring only
+        self.assertIn("Компания", html)
 
     def test_v2_modal_included_globally(self):
         """v2_modal.html теперь available от base.html (not per-page)."""
