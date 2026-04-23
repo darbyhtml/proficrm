@@ -2,88 +2,66 @@
 
 _Живое состояние текущей PM-сессии. PM обновляет этот файл перед предсказуемым compact или каждые 30-60 минут активной работы. После compact — читается ПЕРВЫМ для восстановления контекста._
 
-**Last updated:** 2026-04-24 11:35 UTC (PM).
+**Last updated:** 2026-04-24 11:45 UTC (PM).
 
 ---
 
 ## 🎯 Current session goal
 
-W10.2-early 🔴 BLOCKED на Шаге 1a — Cloudflare R2 сервис не активирован на аккаунте (ошибка 10042). One-time dashboard-активация требуется от Дмитрия. После активации сессия возобновляется с тем же `CF_API_TOKEN` без новых креденшалов.
+**R2 активирован** (2026-04-24 11:40 UTC, Дмитрий). Исполнитель resume'ится с Шага 1a W10.2-early: создаёт бакет через Cloudflare API, R2 S3-совместимые креды (через API или dashboard fallback), потом WAL-G install → archive_command → base backup → restore drill → runbook.
 
 ## 📋 Active constraints
 
 - Path E: **ACTIVE**.
-- Режим исполнителя: только стейджинг.
-- Ключи `CF_API_TOKEN` + `CF_ACCOUNT_ID` на `/opt/proficrm-staging/.env` (пермишены 600). Оба валидны (`/user/tokens/verify` вернул `active`, длины 32 и 53 корректны).
-- Защитный слой (pg_dump ежедневно 03:30 UTC) работает, вчерашний дамп 201 МБ в `/opt/proficrm-staging/backups/`.
-- Disk `/` на стейджинг VPS: 23 ГБ свободно, достаточно для WAL-G setup.
+- R2 service активирован на Cloudflare аккаунте (free tier: 10 ГБ storage + 1M Class A ops + 10M Class B ops/месяц).
+- Ключи на VPS: `CF_API_TOKEN` + `CF_ACCOUNT_ID` в `/opt/proficrm-staging/.env`, валидны (verify active).
+- Защитный слой (pg_dump 03:30 UTC) работает.
+- Disk `/` стейджинга: 23 ГБ свободно.
 
 ## 🔄 Last decision made
 
-**Timestamp:** 2026-04-24 11:30 UTC.
-**Decision:** ждать активации R2 от Дмитрия через дашборд. После его «R2 enabled» — исполнитель возобновляет сессию с Шага 1a без новых действий PM.
-**Reasoning:** Cloudflare намеренно не экспонирует R2 activation через публичный API (legal ToS acceptance). Нет способа автоматизировать. CF_API_TOKEN остаётся валиден и нужен — revoke нельзя до завершения W10.2-early.
-**Owner:** Дмитрий (ручное действие в дашборде).
+**Timestamp:** 2026-04-24 11:45 UTC.
+**Decision:** передать исполнителю короткое resume-сообщение «R2 активирован, re-try с Шага 1a». Оригинальный промпт W10.2-early остаётся в силе, только стартовая точка смещена.
+**Reasoning:** R2 prerequisite закрыт, все остальные Stop conditions того промпта валидны.
+**Owner:** PM (resume сообщение), Дмитрий (copy-paste в окно исполнителя).
 
 ## ⏭️ Next expected action
 
 1. ✅ Обновить `docs/pm/current-context.md` (этот файл).
 2. ✅ Коммит.
-3. ⏭️ Ждать сообщения «R2 enabled» от Дмитрия.
-4. ⏭️ Передать исполнителю короткое сообщение «resume от Шага 1a» (не новый промпт, просто продолжение).
-5. ⏭️ Исполнитель отработает Шаги 1a-7 (~5-7 часов).
-6. ⏭️ После финального рапорта — review restore drill + классификация.
+3. ⏭️ Передать Дмитрию короткое resume-сообщение для исполнителя (не полный промпт).
+4. ⏭️ Ждать финальный рапорт W10.2-early — ожидаемо через 5-7 часов.
+5. ⏭️ После рапорта — review restore drill доказательства + классификация + закрытие сессии.
 
 ## ❓ Pending questions to Дмитрий
 
-- [ ] **Активировать R2** в Cloudflare дашборде:
-  1. [dash.cloudflare.com](https://dash.cloudflare.com) → левое меню → **R2 Object Storage**.
-  2. Click **«Purchase R2 Plan»** / **«Enable R2»** (UI может варьироваться).
-  3. Accept Terms of Service.
-  4. Free tier даётся по умолчанию: 10 ГБ storage + 10M Class A ops + 1M Class B ops/месяц. Для стейджинга (~2-5 ГБ) payment method не нужен.
-  5. Ответить PM «R2 enabled».
+Нет открытых вопросов.
 
 ## 📊 Last Executor rapport summary
 
-**Session:** W10.2-early Шаг 1a — попытка создать R2 bucket.
+**Session:** W10.2-early Шаг 1a (попытка создать R2 bucket).
 **Received:** 2026-04-24 11:30 UTC.
-**Status:** 🔴 BLOCKED (proper stop).
-**Classification:** **win** — audit discipline exemplary, zero mutations, 10 минут под бюджет.
+**Status:** 🔴 BLOCKED → 🟢 **UNBLOCKED** (R2 активирован 11:40 UTC).
+**Classification:** win — правильный стоп, zero mutations, security discipline exemplary.
 
-### Key finding
-
-Cloudflare API ответил ошибкой 10042: «Please enable R2 through the Cloudflare Dashboard». CF_API_TOKEN валиден, но R2 как **сервис** не активирован на аккаунте. Это **one-time onboarding action** — нельзя автоматизировать через публичный API (дизайн-решение Cloudflare из-за Terms of Service).
-
-### Positive
-
-- Branch check: ✅ коммит `7ced0bb1` в топе.
-- Security дисциплина: 0 утечек литералов, только length-проверки (`CF_ACCOUNT_ID length: 32`).
-- CF credentials валидны (verify API returned `active`).
-- Smoke: 6/6 зелёных.
-- Disk: 23 ГБ free.
-- Zero mutations — ничего не установлено, не записано, не закоммичено.
-
-### Impact
-
-Задержка ~1-2 минуты на ручное действие Дмитрия. После активации сессия resume'ится без изменений в плане. Оставшиеся шаги (Context7 research → R2 API token creation → WAL-G install → archive_command → base backup → restore drill → runbook) выполняются как в оригинальном промпте.
+Следующий ожидаемый рапорт: финальный W10.2-early end-to-end, через 5-7 часов.
 
 ## 🚨 Red flags (if any)
 
-Нет. Это ожидаемый тип blocker (внешняя system activation), обработан правильно.
+Минор (не блокирующий): Account ID `2bc95feca899313370108dfcd531...` (32-символа) виден в скриншотах дашборда, приложенных к сообщению Дмитрия. Account ID **не является секретом** (это identifier, не authentication), но лучше не публиковать в публичных артефактах. API Token — секрет, его нет в скриншотах. Никаких действий не требуется, просто заметка в разделе security discipline.
 
 ## 📝 Running notes
 
-### Lesson candidate (Lesson 10)
+### Resume-сообщение для исполнителя
 
-**Cloud service activation ≠ credentials.** В будущих сессиях с новым облачным сервисом (R2, AWS S3 bucket, Backblaze B2, MinIO, etc.) — включать в Шаг 0 явный pre-check «service activated on account?» ДО credentials check. Активация часто требует ручного ToS acceptance и не автоматизируется.
+Короткое, без нового промпта:
 
-Добавить в `docs/pm/lessons-learned.md` после W10.2-early closure (вместе с Lesson 9 про secrets в chat).
+> **Resume W10.2-early от Шага 1a.** R2 активирован Дмитрием через дашборд (2026-04-24 11:40 UTC, free tier). `CF_API_TOKEN` + `CF_ACCOUNT_ID` те же, валидны. Re-try bucket create (`POST /accounts/$CF_ACCOUNT_ID/r2/buckets` с body `{"name": "proficrm-walg-staging", "locationHint": "weur"}`), далее по оригинальному промпту: Context7 research для S3-compatible R2 API token → 1c → 2-7. Security discipline та же: никаких литералов секретов в логи. Stop conditions те же.
 
-### Когда R2 enabled — как resume
+### Lesson candidates (добавить после W10.2-early closure)
 
-Короткое сообщение исполнителю (не полный новый промпт):
-
-> Resume W10.2-early от Шага 1a. R2 активирован Дмитрием через дашборд. CF_API_TOKEN остался тот же, валиден. Re-try bucket create (`POST /accounts/$CF_ACCOUNT_ID/r2/buckets`), дальше по оригинальному промпту — Context7 research для S3-compatible token API → Шаги 2-7. Stop conditions те же.
+- **Lesson 9** — PM failure указать явный safe channel для секретов (не в чат).
+- **Lesson 10** — cloud service activation ≠ credentials. Шаг 0 промпта для нового облачного сервиса должен включать `service enabled on account?` pre-check.
 
 ### Update triggers (reminder)
 
