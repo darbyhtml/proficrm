@@ -8,7 +8,7 @@
   Контекст: `items` — список dict {date, kind, obj}.
 {% endcomment %}
 {% for item in items %}
-  <li class="mb-4 ml-6">
+  <li class="mb-4 ml-6 company-timeline-entry" data-kind="{% if item.kind == 'note' and item.obj.note_type == 'call_in' %}call_in{% elif item.kind == 'note' and item.obj.note_type == 'call_out' %}call_out{% elif item.kind == 'note' and item.obj.note_type == 'email_in' %}email_in{% elif item.kind == 'note' and item.obj.note_type == 'email_out' %}email_out{% else %}{{ item.kind }}{% endif %}">
     {% if item.kind == "event" %}
       {# === Передвижение / Создание === #}
       <span class="absolute -left-[11px] flex h-[22px] w-[22px] items-center justify-center rounded-full

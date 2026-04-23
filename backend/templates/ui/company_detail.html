@@ -4,8 +4,17 @@
 
 {% block content %}
   <script src="{% static 'ui/js/pages/company_detail_handlers.js' %}" nonce="{{ csp_nonce }}"></script>
+  {# UX-1: timeline filter pills + classical load-more wiring. #}
+  <script src="{% static 'ui/js/pages/company_timeline_filters.js' %}" nonce="{{ csp_nonce }}"></script>
 
   <style>
+    /* UX-1: timeline filter pills */
+    .company-timeline-entry.company-timeline-hidden { display: none; }
+    .company-timeline-filter-btn.active {
+      background-color: var(--v2-teal, #01948E);
+      color: white;
+      border-color: var(--v2-teal, #01948E);
+    }
     .modern-tab-panel {
       opacity: 0;
       transform: translateY(10px);
@@ -3020,18 +3029,59 @@
     </script>
 
     {% if view_can_view_activity %}
-      <details class="card card-pad">
-        <summary class="cursor-pointer font-medium">История действий</summary>
-        <div class="mt-3">
-          {% if activity %}
-            <div class="space-y-2">
-              {% for ev in activity %}
-                <div class="rounded-lg border p-3 text-sm">
-                  <div class="text-xs text-brand-dark/70 mb-1">{{ ev.created_at }} · {{ ev.actor|default:"—" }}</div>
-                  <div>{{ ev.message|default:ev.get_verb_display }}</div>
-                </div>
-              {% endfor %}
+      {# UX-1 (2026-04-23): Classical "История действий" теперь renders unified
+         timeline (build_company_timeline — 7 sources) с filter pills вместо
+         простого ActivityEvent list. Modern mode уже использует тот же partial. #}
+      <details class="card card-pad" open>
+        <summary class="cursor-pointer font-medium flex items-center gap-2">
+          <span>История</span>
+          {% if timeline_items %}
+            <span class="text-xs text-brand-dark/50">
+              · {{ timeline_total_count|default:timeline_items|length }} событий
+            </span>
+          {% endif %}
+        </summary>
+        <div class="mt-3" id="companyTimelineClassic" data-company-id="{{ company.id }}">
+          {% if timeline_items %}
+            <div class="flex flex-wrap gap-2 mb-3 company-timeline-filters"
+                 data-target="#companyTimelineClassicList">
+              <button type="button"
+                      class="btn btn-outline btn-sm company-timeline-filter-btn active"
+                      data-filter="all">Все</button>
+              <button type="button"
+                      class="btn btn-outline btn-sm company-timeline-filter-btn"
+                      data-filter="call_in,call_out,call">Звонки</button>
+              <button type="button"
+                      class="btn btn-outline btn-sm company-timeline-filter-btn"
+                      data-filter="email_in,email_out,mailing">Письма</button>
+              <button type="button"
+                      class="btn btn-outline btn-sm company-timeline-filter-btn"
+                      data-filter="note">Заметки</button>
+              <button type="button"
+                      class="btn btn-outline btn-sm company-timeline-filter-btn"
+                      data-filter="task_created,task_done">Задачи</button>
+              <button type="button"
+                      class="btn btn-outline btn-sm company-timeline-filter-btn"
+                      data-filter="event,deal,delreq_created,delreq_decided">Изменения</button>
             </div>
+            <ol class="relative border-l-2 border-brand-soft/50 ml-3 space-y-0"
+                id="companyTimelineClassicList"
+                data-company-id="{{ company.id }}"
+                data-timeline-offset="{{ timeline_items|length }}"
+                data-timeline-total="{{ timeline_total_count|default:timeline_items|length }}">
+              {% include "ui/_partials/_company_timeline_items.html" with items=timeline_items %}
+            </ol>
+            {% if timeline_has_more %}
+              <div class="mt-4 text-center">
+                <button type="button"
+                        id="companyTimelineClassicLoadMore"
+                        class="btn btn-outline btn-sm"
+                        data-company-id="{{ company.id }}"
+                        data-target="#companyTimelineClassicList">
+                  Показать ещё ({{ timeline_total_count|add:"-50" }})
+                </button>
+              </div>
+            {% endif %}
           {% else %}
             <div class="text-sm text-brand-dark/70">Пока пусто.</div>
           {% endif %}
