@@ -318,6 +318,11 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "transfer_targets": get_transfer_targets(effective_user),
             "per_page": per_page,
             "is_admin": is_admin,
+            # UX-3 (2026-04-23): flag ранее computed, но не передавался в
+            # контекст — template {% if can_bulk_transfer %} всегда False,
+            # checkboxes/bulk UI не рендерился. Backend + template + JS
+            # были complete (2026-04 реализация); 1-line fix разблокирует.
+            "can_bulk_transfer": can_bulk_transfer,
             "has_companies_without_responsible": has_companies_without_responsible,
         },
     )
