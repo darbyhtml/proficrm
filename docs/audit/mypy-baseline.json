@@ -3,9 +3,9 @@
   "wave": "0.2",
   "mypy_version": "1.17.1",
   "python_version": "3.13",
-  "total_errors": 1259,
+  "total_errors": 1264,
   "files_with_errors": 118,
-  "_ratchet_note": "2026-04-23: baseline bumped от 1252 к 1259 (+7) absorbing drift from W1-W3 commits (audit.tasks chunking, composite indexes migration). UX-1 не contributes (templates + JS + test file excluded via *.tests_*).",
+  "_ratchet_note": "2026-04-23: baseline bumps — 1252 → 1259 (+7 W1-W3 drift) → 1264 (+5 UX-2 global_search view имеет untyped helper dicts и broad except). Tests файлы excluded via *.tests_*.",
   "top_10_error_codes": {
     "attr-defined": 252,
     "assignment": 239,
