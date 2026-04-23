@@ -43,6 +43,7 @@ from ui.views.dashboard import (
     view_as_reset,
     view_as_update,
 )
+from ui.views.global_search import global_search
 from ui.views.messenger_panel import (
     messenger_agent_status,
     messenger_conversations_unified,

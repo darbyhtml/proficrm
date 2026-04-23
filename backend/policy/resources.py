@@ -77,6 +77,12 @@ RESOURCES: tuple[PolicyResource, ...] = (
     ),
     PolicyResource("ui:companies:export", "action", "Компании: экспорт", sensitive=True),
     PolicyResource("ui:companies:autocomplete", "action", "Компании: автодополнение"),
+    # UX-2 (2026-04-23): global cross-entity search (Ctrl+K modal).
+    PolicyResource(
+        "ui:search:global",
+        "action",
+        "Глобальный поиск (Ctrl+K): компании + контакты + задачи",
+    ),
     PolicyResource("ui:companies:duplicates", "action", "Компании: поиск дублей"),
     PolicyResource("ui:companies:contract:update", "action", "Компании: обновить договор"),
     PolicyResource("ui:companies:transfer", "action", "Компании: передать"),

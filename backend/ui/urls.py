@@ -58,6 +58,8 @@ urlpatterns = [
     path("companies/", views.company_list, name="company_list"),
     path("companies/ajax/", views.company_list_ajax, name="company_list_ajax"),
     path("companies/autocomplete/", views.company_autocomplete, name="company_autocomplete"),
+    # UX-2 (2026-04-23): global Ctrl+K cross-entity search.
+    path("api/search/global/", views.global_search, name="global_search"),
     path("companies/duplicates/", views.company_duplicates, name="company_duplicates"),
     path("companies/export/", views.company_export, name="company_export"),
     path(
