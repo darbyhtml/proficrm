@@ -82,9 +82,7 @@ class UX1ClassicalTimelineTest(TestCase):
         # legacy rendered activity.message/get_verb_display
         # Мы заменили этот блок на timeline_items — теперь нет simple
         # ActivityEvent-only list ниже summary "История".
-        summary_marker = (
-            '<summary class="cursor-pointer font-medium flex items-center gap-2">'
-        )
+        summary_marker = '<summary class="cursor-pointer font-medium flex items-center gap-2">'
         idx_summary = html.find(summary_marker)
         self.assertGreater(idx_summary, 0, "UX-1 summary not found")
         # Within 2KB after summary нет legacy "ev.get_verb_display" patterns
