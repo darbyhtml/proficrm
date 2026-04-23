@@ -933,7 +933,7 @@
     </div>
   </details>
 
-{% include "ui/_v2/v2_modal.html" %}
+{# UX-4 (2026-04-23): v2_modal.html теперь globally included via base.html. #}
 
 <script nonce="{{ request.csp_nonce|default:'' }}">
 (function(){

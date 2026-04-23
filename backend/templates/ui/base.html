@@ -82,6 +82,40 @@
               </form>
             {% endif %}
 
+            {# UX-4 (2026-04-23): Universal quick-add dropdown. #}
+            <div class="relative" id="quickAddWrapper">
+              <button id="quickAddBtn" type="button"
+                      class="inline-flex items-center gap-1 rounded-xl border border-brand-soft bg-brand-teal text-white px-3 py-2 hover:bg-brand-dark active:scale-[0.99] font-medium text-sm"
+                      aria-haspopup="true" aria-expanded="false"
+                      data-action="toggle-quick-add">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+                <span class="hidden sm:inline">Создать</span>
+              </button>
+              <div id="quickAddMenu"
+                   class="hidden absolute right-0 mt-2 w-56 card overflow-hidden bg-white border border-brand-soft rounded-xl shadow-lg"
+                   role="menu" aria-labelledby="quickAddBtn"
+                   style="z-index:9998;">
+                <button type="button" role="menuitem"
+                        class="flex items-center gap-2 w-full text-left px-4 py-2.5 text-sm hover:bg-brand-soft/30 text-brand-dark"
+                        data-action="quick-add-task">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M9 11l3 3L22 4"/>
+                    <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                  </svg>
+                  Задача
+                </button>
+                <a href="/companies/new/" role="menuitem"
+                   class="flex items-center gap-2 w-full text-left px-4 py-2.5 text-sm hover:bg-brand-soft/30 text-brand-dark no-underline">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h1M9 13h1M9 17h1M14 9h1M14 13h1M14 17h1"/>
+                  </svg>
+                  Компания
+                </a>
+              </div>
+            </div>
+
             <div class="relative">
               <button id="notifBtn" type="button" class="relative rounded-xl border border-brand-soft bg-white px-2.5 py-2 hover:bg-brand-soft/40 active:scale-[0.99]" aria-label="Уведомления">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2917,6 +2951,10 @@
       })();
     </script>
     {% endif %}
+
+    {# UX-4: V2Modal infrastructure (used by quick-add dropdown + other pages). #}
+    {% include "ui/_v2/v2_modal.html" %}
+    <script src="{% static 'ui/js/pages/header_quick_add.js' %}" nonce="{{ request.csp_nonce }}"></script>
   </body>
 </html>
 
