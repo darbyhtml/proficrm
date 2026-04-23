@@ -22,12 +22,31 @@ W1 wave (4 mini-sessions, 2 дня) закрыл следующие items:
 
 Full W1 details: `docs/release/w1-1-base-split-plan.md`, `docs/release/w1-2-company-detail-split-plan.md`, `docs/release/w1-3-execution-plan.md`, `docs/audit/cold-call-dedup-inventory.md`.
 
-Remaining hotlist items для W2+:
+Remaining hotlist items для W3+:
 - #3 `company_detail.html` full split — W9.
 - #4-5 minified JS bundles — W10 (подключение `.min.js` в templates).
-- #6 `purge_old_activity_events` chunking — W3.
-- #7 ActivityEvent composite index — W3.
-- #8-10 другие items — W2-W3 по priority.
+- #6 `purge_old_activity_events` chunking — ✅ **CLOSED W3.2** (`b3f71051`).
+- #7 ActivityEvent composite index — ✅ **CLOSED W3.2** (`8b281041`).
+- #8-10 другие items — W3+ по priority.
+
+### W3.2 closure (2026-04-23)
+
+**#6 — audit.tasks chunking**:
+- `purge_old_activity_events` ported к policy.tasks pattern (10K chunks,
+  safety cap 10K batches, transaction per batch).
+- Returns `int` (count deleted) вместо `None`.
+- Beat schedule re-enabled: daily 03:00 UTC (за 15 min до policy purge).
+- Was disabled с W0.5 из-за P0 OOM risk на 9.5M rows. Теперь safe.
+
+**#7 — composite indexes on audit_activityevent**:
+- `(entity_type, created_at DESC)` — timeline per entity type.
+- `(actor_id, created_at DESC)` — user activity feed.
+- Migration `0004_w32_composite_indexes`, CONCURRENTLY non-blocking.
+- EXPLAIN verified post-ANALYZE: `actor_id=37` query 334ms → **0.133ms**
+  (2500× speedup); `entity_type='task'` 0.85ms.
+
+Tests: `backend/audit/tests_w3_2.py` (7 tests — 4 chunking, 3 index
+verification).
 
 ---
 

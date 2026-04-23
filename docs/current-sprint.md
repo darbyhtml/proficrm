@@ -1,5 +1,37 @@
 # Текущий спринт
 
+## ✅ [2026-04-23] — W3.2 — Audit tasks chunking + composite indexes (hotlist #6-7)
+
+Hotlist items #6 и #7 закрыты одной сессией.
+
+### Commits
+
+- `b3f71051` — `perf(audit): W3.2 chunk purge_old_activity_events (hotlist #6)`
+  - Ported pattern из `policy.tasks.purge_old_policy_events` (10K chunks).
+  - Beat schedule re-enabled — daily 03:00 UTC (был disabled с W0.5 из-за OOM risk).
+- `8b281041` — `perf(audit): W3.2 composite indexes (hotlist #7)`
+  - Migration `audit.0004_w32_composite_indexes`, CONCURRENTLY.
+  - `(entity_type, created_at DESC)` + `(actor_id, created_at DESC)`.
+  - Tests: `backend/audit/tests_w3_2.py` (7 tests).
+
+### EXPLAIN verification (post-ANALYZE)
+
+| Query | Before | After | Speedup |
+|-------|-------:|------:|--------:|
+| `actor_id=37 ORDER BY created_at DESC LIMIT 50` | 334ms | **0.133ms** | **2,500×** |
+| `entity_type='task' ORDER BY created_at DESC LIMIT 50` | — | 0.85ms | clean scan |
+| `entity_type='security' ORDER BY created_at DESC LIMIT 50` | — | 4ms | 770-row scan |
+
+### Staging state after deploy
+
+- Migration `audit.0004_w32_composite_indexes`: ✅ applied.
+- 10 total indexes на `audit_activityevent` (8 → 10 с новыми composite).
+- 1,923,883 ActivityEvents — первый chunked purge запустится tonight 03:00 UTC
+  (retention 180d cutoff).
+- Smoke: 6/6 green.
+
+---
+
 ## 🎯 [2026-04-22] — W2 WAVE COMPLETE — Security hardening delivered
 
 All W2 security items delivered end-to-end:
