@@ -2,99 +2,72 @@
 
 _Живое состояние текущей PM-сессии. PM обновляет этот файл перед предсказуемым compact или каждые 30-60 минут активной работы. После compact — читается ПЕРВЫМ для восстановления контекста._
 
-**Last updated:** 2026-04-24 12:10 UTC (PM).
+**Last updated:** 2026-04-24 12:25 UTC (PM).
 
 ---
 
 ## 🎯 Current session goal
 
-W10.2-early 🟡 PARTIAL — Шаг 1a ✅ (бакет создан), Шаг 1c → Сценарий B (Cloudflare API не даёт создать permanent R2 S3-токены без прав `API Tokens: Edit` — разумный security design). Ждём от Дмитрия dashboard-creation R2 API Token + delivery на VPS.
+W10.2-early unblocked: R2 S3 creds доставлены Дмитрием на VPS (2026-04-24 ~12:20 UTC). Исполнитель resume'ится с Шага 2 по оригинальному промпту — WAL-G install → archive_command → full backup → restore drill → runbook. Ожидаемо 4-5 часов.
 
 ## 📋 Active constraints
 
 - Path E: **ACTIVE**.
-- R2 bucket `proficrm-walg-staging` **создан** через API (2026-04-24 11:41 UTC).
-- `CF_API_TOKEN` + `CF_ACCOUNT_ID` валидны, в `.env.staging`. После delivery R2 S3 creds CF_API_TOKEN можно revoke (его роль выполнена).
+- R2 bucket `proficrm-walg-staging` ✅ создан (2026-04-24 11:41 UTC).
+- R2 S3 credentials в `/opt/proficrm-staging/.env` (R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_ENDPOINT), пермишены 600.
+- `CF_API_TOKEN` свою роль выполнил (активация + bucket create). После успешного завершения W10.2-early можно revoke.
 - Защитный слой pg_dump работает.
 - Disk 23 ГБ свободно.
 
 ## 🔄 Last decision made
 
-**Timestamp:** 2026-04-24 12:10 UTC.
-**Decision:** Сценарий B — Дмитрий создаёт R2 API Token через дашборд, scope `Object Read & Write`, specific bucket, no TTL. После delivery на VPS — исполнитель resume с Шага 2 (WAL-G install), Шаг 1 fully closed.
-**Reasoning:** публичный API Cloudflare требует `API Tokens: Edit` scope для создания новых tokens — нет у `CF_API_TOKEN`. Это design limitation (предотвращение privilege escalation), не bug. Dashboard action 2-3 минуты — стандартный workflow для первого R2 setup.
-**Owner:** Дмитрий (dashboard + SSH на VPS).
+**Timestamp:** 2026-04-24 12:25 UTC.
+**Decision:** передать исполнителю короткое resume от Шага 2. Оригинальный промпт W10.2-early остаётся в силе.
+**Reasoning:** Шаг 1 fully closed (bucket + credentials). Шаги 2-7 идентичны оригинальному плану.
+**Owner:** PM (resume сообщение), Дмитрий (copy-paste).
 
 ## ⏭️ Next expected action
 
-1. ✅ Обновить `docs/pm/current-context.md` (этот файл).
+1. ✅ Обновить `docs/pm/current-context.md`.
 2. ✅ Коммит.
-3. ⏭️ Передать Дмитрию compact-инструкцию создания R2 API Token + добавления 4 переменных в `.env`.
-4. ⏭️ Ждать сообщение «R2 S3 creds на VPS».
-5. ⏭️ Передать исполнителю короткое resume от Шага 2 (Шаг 1 fully done, bucket existed, credentials в env).
-6. ⏭️ Ждать финальный рапорт W10.2-early через 4-5 часов.
+3. ⏭️ Передать Дмитрию короткое resume-сообщение.
+4. ⏭️ Координация на Шаге 3 (restart Postgres, ~2 минуты простоя стейджинга) — ожидать запрос исполнителя на «ok to restart».
+5. ⏭️ Ждать финальный рапорт W10.2-early через 4-5 часов.
+6. ⏭️ После рапорта — review restore drill proof + classification + закрытие сессии + написание Lessons 9-11 в lessons-learned.md.
 
 ## ❓ Pending questions to Дмитрий
 
-- [ ] **Создать R2 API Token** в дашборде:
-  - Cloudflare → R2 Object Storage → **Manage R2 API Tokens** → Create API Token.
-  - Name: `proficrm-walg-staging-r2`.
-  - Permissions: **Object Read & Write**.
-  - Specify bucket: **Apply to specific buckets only** → `proficrm-walg-staging` (least-privilege).
-  - TTL: blank (permanent).
-  - Copy значения (показываются один раз): Access Key ID, Secret Access Key, S3 endpoint.
-- [ ] **Добавить на VPS** в `/opt/proficrm-staging/.env` (не перезаписать существующий файл, только дописать):
-  ```
-  R2_ACCESS_KEY_ID=<Access Key ID>
-  R2_SECRET_ACCESS_KEY=<Secret Access Key>
-  R2_BUCKET_NAME=proficrm-walg-staging
-  R2_ENDPOINT=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
-  ```
-  `chmod 600 /opt/proficrm-staging/.env` (уже должно быть).
-- [ ] Ответить PM «R2 S3 creds на VPS».
+- [ ] На Шаге 3 исполнитель попросит ok на 2-минутный рестарт Postgres стейджинга. Просто ответь «ok» когда он уточнит.
 
 ## 📊 Last Executor rapport summary
 
-**Session:** W10.2-early Шаги 1a-1c (R2 setup через Cloudflare API).
+**Session:** W10.2-early Шаги 1a-1c.
 **Received:** 2026-04-24 12:05 UTC.
-**Status:** 🟡 PARTIAL — Шаг 1a ✅, Шаг 1c Сценарий B.
-**Classification:** **win** — audit discipline, security discipline (0 утечек литералов), Context7 research thorough, сценарий B triggered правильно.
+**Status:** 🟡 PARTIAL → UNBLOCKED (R2 S3 creds доставлены 12:20 UTC).
+**Classification:** win.
 
-### Прогресс
-
-- **Шаг 1a ✅:** бакет `proficrm-walg-staging` создан (listing подтверждает).
-- **Шаг 1b ✅:** Context7 research findings:
-  - Permanent R2 S3 creds нельзя создать прямым API endpoint — нужна 2-шаговая модель через `/user/tokens` с R2 permission groups.
-  - Temporary credentials (36 ч) существуют, не подходят для archive_command.
-  - Permission group bucket-scoped: `Workers R2 Storage Bucket Item Write` (id `2efd5506f9c8494dacb1fa10a3e7d5b6`).
-- **Шаг 1c → Сценарий B:** `POST /user/tokens` возвращает error 9109 «Unauthorized» — CF_API_TOKEN не имеет scope `API Tokens: Edit` (design limitation Cloudflare, не bug).
-
-### Следующий рапорт
-
-После delivery R2 S3 creds — финальный рапорт end-to-end через 4-5 часов (Шаги 2-7: WAL-G install → archive_command → base backup → restore drill → runbook).
+Следующий рапорт: финальный W10.2-early end-to-end через 4-5 часов.
 
 ## 🚨 Red flags (if any)
 
-Нет. Все stops corrrect, zero утечек секретов, bucket как persistent side-effect — нормален (используется на Шаге 2).
+Нет.
 
 ## 📝 Running notes
 
-### Resume-сообщение для исполнителя (после «R2 S3 creds на VPS»)
+### Scope оставшейся сессии (Шаги 2-7)
 
-> **Resume W10.2-early от Шага 2 (WAL-G install).** Шаг 1 fully closed:
-> - Bucket `proficrm-walg-staging` created (2026-04-24 11:41 UTC).
-> - R2 S3 credentials в `/opt/proficrm-staging/.env`: R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_ENDPOINT.
-> Продолжай по оригинальному промпту от Шага 2 (install WAL-G binary v3.0.3 → /etc/wal-g/walg.env → test `wal-g st ls` → Шаги 3-7). Security discipline та же. Stop conditions те же.
+- **Шаг 2:** WAL-G v3.0.3 binary в `/usr/local/bin/wal-g`. `/etc/wal-g/walg.env` конфиг с R2 creds из `.env.staging`. Test `wal-g st ls` → bucket reachable, empty.
+- **Шаг 3:** `ALTER SYSTEM SET archive_mode/archive_command/archive_timeout/wal_level`. Volume mount `/etc/wal-g` в db-контейнер (изменение `docker-compose.staging.yml`, коммит). Restart db (breaking, ~2 мин). Verify `pg_stat_archiver.archived_count > 0`.
+- **Шаг 4:** `wal-g backup-push /var/lib/postgresql/data`. Verify `wal-g backup-list --pretty`. Monitor 1 час archive push.
+- **Шаг 5:** Mandatory restore drill — отдельный контейнер `db-drill`, wal-g backup-fetch LATEST, recovery.signal + restore_command, row counts match с staging primary.
+- **Шаг 6:** Runbook `docs/runbooks/2026-04-24-wal-g-pitr.md` + cron `/etc/cron.d/proficrm-walg-retention` (weekly full + retention 4 недели).
+- **Шаг 7:** Smoke + rapport с mandatory items.
 
-### Полная reuse промпта не требуется
+### Lessons (добавить после закрытия W10.2-early)
 
-Оригинальный промпт W10.2-early от ~11:00 UTC валиден. Коротких resume-сообщений достаточно (2 переданы: после R2 activation, далее после S3 creds delivery).
-
-### Lesson candidates (добавить после closure)
-
-- **Lesson 9** — PM failure указать explicit safe channel для секретов.
-- **Lesson 10** — cloud service activation ≠ credentials (включать в Шаг 0).
-- **Lesson 11** (new) — Cloudflare API не позволяет создавать permanent R2 S3-tokens без `API Tokens: Edit` scope. Для новых проектов сразу планировать dashboard step или использовать Terraform-managed tokens.
+1. **Lesson 9** — PM failure указать explicit safe channel для секретов (incident с токеном в чате).
+2. **Lesson 10** — cloud service activation ≠ credentials (R2 error 10042).
+3. **Lesson 11** — Cloudflare API не даёт создавать permanent R2 S3 tokens через publicAPI (error 9109, design limitation). Для новых проектов: планировать 1 dashboard step или Terraform-managed tokens.
 
 ### Update triggers (reminder)
 
