@@ -2,138 +2,150 @@
 
 _Живое состояние текущей PM-сессии. PM обновляет этот файл перед предсказуемым compact или каждые 30-60 минут активной работы. После compact — читается ПЕРВЫМ для восстановления контекста._
 
-**Last updated:** 2026-04-23 17:00 UTC (PM).
+**Last updated:** 2026-04-23 17:10 UTC (PM).
 
 ---
 
 ## 🎯 Current session goal
 
-Фаза 2 INVESTIGATE **закрыта**: Scenario B подтверждён через write-path test. Контейнер блокирует HTTPS к R2 и на чтение, и на запись. Host-level wal-g работает (bucket виден с хоста). Жду decision Дмитрия между Option B.1 (host-pivot) vs deep-dive Option A через WebSearch vs других.
+**Фаза 3 B.1 approved Дмитрием.** Host-pivot: archive_command пишет WAL в shared spool, host cron push'ит в R2. Дальше — first base backup через helper-контейнер с host network, restore drill, runbook, ADR update.
 
 ## 📋 Active constraints
 
 - Path E: **ACTIVE**.
-- Staging стабилен: `archive_command = '/bin/true'`, 7/7 containers healthy, 0 crash 30+ минут.
-- Wrapper script `/etc/wal-g/archive-command.sh` fixed но не активен.
-- R2 bucket всё ещё пустой.
+- Staging стабилен: `archive_command = '/bin/true'`, 7/7 containers healthy.
+- Wrapper на disk но не активен.
+- R2 bucket пустой.
 - pg_dump safety net активен.
-- MCP `context7` disconnected. WebSearch/WebFetch доступны как fallback.
 
 ## 🔄 Last decision made
 
-**Timestamp:** 2026-04-23 17:00 UTC.
-**Decision pending:** Дмитрий choices one of:
-- **B.1** — host-pivot с shared spool + host cron (моя рекомендация).
-- **B.2** — host-pivot с inotify watcher.
-- **A** — retry fix-in-container с WebSearch research.
-- **C** — rollback, закрыть W10.2-early как PARTIAL.
-- **D** — change tool (restic / pgbackrest / etc).
-**Reasoning:** архитектурное решение, scope change от original plan → требует Дмитрий approval.
-**Owner:** Дмитрий.
+**Timestamp:** 2026-04-23 17:10 UTC.
+**Decision:** B.1 approved — shared spool + host cron architecture.
+**Reasoning:** evidence definitive (Scenario B), reuse existing artifacts, низкий риск, 1-min RPO приемлем для staging.
+**Owner:** Дмитрий approved, PM пишет Фазу 3 промпт.
 
 ## ⏭️ Next expected action
 
 1. ✅ Обновить `docs/pm/current-context.md`.
 2. ✅ Коммит.
-3. ⏭️ Брифинг Дмитрию + 5 options.
-4. ⏭️ Decision.
-5. ⏭️ Если B.1 — передать исполнителю Фазу 3 promт (draft готовится параллельно).
+3. ⏭️ Передать Дмитрию Фазу 3 промпт (разбит на 3.1 → Checkpoint → 3.2 → Checkpoint → Фаза 4).
+4. ⏭️ Ждать Checkpoint 3.1 (WAL archiving работает через spool → cron → R2).
+5. ⏭️ Ждать Checkpoint 3.2 (first base backup + restore drill).
 6. ⏭️ Фаза 4 close.
 
 ## ❓ Pending questions to Дмитрий
 
-- [ ] **Architectural decision:** B.1 / B.2 / A / C / D — какую стратегию берём для Фазы 3?
-- [ ] Если B.1 — ADR update для фиксации architecture change (host-level wal-g вместо in-container) — ok?
+- [ ] **Одобрение 1 breaking action в Фазе 3.1:** restart db-контейнера (~30 сек простоя) для подхвата двух новых bind-mounts: spool directory + port mapping 127.0.0.1:5432→5432 (для host wal-g → postgres connection в Фазе 3.2).
+- [ ] Telegram Kuma alert ожидаемый, не инцидент.
 
-## 📊 Checkpoint 2 findings (write-path test)
+## 📊 Фаза 3 B.1 — detailed plan
 
-### Evidence
+### Sub-phase 3.1 — WAL archiving setup (~45 min)
 
-| Path | From host | From container |
-|------|-----------|----------------|
-| `st ls /` read         | ✅ test/ dir seen   | ❌ timeout 30s |
-| `wal-push` write 16MB  | not tested         | ❌ timeout 120s, EXIT=124 |
-| Config parse + creds auth | ✅ | ✅ (INFO log подтверждает) |
+Objective: `archive_command` → spool copy; host cron push'ит в R2.
 
-### Interpretation
+Steps:
 
-- wal-g **видит** `/etc/wal-g/walg.env` в контейнере (INFO лог + credentials parsed).
-- **HTTPS layer блокирован** в контейнере независимо от read/write direction.
-- С хоста — works perfectly.
-- Значит блокер — **networking-layer** (TLS/IPv6/HTTP2/glibc NSS), не auth / конфиг / code.
+1. **Spool directory на хосте:** `/var/lib/proficrm-staging/wal-spool/`, owner `999:999` (postgres UID в контейнере = UID на хосте).
+2. **Обновить `docker-compose.staging.yml`:** добавить два mount'а в сервис db:
+   - `/var/lib/proficrm-staging/wal-spool:/wal-spool` (rw для postgres).
+   - `ports: - "127.0.0.1:5432:5432"` (для host wal-g backup-push в 3.2).
+3. **Rewrite `/etc/wal-g/archive-command.sh`** — простой cp:
+   ```bash
+   #!/bin/bash
+   set -e
+   SRC="$1"
+   DEST="/wal-spool/$(basename "$SRC")"
+   cp --no-clobber "$SRC" "$DEST.tmp"
+   sync
+   mv "$DEST.tmp" "$DEST"
+   ```
+4. **Host cron script** `/opt/proficrm-staging/scripts/walg-push-from-spool.sh`:
+   - flock для защиты от concurrent runs.
+   - Source walg.env.
+   - Для каждого WAL файла (skip .tmp): `wal-g wal-push $SRC` на хосте; при успехе `rm $SRC`; при ошибке — keep и log.
+5. **Cron entry** `/etc/cron.d/proficrm-walg-spool`: `* * * * *`.
+6. **Commit + push + pull на VPS + restart db** (breaking action ~30s).
+7. **Reactivate archive_command:** `ALTER SYSTEM SET archive_command = '/etc/wal-g/archive-command.sh %p'; SELECT pg_reload_conf();`.
+8. **Verify flow через 2-3 мин:** spool наполняется, cron tick, spool пустеет, R2 `wal_005/` получает файлы, pg_stat_archiver archived_count растёт, failed_count=0.
 
-Evidence ранее (read-path): `st ls` hang 30s.
-Evidence сейчас (write-path): `wal-push` hang 120s.
-Pattern consistent — тот же HTTPS-blocker.
+**Checkpoint 3.1 → PM.**
+
+### Sub-phase 3.2 — First base backup + restore drill (~60 min)
+
+Objective: full base backup в R2, restore drill proof.
+
+Steps:
+
+1. **Helper для backup-push:** temp `docker-compose.walg-backup.yml` с `network_mode: host` + mount data volume + wal-g binary + walg.env.
+2. **Добавить PGPASSWORD в walg.env** (если ещё не там) — Дмитрий передаст через SSH, не в чат.
+3. **Run backup-push:** `wal-g backup-push /var/lib/postgresql/data` через helper.
+4. **Verify:** `wal-g backup-list --pretty` с хоста показывает 1 backup с sane size.
+5. **Restore drill:** scratch-контейнер с host network, backup-fetch LATEST, recovery.signal, replay WAL из R2 (wal-fetch), row counts match.
+6. **Cleanup drill env.**
+
+**Checkpoint 3.2 → PM.**
+
+### Фаза 4 — Close (~30 min)
+
+1. **Runbook** `docs/runbooks/2026-04-23-wal-g-pitr.md` (адаптирован для host-pivot architecture).
+2. **ADR update** `docs/decisions/2026-04-24-wal-g-r2-bridge-to-minio.md`:
+   - §Actual Implementation: архитектура host-pivot.
+   - §Known Issues: container HTTPS blocker evidence + workaround.
+3. **Retention cron** — weekly full base backup + delete retain FULL 4.
+4. **Smoke + final rapport.**
 
 ## 🚨 Red flags (if any)
 
-Нет. Staging стабилен. Это обычный архитектурный pivot point.
+Нет. План чистый, breaking action одобрен.
 
 ## 📝 Running notes
 
-### Options для Фазы 3 (ranked recommendation)
+### Почему port mapping 127.0.0.1:5432:5432 необходим
 
-1. **⭐ B.1 — host-pivot: shared spool + host cron** (моя top choice).
-   - archive_command в контейнере: `cp %p /var/lib/proficrm-staging/wal-spool/` (local only, fast).
-   - Host cron каждую минуту: `wal-g wal-push <oldest-file>` → R2. После success — удалить из spool.
-   - Base backup: с хоста напрямую (не через контейнер).
-   - **Плюсы:** reuse существующий wal-g + walg.env на хосте, archive_command trivial/fast, PostgreSQL happy.
-   - **Минусы:** 1-min RPO (acceptable для staging), spool storage ~1 GB/день peak, delete-after-success discipline в cron script.
-   - **Time to implement:** 1.5-2h.
+wal-g `backup-push` читает postgres data directory + зовёт `pg_start_backup()` через postgres connection. Helper-контейнер с `network_mode: host` видит only host network — не Docker bridge. Postgres в bridge, недоступен. Port mapping 127.0.0.1:5432 делает postgres reachable с хоста (и host-network helper). Localhost-only binding безопасно.
 
-2. **B.2 — host-pivot: inotify watcher service** (альтернатива B.1).
-   - systemd service с inotifywait на spool dir.
-   - Push в R2 немедленно при создании файла в spool.
-   - **Плюсы:** near-zero lag.
-   - **Минусы:** новый service, больше moving parts, overkill для staging PITR.
-   - **Time:** 2-2.5h.
+### PGPASSWORD
 
-3. **A — retry fix-in-container** (low probability of success без Context7).
-   - WebSearch research: wal-g Docker HTTPS hang, IPv6 NSS ordering, HTTP/2 in container.
-   - Candidate fixes: `GODEBUG=netdns=go+4`, Docker IPv6 enable, MTU, network_mode: host.
-   - **Плюсы:** если работает — оригинальная архитектура preserved.
-   - **Минусы:** trial-and-error без надёжных docs, 30-60 мин research + ещё debugging. Риск прийти к B.1 после потери времени.
-   - **Time:** 1-3h с uncertain outcome.
+`/etc/wal-g/walg.env` сейчас содержит `PGHOST=localhost, PGDATABASE=crm_staging, PGUSER=crm_staging` но нет `PGPASSWORD`. Нужно добавить для Фазы 3.2. Варианты:
 
-4. **C — rollback + close PARTIAL.**
-   - `archive_command='/bin/true'` остаётся, wrapper не активирован.
-   - W10.2-early status PARTIAL (bucket + creds есть; PITR не work).
-   - Новый хотлист item для retry.
-   - **Плюсы:** immediate closure, stable baseline.
-   - **Минусы:** потеря всей работы дня, пре-W9 deploy rehearsal без PITR capability.
-   - **Time:** 20 мин.
+- Дмитрий `nano /opt/proficrm-staging/.env` → `cat POSTGRES_PASSWORD` → append `PGPASSWORD=<value>` в `/etc/wal-g/walg.env` через SSH.
+- Или исполнитель читает POSTGRES_PASSWORD из `.env.staging` и пишет в walg.env через SSH.
 
-5. **D — change tool (restic / pgbackrest / Backblaze B2).**
-   - Nuclear option, стирает 90% сделанного.
-   - Нужен новый ADR.
-   - **Плюсы:** потенциально обходит Cloudflare R2 specifics.
-   - **Минусы:** ре-learning, 4-6h новая сессия.
-   - **Time:** 4-6h отдельно.
+Второй вариант автономнее, исполнитель сам справится в Step 3.2-2.
 
-### Почему моя рекомендация B.1
+### Architecture diagram (для ADR)
 
-- Evidence definitive (Scenario B classified clean).
-- B.1 reuses existing artifacts (wal-g binary, walg.env, bucket, creds) — не ломает сделанное.
-- archive_command trivial (`cp`) — не может timeout'нуть, postgres stable.
-- Host-level wal-g уже tested (работает).
-- Time budget реалистичный (1.5-2h в оставшемся окне).
-- 1-min RPO приемлем на staging.
+```
+┌─────────────────────────────────────────────┐
+│ staging VPS 5.181.254.172                   │
+│                                             │
+│ ┌──────────────┐         ┌─────────────┐    │
+│ │ db container │         │ host        │    │
+│ │              │         │             │    │
+│ │  postgres ───┼─cp──►  /wal-spool/    │    │
+│ │  archive_cmd │         │     │       │    │
+│ └──────────────┘         │     ▼       │    │
+│                          │  cron every │    │
+│                          │  1 min:     │    │
+│                          │  wal-g      │    │
+│                          │  wal-push   │    │
+│                          └─────┼───────┘    │
+│                                │            │
+└────────────────────────────────┼────────────┘
+                                 │ HTTPS
+                                 ▼
+                      ┌────────────────────┐
+                      │ Cloudflare R2      │
+                      │ proficrm-walg-     │
+                      │ staging bucket     │
+                      └────────────────────┘
+```
 
-### ADR update scope (если B.1)
+### Lesson candidates (обновлены)
 
-`docs/decisions/2026-04-24-wal-g-r2-bridge-to-minio.md`:
-
-- §Actual Implementation (new section) — describe host-level wal-g + shared spool вместо in-container.
-- §Known Issues — container HTTPS blocker, evidence, workaround.
-- §Migration plan к MinIO — адаптировать для host-level setup (переменит endpoint, spool и cron остаются).
-
-Title ADR остаётся same (decision о R2 bridge), но implementation details другие.
-
-### Lesson candidates (накопившиеся 9-16)
-
-Плюс:
-- L17 — «Container HTTPS hang = try host-level tool as pivot BEFORE Docker networking deep-dive. Faster path to working system.»
+L9-17 уже перечислены. Ничего нового в этот момент.
 
 ### Update triggers (reminder)
 
