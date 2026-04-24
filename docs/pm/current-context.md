@@ -2,98 +2,144 @@
 
 _Живое состояние текущей PM-сессии. PM обновляет этот файл перед предсказуемым compact или каждые 30-60 минут активной работы. После compact — читается ПЕРВЫМ для восстановления контекста._
 
-**Last updated:** 2026-04-24 15:30 UTC (PM).
+**Last updated:** 2026-04-23 16:40 UTC (PM).
 
 ---
 
 ## 🎯 Current session goal
 
-**Handoff к новой сессии исполнителя.** W10.2-early blocked на container networking + wrapper script bug. Новый исполнитель получит deep-dive промпт с 4 фазами + checkpoint'ами к PM между ними. Приоритет: сначала **стабилизация staging** (остановить postgres crash loop), потом архитектурный investigation.
+Фаза 1 STABILIZE **закрыта успешно**. Ready к Фазе 2 INVESTIGATE с фокусом на **write-path test** (реальный WAL файл через fixed wrapper — работает ли upload в R2 из контейнера?). Это дешёвый эксперимент ~2-5 минут, различит Option A (fix-in-container работает) vs Option B (нужен host-level pivot).
 
 ## 📋 Active constraints
 
 - Path E: **ACTIVE**.
-- Staging API работает (HTTP 200), 7/7 контейнеров healthy, данные целы.
-- **🔴 Postgres в crash loop** — archive_command timeouts каждую минуту, exit 124, automatic recovery. Быстрые циклы, не катастрофично, но **нужно остановить как можно скорее** (Фаза 1 Step 1 нового промпта).
-- Защитный слой pg_dump активен.
-- R2 bucket пустой.
+- Staging API HTTP 200, все 7 контейнеров healthy, 0 crash events 10 минут.
+- `archive_command = '/bin/true'` (safe default). Staging не crash'ит.
+- Wrapper script `/etc/wal-g/archive-command.sh` **fixed** (`wal-push "$1"`), но **не активен** — reactivate одним `ALTER SYSTEM` когда решим Фазу 2.
+- pg_dump safety net активен (вчерашний backup 03:30 UTC есть).
+- MCP `context7` и `playwright` **disconnected** — если Фазе 2 нужен research, fallback через WebSearch/WebFetch.
 
 ## 🔄 Last decision made
 
-**Timestamp:** 2026-04-24 15:30 UTC.
-**Decision:** новая сессия исполнителя с deep-dive промптом (4 фазы с checkpoint'ами). Старая сессия closed (session dead после длинных debug-циклов).
-**Reasoning:** fresh context + research time + structured investigation лучше чем продолжение в hot fatigued сессии. Дмитрий явно запросил.
-**Owner:** Дмитрий (запускает новую сессию), PM (написал промпт).
+**Timestamp:** 2026-04-23 16:40 UTC.
+**Decision:** approve Фазу 2 с начальным write-path тестом (manual `archive-command.sh /path/to/real/WAL`). Contingent на результат — fix-in-container или pivot.
+**Reasoning:** silent-loss подтверждён как root cause потерянных archives (wrapper bug, не networking). Container networking blocker может оказаться **только** в read-path (`st ls` timeout) — write-path не протестирован. Дешёвый тест даёт максимум эпистемической выгоды.
+**Owner:** Дмитрий approved Фазу 2, PM даёт specifics.
 
 ## ⏭️ Next expected action
 
-1. ✅ Обновить `docs/pm/current-context.md`.
+1. ✅ Обновить `docs/pm/current-context.md` (этот файл).
 2. ✅ Коммит.
-3. ⏭️ Передать Дмитрию полный deep-dive промпт.
-4. ⏭️ Дмитрий запускает новую сессию исполнителя.
-5. ⏭️ Checkpoint 1 от исполнителя (после Фазы 1 stabilization) — ожидаю через ~15 минут.
-6. ⏭️ Checkpoint 2 (после Фазы 2 investigation) — через ~60-90 минут.
-7. ⏭️ Decision вместе с Дмитрием по стратегии (A/B/C/D).
-8. ⏭️ Фаза 3 execute, Фаза 4 close.
+3. ⏭️ Передать исполнителю approval Фазы 2 с focus на write-path test.
+4. ⏭️ Ждать Checkpoint 2 с результатом теста + рекомендацией A/B/C/D.
+5. ⏭️ Решение вместе с Дмитрием.
+6. ⏭️ Фаза 3 execute.
+7. ⏭️ Фаза 4 close.
 
 ## ❓ Pending questions to Дмитрий
 
-Нет pending вопросов. Ждём рапорт от нового исполнителя.
+Нет. Decision A/B/C/D ожидается от Дмитрия после Checkpoint 2.
 
-## 📊 State snapshot для нового исполнителя
+## 📊 State snapshot post-Checkpoint-1
 
-### ✅ Done (НЕ повторять)
+### Фаза 1 Actions (все успешны)
 
-- `/usr/local/bin/wal-g v3.0.8` установлен (хост + db-контейнер через bind mount).
-- `/etc/wal-g/walg.env` создан, chmod 600, R2 creds валидны.
-- R2 bucket `proficrm-walg-staging` создан (2026-04-23 11:41:08 UTC) — empty.
-- `docker-compose.staging.yml` коммит `9b3e956a` — bind mounts.
-- Permissions fix `/var/lib/postgresql/data/pg_wal/walg_data/` → postgres:postgres (успешный).
-- `archive_mode = on`.
-- `scripts/backup_postgres_staging.sh` + cron 03:30 UTC работают (safety net).
+| Step | Action | Result |
+|------|--------|--------|
+| 0a | checkout feature-ветки | ✅ HEAD `8e77027c`, артефакты видны |
+| 0b | read-only audit staging (4 теста) | ✅ ground truth получен |
+| 1 | `archive_command = '/bin/true'` + reload | ✅ crash loop остановлен |
+| 2 | wrapper fix `wal-push "$1"` | ✅ на disk, chmod +x, ready |
+| 3 | smoke + stability check | ✅ 6/6 green, 0 crash за 10 мин |
 
-### 🔴 Broken
+### Ground truth findings
 
-- **Wrapper script bug:** `/etc/wal-g/archive-command.sh` содержит `wal-push ""` вместо `wal-push "$1"`. Теряет `%p` параметр.
-- **Container networking:** wal-g в db-контейнере не коннектится к R2 (IPv6 hang → HTTP/2 handshake failure). Host — работает.
-- **archive_command** = `/etc/wal-g/archive-command.sh %p`, running every минуту, timeout'ит → postgres kill → recovery. Цикл продолжается.
-- **R2 bucket:** пустой.
+| Finding | Evidence |
+|---------|----------|
+| **R2 bucket реально пустой** | `wal-g st ls` с хоста (где network работает) — basebackups_005/, wal_005/ empty |
+| **Silent-loss через wrapper bug** | `wal-g wal-push ""` exit 0 за миллисекунды, 0 bytes uploaded |
+| **`archived_count=48` — всё lies** | 48 WAL «архивированы» по счётчику postgres, 0 в R2 |
+| **Local WAL сегменты удалены** | `.done` файлы удалены вместе с WAL — **реальная потеря PITR window** с ~12:00 до 15:11 UTC |
+| **Crash loop окончился САМ в 15:11 UTC** | До моего PM diagnostic 15:20 UTC. stats_reset на этот же timestamp. |
+| **Container networking — только read** | `st ls` из контейнера timeout 30s. Write-path НЕ тестирован. |
+| **Дата** | Server UTC `2026-04-23 16:32` — **сегодня 23-е, не 24-е** (мой drift исправлен) |
 
-### 📊 Evidence
+### Data loss assessment
 
-- postgres logs last hour: 3 recovery цикла (14:57, 15:02 exit 124, 15:11 SIGTERM).
-- `pg_stat_archiver`: archived_count=0, failed_count=0 (reset после recovery).
-- `wal-g st ls basebackups_005/` + `wal_005/`: empty.
-- disk `/`: 24 GB свободно.
+**Потеряно:** WAL archives с момента `archive_mode=on` (~12:00 UTC) по `/bin/true` активация (~16:10 UTC). Это ≈4 часа transactions. Staging — тестовое окружение, data loss приемлем в пределах business impact (тестеры, не прод).
+
+**Остаётся:** pg_dump вчерашний + текущее состояние БД (Postgres сам успешно оперировал на этих WAL перед их «архивацией»). Полная recovery window до последнего pg_dump (24h).
+
+**Урок:** Lesson 12 (never trust pg_stat_archiver alone) уже candidate.
 
 ## 🚨 Red flags (if any)
 
-- **Postgres crash loop продолжается до Фазы 1 Step 1.** Чем быстрее новая сессия стартует, тем меньше recovery событий.
+### 🟢 Resolved
+
+- Crash loop stopped (Step 1 `/bin/true`).
+- Wrapper bug fixed (Step 2).
+- Staging stable confirmed (Step 3).
+
+### 🟡 PM self-detected drift (ранее)
+
+- Я писал «2026-04-24» в sequential updates `current-context.md`, commit messages. **Фактическая дата — 2026-04-23**. Подтверждено VPS UTC. Исправлено в этом update. **Lesson 15 candidate** — PM sync даты через `date` command.
+
+### 🟢 Stale PM context (resolved)
+
+Мой diagnostic в 15:10-15:20 UTC писал «postgres в crash loop сейчас». На деле crash loop остановился **в 15:11 UTC** (stats_reset timestamp), то есть за ~9 минут до моего update. Новый исполнитель поймал drift. Это не PM failure — это **temporal staleness** inherent для любого snapshot. Полезно помнить: при delegation после передачи context исполнитель должен **re-verify** (что он и сделал).
 
 ## 📝 Running notes
 
-### Фазы нового промпта
+### Фаза 2 Specifics
 
-1. **Фаза 1 STABILIZE** (~15 мин): остановить crash loop, fix wrapper bug, confirm stable. **Checkpoint PM.**
-2. **Фаза 2 INVESTIGATE** (~30-60 мин): reproduce issue, Context7 research, test fixes. **Checkpoint PM с рекомендацией.**
-3. **Фаза 3 EXECUTE** (conditional на PM approval): chosen strategy (fix-in-container / host-pivot / rollback).
-4. **Фаза 4 CLOSE** (~15-30 мин): runbook + rapport + commits.
+**Первый тест (write-path):**
 
-### Decision options для Фазы 2 checkpoint
+```bash
+# Изолированный test через temporary WAL file.
+# Не trigger реальный archive_command (оставляем /bin/true до подтверждения).
+ssh root@5.181.254.172 'docker compose -f /opt/proficrm-staging/docker-compose.staging.yml -p proficrm-staging exec -u postgres -T db bash -c "
+  # Создать fake WAL file для теста (16MB null).
+  TESTFILE=/tmp/test_wal_$(date +%s)
+  dd if=/dev/zero of=\$TESTFILE bs=1M count=16 2>/dev/null
+  
+  # Trigger wrapper — должен попытаться upload в R2.
+  set -a; . /etc/wal-g/walg.env; set +a
+  START=\$(date +%s%N)
+  timeout 120 /usr/local/bin/wal-g wal-push \"\$TESTFILE\"
+  EXIT=\$?
+  END=\$(date +%s%N)
+  echo EXIT=\$EXIT
+  echo DURATION_MS=\$(( (END - START) / 1000000 ))
+  rm -f \$TESTFILE
+"'
 
-- **A — Fix in container:** simple config change решает (например `AWS_DISABLE_CONCURRENT_UPLOAD` или Docker IPv6 settings). Best case.
-- **B — Pivot host-level wal-g:** archive_command в контейнере пишет WAL в shared spool directory, host cron push'ит в R2. Обходит container networking.
-- **C — Rollback completely:** archive_mode=off, вернуться к pg_dump only. W10.2-early → MIXED result. Worst case.
-- **D — Retry with different approach:** например `restic` вместо `wal-g`, или Backblaze B2 вместо Cloudflare R2 — смена tools. Nuclear option.
+# Затем проверка что файл реально в R2 (с хоста).
+ssh root@5.181.254.172 'set -a; . /etc/wal-g/walg.env; set +a; /usr/local/bin/wal-g st ls wal_005/ 2>&1 | head -10'
+```
 
-### Lesson candidates (накопившиеся 12-14, добавить после closure)
+Expected outcomes:
+
+- **Scenario A (write works):** EXIT=0, DURATION < 30s, `st ls wal_005/` shows uploaded file. → Option A fix-in-container. Restore wrapper activation, full backup-push, restore drill.
+- **Scenario B (write hangs):** EXIT=124 (timeout), DURATION=120000ms. → Container networking blocker для write тоже. Переход к Option B (host-pivot) или Option D (different tool).
+- **Scenario C (other failure):** EXIT non-zero but not timeout. Investigate specific error.
+
+### Options A/B/C/D (для Checkpoint 2)
+
+- **A — fix-in-container works:** reactivate wrapper, full backup-push, restore drill, close Фаза 3 → Фаза 4 runbook. 1.5-2h оставшегося времени.
+- **B — host-pivot:** архитектурный redesign (archive_command в контейнере → shared spool; host cron → R2 push). ADR update. 3-4h.
+- **C — rollback:** закрыть W10.2-early как PARTIAL (bucket, creds, script есть; PITR не работает). pg_dump safety net остаётся. Новый hotlist item для retry позже.
+- **D — change tools:** restic / pgbackrest / Backblaze B2 вместо Cloudflare R2. Nuclear option, новый ADR.
+
+### Lesson candidates (после W10.2-early closure)
 
 - L9 — explicit safe channel для секретов.
-- L10 — cloud service activation ≠ credentials.
-- L11 — Cloudflare API не даёт permanent S3-tokens, планировать dashboard step.
-- L12 — Never trust pg_stat_archiver alone (cross-check bucket listing).
-- L13 — Container networking ≠ host networking, тест до архитектурного commit.
+- L10 — cloud service activation ≠ credentials (R2 10042).
+- L11 — Cloudflare API не даёт permanent S3-tokens.
+- L12 — Never trust `pg_stat_archiver` alone — cross-check bucket listing.
+- L13 — Container networking ≠ host networking, тестировать оба пути.
 - L14 — Wrapper scripts для archive_command — обязательный тест с реальным `%p`.
+- L15 — PM sync даты через `date` command, не полагаться на implicit память.
+- L16 (new) — temporal staleness in delegation: execut должен re-verify PM context if > 10 min old.
 
 ### Update triggers (reminder)
 
