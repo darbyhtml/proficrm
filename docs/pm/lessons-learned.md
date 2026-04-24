@@ -384,6 +384,420 @@ Self-assessment в Test 6 passed → ложная уверенность. Реа
 
 ---
 
+## Lesson 9: Safe channel для секретов — explicit, не «мне или исполнителю»
+
+**Date:** 2026-04-24 (incident во время W10.2-early).
+
+**Что случилось:**
+
+PM в опциях для delivery R2 credentials написал: «передать **мне или исполнителю**». Дмитрий разумно интерпретировал — отправил Cloudflare API token (`cfut_...`) прямо в чат.
+
+**Impact:**
+
+- Токен оказался в conversation logs Anthropic (pass через API boundary).
+- Токен в transcript файлах локально.
+- Риск утечки в compact summary, git commit (если случайно вставить).
+
+Mitigation: немедленный revoke через Cloudflare dashboard, новый токен доставлен через SSH `.env` прямо на VPS.
+
+**Root cause (PM failure):**
+
+Недостаточно explicit safe channel в вариантах. «Мне или исполнителю» read как «куда удобнее» — оба = чат для Дмитрия.
+
+**Правило:**
+
+Когда запрашиваешь у Дмитрия secret / credential / API key / password:
+
+1. **Явно запрет на чат:** «НЕ присылай в чат — это журналируется на стороне LLM провайдера».
+2. **Явный канал:** SSH `.env` на VPS, 1Password, Signal secret chat, зашифрованный file через `age`/`sops`, GitHub Secrets.
+3. **Confirmation:** «Напиши "creds на VPS" когда закончишь — я передам исполнителю команду читать из env».
+4. Если **случайно получил секрет в чат** — немедленно stop, flag, рекомендовать revoke. Никогда не использовать его.
+
+**References:**
+
+- Incident: 2026-04-24 ~11:00 UTC (PM session logs).
+- Fix CLAUDE.md §«Язык» с carve-out классов 1/2 — но это отдельный drift fix.
+
+---
+
+## Lesson 10: Cloud service activation ≠ credentials
+
+**Date:** 2026-04-24 (W10.2-early Фаза 1a).
+
+**Что случилось:**
+
+Исполнитель с валидным `CF_API_TOKEN` (token verify вернул `active`) попытался создать R2 bucket через API. Cloudflare ответил:
+
+```json
+{
+  "success": false,
+  "errors": [{"code": 10042, "message": "Please enable R2 through the Cloudflare Dashboard."}]
+}
+```
+
+R2 как сервис **не был активирован** на аккаунте. Активация требует manual ToS acceptance + карту — **не автоматизируется через публичный API**.
+
+**Impact:**
+
+- Stop на Step 1a, 10 минут потерянного времени исполнителя.
+- PM не включал «service enabled» в Step 0 pre-check.
+
+**Root cause:**
+
+Promт предполагал что «valid credentials = ready to use API». Для Cloudflare R2 / AWS S3 / Backblaze B2 / многих cloud services **activation** — отдельное действие, не автоматизируется.
+
+**Правило:**
+
+Promт для нового облачного сервиса обязательно включает в Step 0 **service activation pre-check**:
+
+```bash
+# Для R2:
+curl -sf -H "Authorization: Bearer $CF_API_TOKEN" \
+  https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/r2/buckets | jq .success
+
+# Если false с error 10042 → stop, Дмитрий делает dashboard activation.
+```
+
+Добавить в promт pattern:
+
+```
+### Step 0: Pre-check service availability
+- Credentials valid (auth endpoint returns 200).
+- Service enabled on account (one benign API call that requires activation).
+```
+
+**References:**
+
+- Incident: W10.2-early Фаза 1a (2026-04-24 11:25 UTC).
+
+---
+
+## Lesson 11: Cloudflare API не даёт permanent S3-compatible R2 tokens
+
+**Date:** 2026-04-24 (W10.2-early Фаза 1c).
+
+**Что случилось:**
+
+После активации R2 исполнитель попытался создать S3-compatible API token через Cloudflare API endpoint `POST /user/tokens`. Ответ:
+
+```json
+{"success": false, "errors": [{"code": 9109, "message": "Unauthorized to access requested resource"}]}
+```
+
+`CF_API_TOKEN` имел R2 permissions, но **не** `API Tokens: Edit` scope (нужен для создания новых tokens). По design Cloudflare — предотвращение privilege escalation через token proliferation.
+
+**Impact:**
+
+- Автоматизация заблокирована → Scenario B (Дмитрий создаёт в dashboard).
+- 2-3 минуты delay + ручной step.
+
+**Root cause:**
+
+PM предполагал что Cloudflare API имеет полный cycle self-service token creation. Реальность — permanent S3-style credentials создаются **только** через dashboard.
+
+**Правило:**
+
+Для **новых проектов** с Cloudflare R2 планировать:
+
+1. Dashboard step **включён в план с самого начала** как explicit manual action Дмитрия.
+2. Либо pivot на **Terraform-managed tokens** если R2 используется активно (но для W10.2-early overkill).
+3. Temporary credentials endpoint (`/accounts/:acc/r2/buckets/:b/temporary-credentials`) существует — но **36 часов expiry**, не подходит для archive_command.
+
+**References:**
+
+- Incident: W10.2-early Фаза 1c (2026-04-24 11:55 UTC).
+- Cloudflare docs: R2 API Tokens management (dashboard-only).
+
+---
+
+## Lesson 12: Never trust `pg_stat_archiver` alone — cross-check bucket listing
+
+**Date:** 2026-04-24 (W10.2-early первичный debug).
+
+**Что случилось:**
+
+PostgreSQL `pg_stat_archiver.archived_count` показывал `48` (потом `646`), `failed_count=0`. PM и Дмитрий предполагали — WAL-G успешно архивирует.
+
+**Реальность:** R2 bucket был **пуст**. wrapper script содержал bug `wal-g wal-push ""` (пустой аргумент вместо `%p`). wal-g exit 0 за миллисекунды без upload. PostgreSQL считал archive successful и **удалял** локальные WAL segments. Silent data loss ≈ 4 часа transactions (с `archive_mode=on` до `/bin/true` fix).
+
+**Impact:**
+
+- 4 часа tests на staging потерялись из PITR window.
+- pg_dump safety net ограничил окно до 24h (acceptable для staging).
+- Нужен был прямой `wal-g st ls` в R2 чтобы это увидеть.
+
+**Root cause:**
+
+PostgreSQL увеличивает `archived_count` **по exit code** `archive_command`. Exit 0 без реального upload = success according к postgres. `failed_count` растёт только при non-zero exit.
+
+**Правило:**
+
+Cross-check chain для WAL archiving health:
+
+1. **pg_stat_archiver:** `archived_count` растёт, `failed_count=0`, `last_archived_time` свежее. Необходимое, но **не достаточное**.
+2. **Bucket listing** (с working-network host): `wal-g st ls wal_005/ | wc -l` ≥ expected count.
+3. **Size sanity:** каждый archive > 150 bytes (WAL segment compressed даже пустой имеет header).
+4. **Restore drill**: mandatory at least once после setup.
+
+Минимум один из #2-#4 обязательно в runbook daily check. Только #1 — trap.
+
+**References:**
+
+- Incident: W10.2-early (2026-04-24).
+- ADR: `docs/decisions/2026-04-24-wal-g-r2-bridge-to-minio.md` §Actual Implementation.
+- Runbook: `docs/runbooks/2026-04-23-wal-g-pitr.md` daily operations.
+
+---
+
+## Lesson 13: Container networking ≠ host networking — тест до архитектурного commit
+
+**Date:** 2026-04-24 (W10.2-early Фаза 2).
+
+**Что случилось:**
+
+`wal-g st ls` из db-контейнера — timeout 30s. `wal-g st ls` с хоста — работает. Различие принято за «container networking broken».
+
+Через Lesson 19 (TLS CA bundle) обнаружилось — reality narrower: не networking, а TLS certificate trust. Container Debian 12 CA bundle не trust'ит Cloudflare chain, host Ubuntu 24.04 — trust'ит.
+
+**Правило (broadly applicable):**
+
+Перед архитектурным commit (e.g. «pivot на host-level tool») — тест **granular differences** контейнер vs хост:
+
+1. DNS resolution (`getent hosts`, `dig`).
+2. TCP connect (`nc -zv <host> <port>`).
+3. TLS handshake (`openssl s_client -connect <host>:443`).
+4. HTTPS call (`curl -v --http1.1 https://...`, `curl -v --http2 https://...`).
+5. Certificate bundle (`ls /etc/ssl/certs`, `wc -l /etc/ssl/certs/ca-certificates.crt`).
+6. Application-level (wal-g / aws-cli / kubectl).
+
+Identify **exact layer** разницы. Это определяет narrow vs broad fix.
+
+W10.2-early case: narrow fix (CA mount) возможен, но deployed broader fix (host-pivot) из-за time pressure + reliable isolation.
+
+**Superseded by (narrower):** Lesson 19.
+
+**References:**
+
+- Incident: W10.2-early Фаза 2 + 3.2 (2026-04-24).
+
+---
+
+## Lesson 14: Wrapper scripts для `archive_command` — обязательный тест с реальным `%p`
+
+**Date:** 2026-04-24 (W10.2-early первичный wrapper bug).
+
+**Что случилось:**
+
+Первая версия `/etc/wal-g/archive-command.sh`:
+
+```bash
+exec /usr/local/bin/wal-g wal-push ""   # bug: пустая строка вместо $1
+```
+
+PostgreSQL zov'ёт wrapper с путём WAL файла как `$1`, но wrapper игнорировал аргумент. wal-g получал пустое имя файла, exit 0 (silent), postgres помечал WAL archived. **Silent loss.**
+
+**Правило:**
+
+Любой wrapper для `archive_command` **обязательно** тестируется с реальным файлом **перед** активацией archive_mode:
+
+```bash
+# Direct test (не через postgres) — симулирует %p вызов.
+echo "test content" > /tmp/test_wal_segment
+/etc/wal-g/archive-command.sh /tmp/test_wal_segment
+# Then verify file landed в R2:
+wal-g st ls wal_005/ | grep test_wal_segment
+```
+
+Только после успеха ручного теста — `ALTER SYSTEM SET archive_command = '...'; pg_reload_conf();`.
+
+**References:**
+
+- Incident: W10.2-early (2026-04-24).
+- Wrapper fix: commit `abaa31d9` (script с `$1`).
+
+---
+
+## Lesson 15: PM должен сверять дату через `date` command
+
+**Date:** 2026-04-24 (self-detected PM drift).
+
+**Что случилось:**
+
+PM писал «2026-04-24» в header `docs/pm/current-context.md` + commit messages. Реальная дата сессии-начала была **2026-04-23**. Исполнитель в Checkpoint 1 обратил внимание: VPS server UTC показал `2026-04-23 16:32`.
+
+Почему путаница:
+
+- Сессия стартовала 2026-04-23 вечером MSK.
+- Длилась >8 часов, пересекая midnight UTC.
+- System reminder snapshot даты (`currentDate`) frozen в момент старта.
+- PM использовал memory-based даты вместо active check.
+
+**Impact:**
+
+- Spurious timestamps в commits.
+- Потенциальная confusion при audit / post-mortem.
+
+**Правило:**
+
+PM перед каждым `Last updated:` в `current-context.md`:
+
+```bash
+date -u +"%Y-%m-%d %H:%M UTC"
+```
+
+Использовать вывод напрямую. Если сессия пересекает UTC midnight — это явный сигнал, не implicit.
+
+**References:**
+
+- Self-detected: W10.2-early Checkpoint 1 (исполнитель flag'нул).
+- Fix: current-context commits от 2026-04-24 onward.
+
+---
+
+## Lesson 16: Port conflict audit — ss/lsof ДО port mapping в multi-env VPS
+
+**Date:** 2026-04-24 (W10.2-early Фаза 3.1).
+
+**Что случилось:**
+
+Staging docker-compose получил `ports: "127.0.0.1:5432:5432"` для db. При `docker compose up -d db` — fail: `address already in use`. Причина — prod postgres на том же VPS слушает `0.0.0.0:5432`.
+
+Исполнитель pivot'нулся на port `15432`, но 4 минуты staging downtime (вместо 30-60 сек планируемых).
+
+**Правило:**
+
+Перед любым port mapping на shared VPS:
+
+```bash
+# Что слушает target port?
+ss -tlnp | grep :<port>
+# Или:
+lsof -i :<port>
+```
+
+Если занят — выбрать unused port ДО compose change, а не в момент restart. Простая 2-минутная проверка.
+
+Плюс: в multi-env VPS всегда использовать **non-standard ports** для non-prod (staging — 15432, dev — 25432, etc.) чтобы избежать implicit conflicts.
+
+**References:**
+
+- Incident: W10.2-early Фаза 3.1 (2026-04-24 18:00 UTC).
+- CRITICAL hotlist item (prod 0.0.0.0:5432 exposure): `docs/audit/hotlist.md`.
+
+---
+
+## Lesson 17: TLS CA bundle trust ≠ networking hang — проверять `curl` / `wal-g` с `DEVEL` log рано
+
+**Date:** 2026-04-24 (W10.2-early Фаза 3.2 TLS discovery).
+
+**Что случилось:**
+
+Container HTTPS к Cloudflare R2 hang'ал 30-120 секунд. Ранняя диагностика приняла это за «networking layer» block (IPv6, HTTP/2, MTU). Исследование включало Context7 research, Docker network mode changes, pivot на host-level.
+
+После detailed debug — обнаружено: `x509: certificate signed by unknown authority`. Не networking, а TLS cert trust. Debian 12 CA bundle не содержит (или не trust'ит) Cloudflare's intermediate.
+
+**Impact:**
+
+- ~3 часа debug на неправильной гипотезе.
+- Pivot на host-pivot deployed (рабочий).
+- Alternative (CA mount) обнаружен retroactive как простой fix.
+
+**Правило:**
+
+При HTTPS hang в контейнере — **сначала проверять TLS level** до networking:
+
+1. `curl -v https://<host>` с timeout — видит ли TLS handshake? Error message?
+2. `wal-g` с `WALG_LOG_LEVEL=DEVEL` (или equivalent) — выдаёт ли TLS diagnostics?
+3. `openssl s_client -connect <host>:443 -showcerts` — handshake проходит?
+4. Compare CA bundle: `diff <(ls /etc/ssl/certs/) <(ssh host ls /etc/ssl/certs/)`.
+
+TLS checks занимают 2 минуты. Networking deep-dive — часы. Иерархия: **TLS first, network second**.
+
+**Related:** Lesson 19 (narrower TLS specific).
+
+**References:**
+
+- Root cause discovery: W10.2-early Checkpoint 3.2 (2026-04-24 09:30 UTC).
+- ADR: §Known Issues #1.
+
+---
+
+## Lesson 18: Heredoc quote escaping в multi-layer SSH+docker+bash — писать на хосте, `docker cp` в контейнер
+
+**Date:** 2026-04-24 (W10.2-early Фаза 3.2 restore drill).
+
+**Что случилось:**
+
+Исполнитель пытался создать `/tmp/restore-command.sh` в drill-контейнере через SSH → docker compose exec → bash heredoc → cat > file. Quote escaping через 4 уровня (ssh, docker exec `-c`, bash `-c`, heredoc) — ломался каждый раз. Результат: пустой или broken script.
+
+**Решение:** написать script **на хосте** → `docker cp <host path> <container>:<path>`. Zero quote escaping.
+
+**Правило:**
+
+При создании файлов внутри контейнера через SSH + docker exec — **не** использовать heredoc через несколько bash layers. Предпочитать:
+
+1. **Write локально** (в worktree) → `scp` на хост → `docker cp` в контейнер.
+2. **Write через SSH cat на хосте** → `docker cp` в контейнер.
+3. **Mount config directory** как volume → write на хосте → auto visible внутри.
+
+Heredoc OK для single-layer (SSH на хост, работа на хосте). Multi-layer — ломается на escaping.
+
+**References:**
+
+- Incident: W10.2-early Фаза 3.2 restore drill (2026-04-24).
+
+---
+
+## Lesson 19: Container CA bundle ≠ host CA bundle — проверять `/etc/ssl/certs` первым
+
+**Date:** 2026-04-24 (W10.2-early Фаза 3.2, definitive root cause).
+
+**Что случилось:**
+
+Точное воспроизведение Lesson 17, но **narrower root cause**:
+
+- `postgres:16` image (Debian 12 bookworm) имеет CA bundle который **не содержит** Cloudflare's intermediate certificate.
+- Ubuntu 24.04 host `/etc/ssl/certs/ca-certificates.crt` (3610 entries) — trust'ит.
+- Результат: `wal-g` в контейнере получает `x509: certificate signed by unknown authority`, на хосте — OK.
+
+**Impact:**
+
+- Same что Lesson 17 — 3 часа debug.
+- Workaround: bind mount `/etc/ssl/certs:/etc/ssl/certs:ro` — **один** параметр, решает полностью.
+
+**Правило:**
+
+При HTTPS к external service из контейнера — проверить CA bundle alignment в первую минуту диагностики:
+
+```bash
+# На хосте.
+HOST_BUNDLE_LINES=$(wc -l < /etc/ssl/certs/ca-certificates.crt)
+
+# В контейнере.
+docker exec <container> wc -l /etc/ssl/certs/ca-certificates.crt 2>/dev/null || echo "no bundle"
+
+# Если size сильно меньше (например < 500 entries) → вероятная TLS trust issue.
+```
+
+Simple fix в compose:
+
+```yaml
+services:
+  mycontainer:
+    volumes:
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+```
+
+**Частота возникновения:** высокая при использовании minimalist base images (`alpine`, slim postgres/mysql) + external HTTPS к cloud providers. CA bundle часто минимален.
+
+**References:**
+
+- Definitive discovery: W10.2-early Фаза 3.2 (2026-04-24 09:30 UTC).
+- ADR: §Known Issues #1 detailed write-up.
+- Runbook: `docs/runbooks/2026-04-23-wal-g-pitr.md` troubleshooting section.
+
+---
+
 ## Anti-patterns (чего НЕ делать)
 
 Собрано из неудачных decisions.
@@ -449,6 +863,27 @@ Self-assessment в Test 6 passed → ложная уверенность. Реа
 
 **Reference:** Lesson 8 (выше).
 
+### AP-9: «HTTPS hang = networking issue» — ранняя неправильная гипотеза
+
+**Симптом:** wal-g/curl/aws-cli виснет в контейнере. Ранний вывод: «Docker network / IPv6 / HTTP/2 блокер». 2-3 часа debug на неправильной гипотезе.
+
+**Prevention (Lesson 17 + 19):**
+
+- **TLS checks ДО networking:** `curl -v`, `wal-g --DEVEL log`, `openssl s_client`.
+- **Compare CA bundles:** `wc -l /etc/ssl/certs/ca-certificates.crt` host vs container.
+- **Fix priority:** TLS first (минуты), networking second (часы).
+
+### AP-10: «Exit 0 из archive_command = успех архивации»
+
+**Симптом:** `pg_stat_archiver.archived_count` растёт, `failed_count=0`, PM и исполнитель полагают что WAL в R2. Реальность: wrapper bug / silent wal-g error / empty path = exit 0 без upload. Данные теряются навсегда.
+
+**Prevention (Lesson 12 + 14):**
+
+- **Wrapper test с реальным `%p` ДО `archive_mode=on`.**
+- **Cross-check bucket listing** в daily operations runbook.
+- **Restore drill** минимум раз после setup.
+- Не trust `archived_count` alone.
+
 ---
 
 ## Как добавлять новые lessons
@@ -501,3 +936,5 @@ Impact: <measurable>.
 | Дата | Изменение |
 |------|-----------|
 | 2026-04-23 | Создано. Lessons 1-7 + 7 anti-patterns из апрельских sessions. |
+| 2026-04-24 | Lesson 8 (self-assessment ≠ discipline) + AP-8. |
+| 2026-04-24 | Lessons 9-19 + AP-9, AP-10 (W10.2-early closure: secrets channel, cloud activation, CF API, pg_stat_archiver trust, container vs host networking/TLS, wrapper testing, date drift, port audit, heredoc escaping, CA bundles). |
