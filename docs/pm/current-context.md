@@ -19,6 +19,17 @@ _Живое состояние текущей PM-сессии. PM обновля
 
 **Начинаем с W1 Design tokens** → W2 Controls → W3 Layout components → W8 Company detail (самая сложная) → W6 Dashboard. Цель на сегодня: 4-5 модулей.
 
+### W1 — ✅ APPROVED (2026-04-24)
+
+Design tokens в Claude Design утверждён после 1 iteration правок:
+- 12/12 секций брифа покрыты (palette / neutral / semantic / states / typography / spacing / radii / shadows / transitions / accessibility / component states / CSS vars reference).
+- 138 CSS custom properties с префиксом `--proficrm-`.
+- 40 brand shades (4 × 10) + 10 neutral + state colors.
+- Brand hex match: primary-500=#01948E, accent-500=#FDAD3A, deep-500=#003D38, soft-300=#C2E2DE (soft base on 300 — documented as exception).
+- Iteration fix: accent-300/400 inversion swapped на smooth ramp; soft legend note добавлен.
+
+Переходим к W2 Component controls.
+
 ## 📋 Active constraints
 
 - Path E: **ACTIVE** — но для этой задачи **security exception** применяется (CLAUDE.md §Деплой R3: «CONFIRM_PROD=yes allowed для security CVEs»). Public postgres exposure попадает под criteria.
