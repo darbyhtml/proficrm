@@ -1,0 +1,33 @@
+# W10.2-early B.1: helper compose for wal-g backup-push from host network.
+# CA trust: mount host /etc/ssl/certs (container Debian 12 bundle rejects R2 cert).
+#
+# Usage (staging VPS, as root):
+#   cd /opt/proficrm-staging
+#   docker compose -f docker-compose.walg-backup.yml run --rm walg-backup
+#
+# См. docs/runbooks/2026-04-23-wal-g-pitr.md (section Full base backup).
+services:
+  walg-backup:
+    image: postgres:16
+    network_mode: host
+    volumes:
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+      - /etc/wal-g:/etc/wal-g:ro
+      - /usr/local/bin/wal-g:/usr/local/bin/wal-g:ro
+      - /var/lib/docker/volumes/proficrm-staging_pgdata_staging/_data:/var/lib/postgresql/data:ro
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        set -a
+        . /etc/wal-g/walg.env
+        set +a
+        export PGHOST=127.0.0.1
+        export PGCONNECT_TIMEOUT=10
+        echo "[walg-backup] pre-check pg_isready at $$(date -u +%FT%TZ)"
+        pg_isready -h 127.0.0.1 -p "$$PGPORT" -U "$$PGUSER" -t 10 || { echo "ERROR pg_isready failed"; exit 2; }
+        echo "[walg-backup] starting backup-push at $$(date -u +%FT%TZ)"
+        time /usr/local/bin/wal-g backup-push /var/lib/postgresql/data
+        RC=$$?
+        echo "[walg-backup] exit=$$RC at $$(date -u +%FT%TZ)"
+        exit $$RC

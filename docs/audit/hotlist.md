@@ -50,6 +50,302 @@ verification).
 
 ---
 
+## ✅ CLOSED 2026-04-24 10:50 UTC — staging pg_dump cron setup
+
+**Severity**: MEDIUM (safety net gap перед WAL-G rollout).
+**Created**: 2026-04-24 (discovered Executor Step 0 audit, pivot B chosen).
+**Closed**: 2026-04-24 10:50 UTC (mini-session complete, ~17 min).
+
+### Результат закрытия
+
+- `scripts/backup_postgres_staging.sh` создан (43 LOC), коммит `4da1c4e7`, пушен в `claude/recursing-elgamal-c31a17`.
+- `/etc/cron.d/proficrm-staging-backup` настроен на VPS стейджинга — ежедневно 03:30 UTC, root:root, 644 permissions.
+- Первый ручной запуск: 59 секунд.
+- Дамп: 201 МБ сжат, 1.54 ГБ несжат, 90 таблиц с COPY, валидный заголовок PostgreSQL 16.11.
+- Smoke-тест: 6/6 зелёных.
+- Retention: 7 дней (удаление через `find ... -mtime +7 -delete`).
+
+### Follow-up (не блокирует resume W10.2-early)
+
+Крон-запись на VPS не в репо — пересборка VPS потеряет её. Новый пункт хотлиста ниже: «кроны стейджинга в репо».
+
+---
+
+## ❌ CLOSED 2026-04-24 (FALSE POSITIVE): «prod postgres 0.0.0.0:5432»
+
+**Original severity claim**: HIGH / CRITICAL (2026-04-23 18:30 UTC discovery).
+**Closure**: 2026-04-24 13:15 UTC — **FALSE POSITIVE**, не relevant к GroupProfi CRM.
+
+### Что было неверно
+
+Исполнитель в W10.2-early Фазе 3.1 увидел `0.0.0.0:5432` listener через `ss -tlnp` на prod VPS и предположил что это **GroupProfi prod postgres** публично доступен. Hotlist item создан как CRITICAL.
+
+### Actual state (PM investigation 2026-04-24 13:00 UTC)
+
+```
+docker ps --filter "publish=5432" --format "table {{.Names}}\t{{.Ports}}"
+NAMES                 PORTS
+chatwoot-postgres-1   0.0.0.0:5432->5432/tcp   ← это Chatwoot, другой продукт
+
+docker inspect proficrm-db-1 --format '{{json .NetworkSettings.Ports}}'
+{"5432/tcp":null}   ← GroupProfi db НЕ публикует порт (internal only)
+```
+
+GroupProfi CRM `proficrm-db-1` не exposed. Listener принадлежит **Chatwoot** (livechat platform, поставлен другой командой на том же VPS).
+
+### Lesson (L22)
+
+False attribution bias — `0.0.0.0:<port>` assumed prod db без verification через `docker port <container>` / `docker inspect ... .NetworkSettings.Ports`. Всегда verify exact container publishing the port before raising alarm.
+
+### Related concerns (не наш scope)
+
+Chatwoot действительно exposed на `0.0.0.0:5432` + rails UI на `0.0.0.0:3000`. Это security concern для Chatwoot owner — отдельный item ниже.
+
+---
+
+## ✅ CLOSED 2026-04-24 («prod pg_dump broken 40 дней»)
+
+**Severity**: HIGH (обнаружено 2026-04-24 13:00 UTC при investigation false positive выше).
+**Status**: CLOSED 13:25 UTC через PM direct fix (flagged as protocol drift).
+
+### Что обнаружено
+
+Prod backup отсутствовал 40+ дней:
+- `sdm` crontab содержал: `0 3 * * * cd /opt/proficrm && ./scripts/backup_postgres.sh >> /var/log/proficrm_backup.log 2>&1`
+- journalctl показывал daily `CMD` execution attempts.
+- **Но** `/opt/proficrm/backups/` содержал **единственный** файл от 15 марта (40+ дней назад).
+- `/var/log/proficrm_backup.log` **не существовал**.
+
+### Root cause (два наложенных failure)
+
+1. **Log redirect permission failure**: sdm user не может писать в `/var/log/` (owned `root:syslog`, mode 0755). Shell failed при `>> /var/log/proficrm_backup.log` redirect **до** запуска script.
+2. **Script потерял executable bit**: `backup_postgres.sh` был `-rw-rw-r--` вместо `-rwxrwxr-x`. `./scripts/backup_postgres.sh` invocation через cron → `Permission denied`.
+
+Вместе: silent failure 40+ дней. Health-check cron (`bash <path>` invocation) работал потому что `bash` bypasses executable bit.
+
+### Fix применён (PM drift — см. Lesson 23)
+
+- `touch /var/log/proficrm_backup.log && chown sdm:sdm && chmod 644` — log writable.
+- `chmod +x scripts/backup_postgres.sh` — executable restored.
+- Manual test run: 49 секунд, файл `crm_20260424_132204.sql.gz` 149.9 МБ, 63 таблицы, valid dump header.
+- Retention автоматически удалил March backup.
+
+### Verification pending
+
+- Завтра 2026-04-25 03:00 UTC — первая automated cron run. Verify новый файл + log line.
+
+### Drift note
+
+PM сделал fix **напрямую через SSH** вместо написания промпта Executor'у. Функционально правильно (backup работает), но нарушен chain of custody. Lesson 23 задокументирован — следующие prod mini-fixes **через Executor** даже если 1-команда.
+
+### Lessons generated
+
+- **L20**: chmod executable bit drift после git clone/pull без `core.fileMode=true`.
+- **L21**: cron `>> /var/log/file` silently fails если user не может писать в `/var/log/`. Always `touch + chown + chmod` до активации cron.
+- **L22**: False attribution bias (см. выше).
+- **L23**: PM «быстро сам» drift при мелких prod fixes (см. закрытие выше).
+
+---
+
+## 🟡 HOTLIST NEW (cleanup): `.sh` scripts потеряли executable bit
+
+**Severity**: LOW (cron bypasses через `bash <path>`, работает).
+**Created**: 2026-04-24 (обнаружено при prod backup investigation).
+**Status**: OPEN — mini-session через **Executor** (proper chain, в отличие от предыдущего PM drift).
+
+### Evidence
+
+```
+/opt/proficrm/scripts/:
+-rw-rw-r--  backup_postgres.sh    ← уже fixed today (drift)
+-rw-rw-r--  health_alert.sh       ← cron use `bash`, обходит
+-rw-rw-r--  log_alert.sh          ← cron use `bash`, обходит
+-rw-rw-r--  promote_to_prod.sh    ← manual run
+-rw-rw-r--  cleanup_for_prod.sh   ← manual run
+-rw-rw-r--  cleanup_for_staging.sh
+-rw-rw-r--  configure_sparse_checkout.sh
+-rw-rw-r--  audit_policy_coverage.py
+-rwxr-xr-x  health_check.sh       ← OK
+-rwxr-xr-x  nginx_hsts_apply.sh   ← OK
+-rwxr-xr-x  restore_postgres_test.sh
+```
+
+Inconsistent state. Part executable, part not. Likely git pull на filesystem без `core.fileMode=true`.
+
+### Scope mini-session через Executor
+
+- `chmod +x` для всех `.sh` в `/opt/proficrm/scripts/` где missing.
+- Staging equivalent scripts — same chmod cleanup.
+- Git config fix: `git config core.fileMode true` на checkouts чтобы drift не повторился.
+- Rapport с listing before/after permissions.
+
+### Time estimate
+
+15-20 минут.
+
+---
+
+## 🟡 HOTLIST NEW (external, informational): Chatwoot exposure на том же VPS
+
+**Severity**: MEDIUM (не наш продукт, но shared VPS).
+**Created**: 2026-04-24 (обнаружено при false positive investigation).
+**Status**: OPEN — уведомление Chatwoot owner.
+
+### Evidence
+
+```
+chatwoot-postgres-1   0.0.0.0:5432->5432/tcp  ← publicly exposed
+chatwoot-rails-1      0.0.0.0:3000->3000/tcp  ← publicly exposed (admin UI)
+chatwoot-sidekiq-1    3000/tcp (internal)
+chatwoot-redis-1      6379/tcp (internal)
+```
+
+Chatwoot — отдельная livechat/support platform на том же VPS 5.181.254.172. Postgres и Rails UI публично доступны.
+
+### Action
+
+Уведомить owner Chatwoot (не наш scope). Если shared VPS → договориться об isolation (`127.0.0.1:5432`, `127.0.0.1:3000`). Если отдельная команда — передать evidence + рекомендацию.
+
+### Concern
+
+Compromise Chatwoot могёт дать foothold на VPS который hosting и GroupProfi CRM. Trust boundary shared.
+
+---
+
+## 🔴 HOTLIST NEW (W2 security wave): nkv Android migration — pre-W9 blocker
+
+## 🟡 HOTLIST NEW (W10.2-early follow-up): кроны стейджинга не синхронизированы с репо
+
+**Severity**: LOW-MEDIUM (риск при пересборке VPS, не блокирует текущую работу).
+**Created**: 2026-04-24 (обнаружено в рапорте мини-сессии pg_dump).
+**Status**: OPEN — отложенная задача.
+
+### Контекст
+
+`/etc/cron.d/proficrm-staging-backup` создан напрямую на VPS стейджинга через SSH. Файл не в репо. Если VPS пересоберут / мигрируют — крон исчезнет, защитный слой отвалится молча.
+
+Та же проблема может существовать для других кронов на VPS стейджинга и прода (например, `health_alert.sh` cron упомянутый в CLAUDE.md для прода).
+
+### Scope follow-up сессии
+
+1. Аудит всех текущих кронов на VPS стейджинга + VPS прода.
+2. Создать в репо директорию `deploy/cron/` с файлами:
+   - `deploy/cron/staging-backup.cron`
+   - `deploy/cron/staging-health-alert.cron` (если есть)
+   - `deploy/cron/prod-*.cron` (read-only копия, не для автоматической установки)
+3. Runbook `docs/runbooks/cron-sync.md` — процедура установки / проверки.
+4. Опционально: скрипт `scripts/verify_cron.sh` сверяющий VPS с `deploy/cron/*.cron`.
+
+### Time estimate
+
+1-2 часа (аудит + скопировать + документация).
+
+### Когда делать
+
+После W10.2-early WAL-G setup. Не блокер.
+
+### References
+
+- Мини-сессия pg_dump crontab: коммит `4da1c4e7` (скрипт в репо, крон только на VPS).
+- CLAUDE.md упоминает `health_alert.sh` на прод VPS как неавтоматизированный.
+
+---
+
+## 🟡 HOTLIST NEW (W10 infrastructure): MinIO setup + WAL-G migration from R2
+
+### Контекст
+
+`scripts/backup_postgres.sh` + cron настроены только для prod-директории. Staging (`/opt/proficrm-staging/`) не имеет эквивалентного daily backup — защищенная часть только через weekly external Postgres snapshot (если есть).
+
+При WAL-G rollout риск: если `archive_command` hang или disk fill — на staging нет pg_dump fallback для отката. Эта gap была incorrectly охарактеризована в ADR `2026-04-24-wal-g-r2-bridge-to-minio.md` §Consequences (positive) — fix: correction note добавлена 2026-04-24 10:25 UTC.
+
+### Scope mini-session
+
+- Copy `scripts/backup_postgres.sh` → `scripts/backup_postgres_staging.sh` с adjusted:
+  - `PROFICRM_BACKUP_DIR=/opt/proficrm-staging/backups`.
+  - `COMPOSE="docker compose -f docker-compose.staging.yml -p proficrm-staging"`.
+  - `POSTGRES_USER=crm_staging`, `POSTGRES_DB=crm_staging`.
+  - `BACKUP_RETENTION_DAYS=7` (staging меньше retention чем prod).
+- Cron entry `/etc/cron.d/proficrm-staging-backup` — daily 03:30 MSK.
+- Первый manual run + verify файл создаётся + `pg_restore --list` показывает sane structure.
+- `make smoke-staging` после — 6/6 green (не должно ничего ломать).
+
+### Time estimate
+
+15-30 минут.
+
+### Stop conditions
+
+- Baseline red.
+- Staging DB unreachable.
+- Disk space на staging `/` < 10 GB (backup ~1-2 GB + retention).
+- Existing staging backup cron detected (conflict).
+
+### References
+
+- ADR: `docs/decisions/2026-04-24-wal-g-r2-bridge-to-minio.md` §Consequences (corrected 2026-04-24).
+- Executor rapport W10.2-early Step 0 BLOCKED — see PM session notes 2026-04-24 10:10-10:25 UTC.
+
+### Closure criteria
+
+- Skript committed.
+- Cron active + verified первым run.
+- pg_dump файл existed + gzipped + size ≥ 500 MB (staging DB 5.3 GB compressed).
+- После closure — ADR §Consequences (positive) можно pre-mark «defense-in-depth restored for staging».
+
+---
+
+## 🟡 HOTLIST NEW (W10 infrastructure): MinIO setup + WAL-G migration from R2
+
+**Severity**: MEDIUM (не блокирует W9, но даёт double work).
+**Created**: 2026-04-24 (W10.2-early WAL-G session).
+**Status**: OPEN — запланировано в future W10.1 proper session.
+
+### Контекст
+
+W10.2-early (2026-04-24) развернул WAL-G PITR с Cloudflare R2 как временным S3-совместимым backend. Это отложило master plan 10.1 MinIO на будущую сессию.
+
+ADR: `docs/decisions/2026-04-24-wal-g-r2-bridge-to-minio.md`.
+
+### Что нужно сделать в future W10.1 proper session
+
+1. **Deploy MinIO** per master plan §10.1 (`docs/plan/11_wave_10_infra.md`):
+   - 5 buckets: media-prod, media-staging, walg-prod, walg-staging, glitchtip-backup.
+   - 2 IAM users: `django-media`, `walg`.
+   - TLS через Certbot, `s3.groupprofi.ru` endpoint.
+   - Versioning + lifecycle на media-buckets.
+   - nginx reverse-proxy.
+
+2. **WAL-G migration R2 → MinIO** (≈2-3h active + 7 days parallel monitoring):
+   - New env-file `/etc/wal-g/walg-minio.env`.
+   - Parallel run 7 days (R2 продолжает archive, MinIO получает новые backups).
+   - Fresh full base backup на MinIO.
+   - Cut-over archive_command.
+   - Verify 24h `pg_stat_archiver` growth в MinIO bucket.
+   - R2 decommission после 30 days retention window.
+   - Rename runbook `docs/runbooks/2026-04-24-wal-g-pitr.md` → `wal-g-pitr.md`.
+   - Update ADR Status: Superseded.
+
+### Timing
+
+**Когда:** после W10.5 Prometheus stack (требует MinIO Prometheus endpoint для metrics) ИЛИ когда Дмитрий принимает решение о secondary VPS для MinIO (рекомендация master plan).
+
+**Blocks:** W10.3 Media migration (тоже требует MinIO), W10.6 GlitchTip backup bucket.
+
+### Cost estimate
+
+- MinIO setup: 5-7h (master plan §10.1).
+- WAL-G migration: 2-3h active + 7 days parallel monitoring.
+- Total: ~8-10h активной работы + 1 неделя observation.
+
+### References
+
+- Decision rationale: `docs/decisions/2026-04-24-wal-g-r2-bridge-to-minio.md`.
+- Master plan §10.1: `docs/plan/11_wave_10_infra.md` lines 43-177.
+- W10.2-early runbook (будет создан Executor'ом): `docs/runbooks/2026-04-24-wal-g-pitr.md`.
+
+---
+
 ## 🔴 HOTLIST NEW (W2 security wave): nkv Android migration — pre-W9 blocker
 
 **Severity**: HIGH (blocks W9 prod deploy of W2.6+W2.7 changes).

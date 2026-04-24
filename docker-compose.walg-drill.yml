@@ -1,0 +1,29 @@
+# W10.2-early B.1: restore drill container (scratch postgres on :5433).
+# Used for manual restore drills — not part of regular ops.
+#
+# Workflow:
+#   mkdir -p /tmp/walg-drill-data && chown 999:999 /tmp/walg-drill-data && chmod 700 /tmp/walg-drill-data
+#   docker compose -f docker-compose.walg-drill.yml up -d
+#   # inside container: chown postgres:postgres /var/lib/postgresql/data,
+#   # run wal-g backup-fetch LATEST, setup recovery.signal + restore_command,
+#   # pg_ctl start -o "-p 5433".
+#   # After drill: docker compose -f docker-compose.walg-drill.yml down -v
+#   #             rm -rf /tmp/walg-drill-data
+#
+# См. docs/runbooks/2026-04-23-wal-g-pitr.md (section Restore drill).
+services:
+  db-drill:
+    image: postgres:16
+    network_mode: host
+    environment:
+      POSTGRES_PASSWORD: drill_transient
+      PGPORT: 5433
+    volumes:
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+      - /etc/wal-g:/etc/wal-g:ro
+      - /usr/local/bin/wal-g:/usr/local/bin/wal-g:ro
+      - /tmp/walg-drill-data:/var/lib/postgresql/data
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - sleep infinity

@@ -50,17 +50,102 @@ bash tests/smoke/staging_post_deploy.sh
 
 ---
 
-## При старте каждой сессии прочитать:
+## 👤 Роли: PM-planner vs Executor
 
-1. **CLAUDE.md** (этот файл)
-2. **docs/current-sprint.md** — что сейчас в работе, где остановились, что следующее
+Проект ведётся **двумя Claude Code instances параллельно** через Дмитрия как координатора:
+
+| Роль | Что делает | Что НЕ делает |
+|------|-----------|---------------|
+| **PM-planner** | Strategic планирование, написание промптов для Executor, review результатов, maintenance docs, pattern recognition | Не пишет код, не commit'ит, не деплоит, не трогает серверы |
+| **Executor** | Имплементация: код, тесты, миграции, staging deploy, browser verification | Не принимает strategic decisions без явного approval Дмитрия |
+
+Третий участник — **IT-друг Дмитрия** (external) — Android app работа когда нужна. Координируется через Дмитрия.
+
+### Как понять текущую роль
+
+- Bootstrap-промпт явно говорит "Ты — PM-planner..." или "Ты — Executor..." → слушай.
+- Промпт содержит `make smoke-staging` + `docker exec` + `git commit` шаги → **Executor mode**.
+- Промпт содержит "обсудим", "оценим", "спланируй", "напиши промпт для другого окна" → **PM mode**.
+- Без явного указания → спроси одним вопросом.
+
+### Чтение при старте — по роли
+
+**PM-planner обязательно читает:**
+
+1. `CLAUDE.md` (этот файл) — safety rules + role map.
+2. `docs/pm/playbook.md` — детальный PM guide (workflow, patterns, prompt template).
+3. `docs/pm/lessons-learned.md` — инциденты + discoveries + anti-patterns.
+4. `docs/current-sprint.md` — текущий статус и стоп-точка.
+5. `docs/audit/hotlist.md` — top-7 tech debt.
+6. `docs/plan/00_MASTER_PLAN.md` + релевантная wave — если планируется новая волна.
+
+**Executor обязательно читает:**
+
+1. `CLAUDE.md` (этот файл) — safety rules, staging health check, MANDATORY правила.
+2. `docs/current-sprint.md` — что сейчас в работе.
+3. Промпт от PM — source of truth по scope.
+
+Дополнительно, по ситуации:
+- Задача связана с архитектурой или новым модулем → `docs/architecture.md`.
+- Задача похожа на ранее решённую проблему → `docs/problems-solved.md`.
+- Нужно понять почему выбран конкретный подход → `docs/decisions.md` или `docs/decisions/`.
+
+---
+
+## При старте каждой сессии (общее для обеих ролей)
+
+1. **CLAUDE.md** (этот файл) — первым.
+2. **docs/current-sprint.md** — что сейчас в работе, где остановились.
 
 Это обязательно. Не начинать работу, не прочитав оба файла.
 
-Дополнительно, по ситуации:
-- Задача связана с архитектурой или новым модулем → прочитать `docs/architecture.md`
-- Задача похожа на ранее решённую проблему → проверить `docs/problems-solved.md`
-- Нужно понять почему выбран конкретный подход → прочитать `docs/decisions.md`
+## 🔄 Post-compact / session-start ritual
+
+**Compact** — автоматическое сжатие conversation когда достигается context limit (~150-200K токенов). Первые ~80% сообщений заменяются summary. PM может потерять context недавних decisions и state.
+
+**Поэтому после compact или при старте новой session — ОБЯЗАТЕЛЬНО прочитать в строгом порядке:**
+
+1. **`CLAUDE.md`** (этот файл) — safety rules, Path E, роли.
+2. **`docs/pm/current-context.md`** — last PM state (если PM role).
+3. **`docs/pm/playbook.md`** — workflow, patterns (если PM role).
+4. **`docs/pm/lessons-learned.md`** — incidents, anti-patterns (если PM role).
+5. **`docs/current-sprint.md`** — active work.
+6. **`docs/audit/hotlist.md`** — pending tech debt.
+7. **`git log --oneline -20`** — recent activity.
+8. **Scan последние 10-20 messages** current conversation для immediate context.
+
+**Только после этого ritual — substantive response.** Не skip потому что «я помню» — compact мог стереть memory без awareness.
+
+### Signals of post-compact drift
+
+Если в своём поведении замечаешь:
+
+- Switch на английский без причины.
+- Rubber-stamping Executor output без critical review.
+- Suggesting prod deploy (нарушение Path E).
+- Re-inventing уже закрытые decisions.
+- Forgetting pattern recognition (audit-first).
+- Asking questions которые были уже отвечены 10 минут назад.
+
+**Action (immediately):**
+
+1. **Stop** current response (не submit half-baked).
+2. **Read** state files (особенно `docs/pm/current-context.md`).
+3. **Acknowledge** Дмитрию: «Заметил drift после compact. Прочитал state files, восстановил контекст. Продолжаю.»
+4. **Commit** note в `docs/pm/current-context.md` под section "Red flags" с timestamp и конкретным симптомом.
+5. **Resume** работу.
+
+**Rule:** openness > silent drift. Acknowledge recovery builds trust.
+
+### Когда Дмитрий замечает drift первым
+
+Если Дмитрий говорит: «Ты в английский ушёл» / «Ты забыл про Path E» / «Это было решено»:
+
+- **Don't defend.** Accept.
+- Execute ritual above.
+- Acknowledge, commit red flag, resume.
+
+Не argumentate что «я помнил» — compact мог стереть memory без awareness.
 
 ## Аудит и граф знаний
 
@@ -169,9 +254,71 @@ bash tests/smoke/staging_post_deploy.sh
 4. **Если задача не подпадает ни под один триггер** — работать без скилла, инструментами напрямую.
 5. **При пограничном случае** — один вопрос пользователю, не более.
 
-## Язык
+## Язык — строго русский для сообщений Дмитрию
 
-Всегда отвечать **только на русском языке**. Без исключений. Даже если пользователь написал по-английски. Даже в compact summary. Комментарии в коде — на русском (docstrings, inline), если это не противоречит существующим конвенциям модуля. Технические термины (JWT, API, CRUD, SSE, CORS) оставлять как есть.
+**Правило:** отвечать пользователю **только на русском языке**. Без исключений. Уточнено 2026-04-24 после явного feedback Дмитрия: «можешь писать по русски? Промты как угодно делай, но всё что пишешь мне — на РУССКОМ».
+
+### Carve-out: два класса текста
+
+**Класс 1 — сообщения Дмитрию (текст ответов в чате):**
+
+Чистый русский. Всё, что Дмитрий читает как свой разговор с ассистентом.
+
+Исключения только строго технические:
+
+- **Аббревиатуры без русского аналога:** JWT, API, CRUD, SSE, CORS, WSGI, SQL, HTTP, TOTP, DRF, ORM, CSP, CDN, DNS, ADR, PITR, RPO, RTO, VPS.
+- **Имена собственные:** Django, Celery, Redis, PostgreSQL, Docker, nginx, Playwright, GitHub, MinIO, WAL-G, Cloudflare R2, Xiaomi, Android.
+- **Пути файлов, URL, код, bash-команды.**
+- **Git commit type-prefix:** `Fix(Module):`, `Feat(Module):`, `Docs(Module):`, `Harden(Module):`.
+
+**Слова, которые должны быть на русском (даже если в проекте часто звучат на английском):**
+
+| Английское | Русское |
+|------------|---------|
+| rapport | рапорт / отчёт |
+| hotlist | хотлист |
+| pivot | поворот / смена подхода |
+| checkout (branch) | чекаут / «переключить ветку» |
+| staging | стейджинг |
+| audit | аудит |
+| scope | скоуп / рамки |
+| session | сессия |
+| deploy | деплой |
+| backup | бэкап |
+| cron | крон |
+| fallback | фолбэк / «резервный путь» |
+| safety net | страховка / защитный слой |
+| tradeoff | компромисс |
+| readiness | готовность |
+| stop condition | условие остановки |
+| leverage | использовать |
+| align | согласовать |
+| ship | выкатить |
+| rubber-stamp | штамповать / одобрять без проверки |
+| blocker | блокер |
+| best practice | лучшая практика |
+| follow-up | follow-up (или «уточняющий вопрос») |
+
+**Класс 2 — промпты для Executor:**
+
+Блоки между `**[НАЧАЛО ПРОМПТА]**` и `**[КОНЕЦ ПРОМПТА]**` — **допустимый смешанный стиль**. Это технический документ для другого Claude Code instance, содержит bash-команды, canonical template-маркеры (Step 0 / Step 1), referenced env-vars. Mix приемлем.
+
+Граница жёсткая: как только кавычка `**[КОНЕЦ ПРОМПТА]**` закрылась и PM снова говорит Дмитрию — сразу чистый русский класс 1.
+
+### Применение
+
+- **Все ответы Дмитрию в чате** — класс 1.
+- **Documentation (`docs/**`)** — класс 1 (та же дисциплина).
+- **Commit messages** — класс 1 (русское описание + английский type-prefix).
+- **PR descriptions** — класс 1.
+- **Compact summaries** — класс 1.
+- **Промпты для Executor** внутри ответа Дмитрию — класс 2 между маркерами.
+
+### Self-check
+
+Если в ответе Дмитрию (вне блоков `[НАЧАЛО ПРОМПТА]..[КОНЕЦ ПРОМПТА]`) есть слово из таблицы выше или синоним без перевода — дрейф. Переписывать перед отправкой.
+
+**Критерий:** если читать вслух и хочется переключаться язык посреди фразы — это дрейф.
 
 ## Автообновление документации
 
