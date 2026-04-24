@@ -40,6 +40,16 @@ Controls component library утверждён без iteration правок (zer
 
 Переходим к W3 Layout.
 
+### W3 — ✅ APPROVED (2026-04-24)
+
+Layout component library утверждён без iteration (как и W2):
+- 8/8 секций: Cards / Modals / Tables / Tabs / Badges-Tags-Chips / Alerts / Toasts / Tokens used.
+- W2 controls explicitly reused без modifications.
+- Realistic Russian B2B references (44-ФЗ тендер, финансовые суммы с typographic spaces, договор № 2025-1842, СМТ recovery pattern).
+- Bonus patterns: activity log dense с uppercase action badges, W4 preview CTA card, toast progress bar hover-pause showcase.
+
+Переходим к W8 Company detail (самая сложная страница проекта).
+
 ## 📋 Active constraints
 
 - Path E: **ACTIVE** — но для этой задачи **security exception** применяется (CLAUDE.md §Деплой R3: «CONFIRM_PROD=yes allowed для security CVEs»). Public postgres exposure попадает под criteria.
