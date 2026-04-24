@@ -1072,6 +1072,59 @@ Even 30-line промпт sufficient. Value — chain of custody, not script len
 
 ---
 
+## Lesson 24: `core.fileMode` setting — platform-specific, не copy-paste между OS
+
+**Date:** 2026-04-24 (merge feature-branch → main pre-check).
+
+**Что случилось:**
+
+При Executor pre-check перед merge `claude/recursing-elgamal-c31a17` → `main` на Windows host появились 6 файлов M (modified) в staging area без реальных changes:
+
+```
+M deploy_production.sh
+M deploy_staging.sh
+M scripts/backup_postgres.sh
+... (21 scripts total)
+```
+
+**Root cause:**
+
+Предыдущая сессия (scripts chmod cleanup) установила `git config core.fileMode=true` на **всех трёх checkouts**: local worktree (Windows) + prod VPS (Linux) + staging VPS (Linux). Intent был force git to track exe bit.
+
+Но **Windows NTFS не имеет Unix exe bit**. Когда git на Windows делает stat() — каждый `.sh` выглядит без +x. Git видит diff между index (100755) и filesystem (100644) → 21 M files. Реальных changes нет.
+
+Linux serversы (prod + staging) OK: FS честно сообщает 100755 для scripts, совпадает с git index.
+
+**Fix (~10 секунд):**
+
+```bash
+git config core.fileMode false  # на Windows worktree
+git status  # tree clean
+```
+
+**Правила:**
+
+1. **`core.fileMode` — platform-specific setting**. Не copy-paste между OS одним `.gitconfig` share. Устанавливать per-checkout:
+   - **Windows checkouts**: `core.fileMode=false` (FS не имеет exe bit, any value confusing).
+   - **Linux/macOS checkouts**: `core.fileMode=true` (FS honors exe bit, git должен tracking).
+
+2. **Mode changes делать через `git update-index --chmod=+x <file>`** — эта команда работает independently от `core.fileMode` flag и устанавливает index mode directly. После этого Linux servers через `git pull` получат 100755 в filesystem.
+
+3. **Windows host для cross-platform repos** — keep `core.fileMode=false` как default. Не polluting index через stat() calls.
+
+**Impact в этом incident:**
+
+- Pre-check showed false dirty tree → временная confusion.
+- Recovery: ~10 секунд (`git config core.fileMode false`).
+- Merge proceeded cleanly.
+
+**Reference:**
+
+- Executor merge rapport 2026-04-24 14:30 UTC (pre-check + fix).
+- Git docs: https://git-scm.com/docs/git-config#Documentation/git-config.txt-corefileMode.
+
+---
+
 ## Anti-patterns (чего НЕ делать)
 
 Собрано из неудачных decisions.
