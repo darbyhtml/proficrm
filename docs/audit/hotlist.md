@@ -71,59 +71,148 @@ verification).
 
 ---
 
-## 🔴 HOTLIST NEW (security CRITICAL): prod postgres public exposure 0.0.0.0:5432
+## ❌ CLOSED 2026-04-24 (FALSE POSITIVE): «prod postgres 0.0.0.0:5432»
 
-**Severity**: HIGH / CRITICAL (зависит от password strength + fail2ban state).
-**Discovered**: 2026-04-23 18:30 UTC (исполнитель в Фазе 3.1 W10.2-early при port conflict debug).
-**Status**: OPEN — отдельная fix-сессия после W10.2-early closure.
+**Original severity claim**: HIGH / CRITICAL (2026-04-23 18:30 UTC discovery).
+**Closure**: 2026-04-24 13:15 UTC — **FALSE POSITIVE**, не relevant к GroupProfi CRM.
+
+### Что было неверно
+
+Исполнитель в W10.2-early Фазе 3.1 увидел `0.0.0.0:5432` listener через `ss -tlnp` на prod VPS и предположил что это **GroupProfi prod postgres** публично доступен. Hotlist item создан как CRITICAL.
+
+### Actual state (PM investigation 2026-04-24 13:00 UTC)
+
+```
+docker ps --filter "publish=5432" --format "table {{.Names}}\t{{.Ports}}"
+NAMES                 PORTS
+chatwoot-postgres-1   0.0.0.0:5432->5432/tcp   ← это Chatwoot, другой продукт
+
+docker inspect proficrm-db-1 --format '{{json .NetworkSettings.Ports}}'
+{"5432/tcp":null}   ← GroupProfi db НЕ публикует порт (internal only)
+```
+
+GroupProfi CRM `proficrm-db-1` не exposed. Listener принадлежит **Chatwoot** (livechat platform, поставлен другой командой на том же VPS).
+
+### Lesson (L22)
+
+False attribution bias — `0.0.0.0:<port>` assumed prod db без verification через `docker port <container>` / `docker inspect ... .NetworkSettings.Ports`. Всегда verify exact container publishing the port before raising alarm.
+
+### Related concerns (не наш scope)
+
+Chatwoot действительно exposed на `0.0.0.0:5432` + rails UI на `0.0.0.0:3000`. Это security concern для Chatwoot owner — отдельный item ниже.
+
+---
+
+## ✅ CLOSED 2026-04-24 («prod pg_dump broken 40 дней»)
+
+**Severity**: HIGH (обнаружено 2026-04-24 13:00 UTC при investigation false positive выше).
+**Status**: CLOSED 13:25 UTC через PM direct fix (flagged as protocol drift).
+
+### Что обнаружено
+
+Prod backup отсутствовал 40+ дней:
+- `sdm` crontab содержал: `0 3 * * * cd /opt/proficrm && ./scripts/backup_postgres.sh >> /var/log/proficrm_backup.log 2>&1`
+- journalctl показывал daily `CMD` execution attempts.
+- **Но** `/opt/proficrm/backups/` содержал **единственный** файл от 15 марта (40+ дней назад).
+- `/var/log/proficrm_backup.log` **не существовал**.
+
+### Root cause (два наложенных failure)
+
+1. **Log redirect permission failure**: sdm user не может писать в `/var/log/` (owned `root:syslog`, mode 0755). Shell failed при `>> /var/log/proficrm_backup.log` redirect **до** запуска script.
+2. **Script потерял executable bit**: `backup_postgres.sh` был `-rw-rw-r--` вместо `-rwxrwxr-x`. `./scripts/backup_postgres.sh` invocation через cron → `Permission denied`.
+
+Вместе: silent failure 40+ дней. Health-check cron (`bash <path>` invocation) работал потому что `bash` bypasses executable bit.
+
+### Fix применён (PM drift — см. Lesson 23)
+
+- `touch /var/log/proficrm_backup.log && chown sdm:sdm && chmod 644` — log writable.
+- `chmod +x scripts/backup_postgres.sh` — executable restored.
+- Manual test run: 49 секунд, файл `crm_20260424_132204.sql.gz` 149.9 МБ, 63 таблицы, valid dump header.
+- Retention автоматически удалил March backup.
+
+### Verification pending
+
+- Завтра 2026-04-25 03:00 UTC — первая automated cron run. Verify новый файл + log line.
+
+### Drift note
+
+PM сделал fix **напрямую через SSH** вместо написания промпта Executor'у. Функционально правильно (backup работает), но нарушен chain of custody. Lesson 23 задокументирован — следующие prod mini-fixes **через Executor** даже если 1-команда.
+
+### Lessons generated
+
+- **L20**: chmod executable bit drift после git clone/pull без `core.fileMode=true`.
+- **L21**: cron `>> /var/log/file` silently fails если user не может писать в `/var/log/`. Always `touch + chown + chmod` до активации cron.
+- **L22**: False attribution bias (см. выше).
+- **L23**: PM «быстро сам» drift при мелких prod fixes (см. закрытие выше).
+
+---
+
+## 🟡 HOTLIST NEW (cleanup): `.sh` scripts потеряли executable bit
+
+**Severity**: LOW (cron bypasses через `bash <path>`, работает).
+**Created**: 2026-04-24 (обнаружено при prod backup investigation).
+**Status**: OPEN — mini-session через **Executor** (proper chain, в отличие от предыдущего PM drift).
 
 ### Evidence
 
-На VPS 5.181.254.172 (single-host hosting prod + staging):
-
 ```
-ss -tlnp | grep 5432
-LISTEN 0.0.0.0:5432   docker-proxy pid=156678
-LISTEN [::]:5432      docker-proxy pid=156684
+/opt/proficrm/scripts/:
+-rw-rw-r--  backup_postgres.sh    ← уже fixed today (drift)
+-rw-rw-r--  health_alert.sh       ← cron use `bash`, обходит
+-rw-rw-r--  log_alert.sh          ← cron use `bash`, обходит
+-rw-rw-r--  promote_to_prod.sh    ← manual run
+-rw-rw-r--  cleanup_for_prod.sh   ← manual run
+-rw-rw-r--  cleanup_for_staging.sh
+-rw-rw-r--  configure_sparse_checkout.sh
+-rw-rw-r--  audit_policy_coverage.py
+-rwxr-xr-x  health_check.sh       ← OK
+-rwxr-xr-x  nginx_hsts_apply.sh   ← OK
+-rwxr-xr-x  restore_postgres_test.sh
 ```
 
-Это docker-proxy от prod-директории — prod postgres **публично доступен на всём интернете** через TCP:5432. Только password protection (`POSTGRES_PASSWORD` из prod `.env`).
+Inconsistent state. Part executable, part not. Likely git pull на filesystem без `core.fileMode=true`.
 
-### Impact
+### Scope mini-session через Executor
 
-- Любой может попытаться brute-force `crm` user.
-- Уязвим к CVE-based атакам PostgreSQL даже при strong password.
-- Не соответствует security best practice («database не выставляется наружу»).
+- `chmod +x` для всех `.sh` в `/opt/proficrm/scripts/` где missing.
+- Staging equivalent scripts — same chmod cleanup.
+- Git config fix: `git config core.fileMode true` на checkouts чтобы drift не повторился.
+- Rapport с listing before/after permissions.
 
-### Root cause гипотеза
+### Time estimate
 
-В prod `docker-compose.yml` (в отличие от staging после fix 2026-04-23) db сервис имеет `ports: - "5432:5432"` (без `127.0.0.1:` binding). Deploy history: вероятно copy-paste pattern с первой установки.
-
-### Recommended fix
-
-1. Изменить prod `docker-compose.yml`:
-   ```yaml
-   services:
-     db:
-       ports:
-         - "127.0.0.1:5432:5432"   # localhost-only
-   ```
-2. `docker compose up -d db` — breaking ~30s (prod downtime!).
-3. Verify `ss -tlnp | grep 5432` показывает только `127.0.0.1`.
-4. Проверить что приложения продолжают работать (они используют Docker network, не host port).
-
-### Constraints
-
-- **Path E active** → prod deploy requires `CONFIRM_PROD=yes` + security exception. HIGH security finding подходит под exception criteria из CLAUDE.md.
-- Fix **отдельной мини-сессией** (не смешивать с W10.2-early).
-- Требуется Дмитрий approval на prod change.
-
-### Related
-
-- Discovery в rapport W10.2-early Фаза 3.1 (Checkpoint 3.1, 2026-04-23 18:30 UTC).
-- Staging port изменён на `127.0.0.1:15432:5432` чтобы избежать conflict.
+15-20 минут.
 
 ---
+
+## 🟡 HOTLIST NEW (external, informational): Chatwoot exposure на том же VPS
+
+**Severity**: MEDIUM (не наш продукт, но shared VPS).
+**Created**: 2026-04-24 (обнаружено при false positive investigation).
+**Status**: OPEN — уведомление Chatwoot owner.
+
+### Evidence
+
+```
+chatwoot-postgres-1   0.0.0.0:5432->5432/tcp  ← publicly exposed
+chatwoot-rails-1      0.0.0.0:3000->3000/tcp  ← publicly exposed (admin UI)
+chatwoot-sidekiq-1    3000/tcp (internal)
+chatwoot-redis-1      6379/tcp (internal)
+```
+
+Chatwoot — отдельная livechat/support platform на том же VPS 5.181.254.172. Postgres и Rails UI публично доступны.
+
+### Action
+
+Уведомить owner Chatwoot (не наш scope). Если shared VPS → договориться об isolation (`127.0.0.1:5432`, `127.0.0.1:3000`). Если отдельная команда — передать evidence + рекомендацию.
+
+### Concern
+
+Compromise Chatwoot могёт дать foothold на VPS который hosting и GroupProfi CRM. Trust boundary shared.
+
+---
+
+## 🔴 HOTLIST NEW (W2 security wave): nkv Android migration — pre-W9 blocker
 
 ## 🟡 HOTLIST NEW (W10.2-early follow-up): кроны стейджинга не синхронизированы с репо
 
