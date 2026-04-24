@@ -71,6 +71,60 @@ verification).
 
 ---
 
+## 🔴 HOTLIST NEW (security CRITICAL): prod postgres public exposure 0.0.0.0:5432
+
+**Severity**: HIGH / CRITICAL (зависит от password strength + fail2ban state).
+**Discovered**: 2026-04-23 18:30 UTC (исполнитель в Фазе 3.1 W10.2-early при port conflict debug).
+**Status**: OPEN — отдельная fix-сессия после W10.2-early closure.
+
+### Evidence
+
+На VPS 5.181.254.172 (single-host hosting prod + staging):
+
+```
+ss -tlnp | grep 5432
+LISTEN 0.0.0.0:5432   docker-proxy pid=156678
+LISTEN [::]:5432      docker-proxy pid=156684
+```
+
+Это docker-proxy от prod-директории — prod postgres **публично доступен на всём интернете** через TCP:5432. Только password protection (`POSTGRES_PASSWORD` из prod `.env`).
+
+### Impact
+
+- Любой может попытаться brute-force `crm` user.
+- Уязвим к CVE-based атакам PostgreSQL даже при strong password.
+- Не соответствует security best practice («database не выставляется наружу»).
+
+### Root cause гипотеза
+
+В prod `docker-compose.yml` (в отличие от staging после fix 2026-04-23) db сервис имеет `ports: - "5432:5432"` (без `127.0.0.1:` binding). Deploy history: вероятно copy-paste pattern с первой установки.
+
+### Recommended fix
+
+1. Изменить prod `docker-compose.yml`:
+   ```yaml
+   services:
+     db:
+       ports:
+         - "127.0.0.1:5432:5432"   # localhost-only
+   ```
+2. `docker compose up -d db` — breaking ~30s (prod downtime!).
+3. Verify `ss -tlnp | grep 5432` показывает только `127.0.0.1`.
+4. Проверить что приложения продолжают работать (они используют Docker network, не host port).
+
+### Constraints
+
+- **Path E active** → prod deploy requires `CONFIRM_PROD=yes` + security exception. HIGH security finding подходит под exception criteria из CLAUDE.md.
+- Fix **отдельной мини-сессией** (не смешивать с W10.2-early).
+- Требуется Дмитрий approval на prod change.
+
+### Related
+
+- Discovery в rapport W10.2-early Фаза 3.1 (Checkpoint 3.1, 2026-04-23 18:30 UTC).
+- Staging port изменён на `127.0.0.1:15432:5432` чтобы избежать conflict.
+
+---
+
 ## 🟡 HOTLIST NEW (W10.2-early follow-up): кроны стейджинга не синхронизированы с репо
 
 **Severity**: LOW-MEDIUM (риск при пересборке VPS, не блокирует текущую работу).
