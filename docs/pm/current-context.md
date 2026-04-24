@@ -8,7 +8,16 @@ _Живое состояние текущей PM-сессии. PM обновля
 
 ## 🎯 Current session goal
 
-**W10.2-early закрыт.** Следующая задача — **prod security mini-session:** изолировать prod postgres от `0.0.0.0:5432` на `127.0.0.1:5432:5432` (loopback only). Это CRITICAL hotlist item, первое реальное использование Path E exception (security criterion). 30-60 минут + 30 сек prod downtime.
+**Pivot на дневную работу:** prod session отложена до вечера (prod downtime в час пик не уместен). Вместо этого запускаем серию design prototype промптов в Claude Design — пазл из 16 web модулей + 9 Android модулей. Дмитрий вставляет в Claude Design, я пишу brief, он показывает результат, итерируем.
+
+**Brand palette подтверждён Дмитрием:**
+- `#01948E` primary (бирюзовый)
+- `#FDAD3A` accent (оранжевый)
+- `#003D38` deep (тёмно-зелёный, для текста / dark elements)
+- `#C2E2DE` soft (нежно голубо-серый)
+- Фон белый, текст чёрный или deep. Brand с нуля (раньше guidelines не было).
+
+**Начинаем с W1 Design tokens** → W2 Controls → W3 Layout components → W8 Company detail (самая сложная) → W6 Dashboard. Цель на сегодня: 4-5 модулей.
 
 ## 📋 Active constraints
 
