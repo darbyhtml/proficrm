@@ -171,3 +171,116 @@ Pre-W9 prod deploy rehearsal требует **solid backup strategy**. 333+ ко
 - Cloudflare R2 free tier: <https://developers.cloudflare.com/r2/pricing/>.
 - WAL-G docs: <https://wal-g.readthedocs.io/>.
 - Related: `docs/decisions/2026-04-21-defer-prod-deploy-to-w9.md` (Path E — staging-only).
+- Runbook (actual implementation): `docs/runbooks/2026-04-23-wal-g-pitr.md`.
+
+---
+
+## Actual Implementation (updated 2026-04-23)
+
+Original plan: `wal-g` в db container → R2 прямо через `archive_command`.
+
+Actual deployed: **host-pivot architecture** после discovery container TLS
+issue (см. §Known Issues ниже):
+
+- `archive_command` в контейнере: `cp %p /wal-spool/` (atomic через `.tmp` rename).
+- `/var/lib/proficrm-staging/wal-spool/` — host-mounted в db container (UID 999).
+- Host cron каждую минуту (`/etc/cron.d/proficrm-walg-spool`): `wal-g wal-push <oldest>`
+  из spool в R2, удаление файла после successful push.
+- First base backup + weekly retention: `docker-compose.walg-backup.yml` с
+  `network_mode: host` + bind mount `/etc/ssl/certs:/etc/ssl/certs:ro` (см. §Known Issues).
+- Restore drill: `docker-compose.walg-drill.yml` аналогичной конфигурации (на порту 5433).
+- Port exposure: `docker-compose.staging.yml` expose staging postgres на
+  `127.0.0.1:15432:5432` (5432 занят prod postgres на том же VPS — см. §Known Issue #2).
+
+Документация: `docs/runbooks/2026-04-23-wal-g-pitr.md`.
+
+### Evidence первого успешного flow (2026-04-23)
+
+- **WAL archiving:** первый WAL `000000010000009B000000DA.br` в R2 `wal_005/`
+  через 1 минуту после `pg_switch_wal()`. `pg_stat_archiver`: `failed_count=0`.
+- **Base backup:** `base_000000010000009B000000E0`, 5.70 GB uncompressed →
+  1.01 GB (brotli), upload 1 мин 6 сек, exit=0.
+- **Restore drill:** `backup-fetch LATEST` 14 сек, WAL replay (3 segments)
+  2.68 сек, `pg_is_in_recovery=f`. Row counts primary vs drill:
+  `accounts_user=40`, `companies_company=45711`, `audit_activityevent=1671354`
+  — **100% match**, `MAX(audit_activityevent.created_at)` identical до microseconds.
+
+### Commits
+
+- `4da1c4e7` — pg_dump safety net (pre-req).
+- `4e6186e4` — docker-compose mounts (spool + port).
+- `abaa31d9` — host cron push script.
+- `0c0b8c17` — port fix `127.0.0.1:15432:5432` (5432 conflict с prod).
+- `a13bf9a6` — helper compose (backup + drill) + host fallback script.
+
+---
+
+## Known Issues
+
+### 1. Container HTTPS к Cloudflare R2 — TLS certificate trust (не networking)
+
+**Discovered:** 2026-04-23 (в процессе W10.2-early Фаза 3.2).
+
+**Evidence:** `wal-g` binary внутри `postgres:16` container (Debian 12 bookworm):
+
+- Любой HTTPS call к `https://<account>.r2.cloudflarestorage.com` возвращает
+  `x509: certificate signed by unknown authority`.
+- То же `wal-g` binary на хосте Ubuntu 24.04: работает идеально.
+- `st ls`, `wal-push`, `backup-push` — все блокируются на TLS handshake (но
+  `backup-push` зависает весь процесс на 27 мин через Go runtime retry'и
+  futex'ов прежде чем сообщить ошибку наружу — симптом выглядел как networking hang).
+
+**Root cause:** Debian 12 CA bundle в postgres:16 image не trust'ит Cloudflare's
+certificate chain. Host Ubuntu 24.04 `/etc/ssl/certs/ca-certificates.crt` (3610
+entries) trust'ит (проверено прямым host-level `wal-g st ls wal_005/`).
+
+**Workaround 1 (deployed — host-pivot):** `archive_command` в контейнере делает
+trivial `cp` в shared spool. Host cron запускает `wal-g` (видит host CA bundle).
+Обходит проблему полностью для continuous WAL archiving.
+
+**Workaround 2 (verified в 3.2, deployed для full backup и drill):** bind mount
+`/etc/ssl/certs` с хоста в container. Позволяет in-container `wal-g wal-push`
+работать. Используется в `docker-compose.walg-backup.yml` (Sunday 02:00 UTC
+retention cron) и `docker-compose.walg-drill.yml` (manual restore drills).
+
+**Когда выбирать:**
+
+- **Host-pivot** (текущий choice для continuous WAL archiving) — простой debug,
+  изоляция от container state, archive_command путь остаётся trivial.
+- **CA mount** — для helper compose operations (backup + drill). Кандидат
+  как основной approach при MinIO migration (internal endpoint).
+
+**Future investigation:** почему Debian 12 CA bundle не trust'ит Cloudflare —
+stale bundle? missing intermediate в postgres:16 image? upstream Debian 12
+ca-certificates version вопрос? В scope W10.1 proper session или отдельная
+сессия инвестигации.
+
+### 2. Port conflict: prod postgres на `0.0.0.0:5432` того же VPS
+
+**Discovered:** 2026-04-23 при попытке exposure staging db на `127.0.0.1:5432`.
+
+**Symptom:** `docker compose up -d db` для staging упал с
+`failed to bind port 127.0.0.1:5432/tcp: address already in use`.
+
+**Root cause:** prod `/opt/proficrm/docker-compose.yml` expose postgres на
+`0.0.0.0:5432` (публично, все интерфейсы), на том же VPS что и staging.
+
+**Workaround (deployed):** staging db exposed на `127.0.0.1:15432:5432`
+(нестандартный loopback port). Helper compose connects через `PGPORT=15432`
+(в walg.env).
+
+**Security concern — отдельный hotlist item:** prod postgres экспозит 5432
+на публичный интернет. Это должно быть bound на loopback или internal Docker
+network only. Action: отдельная prod-session (с `CONFIRM_PROD=yes` маркером)
+для prod postgres isolation.
+
+---
+
+## Status
+
+- **2026-04-24 initial decision:** Accepted.
+- **2026-04-23 implementation close:** delivered host-pivot architecture,
+  first restore drill 100% match, retention cron активирован.
+
+**Supersedes:** — (новое решение).
+**Superseded-by:** — (actual на момент закрытия W10.2-early).
